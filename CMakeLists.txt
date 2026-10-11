@@ -31,6 +31,7 @@ endif()
 
 # The engine.
 add_library(loadpath STATIC
+	src/Cascade.cpp
 	src/Cli.cpp
 	src/CombinedAuthority.cpp
 	src/Handles.cpp

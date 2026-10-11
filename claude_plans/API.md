@@ -758,7 +758,7 @@ another copy.
 bool Crack(InterfaceId, std::uint32_t Pass);   // Intact -> Cracked, stamps CrackPass; false otherwise
 bool Sever(InterfaceId, std::uint32_t Pass);   // Intact or Cracked -> Severed, stamps SeverPass; false otherwise
 std::uint32_t HighestPass() const;             // the largest crack or sever stamp ever written, 0 when none
-StrengthProfile EffectiveProfile(InterfaceId) const;  // the profile with TensileStrengthPa = ShearCohesionPa = 0 when Cracked
+StrengthProfile EffectiveProfile(InterfaceId) const;  // the profile with TensileStrengthPa = ShearCohesionPa = 0 when Cracked, Severed or Removed (a dead joint reads the weaker form, fail closed)
 ```
 
 State is irreversible: `Crack` on anything but `Intact` and `Sever` on `Severed` or `Removed`
@@ -864,6 +864,13 @@ entry is `InvalidInput` (the authority's rule). Then, with `Pass = HighestPass()
    the live interface count; `MaxPasses` is a budget, and reaching it after a counted pass ends
    the run as `PassCapReached` with the structure as it stands then (the host sees a partial
    cascade and calls again; the next run continues from `HighestPass`).
+
+`FirstPass` is `HighestPass() + 1` at entry and `LastPass` the last stamp written, so a run that
+changed nothing has `LastPass = FirstPass − 1` and `Passes = 0`.
+
+**The structure file carries state** (slice 1b format, extended here): every interface whose
+two bodies are live is written, `Intact`, `Cracked` or `Severed`, with `state`, `crack_pass`
+and `sever_pass`; a file without those fields reads `Intact` and unstamped, so old files load.
 
 The final `State` is the last judge's `Worst` mapped to `CascadeState` (`Stands`,
 `Overstressed`, `Undecided`), or `PassCapReached`; `Collapses` cannot be final because every

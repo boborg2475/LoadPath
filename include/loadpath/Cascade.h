@@ -1,0 +1,86 @@
+#pragma once
+
+#include "loadpath/CollapseCertificate.h"
+#include "loadpath/Handles.h"
+#include "loadpath/StandingAuthority.h"
+#include "loadpath/StructuralAuthority.h"
+#include "loadpath/Structure.h"
+
+#include <cstdint>
+#include <memory>
+#include <span>
+#include <vector>
+
+namespace loadpath
+{
+enum class CascadeState : std::uint8_t
+{
+	Stands,
+	Overstressed,
+	Undecided,
+	InvalidInput,
+	PassCapReached
+};
+
+struct FailedInterface
+{
+	InterfaceId Id;
+	std::uint32_t Pass = 0;
+	// The crack: the larger of tension and shear; the sever: the reading's axis at release, None when unread.
+	GoverningAxis Axis = GoverningAxis::None;
+	// The crack ratio or the reading's utilisation at release.
+	double Ratio = 0.0;
+	// False: cracked (bond lost, friction kept); true: severed with its cluster.
+	bool bSevered = false;
+};
+
+struct ReleasedCluster
+{
+	std::uint32_t Pass = 0;
+	// Ascending slot order; released as one rigid body by the host.
+	std::vector<BodyId> Bodies;
+	// The certificate's motion of the lowest-slot body; the others share it.
+	MechanismMotion Motion;
+	// Every live interface that crossed the cluster boundary, now Severed.
+	std::vector<InterfaceId> Severed;
+	// The certificate's bracket for the component.
+	double LoadFactorLower = 0.0, LoadFactorUpper = 0.0;
+};
+
+struct CascadeOptions
+{
+	AuthorityOptions Authority;
+	// Joints with ratio >= R_max (1 - delta) crack this pass; 0 is one event per pass (ties together), 1 all at once.
+	double CrackBandFraction = 0.5;
+	// Counted passes before PassCapReached.
+	int MaxPasses = 32;
+};
+
+struct CascadeVerdict
+{
+	CascadeState State = CascadeState::Undecided;
+	// Stamps written by this run; FirstPass is the previous run's LastPass + 1.
+	std::uint32_t FirstPass = 0, LastPass = 0;
+	// Counted passes: those that cracked or released something.
+	int Passes = 0;
+	// Ascending (pass, slot).
+	std::vector<FailedInterface> Failures;
+	// Ascending (pass, lowest body slot).
+	std::vector<ReleasedCluster> Clusters;
+	// The final judge's readings, every live interface.
+	std::vector<InterfaceReading> Readings;
+	// The final judge's components.
+	std::vector<ComponentReport> Components;
+	InterfaceId InvalidInterface{};
+};
+
+// Run mutates the structure it is given (stamps, removals) and lists every change in the verdict.
+class ICascade
+{
+public:
+	virtual ~ICascade() = default;
+	virtual CascadeVerdict Run(Structure& Model, std::span<const BodyLoad> Loads, const CascadeOptions& Options) const = 0;
+};
+
+std::unique_ptr<ICascade> MakeCascade(std::unique_ptr<IStructuralAuthority> Authority);
+}

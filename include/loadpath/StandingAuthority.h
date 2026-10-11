@@ -62,6 +62,8 @@ struct InterfaceReading
 	InterfaceId Id;
 	double Utilisation = 0;
 	GoverningAxis Axis = GoverningAxis::None;
+	// Utilisation is the maximum of these and Axis names it; a non-finite ratio stays non-finite.
+	double CompressionUtilisation = 0, TensionUtilisation = 0, ShearUtilisation = 0;
 	// Resultants of the force on B, about the rectangle centre.
 	double NormalForceN = 0;
 	Vec3 ShearForceN;

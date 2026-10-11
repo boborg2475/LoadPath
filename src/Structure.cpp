@@ -177,6 +177,26 @@ bool Structure::RemoveBody(BodyId Id)
 	return true;
 }
 
+bool Structure::Crack(InterfaceId, std::uint32_t)
+{
+	return false;
+}
+
+bool Structure::Sever(InterfaceId, std::uint32_t)
+{
+	return false;
+}
+
+std::uint32_t Structure::HighestPass() const
+{
+	return 0;
+}
+
+StrengthProfile Structure::EffectiveProfile(InterfaceId Id) const
+{
+	return Profile(Interface(Id).Profile);
+}
+
 bool Structure::IsKnown(BodyId Id) const
 {
 	return Id.Generation == FirstGeneration && Id.Index < Bodies.size();

@@ -1060,3 +1060,55 @@ TEST_CASE("Statics.Solver.MechanismReadingsAreInEquilibriumWithTheRangeLoad")
 	CHECK(ResidualN.X > 0.0);
 	CheckRelative(Bed->NormalForceN, WeightN, 1.0e-9, "bed normal force against the weight");
 }
+
+TEST_CASE("Statics.Readings.PerAxisUtilisationsAgreeWithTheWorst")
+{
+	struct Case
+	{
+		const char* Name;
+		StrengthProfile Profile;
+		StandingOptions Options;
+		GoverningAxis Expected;
+		double WantTension;
+		double WantShear;
+	};
+	const double SteepRad = 80.0 * RadPerDegree;
+	const double SlopeRad = 40.0 * RadPerDegree;
+	const Case Cases[] = {
+		{"bonded brick, tension governs at 80 deg", Bonded(100.0, 1.0e5, 0.7), TiltedPlane(SteepRad), GoverningAxis::Tension, -UphillCornerNormalN(SteepRad) / CornerCapacityN(100.0), NaN},
+		{"cohesive brick, shear governs at 40 deg", Bonded(0.0, 100.0, 0.3), TiltedPlane(SlopeRad), GoverningAxis::Shear, NaN, CornerShareOfSlopeShearN(SlopeRad) / (CornerCapacityN(100.0) + 0.3 * UphillCornerNormalN(SlopeRad))},
+		{"crushed under own weight, compression governs", CrushedUnderOwnWeight(), StandingOptions{}, GoverningAxis::Compression, NaN, NaN},
+		{"tension and shear both over one at 80 deg", Bonded(100.0, 100.0, 0.7), TiltedPlane(SteepRad), GoverningAxis::Shear, -UphillCornerNormalN(SteepRad) / CornerCapacityN(100.0), CornerShareOfSlopeShearN(SteepRad) / CornerCapacityN(100.0)},
+	};
+	for (const Case& Each : Cases)
+	{
+		INFO("case: " << doctest::String(Each.Name));
+		const BrickOnGround F = MakeBrickOnGround(Each.Profile);
+		const StandingResult Result = SolveWith(F.Model, Each.Options);
+		const InterfaceReading* Bed = RequireReading(Result, F.Bed);
+		if (Bed == nullptr)
+		{
+			continue;
+		}
+		INFO("state " << Result.State << ", utilisation " << Bed->Utilisation << ", axis " << Bed->Axis << ", compression " << Bed->CompressionUtilisation << ", tension " << Bed->TensionUtilisation << ", shear " << Bed->ShearUtilisation);
+		CHECK(Bed->Axis == Each.Expected);
+		const double Worst = std::max({Bed->CompressionUtilisation, Bed->TensionUtilisation, Bed->ShearUtilisation});
+		CHECK(Bed->Utilisation == Worst);
+		const double Named = Each.Expected == GoverningAxis::Compression ? Bed->CompressionUtilisation : (Each.Expected == GoverningAxis::Tension ? Bed->TensionUtilisation : Bed->ShearUtilisation);
+		CHECK(Named == Bed->Utilisation);
+		for (const double Ratio : {Bed->CompressionUtilisation, Bed->TensionUtilisation, Bed->ShearUtilisation})
+		{
+			CHECK(std::isfinite(Ratio));
+			CHECK(Ratio >= 0.0);
+			CHECK(Ratio <= Bed->Utilisation);
+		}
+		if (!std::isnan(Each.WantTension))
+		{
+			CheckRelative(Bed->TensionUtilisation, Each.WantTension, 1.0e-9, "tension utilisation");
+		}
+		if (!std::isnan(Each.WantShear))
+		{
+			CheckRelative(Bed->ShearUtilisation, Each.WantShear, 1.0e-9, "shear utilisation");
+		}
+	}
+}

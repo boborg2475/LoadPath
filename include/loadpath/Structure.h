@@ -23,6 +23,15 @@ public:
 	// False for an unknown or already removed id.
 	bool RemoveBody(BodyId Id);
 
+	// Intact to Cracked, stamping CrackPass; false and no change otherwise or for pass 0.
+	bool Crack(InterfaceId Id, std::uint32_t Pass);
+	// Intact or Cracked to Severed, stamping SeverPass; false and no change otherwise or for pass 0.
+	bool Sever(InterfaceId Id, std::uint32_t Pass);
+	// The largest crack or sever stamp ever written, 0 when none.
+	std::uint32_t HighestPass() const;
+	// The profile with TensileStrengthPa and ShearCohesionPa zeroed when the interface is Cracked.
+	StrengthProfile EffectiveProfile(InterfaceId Id) const;
+
 	bool IsLive(BodyId Id) const;
 	bool IsLive(InterfaceId Id) const;
 	bool IsValid(ProfileId Id) const;
