@@ -158,9 +158,182 @@ A hand-written JSON reader with no dependency. Format:
                     "u": [1, 0, 0], "v": [0, 1, 0], "half_u_m": 0.1075, "half_v_m": 0.05125, "profile": "mortar" } ] }
 ```
 
-`LoadStructure(std::string_view json) -> Result<Structure>` with a `FileError` carrying the
-line and a message for the first problem. Names resolve to handles; a duplicate or unknown name
-is an error; missing optional fields take the struct defaults; every `Add*` refusal is
-surfaced with the element's name. `WriteStructure(const Structure&) -> std::string` round-trips.
-The CLI `loadpath_cli <file>` loads and prints profile, body and interface counts and the first
-error if any; exit code 0 on success, 1 on a load error, 2 on usage.
+```cpp
+struct FileError { int Line = 0; std::string Message; };   // Line 0 = not a syntax error
+struct LoadedStructure { Structure Model; std::vector<std::string> BodyNames, InterfaceNames, ProfileNames; };
+struct LoadResult { LoadedStructure Value; FileError Error; bool Ok() const { return Error.Message.empty(); } };
+LoadResult  LoadStructure(std::string_view Json);
+std::string WriteStructure(const LoadedStructure&);
+int RunCli(std::span<const std::string_view> Args, std::string& Out, std::string& Err);
+```
+
+The JSON subset: objects, arrays, numbers (sign, fraction, exponent), strings with the standard
+escapes (`\" \\ \/ \b \f \n \r \t \uXXXX` for the Basic Multilingual Plane), `true`, `false`,
+`null`, whitespace. Anything else is a syntax error with its 1-based line. Duplicate keys take
+the last value. The reader is a small recursive descent over `std::string_view`; depth is capped
+at 64 (a deeper document is a syntax error, never a stack overflow).
+
+Semantics: declaration order is free within the file; the loader adds all profiles, then all
+bodies, then all interfaces, each kind in file order. A duplicate name within a kind, an unknown name, a
+missing required field (`mass_kg`, `a`, `b`, `normal`, `centre_m`, `u`, `v`, `half_u_m`,
+`half_v_m`, `profile`), a wrong type, or a 3-vector of the wrong length is an error naming the
+element (`Line` is the element's opening line). Missing optional fields take the struct defaults.
+Every `Add*` refusal is surfaced as an error naming the element and the `ModelError` by name.
+`WriteStructure` emits the same format with every field, bodies in slot order, so
+load(write(load(x))) equals load(x) field for field. Removed bodies and their interfaces are
+not written.
+
+The CLI binary `loadpath_cli` is a `main` (in `cli/Main.cpp`, its own CMake target) that reads
+the file named by its one argument into a string and calls `RunCli`, which does everything else
+so tests cover it without a process. The signature above is replaced by:
+
+```cpp
+int RunCli(std::span<const std::string_view> Args, std::optional<std::string_view> FileContents,
+           std::string& Out, std::string& Err);
+```
+
+`Args` excludes the program name; `FileContents` is `std::nullopt` when the file could not be
+read. No argument or more than one prints usage to `Err` and returns 2; an unreadable file
+prints `cannot read <name>` to `Err` and returns 2; a load error prints `line N: message` (or
+just the message when `Line` is 0) to `Err` and returns 1; success prints
+`profiles P  bodies B  interfaces I` to `Out` and returns 0. `Err` text ends in a newline, as
+`Out` does.
+
+Ratified after the 1b red set (2026-10-11): `BodyNames[Id.Index]` names body `Id`, and the same
+for profiles and interfaces (slot-indexed, so a name list is as long as the slot vector).
+Bodies and profiles require a `name`; interfaces have none and their errors say `interface`
+plus the field. A field error's message contains the field key and the element name; a
+duplicate name is reported at the second element's opening line. `Line` is 0 only for an error
+with no location: a document that is not an object (empty input, a top-level array) reports
+`Line 0`; every syntax, field, name and `Add*` error carries a line. Unknown keys are ignored.
+A number that parses to a non-finite value (`1e999`) is a syntax error at its line. All
+standard escapes decode, surrogate pairs combine, a lone surrogate is a syntax error.
+`centroid_m` is optional (default origin). Nesting: 64 levels counting the root are accepted,
+65 refused. The writer prints doubles in shortest round-trip form (`std::to_chars`) and omits
+`max_shear_pa` when it is `+infinity`, which the reader's default restores.
+
+## Slice 2: the standing authority (statics v1)
+
+The first physics. A swappable interface, one implementation: an elastic rigid-body-spring
+field (RBSM) on small structures with a dense solve. It answers "does this structure stand
+under these loads", gives every interface a utilisation with its governing axis, and when the
+structure cannot stand it names the mechanism. Slice 3 adds cracking and the cascade on top;
+slice 4 adds the collapse certificate beside it.
+
+### The interface (`StandingAuthority.h`)
+
+```cpp
+struct BodyLoad { BodyId Body; Vec3 ForceN; Vec3 PointM; };   // a point force; moment = (Point - Centroid) x Force
+struct StandingOptions {
+	Vec3 Gravity = {0, 0, -GravityMPerS2};        // tilt tests rotate this; a lateral multiplier adds a horizontal component
+	int MaxActiveSetIterations = 50;
+	double PivotToleranceRelative = 1e-10;         // a pivot below this times the largest pivot is a mechanism
+};
+enum class StandingState : uint8_t { Stands, Overstressed, Mechanism, Undecided, InvalidInput };
+enum class GoverningAxis : uint8_t { None, Compression, Tension, Shear };
+struct CornerReading { Vec3 PointM; double NormalForceN; Vec3 ShearForceN; bool bOpen; bool bSlipping; };
+struct InterfaceReading {
+	InterfaceId Id; double Utilisation; GoverningAxis Axis;
+	double NormalForceN; Vec3 ShearForceN; Vec3 MomentNm;      // resultants about the rectangle centre, force on B
+	std::array<CornerReading, 4> Corners;                       // order: (+u,+v), (-u,+v), (-u,-v), (+u,-v)
+};
+struct MechanismMotion { BodyId Body; Vec3 TranslationM; Vec3 RotationRad; };   // the null vector, largest component scaled to 1
+struct StandingResult {
+	StandingState State = StandingState::Undecided;
+	std::vector<InterfaceReading> Readings;        // every live interface, ascending slot order
+	std::vector<MechanismMotion> Mechanism;        // non-empty only when State == Mechanism
+	std::vector<BodyId> UnconstrainedBodies;       // bodies the mechanism moves
+	int ActiveSetIterations = 0;
+	InterfaceId InvalidInterface;                  // set when State == InvalidInput
+};
+class IStandingAuthority {
+public:
+	virtual ~IStandingAuthority() = default;
+	virtual StandingResult Solve(const Structure&, std::span<const BodyLoad> Loads, const StandingOptions&) const = 0;
+};
+std::unique_ptr<IStandingAuthority> MakeRbsmStandingAuthority();
+```
+
+`Solve` is const, keeps no state between calls, is deterministic for a given structure, and
+never mutates the structure. The host may call it on any thread.
+
+### States
+
+- **Stands**: the active set converged, the stiffness matrix is non-singular, and every
+  interface reads utilisation ≤ 1. By the lower-bound theorem this is a standing certificate
+  for a rigid-block structure whose corner forces are within every bound.
+- **Overstressed**: converged and non-singular, but some interface reads > 1 on an axis the
+  active set does not release (compression on any joint; tension or cohesive shear on a
+  bonded joint). Slice 3's crack round acts on it. In slice 2 the readings are the answer.
+- **Mechanism**: the factorisation met a pivot under tolerance, so some set of bodies is free
+  to move within the current active set; `Mechanism` holds the null vector. This is the
+  slice-2 collapse answer: a block pushed past its toe, a frictionless block on a slope, a
+  body resting on a single point. It is fail-closed: a structure that is in fact balanced but
+  whose stiffness is singular still reads Mechanism; slice 4's certificate refines it.
+- **Undecided**: the active set did not converge within the cap. Fail closed; never Stands.
+- **InvalidInput**: a live interface whose profile has a stiffness that is not finite and `> 0`;
+  a load on a dead body; a non-finite load or gravity. `InvalidInterface` names the first.
+
+### The model (orchestrator rulings, 2026-10-11)
+
+- **Six degrees of freedom per free body** about its centroid; grounded bodies are fixed and
+  their rows are removed. Unknowns are ordered by body slot index, six per body, which fixes
+  the assembly order and makes the result bit-reproducible.
+- **Four corner springs per interface**, at the rectangle's corners (±HalfExtentU, ±HalfExtentV
+  about the centre), each with normal stiffness `kn · A/4` and tangential stiffness `kt · A/4`
+  in the plane, where `kn` and `kt` are the profile's `NormalStiffnessPaPerM` and
+  `TangentialStiffnessPaPerM`. Corner points, not Gauss points, because that is the
+  admissibility the rigid-block limit theorems and every tier-1 benchmark assume: a hinge
+  forms at the edge, so Housner's `a/g = b/h`, the incline's `tan θ = w/h` and the arch's
+  `t/r = 0.1075` come out exactly. A Gauss-point lumping would open the joint at `e = a/√3`
+  instead of `e = a`. The corner's tributary area is `A/4` for stress checks.
+- **Relative displacement at a corner** `p`: `δ = (uB + θB × (p − cB)) − (uA + θA × (p − cA))`
+  with `u` the translation and `θ` the small rotation of each body. Normal gap `g = δ · n`
+  (positive opening, `n` from A to B). Corner normal force on B, compression positive,
+  `N = −(kn A/4) g`; shear force on B `S = −(kt A/4) (δ − g n)`.
+- **Free releases in the active set** (slice 2): a corner on an interface whose profile has
+  `TensileStrengthPa == 0` opens when its trial `N < 0` and then carries nothing; a corner on an
+  interface whose profile has `ShearCohesionPa == 0` slips when its trial `|S|` exceeds
+  `μ N` (and the cap `MaxShearStrengthPa · A/4`), after which its shear is held at capacity
+  opposite the trial slip direction with no tangential stiffness and **no dilation**
+  (non-associative, DESIGN §9 row 8). A corner returns to closed when its gap would be `≤ 0`
+  under the field solved without it, and to stick when its trial shear falls under capacity
+  by a 1e-9 relative margin (hysteresis so it cannot chatter). The loop ends when no corner
+  changes status; it is capped by `MaxActiveSetIterations`.
+- **Bonded nonlinearities are not released here.** A corner with `TensileStrengthPa > 0`
+  stays closed in tension and reports tension utilisation `N⁻ / (ft A/4)`; with cohesion it
+  reports shear utilisation `|S| / min(c A/4 + μ N⁺, cap A/4)`. Over 1 is `Overstressed`.
+  Slice 3's crack round zeroes the bond (ft and c) of a cracked interface and re-solves, at
+  which point these corners enter the free active set above.
+- **Utilisation per interface** is the worst corner on the worst axis:
+  compression `N⁺ / (fc A/4)`, tension as above (on a dry joint an open corner reads 0), shear
+  as above with `N⁺ = max(N, 0)`. A corner with zero force reads 0 on every axis. Non-finite
+  anywhere makes the interface read `+inf` on that axis (fail closed) and the state cannot be
+  Stands.
+- **Solve**: assemble the symmetric stiffness, factor with Eigen's dense LDLT (vendored under
+  `third_party/eigen`, `EIGEN_MPL2_ONLY`, single-threaded, included as a SYSTEM directory so
+  its warnings do not trip `/WX`), check the smallest pivot against the tolerance, back-
+  substitute, recover corner forces. Dense is the slice-2 choice; slice 6 swaps the
+  factorisation behind the same interface.
+- **Mechanism reporting**: when a pivot fails, the null vector is normalised so its largest
+  absolute component is 1 and written per body as `TranslationM`/`RotationRad`;
+  `UnconstrainedBodies` lists bodies with any component above 1e-6. Tests assert the motion
+  shape: a Housner block reads rotation about the toe edge; a sliding block reads a pure
+  translation down-slope.
+- **Loads**: gravity `m · g⃗` at every free body's centroid (no moment); each `BodyLoad` adds
+  its force and `(PointM − CentroidM) × ForceN` to its body. A tilt test rotates `g⃗`; a
+  lateral load factor λ uses `g⃗ = (λ g, 0, −g)`. The test does any bisection; one solve is
+  microseconds at this scale.
+
+### Anchors slice 2 must pin
+
+From `BENCHMARKS.md` group 2 (exact anchors, slice 2) and group 3 (friction switches), each with
+its ANCHORS.md row: block on an incline tips at `tan θ = w/h` and slides at `tan θ = μ`, the
+lower governing, with the mechanism shape asserted; Housner block `a/g = b/h` with rotation
+about the toe; free wall `λ = t/H`; 3DEC's four regimes on a slope; the harmonic stack for
+n = 2..4 (stands at overhang `(L/2) H_n`, falls one part in 1e6 beyond); the inverted
+3-triangle falls and the 4-diamond stands; the 3DEC wedge on two planes at φ = 33.36°; the
+Couplet–Heyman semicircular arch with radial joints stands at `t/r = 0.1075` and falls below
+(voussoir count from the benchmark report's discretisation guidance; hinge positions asserted
+within a half-voussoir of 54.5°); the friction switch on that arch (stands at φ = 22°, slides at
+21°). Bracket: the Orduña hollow pile's non-associative load factor inside [0.427, 0.553].
