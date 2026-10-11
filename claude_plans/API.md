@@ -999,7 +999,10 @@ its URL in the row's `source`; a value with no source is omitted, never invented
   measured; the dry-bond floor", compression and stiffness as the code row with the note.
 - `c24_bearing_perp_to_grain` (bearing, characteristic): `f_c,90,k = 2.5` MPa × `k_c,90 =
   1.5` = 3.75 MPa compressive (Swedish Wood Vol. 3 Ex 3.2; EN 1995-1-1 §6.1.5), no tension,
-  no cohesion, friction from the cited timber source or omitted (see the ANCHORS row), stiffness
+  no cohesion, friction 0.3, the low end of the Wood Handbook (FPL-GTR-190, ch. 4, Glass & Zelinka 2010)
+  range "0.3 to 0.5" for smooth dry wood against hard smooth surfaces (kinetic; the PDF host
+  was unreachable from here and the sentence was matched through a search snippet, which the
+  ANCHORS row says), stiffness
   `E_90,mean = 0.37` GPa for C24 (EN 338) over a 45 mm bearing depth: 8.2 GPa/m normal, half
   that tangential, derived in the note.
 - Fasteners (Swedish Wood Vol. 3 Ex 4.1–4.3, Structural Basics): `ec5_screw_8x60_steel_to_glulam`
