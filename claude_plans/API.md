@@ -538,7 +538,7 @@ no threads, Eigen storage and factorisation only. The circumscribed solve is ski
 inscribed one reaches the cap; `t_out` is clamped to at least `t_in` (exact, every inscribed
 set sits inside its circumscribed one). `t_out` is today the converged primal value; the ruling
 that it should be the circumscribed **dual objective** `bᵀy / τ` (an upper bound needs dual
-feasibility) is **open**, logged in CURRENT_STATE.
+feasibility) is **open**, logged in CURRENT_STATE; the two agree within the 1e-9 termination gap, so the reported bound can sit on the unsafe side only by that much.
 
 **State.** `Stands` when `t_in ≥ 1` (whatever the circumscribed solve did: if it failed,
 `LoadFactorUpper = LoadFactorCap`); `Collapses` when `t_out < 1`; `Undecided` when
@@ -561,7 +561,7 @@ which component collapsed; the combined authority (slice 4b) reports per compone
 inscribed optimum are the body velocities (sign `−y`, rotations unscaled by the characteristic
 length, normalised per component so the largest physical component is 1). At `t* = 0` the dual
 optimal set is a cone and the interior point returns its analytic centre, which names every
-body that can move; so on a Collapses with `t_in` under the selection gate (1e-6, the tests'
+body that can move; so on a Collapses with `t_in` under the selection gate (`FeasibilityTolerance`, 1e-9; the largest dry `t_in` seen is 5.5e-10 and `t_in` scales with the tolerance, so the margin is thin but real; the tests'
 absolute tolerance, not the solver tolerance) a **selection LP** runs per component: over body
 velocities `y` and bounding variables `u`, with `±y ≤ u`, the kinematic admissibility rows
 `gᵀ (v_B − v_A) ≤ 0` for every inscribed friction and cohesion generator, the opening row
@@ -582,8 +582,13 @@ LP does not converge the component reads Undecided with empty lists**: the analy
 never handed to a host as a release set. On `Stands` every list is empty. Where several
 mechanisms tie (a harmonic stack with every offset scaled by `1 + ε` has every level at its
 knife edge at once, the optima differing by order ε), the selection may name every tied level:
-the mechanism is not unique there, the tests pin only that the top block is named, and a host
-releasing all tied levels releases bodies that are each past their own threshold.
+the mechanism is not unique there and the tests pin only that the top block is named. **Listing
+threshold (ruled 2026-10-11 after the third review):** a body is unconstrained when the largest
+of its six scaled components exceeds 1e-3 of the component's largest, and an interface hinges
+when a corner's relative speed exceeds 1e-3 of the fastest corner and one of its bodies is
+listed; the earlier 1e-6 admitted interior-point residue (tied levels at about 1e-5, a stable
+bystander lifting at 1.6e-6, a weakly bonded bystander's joint read hinging) and let the two
+lists disagree. An Undecided after a failed selection still carries `LoadFactorUpper < 1`.
 
 ### The theorem ruling (settles the question slice 2 left open)
 

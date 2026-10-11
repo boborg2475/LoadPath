@@ -458,11 +458,27 @@ TEST_CASE("Certificate.Mechanics.SimultaneousKnifeEdgeNamesTheTopBlockAndNeverTh
 		CHECK(Result.UnconstrainedBodies.size() <= S.Blocks.size());
 		CHECK(Result.HingingInterfaces.size() <= S.Blocks.size());
 		CHECK(Result.HingingInterfaces.size() >= 1u);
+		const MechanismMotion* TopMotion = FindMotion(Result, Top);
+		const MechanismMotion* LowerMotion = FindMotion(Result, S.Blocks.back());
+		REQUIRE(TopMotion != nullptr);
+		const double LowerRotation = LowerMotion != nullptr ? Length(LowerMotion->RotationRad) : 0.0;
+		INFO("top rotation " << TopMotion->RotationRad << ", lower rotation size " << LowerRotation);
+		CHECK(LowerRotation <= 1.0e-2 * Length(TopMotion->RotationRad));
 	}
 	else
 	{
 		CHECK(Result.UnconstrainedBodies.empty());
 		CHECK(Result.HingingInterfaces.empty());
 		CHECK(Result.Mechanism.empty());
+	}
+	for (int Count = 2; Count <= 4; ++Count)
+	{
+		const Stack Wider = BuildOnTable(HarmonicStack(Count, 1.0 + 1.0e-4), 0.0);
+		const CertificateResult Each = DecideWith(Wider.Model, CertificateOptions{});
+		INFO("n = " << Count << ", overhang scale 1 + 1e-4: state " << Each.State << ", moving " << Describe(Each.UnconstrainedBodies) << ", hinging " << Describe(Each.HingingInterfaces));
+		CHECK(Each.State == CertificateState::Collapses);
+		CHECK(Each.UnconstrainedBodies.size() == 1u);
+		CHECK(HasBody(Each.UnconstrainedBodies, Wider.Blocks.front()));
+		CHECK(Each.HingingInterfaces.size() == 1u);
 	}
 }

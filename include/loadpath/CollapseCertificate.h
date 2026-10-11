@@ -30,7 +30,7 @@ struct CertificateOptions
 	double LoadFactorCap = 1.0e3;
 	// Relative, on the equilibrium residual and complementarity.
 	double FeasibilityTolerance = 1.0e-9;
-	// Interior-point iterations before Undecided.
+	// Interior-point iterations allowed per solve (inscribed, circumscribed, selection); a failed solve reads Undecided unless t_in >= 1.
 	int MaxIterations = 200;
 };
 
@@ -39,13 +39,14 @@ struct CertificateResult
 	CertificateState State = CertificateState::Undecided;
 	// The inscribed-cone collapse multiplier: a statically admissible field exists up to here.
 	double LoadFactorLower = 0.0;
-	// The circumscribed-cone multiplier: no statically admissible field exists beyond here.
+	// The circumscribed-cone multiplier: no statically admissible field exists beyond here (the cap when t_in >= 1 and the circumscribed solve failed).
 	double LoadFactorUpper = 0.0;
 	// The selected mechanism of every Collapses component whatever State, per moving body, normalised per component so its largest component is 1.
 	std::vector<MechanismMotion> Mechanism;
 	std::vector<BodyId> UnconstrainedBodies;
-	// Interfaces the selected mechanism moves: a corner's relative velocity above 1e-6 of the component's fastest corner; empty on Stands.
+	// Interfaces the selected mechanism moves: a corner's relative velocity above 1e-3 of the component's fastest corner on an interface with a listed body; empty on Stands.
 	std::vector<InterfaceId> HingingInterfaces;
+	// Maximum over components of the cone solves' iterations; the selection solve's count is not included.
 	int Iterations = 0;
 	InterfaceId InvalidInterface{};
 };

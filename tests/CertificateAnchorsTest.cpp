@@ -917,3 +917,121 @@ TEST_CASE("Certificate.Anchor.OnlyTheCapSlidesOffABondedPier")
 	CHECK(Result.State == CertificateState::Collapses);
 	CheckOnlyBodyAndInterface(Result, Cap, Joint);
 }
+
+TEST_CASE("Certificate.Anchor.FailedSelectionReadsUndecidedWithEmptyLists")
+{
+	const RunningBondWall W = MakeRunningBondWallWithoutLastFirstCourseBrick(0.6);
+	const CertificateResult Full = DecideWith(W.Model, CertificateOptions{});
+	INFO("full run " << Full.State << " [" << Full.LoadFactorLower << ", " << Full.LoadFactorUpper << "] after " << Full.Iterations << " iterations");
+	REQUIRE(Full.State == CertificateState::Collapses);
+	REQUIRE(Full.LoadFactorUpper < 1.0);
+	CertificateOptions Limited;
+	Limited.MaxIterations = Full.Iterations;
+	const CertificateResult Result = DecideWith(W.Model, Limited);
+	INFO("limited to " << Limited.MaxIterations << ": " << Result.State << " [" << Result.LoadFactorLower << ", " << Result.LoadFactorUpper << "], moving " << Describe(Result.UnconstrainedBodies) << ", hinging " << Describe(Result.HingingInterfaces) << ", mechanism bodies " << Result.Mechanism.size());
+	CHECK(Result.State == CertificateState::Undecided);
+	CHECK(Result.UnconstrainedBodies.empty());
+	CHECK(Result.HingingInterfaces.empty());
+	CHECK(Result.Mechanism.empty());
+	CHECK(Result.LoadFactorUpper < 1.0);
+}
+
+namespace
+{
+struct BystanderFixture
+{
+	Structure Model;
+	BodyId Lower;
+	BodyId Top;
+	BodyId Bystander;
+	InterfaceId TopJoint;
+	InterfaceId BystanderJoint;
+};
+
+BystanderFixture MakeTippingTopWithBystander(double OverhangScale, double BystanderMassKg, const StrengthProfile& BystanderProfile)
+{
+	BystanderFixture F;
+	const ProfileId Dry = AddProfileOk(F.Model, DryJoint(TableStackFriction));
+	const ProfileId BystanderP = AddProfileOk(F.Model, BystanderProfile);
+	const Box Table{Vec3{-5.0, 0.0, -0.5}, Vec3{5.0, 5.0, 0.5}, 0.0};
+	const Box LowerShape{Vec3{-0.3, 0.0, 0.1}, Vec3{0.5, 0.25, 0.1}, 1.0};
+	const Box TopShape{Vec3{0.2 + 0.5 * OverhangScale, 0.0, 0.3}, Vec3{0.5, 0.25, 0.1}, 1.0};
+	const Box BystanderShape{Vec3{-0.65, 0.0, 0.3}, Vec3{0.1, 0.25, 0.1}, BystanderMassKg};
+	const BodyId TableId = AddBox(F.Model, Table, true);
+	F.Lower = AddBox(F.Model, LowerShape);
+	F.Top = AddBox(F.Model, TopShape);
+	F.Bystander = AddBox(F.Model, BystanderShape);
+	AddInterfaceOk(F.Model, *StackedFaces(TableId, Table, F.Lower, LowerShape, Dry));
+	F.TopJoint = AddInterfaceOk(F.Model, *StackedFaces(F.Lower, LowerShape, F.Top, TopShape, Dry));
+	F.BystanderJoint = AddInterfaceOk(F.Model, *StackedFaces(F.Lower, LowerShape, F.Bystander, BystanderShape, BystanderP));
+	return F;
+}
+}
+
+TEST_CASE("Certificate.Anchor.AStableBystanderIsNotListed")
+{
+	struct Case
+	{
+		const char* Name;
+		double OverhangScale;
+		double BystanderMassKg;
+		StrengthProfile Profile;
+	};
+	const Case Cases[] = {
+		{"dry, 1e-4", 1.0e-4, 1.0e-5, DryJoint(TableStackFriction)},
+		{"dry, 1e-6", 1.0e-6, 1.0e-5, DryJoint(TableStackFriction)},
+		{"bonded, 1e-4", 1.0e-4, 1.0e-4, Bonded(1.0e-3, 1.0e-3, TableStackFriction)},
+	};
+	for (const Case& Each : Cases)
+	{
+		const BystanderFixture F = MakeTippingTopWithBystander(Each.OverhangScale, Each.BystanderMassKg, Each.Profile);
+		const CertificateResult Result = DecideWith(F.Model, CertificateOptions{});
+		const MechanismMotion* Bystander = FindMotion(Result, F.Bystander);
+		INFO(doctest::String(Each.Name) << ": state " << Result.State << ", moving " << Describe(Result.UnconstrainedBodies) << ", hinging " << Describe(Result.HingingInterfaces));
+		INFO("bystander motion " << (Bystander ? Bystander->TranslationM : Vec3{}) << " / " << (Bystander ? Bystander->RotationRad : Vec3{}));
+		CHECK(Result.State == CertificateState::Collapses);
+		CHECK_FALSE(HasBody(Result.UnconstrainedBodies, F.Bystander));
+		CHECK_FALSE(HasInterface(Result.HingingInterfaces, F.BystanderJoint));
+		CheckOnlyBodyAndInterface(Result, F.Top, F.TopJoint);
+	}
+}
+
+TEST_CASE("Certificate.Property.HingingInterfacesTouchAMovingBody")
+{
+	const auto CheckEveryHingeTouches = [](const Structure& Model, const CertificateResult& Result) {
+		if (Result.State != CertificateState::Collapses)
+		{
+			return 0;
+		}
+		INFO("moving " << Describe(Result.UnconstrainedBodies) << ", hinging " << Describe(Result.HingingInterfaces));
+		int Orphans = 0;
+		for (const InterfaceId Hinging : Result.HingingInterfaces)
+		{
+			const InterfaceRecord& Record = Model.Interface(Hinging);
+			const bool bTouches = HasBody(Result.UnconstrainedBodies, Record.BodyA) || HasBody(Result.UnconstrainedBodies, Record.BodyB);
+			INFO("hinging interface " << Describe(std::vector<InterfaceId>{Hinging}) << " touches a moving body: " << bTouches);
+			CHECK(bTouches);
+			Orphans += bTouches ? 0 : 1;
+		}
+		return Orphans;
+	};
+	int Collapses = 0;
+	for (int Draw = 0; Draw < oracle::DrawCount; ++Draw)
+	{
+		const oracle::SeededDraw Each = oracle::MakeSeededDraw(Draw);
+		INFO("master seed " << oracle::MasterSeed << ", draw " << Draw << " (generator seed " << Each.Seed << "): " << Each.Fixture << ", friction " << Each.Friction << ", lambda (" << Each.LambdaX << ", " << Each.LambdaY << ")");
+		const CertificateResult Result = DecideWith(Each.Model, CertificateLateral(Each.LambdaX, Each.LambdaY));
+		CheckEveryHingeTouches(Each.Model, Result);
+		Collapses += Result.State == CertificateState::Collapses ? 1 : 0;
+	}
+	for (int Count = 2; Count <= 8; ++Count)
+	{
+		INFO("harmonic n = " << Count << ", overhang scale 1 + 1e-6");
+		const Stack S = BuildOnTable(HarmonicStack(Count, 1.0 + 1.0e-6), 0.0);
+		const CertificateResult Result = DecideWith(S.Model, CertificateOptions{});
+		CheckEveryHingeTouches(S.Model, Result);
+		Collapses += Result.State == CertificateState::Collapses ? 1 : 0;
+	}
+	INFO("collapsing cases " << Collapses);
+	CHECK(Collapses > 0);
+}

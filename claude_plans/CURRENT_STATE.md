@@ -17,78 +17,43 @@ reports Mechanism as a verdict, and fails closed to Undecided rather than guess)
 mechanics tests (incline tip and slide, Housner, free and coursed wall, the Itasca slope
 regimes, harmonic stack, Paterson–Zwick triangle and diamond), 20 solver characterisation and
 defect tests, a seeded locality property and a seeded static-admissibility oracle property.
-Slice 4a, the limit-analysis collapse certificate (`ICollapseCertificate`, 34 cases), is green
-at 6d83bba after two reviews, with a third round in flight ("Next" 1). Default suite 147 cases
-(7846 assertions in Debug, 15367 in Release, about 7.4 s and 1.3 s);
+Slice 4a, the limit-analysis collapse certificate (`ICollapseCertificate`, 39 cases), is green
+at 322f69c after three reviews, with the closing round in flight ("Next" 1). Default suite 152
+cases (7935 assertions in Debug, 15456 in Release, about 5.5 s and 1.1 s);
 the `Deferred.Slice4` tier holds 3 cases red by design. The design brief
 ([DESIGN.md](DESIGN.md)) has every §9 question decided and §10 carries the slice-2 rulings.
 
 ## Next
 
-1. Slice 4 pulled forward (DESIGN §10, 2026-10-11). The contract is API.md "Slice 4: the
-   collapse certificate". Slice 4a, `MakeLimitAnalysisCertificate`
-   (`src/LimitAnalysisCertificate.cpp`), is implemented and green, not yet reviewed: 24
-   `Certificate.*` cases, a homogeneous self-dual Mehrotra interior point on the per-component
-   normal equations (Eigen LLT), inscribed solve first and the circumscribed one skipped when the
-   inscribed reaches the cap. Union-find, corner points, corner Jacobian and characteristic length
-   now live in `src/StaticsCommon.h`, shared with the RBSM authority. Still open in slice 4:
-   - Slice 4b, the combined authority: referee every component the elastic authority leaves
-     Undecided and every Mechanism it reports, count the disagreements, and move the three
-     `Deferred.Slice4.*` cases under `Statics.*` asserting through the certificate; the probe
-     grids' 318 fail-closed Undecided points resolve there.
-   - Anchors with no test yet: Couplet–Heyman arch (B-ARC-01/06), Orduña pile bracket (B-ORD-01),
-     3DEC wedge (B-WDG-01, its skipped test still drives the elastic authority).
-   - `MaxShearStrengthPa` is not in the LP: no test drives it, so a finite cap is ignored and the
-     certificate over-reads shear capacity (fail open for Stands). Needs a test and a formulation:
-     facet rows on the corner shear. Bounding `r Σα ≤ cap` turns a shear cap into a compression
-     cap, so that one is wrong.
-   - The two 4a-review rulings are implemented and green, not yet reviewed: the inner strength
-     region on the inscribed solve (`T' = min(ft, c/μ)`, cohesion `c − μT'`; the hull stays on
-     the circumscribed one), and mechanism selection at `t_in` under tolerance. The selection is
-     a second HSD Mehrotra on the 6n velocity normal equations, now in the motion-normalised
-     form of API.md: maximise `Demandᵀ y` subject to `Σ u = 1`, `±y ≤ u`, `gᵀ v_corner(y) ≤ 0`
-     per inscribed generator, and `−offsetᵀ y ≤ tol` when any tension offset exists. A
-     selection that does not converge reads Undecided with empty lists (the analytic-centre
-     fallback is gone), and `Stands` survives a failed circumscribed solve with
-     `LoadFactorUpper = LoadFactorCap`. `CoursedFreeWallHingesAtTheBase` (0.19 s Debug, was
-     1.2 s) and the 30-course wall at `λ(1 + 1e-4)` (30 moving, 1 hinge) now select correctly;
-     no selection in the default suite hits the iteration cap. The selection gate is still
-     `t_in < 1e-9` (FeasibilityTolerance), not API.md's 1e-6: every selection in the suite runs
-     at `t_in ≤ 3e-10`, so no test drives the change. No test covers selection on a bonded
-     component (the opening row). Open:
-     - `SelectionFailureIsUndecidedNotAnOverRelease` is red. The selection converges on the
-       2-brick harmonic stack at `1 + 1e-6` (10 iterations) but its optimum is 3.7e-7 work per
-       unit motion against a termination gap of 2.9e-11, so the interior point returns a mix
-       with the lower brick at about 4e-5 relative, above the 1e-6 listing threshold: Collapses
-       naming both bricks. Probes: harmonic stacks n = 2..6 at margin 1e-6 all read Collapses
-       naming every brick; at 1e-8, n = 2 reads Undecided (selection fails) and n = 3..6 read
-       Collapses naming every brick (optimum 1e-9, below the gap). Every level of a scaled
-       harmonic stack is critical at once, so the candidate mechanisms differ in work per motion
-       by O(margin). Tried and rejected: gap relative to the objective (dual residual degrades
-       to 3e-7 past iteration 10, never terminates); a second solve with the cost rescaled by
-       1/optimum (τ → 0, 4 failures, breaks HarmonicStack...CollapsesBeyond); failing the
-       selection when gap > 1e-6 × optimum (breaks SingleBrickTips, a one-body component).
-       Needs a ruling: a crossover/purification step that identifies the optimal vertex, or a
-       support-resolvability rule that reads Undecided only when an alternative body sits in
-       the uncertainty band.
-   - `t_out` ruling open (API.md "Solver"): it is today the circumscribed converged primal value;
-     an upper bound needs dual feasibility, so it should arguably be the dual objective `bᵀy / τ`.
-     No test distinguishes the two yet.
-   - Severity Undecided > Collapses: a structure with one Collapses and one Undecided component
-     reads Undecided while `LoadFactorUpper < 1`. The single-component tests pin
-     `(State == Collapses) == (Upper < 1)`; decide which way multi-component results go.
-   - Unpinned choices: HingingInterfaces is kinematic (an interface whose corner relative
-     velocity in the inscribed mechanism exceeds 1e-6 of the component's fastest corner);
-     mechanism lists are filled on Collapses only, not on Undecided; non-convergence reports
-     Undecided with `[0, cap]` unless `t_in ≥ 1`; a free body with no interface reads Collapses at t = 0 through the
-     regularised refactor (pinned by the review-round mechanics test).
-   - Debug runtime: the default suite is 7.3 s in Debug (1.25 s Release), of which the mechanism
-     selection LP adds about 3 s (4.3 s before it); `CoursedFreeWallHingesAtTheBase` is now 0.19 s
-     and `Certificate.Oracle.SingleBrickGrid` 1.1 s in Debug. Most of it is Eigen LLT factor
-     and solve in Debug. Options: a `Slow.` prefix or a
-     Debug-sized grid for that case, or a hand-written dense Cholesky.
-   - HiGHS is not vendored: the contract chose a dense interior point. The DESIGN §8 referee is
-     still slice 7's question.
+1. Slice 4a, the limit-analysis collapse certificate (API.md "Slice 4", DESIGN §10): green at
+   322f69c after three reviews, 39 `Certificate.*` cases. Open before 4b starts (fourth test
+   round in flight):
+   - the failed-selection path (Undecided with empty lists) has no killing test; spec: the
+     end-brick wall with `MaxIterations` set to the full run's count (inner 10, selection 17);
+   - the listing threshold admits solver residue: at a simultaneous knife edge the tied levels
+     show at about 1e-5 relative and a stable bystander lifting at 1.6e-6 relative is listed
+     (a weakly bonded bystander's joint reads hinging). Ruling (orchestrator 2026-10-11): the
+     threshold is 1e-3 relative for bodies and corners, and an interface hinges only if one of
+     its bodies is listed, which also makes the two lists consistent (harmonic n = 6 and 8
+     named the table joint with the bottom block not moving);
+   - the selection gate is `FeasibilityTolerance` (1e-9); the largest dry `t_in` seen is 5.5e-10,
+     so the margin is thin; `t_in` scales with the tolerance across 1e-6..1e-13 in probes;
+   - `t_out` is the circumscribed converged primal, not the dual objective `bᵀy/τ`; the two
+     agree within the 1e-9 termination gap, so the upper bound can be unsafe only by that much,
+     acceptable to defer;
+   - `Iterations` excludes the selection solve's count, so a host cannot see an Undecided came
+     from the selection cap;
+   - `Certificate.Oracle.SingleBrickGridMatchesTheClosedForm` takes 1.1 s in Debug; raise the
+     Debug stride from 4 to 8 keeping the boundary points (not a `Slow.` move: it is a
+     correctness oracle).
+   Then slice 4b: the combined authority (referee every component the elastic authority leaves
+   Undecided and every Mechanism it reports, count disagreements, report per component, move
+   the three `Deferred.Slice4.*` cases under `Statics.*`); the arch (B-ARC-01/06), Orduña pile
+   (B-ORD-01) and 3DEC wedge (B-WDG-01) anchors; `MaxShearStrengthPa` in the LP as facet rows
+   on the corner shear (today a finite cap is ignored, fail-open for Stands); whether
+   tension-only profiles (ft > 0, c = 0) need a cohesion floor on the inscribed side; severity
+   across components (one Collapses beside one Undecided reads Undecided with Upper < 1) once
+   per-component reporting exists; HiGHS stays slice 7's referee question.
 2. Slice 2b, the remaining slice-2 anchors (BENCHMARKS groups 2 and 3): B-WAL-03 (wall slides at
    λ = μ), B-STK-04 (constant-step stack), B-WDG-02, B-ROK-02, F-CHC-01, F-LIB-01/02, F-EMI-01,
    the 5-diamond (hits the 50-pass cap today, logged below), and the arch and pile rows that
@@ -100,11 +65,10 @@ the `Deferred.Slice4` tier holds 3 cases red by design. The design brief
    only), F-RON-01 panel thickness, B-FTL-01 layout. B-BUR-01 needs a soil-pressure driver;
    F-PYR-01 needs a zero-extent contact; group 9 runs only in the host adapter's suite.
 3. `Scripts/Test.ps1` excludes a `Slow.` prefix from the default run once the first slow test
-   exists. Two candidates are over a second in Debug (CoursedFreeWallHingesAtTheBase 1.3 s,
-   mostly a failing selection solve the motion-normalised rescaling should remove; SingleBrickGrid
-   1.1 s); measure after the rescaling, then move what is still over a second under `Slow.` and
-   add the exclusion, fixing at the same time the caveat that any caller `-tce` drops the
-   `Deferred.` exclusion.
+   exists. One case is over a second in Debug, `Certificate.Oracle.SingleBrickGridMatchesTheClosedForm`
+   at 1.1 s, and it stays in the default run as a correctness oracle with a coarser Debug stride
+   ("Next" 1). When a genuinely slow test arrives, add the exclusion and fix at the same time the
+   caveat that any caller `-tce` drops the `Deferred.` exclusion.
 
 ## Deferred
 
