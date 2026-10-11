@@ -197,7 +197,7 @@ a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 </section>
 
 <section>
-<h2 class="col">The cascade, in progress now</h2>
+<h2 class="col">The cascade</h2>
 <p class="col">A verdict is not yet a collapse. Real structures fail in sequence: one joint cracks, load shifts to its neighbours, another cracks, until a piece has nothing left holding it and falls. The cascade is that loop. It runs in <strong>passes</strong>, and every crack and break is stamped with its pass number so the host can play the failure back in order.</p>
 <figure>
 <div class="scroll">
@@ -308,11 +308,12 @@ a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 <div class="slice">
   <div class="id">3<small>CASCADE</small></div>
   <div class="body">
-    <h3>Crack, sever, release <span class="pill doing">in progress</span></h3>
-    <p>The contract is written and reviewed-by-test: 27 new test cases exist and 26 of them are red on purpose, waiting for the implementation that is being written now.</p>
+    <h3>Crack, sever, release <span class="pill done">done</span></h3>
+    <p>Closed the same day after two reviews and a follow-up. The engine of the design brief's first three slices now exists end to end.</p>
     <dl class="kv">
-      <dt>What lands</dt><dd>Joint states that move one way only (intact, cracked, severed, removed) with pass stamps; a cracked joint reads as a dry joint to both authorities; per-axis utilisation in every reading; the file format carrying state; and the cascade loop of Figure 3 with its band rule, cluster grouping and pass budget.</dd>
-      <dt>Pinned by tests</dt><dd>A brick sliding off a slope releases as one cluster with its bed severed on pass 1; a two-brick stack sliding at the ground leaves as a single cluster; a bonded pier cracks its base on pass 1 and tips on pass 2; a top band of 0.5 cracks the joints at ratios 3 and 2 but not 1.2; a crushing overload cracks nothing; a second run continues numbering from where the first stopped.</dd>
+      <dt>Major</dt><dd>Joint states that move one way only (intact, cracked, severed, removed) with pass stamps and a pass counter that belongs to the structure and travels with the file; a cracked joint reads as a dry joint to both authorities through one effective-profile accessor; per-axis utilisation in every reading; and the cascade loop of Figure 3 with its band rule, cluster grouping and pass budget.</dd>
+      <dt>Pinned by tests</dt><dd>A brick sliding off a slope releases as one cluster with its bed severed on pass 1; a two-brick stack sliding at the ground leaves as a single cluster; a bonded pier cracks its base on pass 1 and tips on pass 2; a top band of 0.5 cracks the joints at ratios 3 and 2 but not 1.2; the arch below least thickness releases six voussoir runs between its seven hinges; a second run continues numbering from where the first stopped, even after a save and reload.</dd>
+      <dt>Reviews</dt><dd>The first review found that a release writing no stamp did not advance the pass number, that saving reset it, and that a NaN on one axis could hide a crack. All three became tests before they became fixes.</dd>
     </dl>
   </div>
 </div>
@@ -329,8 +330,8 @@ a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 <div class="scroll">
 <table>
   <tr><th>Suite</th><th class="num">Cases</th><th class="num">Assertions</th><th class="num">Time</th><th>Notes</th></tr>
-  <tr><td>Debug, default run</td><td class="num">176</td><td class="num">12,333</td><td class="num">~10 s</td><td>at slice 4b close; 203 with slice 3's red set</td></tr>
-  <tr><td>Release, default run</td><td class="num">180</td><td class="num">35,376</td><td class="num">~4 s</td><td>includes the arch and pile anchors</td></tr>
+  <tr><td>Debug, default run</td><td class="num">216</td><td class="num">13,192</td><td class="num">~12 s</td><td>at slice 3 close</td></tr>
+  <tr><td>Release, default run</td><td class="num">221</td><td class="num">36,776</td><td class="num">~7 s</td><td>includes the arch, pile and arch-cascade anchors</td></tr>
   <tr><td>Deferred tier</td><td class="num">1</td><td class="num"></td><td class="num"></td><td>the physical wedge angle, red by design until the slice 7 referee</td></tr>
 </table>
 </div>
@@ -356,8 +357,7 @@ a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 <section class="col">
 <h2>What comes next</h2>
 <div class="grid">
-  <div class="card"><h3>Slice 3 <span class="pill doing">now</span></h3><ul><li>Implementation against the 26 red tests</li><li>Review, then close</li></ul></div>
-  <div class="card"><h3>Slice 5 <span class="pill todo">next</span></h3><ul><li>Material catalogue with citations: brick, mortar, timber, nail, screw, bolt</li><li>Running-bond wall generator and structural fuzz</li></ul></div>
+  <div class="card"><h3>Slice 5 <span class="pill doing">next</span></h3><ul><li>Material catalogue with citations: brick, mortar, timber, nail, screw, bolt</li><li>Running-bond wall generator and structural fuzz</li></ul></div>
   <div class="card"><h3>Slice 6 <span class="pill todo">later</span></h3><ul><li>Sparse solves, event regions, panels</li><li>Target: the old 5,612-piece warehouse decided inside 200 ms</li></ul></div>
   <div class="card"><h3>Slices 7 and 8 <span class="pill todo">later</span></h3><ul><li>HiGHS referee in the test tier, non-associative friction</li><li>The Unreal adapter as its own module</li></ul></div>
 </div>
