@@ -1,0 +1,199 @@
+# LoadPath: design brief and host contract
+
+**Status: DRAFT 2026-10-10, for owner review.** Decisions marked *decided* were made by the
+owner in the kickoff conversation; everything else is a recommendation until ruled. Rulings go
+in §10 with their date. Open items go to [CURRENT_STATE.md](CURRENT_STATE.md).
+
+## 1. What it is
+
+A host-neutral C++20 library that answers two questions about a structure of rigid pieces held
+together by joints: **does it stand**, and if not, **what lets go, in what order, and what moves
+as one body**. Every piece carries real mass. Every joint carries a directional strength envelope
+and the force on it is classified against the joint's own plane: compression, shear, tension,
+bending. Load redistributes as joints fail, so removing enough support brings a structure down
+under its own weight rather than crumbling in place.
+
+It is the structural solver of `DestructionGame` rebuilt standalone. That project spent three
+months learning what the model has to be; this one builds that model without the engine around
+it, so a test runs in milliseconds and a design mistake costs an afternoon rather than a week.
+
+*Decided:* 3D from the first line. No 2D assembler, ever. *Decided:* pieces never fail internally
+here; a beam snapping mid-span is the host's physics engine's job. *Decided:* the host is Unreal
+with Chaos, eventually; the library must drop into an Unreal module without rewriting.
+
+## 2. The host contract
+
+The library is a pure function over its own data. The host owns every object that has a shape,
+a mesh, or a physics body; the library owns a graph of masses and interfaces and never learns
+what they look like.
+
+### 2.1 What the host supplies
+
+- **Bodies.** Mass (kg), centre of mass (m, in a frame the host chooses and keeps), an inertia
+  tensor if it has one, a grounded flag. The host gets back a stable `BodyId`.
+- **Interfaces.** Two body ids, a unit normal pointing from the first to the second, the contact
+  rectangle (centre, two in-plane half-extents, the two in-plane axes), and a `ProfileId`. The
+  normal is **the axis of separation, oriented by which body is second**, never the direction
+  between centroids (TRAPS). The host gets back a stable `InterfaceId`.
+- **Profiles.** The strength and stiffness numbers for a kind of joint, registered once by name.
+- **Events.** Remove a body; apply an external load or impulse to a body; change a profile.
+- **A call to solve**, on the host's thread of choice.
+
+An optional geometry layer in the same repo can find the interfaces between axis-aligned boxes
+for a host that has no better contact information. It is a producer above the engine, like the
+test fixtures, and the engine never depends on it.
+
+### 2.2 What the library returns
+
+A **verdict** per solve:
+
+- Every interface that failed in this solve, with the pass it failed in, the **governing axis**
+  (crushed, slid, pulled apart, cracked in bending) and whether it cracked (bond lost, friction
+  kept) or severed.
+- Every body released, grouped into **rigid clusters** that move as one. The host releases each
+  cluster as one Chaos body (a geometry-collection cluster that fragments on impact), which is
+  the only release mechanism that survived the old project's experiments.
+- Per-interface utilisation (demand over capacity, worst axis) for every live joint, for an
+  overlay or a readout. A ratio, never a boolean.
+- The standing or collapse **certificate** that justified the verdict, for tests and for the
+  referee.
+
+### 2.3 What the library never does
+
+Simulate motion. Split a piece. Allocate on behalf of the host. Call back into the host. Keep
+state the host cannot snapshot. Convert units (§3).
+
+### 2.4 How it lands in Unreal
+
+The host builds the structure at level load from its pieces, keeps a map from its objects to
+`BodyId`s, and keeps every body kinematic. A destruction event becomes `RemoveBody` or
+`ApplyImpulse` plus a solve, run off the game thread on an immutable snapshot; the verdict is
+applied on the game thread: clusters flip to dynamic, utilisations feed the overlay. When Chaos
+fragments a released or struck piece, the host removes it from the graph. The adapter that does
+this is a separate module, written when the library is worth hosting; the Unreal-specific
+constraints it will impose are enforced here from day one (§7).
+
+## 3. Units
+
+SI base units throughout, no exceptions and no internal conversion boundary.
+
+| Quantity | Unit | Note |
+|---|---|---|
+| Length | m | A standard brick is 0.215 × 0.1025 × 0.065 |
+| Mass | kg | |
+| Force | N | Weight = mass × 9.80665 |
+| Stress, strength | Pa | Published MPa × 1e6, converted once by the catalogue loader |
+| Moment | N·m | |
+| Stiffness | N/m, N·m/rad | |
+
+The old project kept strengths in MPa beside forces in Unreal units and compared them through
+one named constant; a missing or doubled conversion was out by exactly 100× and tuned thresholds
+hid it. Here there is nothing to double. Every variable carries its unit in its name. Whether to
+go further and use strong unit types is open (§9).
+
+## 4. The model vocabulary
+
+Material-agnostic by construction. "Brick on mortar" and "stud nailed to a plate" are the same
+types with different numbers.
+
+- **Body**: mass, centroid, grounded flag, optional inertia. An identity, not a shape.
+- **Interface**: two bodies, a normal, a contact rectangle with its area and section moduli, a
+  profile. Carries its own failure state: intact, cracked (pass N), severed (pass N), or gone
+  with a removed body. State is irreversible; nothing heals.
+- **StrengthProfile**: compressive strength, shear cohesion, tensile strength, friction
+  coefficient, shear cap (Mohr-Coulomb with a truncated envelope: only compression buys friction;
+  μ = 0 gives independent axes, right for a fastener), plus normal and tangential stiffness for
+  the elastic field. Seven numbers. Adding a material is adding a row.
+- **Structure**: the graph of the two, with generational handles that stay valid across removal
+  (removal tombstones; nothing renumbers, because break stamps cannot be recomputed).
+- **Load**: a force or impulse on a body, in the structure frame. Gravity is a load the structure
+  applies to itself.
+- **Verdict**: §2.2.
+
+## 5. The physics authority
+
+Carried from the old project's ratified runtime plan (`SOLVER_RUNTIME_PLAN.md`, 2026-09-23) and
+its two designs, which should be read, not copied:
+
+- **Rigid-block statics is the reference.** Joints carry load in every direction their profile
+  allows; corners, arches and cantilevers may hold things up. There is no routing heuristic, no
+  support tier, no "load flows downward". The old project built that stack first and then spent
+  two months removing it; every one of its heuristics was a patch on the absence of equilibrium.
+- **Standing certificate: an elastic rigid-body-spring field** (six degrees of freedom per body,
+  corner springs per interface, no tension past the profile's limit, slip capped by friction).
+  Every interface at or under capacity in a converged field is a lower-bound proof that the
+  structure stands. `RBSM_DESIGN.md` has the formulation and the rulings R1–R31.
+- **Collapse certificate: a graph min-cut over candidate rigid motions.** A cut with negative
+  energy is an upper-bound proof that a mechanism exists, and names the cluster that moves.
+  `GRAPHCUT_DESIGN.md` has the functional, the candidate dictionary and the determinism rules
+  (integer capacities, minimal source set, fixed orderings).
+- **Between them, a brittle loop.** Interfaces over capacity in tension or cohesion crack, in the
+  top band of ratio only, never all at once; the field re-solves; the cut re-searches. Cracking
+  everything at once once ran damage to the far wall of a warehouse. Severing is the cut's job.
+- **A referee in the test tier**: a rigid-block limit-analysis LP (HiGHS) that measures the true
+  load factor on small fixtures and audits both certificates. It never ships and is not day one.
+
+## 6. Testing strategy
+
+- Unit tests isolate one force on one joint; integration tests put gravity on a structure.
+- **Assert on mechanism in unit tests, on outcome in integration tests.** A severed joint is not
+  collapse. **Displacement is never a break assertion**; two pieces can sever and stay in place.
+- Expected values trace to published strengths, written out in the test as formulas over the
+  profile's numbers, so the test fails if a constant is wrong instead of agreeing with it. The
+  source of every pinned number lives in [ANCHORS.md](ANCHORS.md) under the test name.
+- **Property tests against an independent oracle** for anything topological. Seeded, fully
+  deterministic, printing the failing seed. An oracle that mirrors production is worthless.
+- **A green-on-arrival test is proven to bite** by a recorded mutation before it is trusted.
+- Degenerate inputs fail closed, and the comparison direction matters: `!(x > 0.0)` catches a
+  NaN where `x <= 0.0` lets it through (TRAPS).
+- The default suite runs in seconds. Anything slower is opt-in behind a prefix. An opt-in tier
+  rots unless a milestone names it, so milestones name it.
+
+## 7. Engineering constraints (enforced by the build)
+
+- C++20, no exceptions, no RTTI, `/fp:precise`, warnings as errors. These are what an Unreal
+  module imposes; code that needs them will not port.
+- No global mutable state. A solve on a snapshot gives the same answer on any thread and at any
+  worker count, bit for bit. Budgets are work units, never wall-clock.
+- Doubles throughout. Ordered reductions, no float atomics.
+- The public API is plain structs, integer handles and spans. Linear algebra stays behind the
+  API (§9 decides the library).
+- Comments: headers only, one or two sentences (CLAUDE.md).
+
+## 8. Build order (proposed)
+
+1. **Model.** Bodies, interfaces, profiles, handles, validation that fails closed. A CLI that
+   loads a structure file and prints it. First red: a two-body structure refuses a degenerate
+   normal.
+2. **Statics v1.** The elastic field on small structures with a dense solve; per-interface
+   utilisation with its governing axis. Anchors: one brick on the ground, a stack, a brick
+   cantilevered off another, a leaning stack that must fall.
+3. **Cascade.** Top-band cracking, severing, pass stamps, released bodies grouped into clusters.
+   The verdict type is complete here.
+4. **Collapse certificate.** The drop cut first, then tipping candidates.
+5. **Catalogue and fixtures.** Brick, mortar, perpend, C24 timber, nail, screw, bolt, with
+   citations; a running-bond wall generator; the structural fuzz with its oracle.
+6. **Scale.** Sparse solve, event region, panels. The old warehouse is the benchmark: 5,612
+   pieces, 15,042 joints, a decision inside 200 ms.
+7. **Referee.** HiGHS LP in the test tier.
+8. **Unreal adapter**, as its own module.
+
+Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
+
+## 9. Open questions for the owner
+
+| # | Question | Recommendation |
+|---|---|---|
+| 1 | Project name | `LoadPath` is a working name; rename is a folder move |
+| 2 | Metres or millimetres | Metres. Doubles carry a 0.065 m brick and a 30 m warehouse without strain |
+| 3 | Strong unit types or suffixed doubles | Suffixed doubles for now; revisit if a unit bug ever lands |
+| 4 | Linear algebra | Vendor Eigen (MPL2, header-only, already in Unreal's ThirdParty) behind the API |
+| 5 | STL in the public API | Yes, `std::span` and `std::vector` of plain structs; Unreal consumes them fine in a third-party module |
+| 6 | Structure file format for the CLI and fixtures | JSON, hand-written reader, no dependency |
+| 7 | License | Owner's call; nothing is published yet |
+
+## 10. Rulings
+
+- *2026-10-10, owner:* 3D from the start. No piece-internal failure. Unreal with Chaos is the
+  eventual host. Same TDD and three-agent process as the old project. Comments in headers only,
+  one or two sentences. Agents run on Opus 5.5 at high effort unless told otherwise.
