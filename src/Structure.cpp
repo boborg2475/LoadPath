@@ -33,6 +33,11 @@ bool IsFiniteOrPositiveInfinity(double X)
 	return IsFinite(X) || X == std::numeric_limits<double>::infinity();
 }
 
+bool IsLiveState(InterfaceState State)
+{
+	return State == InterfaceState::Intact || State == InterfaceState::Cracked;
+}
+
 bool IsNotNegative(double X)
 {
 	return X >= 0.0;
@@ -169,7 +174,7 @@ bool Structure::RemoveBody(BodyId Id)
 	Bodies[Id.Index].bLive = false;
 	for (InterfaceSlot& Each : Interfaces)
 	{
-		if (Each.Record.BodyA == Id || Each.Record.BodyB == Id)
+		if ((Each.Record.BodyA == Id || Each.Record.BodyB == Id) && Each.Record.State != InterfaceState::Severed)
 		{
 			Each.Record.State = InterfaceState::Removed;
 		}
@@ -177,24 +182,47 @@ bool Structure::RemoveBody(BodyId Id)
 	return true;
 }
 
-bool Structure::Crack(InterfaceId, std::uint32_t)
+bool Structure::Crack(InterfaceId Id, std::uint32_t Pass)
 {
-	return false;
+	if (Pass == 0 || !IsKnown(Id) || Interfaces[Id.Index].Record.State != InterfaceState::Intact)
+	{
+		return false;
+	}
+	InterfaceRecord& Record = Interfaces[Id.Index].Record;
+	Record.State = InterfaceState::Cracked;
+	Record.CrackPass = Pass;
+	HighestStamp = std::max(HighestStamp, Pass);
+	return true;
 }
 
-bool Structure::Sever(InterfaceId, std::uint32_t)
+bool Structure::Sever(InterfaceId Id, std::uint32_t Pass)
 {
-	return false;
+	if (Pass == 0 || !IsLive(Id))
+	{
+		return false;
+	}
+	InterfaceRecord& Record = Interfaces[Id.Index].Record;
+	Record.State = InterfaceState::Severed;
+	Record.SeverPass = Pass;
+	HighestStamp = std::max(HighestStamp, Pass);
+	return true;
 }
 
 std::uint32_t Structure::HighestPass() const
 {
-	return 0;
+	return HighestStamp;
 }
 
 StrengthProfile Structure::EffectiveProfile(InterfaceId Id) const
 {
-	return Profile(Interface(Id).Profile);
+	const InterfaceRecord& Record = Interface(Id);
+	StrengthProfile Effective = Profile(Record.Profile);
+	if (IsKnown(Id) && Record.State != InterfaceState::Intact)
+	{
+		Effective.TensileStrengthPa = 0.0;
+		Effective.ShearCohesionPa = 0.0;
+	}
+	return Effective;
 }
 
 bool Structure::IsKnown(BodyId Id) const
@@ -214,7 +242,7 @@ bool Structure::IsLive(BodyId Id) const
 
 bool Structure::IsLive(InterfaceId Id) const
 {
-	return IsKnown(Id) && Interfaces[Id.Index].Record.State != InterfaceState::Removed;
+	return IsKnown(Id) && IsLiveState(Interfaces[Id.Index].Record.State);
 }
 
 bool Structure::IsValid(ProfileId Id) const
@@ -265,7 +293,7 @@ std::vector<InterfaceId> Structure::LiveInterfaces() const
 	std::vector<InterfaceId> Ids;
 	for (std::size_t Index = 0; Index < Interfaces.size(); ++Index)
 	{
-		if (Interfaces[Index].Record.State != InterfaceState::Removed)
+		if (IsLiveState(Interfaces[Index].Record.State))
 		{
 			Ids.push_back(InterfaceId{static_cast<std::uint32_t>(Index), FirstGeneration});
 		}

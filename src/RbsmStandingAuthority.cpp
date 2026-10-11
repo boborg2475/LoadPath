@@ -128,7 +128,7 @@ bool FindInvalidInput(const Structure& Model, std::span<const BodyLoad> Loads, c
 	}
 	for (const InterfaceId Id : Model.LiveInterfaces())
 	{
-		const StrengthProfile& Profile = Model.Profile(Model.Interface(Id).Profile);
+		const StrengthProfile Profile = Model.EffectiveProfile(Id);
 		if (!IsUsableStiffness(Profile.NormalStiffnessPaPerM) || !IsUsableStiffness(Profile.TangentialStiffnessPaPerM))
 		{
 			Offending = Id;
@@ -148,7 +148,7 @@ bool FindInvalidInput(const Structure& Model, std::span<const BodyLoad> Loads, c
 Joint MakeJoint(const Structure& Model, InterfaceId Id, const std::vector<int>& OffsetOfSlot)
 {
 	const InterfaceRecord& Record = Model.Interface(Id);
-	const StrengthProfile& Profile = Model.Profile(Record.Profile);
+	const StrengthProfile Profile = Model.EffectiveProfile(Id);
 	const double CornerAreaM2 = Record.AreaM2 / 4.0;
 	Joint J;
 	static_cast<statics::JointGeometry&>(J) = statics::MakeJointGeometry(Model, Id, OffsetOfSlot);
@@ -605,6 +605,14 @@ bool IsOverstressed(const Joint& J, const CornerRatios& Ratios)
 	return bNonFinite || bCrushed || bTornBond || bShearedBond;
 }
 
+void Raise(double Candidate, double& AxisUtilisation)
+{
+	if (Candidate > AxisUtilisation)
+	{
+		AxisUtilisation = Candidate;
+	}
+}
+
 void Govern(double Candidate, GoverningAxis Axis, InterfaceReading& Reading)
 {
 	if (Candidate > Reading.Utilisation)
@@ -638,6 +646,9 @@ InterfaceReading ReadJoint(const Joint& J, const JointState& State, const Eigen:
 		Govern(Ratios.Compression, GoverningAxis::Compression, Reading);
 		Govern(Ratios.Tension, GoverningAxis::Tension, Reading);
 		Govern(Ratios.Shear, GoverningAxis::Shear, Reading);
+		Raise(Ratios.Compression, Reading.CompressionUtilisation);
+		Raise(Ratios.Tension, Reading.TensionUtilisation);
+		Raise(Ratios.Shear, Reading.ShearUtilisation);
 		bOverstressed = bOverstressed || IsOverstressed(J, Ratios);
 	}
 	return Reading;

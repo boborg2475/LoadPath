@@ -870,7 +870,10 @@ changed nothing has `LastPass = FirstPass − 1` and `Passes = 0`.
 
 **The structure file carries state** (slice 1b format, extended here): every interface whose
 two bodies are live is written, `Intact`, `Cracked` or `Severed`, with `state`, `crack_pass`
-and `sever_pass`; a file without those fields reads `Intact` and unstamped, so old files load.
+and `sever_pass` (written only when not `Intact`, so a file of an intact structure is unchanged),
+and an optional interface `name` the writer emits when one was given, so a saved joint can be
+found again; a file without those fields reads `Intact`, unstamped and unnamed, so old files
+load.
 
 The final `State` is the last judge's `Worst` mapped to `CascadeState` (`Stands`,
 `Overstressed`, `Undecided`), or `PassCapReached`; `Collapses` cannot be final because every

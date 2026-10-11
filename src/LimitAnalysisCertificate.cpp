@@ -209,7 +209,7 @@ std::vector<Component> BuildComponents(const Structure& Model, std::span<const B
 		{
 			continue;
 		}
-		const StrengthProfile& Profile = Model.Profile(Record.Profile);
+		const StrengthProfile Profile = Model.EffectiveProfile(Id);
 		const double CornerAreaM2 = Record.AreaM2 / 4.0;
 		JointData J;
 		J.Id = Id;

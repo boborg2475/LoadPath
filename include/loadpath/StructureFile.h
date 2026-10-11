@@ -34,6 +34,6 @@ struct LoadResult
 
 LoadResult LoadStructure(std::string_view Json);
 
-// Removed bodies and their interfaces are not written.
+// Removed bodies are not written; an interface is written, with its state and stamps, while both its bodies are live.
 std::string WriteStructure(const LoadedStructure& Loaded);
 }

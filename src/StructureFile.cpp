@@ -476,14 +476,17 @@ public:
 		return true;
 	}
 
-	bool String(std::string_view Key, std::string& Out)
+	bool String(std::string_view Key, std::string& Out, bool bRequired = true)
 	{
 		const JsonValue* Value = nullptr;
-		if (!Get(Key, JsonType::String, true, Value))
+		if (!Get(Key, JsonType::String, bRequired, Value))
 		{
 			return false;
 		}
-		Out = Value->Text;
+		if (Value != nullptr)
+		{
+			Out = Value->Text;
+		}
 		return true;
 	}
 
@@ -637,11 +640,17 @@ private:
 		std::string A;
 		std::string B;
 		std::string ProfileName;
+		std::string Name;
+		std::string StateName = "intact";
+		double CrackPass = 0.0;
+		double SeverPass = 0.0;
 		InterfaceDesc Desc;
 		const bool bRead = Fields.String("a", A) && Fields.String("b", B) && Fields.Vector("normal", Desc.NormalAToB, true) &&
 			Fields.Vector("centre_m", Desc.CentreM, true) && Fields.Vector("u", Desc.AxisU, true) &&
 			Fields.Vector("v", Desc.AxisV, true) && Fields.Number("half_u_m", Desc.HalfExtentUM, true) &&
-			Fields.Number("half_v_m", Desc.HalfExtentVM, true) && Fields.String("profile", ProfileName);
+			Fields.Number("half_v_m", Desc.HalfExtentVM, true) && Fields.String("profile", ProfileName) &&
+			Fields.String("name", Name, false) && Fields.String("state", StateName, false) &&
+			Fields.Number("crack_pass", CrackPass, false) && Fields.Number("sever_pass", SeverPass, false);
 		if (!bRead)
 		{
 			return false;
@@ -669,8 +678,41 @@ private:
 		{
 			return Fields.Fail(ModelErrorText(Added.Error));
 		}
-		Out.InterfaceNames.emplace_back();
-		return true;
+		Out.InterfaceNames.push_back(std::move(Name));
+		return ApplyState(Fields, Added.Value, StateName, CrackPass, SeverPass);
+	}
+
+	bool ApplyState(ElementFields& Fields, InterfaceId Id, const std::string& StateName, double CrackPass, double SeverPass)
+	{
+		if (!IsPassNumber(CrackPass) || !IsPassNumber(SeverPass))
+		{
+			return Fields.Fail("crack_pass and sever_pass must be whole numbers from 0 to 4294967295");
+		}
+		const std::uint32_t Crack = static_cast<std::uint32_t>(CrackPass);
+		const std::uint32_t Sever = static_cast<std::uint32_t>(SeverPass);
+		bool bApplied = false;
+		if (StateName == "intact")
+		{
+			bApplied = Crack == 0 && Sever == 0;
+		}
+		else if (StateName == "cracked")
+		{
+			bApplied = Sever == 0 && Out.Model.Crack(Id, Crack);
+		}
+		else if (StateName == "severed")
+		{
+			bApplied = (Crack == 0 || (Crack <= Sever && Out.Model.Crack(Id, Crack))) && Out.Model.Sever(Id, Sever);
+		}
+		else
+		{
+			return Fields.Fail("unknown state " + StateName);
+		}
+		return bApplied || Fields.Fail("state " + StateName + " does not match its pass stamps");
+	}
+
+	static bool IsPassNumber(double X)
+	{
+		return X >= 0.0 && X <= 4294967295.0 && X == std::floor(X);
 	}
 
 	LoadedStructure& Out;
@@ -818,9 +860,13 @@ std::string WriteStructure(const LoadedStructure& Loaded)
 	}
 	Out += "\n  ],\n  \"interfaces\": [";
 	bFirst = true;
-	for (const InterfaceId& Id : Model.LiveInterfaces())
+	for (std::uint32_t Index = 0; Model.Interface(InterfaceId{Index, 1u}).BodyA.Generation != 0; ++Index)
 	{
-		const InterfaceRecord& J = Model.Interface(Id);
+		const InterfaceRecord& J = Model.Interface(InterfaceId{Index, 1u});
+		if (!Model.IsLive(J.BodyA) || !Model.IsLive(J.BodyB))
+		{
+			continue;
+		}
 		BeginElement(Out, bFirst);
 		bFirst = false;
 		ObjectWriter Writer(Out);
@@ -833,6 +879,16 @@ std::string WriteStructure(const LoadedStructure& Loaded)
 		Writer.Number("half_u_m", J.HalfExtentUM);
 		Writer.Number("half_v_m", J.HalfExtentVM);
 		Writer.String("profile", NameAt(Loaded.ProfileNames, J.Profile.Index, 'p'));
+		if (Index < Loaded.InterfaceNames.size() && !Loaded.InterfaceNames[Index].empty())
+		{
+			Writer.String("name", Loaded.InterfaceNames[Index]);
+		}
+		if (J.State != InterfaceState::Intact)
+		{
+			Writer.String("state", J.State == InterfaceState::Cracked ? "cracked" : "severed");
+			Writer.Number("crack_pass", J.CrackPass);
+			Writer.Number("sever_pass", J.SeverPass);
+		}
 	}
 	Out += "\n  ]\n}\n";
 	return Out;

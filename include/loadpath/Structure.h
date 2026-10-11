@@ -29,7 +29,7 @@ public:
 	bool Sever(InterfaceId Id, std::uint32_t Pass);
 	// The largest crack or sever stamp ever written, 0 when none.
 	std::uint32_t HighestPass() const;
-	// The profile with TensileStrengthPa and ShearCohesionPa zeroed when the interface is Cracked.
+	// The profile with TensileStrengthPa and ShearCohesionPa zeroed unless Intact, so a dead joint reads the weaker form.
 	StrengthProfile EffectiveProfile(InterfaceId Id) const;
 
 	bool IsLive(BodyId Id) const;
@@ -72,5 +72,7 @@ private:
 	std::vector<StrengthProfile> Profiles;
 	std::vector<BodySlot> Bodies;
 	std::vector<InterfaceSlot> Interfaces;
+	// Tracked, never recomputed from records that removal may have rewritten.
+	std::uint32_t HighestStamp = 0;
 };
 }
