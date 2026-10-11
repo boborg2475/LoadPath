@@ -312,3 +312,19 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   below the continuous least thickness** when voussoirs carry exact sector weights and
   centroids (the joints are a subset of the continuous sections); B-ARC-09's "only raises" is a
   DDA artefact, and the anchor pins Milankovitch exactly with joints at ±54.484°.
+- *2026-10-11, orchestrator, slice 3 opening:* **the cascade is a loop over the combined
+  authority** (API.md "Slice 3"), one judge per pass, release before crack within a pass by
+  construction (a component is either Collapses or Overstressed, never both). Rulings carried
+  from the old project's R27–R30 and TRAPS: cracks land event by event in the top band of
+  crack ratio (`CrackBandFraction`, default 0.5, relative edge 1e-9, NaN and +inf always
+  crack, `R_max` over finite eligible ratios only); crushing has no crack action; a crack
+  removes tension and cohesion and keeps compression, friction, the cap and the stiffnesses,
+  through one `Structure::EffectiveProfile` both authorities read; severing is the
+  certificate's job, done only at a release, on every live interface crossing the released
+  cluster's boundary; clusters are the certificate's released bodies grouped over non-hinging
+  interfaces, so each is a certified rigid motion and never a reachability weld. New here: a
+  severed joint is **not live** (it carries nothing), `RemoveBody` keeps a severed joint's
+  stamp, pass numbers continue from `HighestPass` across calls, and the per-axis utilisations
+  move into `InterfaceReading` so the crack rule reads the elastic authority's own ratios
+  rather than a second copy of the strength rule. The run mutates the structure it is given,
+  which is the host's snapshot (DESIGN §2.4), and the verdict lists every change.

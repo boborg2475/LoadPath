@@ -742,3 +742,160 @@ cone's).
   Collapses component reports both per component with `Worst = Collapses`; the disagreement
   count on the dry bridge at μ 5, λ (2.5, 0.875) is 1 (elastic Mechanism, certificate Stands)
   and the release set is empty; a pure elastic Stands never consults the certificate.
+
+## Slice 3: the cascade (crack, sever, release)
+
+The brittle loop of DESIGN §5 on top of the combined authority: judge, release what the
+certificate collapses as rigid clusters, crack the top band of over-capacity bonded joints where
+the structure is Overstressed, re-judge, until a pass changes nothing. It completes the verdict
+type of DESIGN §2.2. The host runs it on its snapshot (§2.4): `Run` mutates the structure it is
+given (stamps, removals), and the verdict lists every change so a host can mirror it onto
+another copy.
+
+### Structure additions (`Structure.h`, `Interface.h`)
+
+```cpp
+bool Crack(InterfaceId, std::uint32_t Pass);   // Intact -> Cracked, stamps CrackPass; false otherwise
+bool Sever(InterfaceId, std::uint32_t Pass);   // Intact or Cracked -> Severed, stamps SeverPass; false otherwise
+std::uint32_t HighestPass() const;             // the largest crack or sever stamp ever written, 0 when none
+StrengthProfile EffectiveProfile(InterfaceId) const;  // the profile with TensileStrengthPa = ShearCohesionPa = 0 when Cracked
+```
+
+State is irreversible: `Crack` on anything but `Intact` and `Sever` on `Severed` or `Removed`
+return false and change nothing; a pass of 0 is refused (0 means never). `IsLive(InterfaceId)`
+is now **`Intact` or `Cracked`**: a severed joint carries exactly nothing (TRAPS), so it leaves
+`LiveInterfaces`, `InterfacesOf` and both authorities, and a body whose joints are all severed
+is a free body with no interface (Collapses at `t = 0`, listed). `RemoveBody` sets a body's
+`Intact` and `Cracked` interfaces to `Removed` with no stamp, as before, and **leaves a
+`Severed` interface `Severed` with its stamp**: the stamp is history and a removal never
+overwrites history. Pass numbers belong to the structure: `HighestPass` survives across calls
+and a later cascade continues from it.
+
+**Both authorities read `EffectiveProfile`**, never the raw profile, so a cracked joint is a dry
+joint to them: compression, friction and the shear cap kept, tension and cohesion gone,
+stiffness unchanged. The crushing bound, `μ`, `MaxShearStrengthPa` and the two stiffnesses are
+untouched by a crack.
+
+### Per-axis readings (`StandingAuthority.h`)
+
+`InterfaceReading` gains `CompressionUtilisation`, `TensionUtilisation` and
+`ShearUtilisation`, the slice-2 ratios per axis as the elastic authority computes them today
+(`Utilisation` is their maximum and `Axis` names the maximum, with the existing tie order), so
+the cascade never recomputes a strength rule from corner forces (the first slice-4b round
+showed what a second copy of that rule costs). A non-finite ratio stays non-finite.
+
+### The interface (`Cascade.h`)
+
+```cpp
+enum class CascadeState : uint8_t { Stands, Overstressed, Undecided, InvalidInput, PassCapReached };
+
+struct FailedInterface {
+	InterfaceId Id;
+	std::uint32_t Pass;
+	GoverningAxis Axis;        // the crack: the larger of tension and shear; the sever: the reading's axis at release, None when unread
+	double Ratio;              // the crack ratio or the reading's utilisation at release
+	bool bSevered;             // false: cracked (bond lost, friction kept); true: severed with its cluster
+};
+
+struct ReleasedCluster {
+	std::uint32_t Pass;
+	std::vector<BodyId> Bodies;            // ascending slot order; released as one rigid body by the host
+	MechanismMotion Motion;                // the certificate's motion of the lowest-slot body; the others share it
+	std::vector<InterfaceId> Severed;      // every live interface that crossed the cluster boundary, now Severed
+	double LoadFactorLower, LoadFactorUpper;  // the certificate's bracket for the component
+};
+
+struct CascadeOptions {
+	AuthorityOptions Authority;
+	double CrackBandFraction = 0.5;       // delta: joints with ratio >= R_max (1 - delta) crack this pass; 0 = one event per pass (ties together), 1 = all at once
+	int MaxPasses = 32;                   // counted passes before PassCapReached
+};
+
+struct CascadeVerdict {
+	CascadeState State = CascadeState::Undecided;
+	std::uint32_t FirstPass = 0, LastPass = 0;   // stamps written by this run; FirstPass = LastPass + 1 of the previous run
+	int Passes = 0;                              // counted passes: those that cracked or released something
+	std::vector<FailedInterface> Failures;       // ascending (pass, slot)
+	std::vector<ReleasedCluster> Clusters;       // ascending (pass, lowest body slot)
+	std::vector<InterfaceReading> Readings;      // the final judge's readings, every live interface
+	std::vector<ComponentReport> Components;     // the final judge's components
+	InterfaceId InvalidInterface{};
+};
+
+class ICascade {
+public:
+	virtual ~ICascade() = default;
+	virtual CascadeVerdict Run(Structure&, std::span<const BodyLoad>, const CascadeOptions&) const = 0;
+};
+
+std::unique_ptr<ICascade> MakeCascade(std::unique_ptr<IStructuralAuthority>);
+```
+
+### The pass
+
+Options first: `CrackBandFraction` must be finite in `[0, 1]` and `MaxPasses ≥ 1`, else
+`InvalidInput`; the authority options are validated by the authority. A load on a body dead at
+entry is `InvalidInput` (the authority's rule). Then, with `Pass = HighestPass() + 1`:
+
+1. **Judge** with the combined authority on the live structure and the loads of live bodies (a
+   load on a released body left with it). `InvalidInput` ends the run as `InvalidInput`.
+2. **Release.** For every component with Verdict `Collapses`: group its `Release` bodies into
+   clusters, the connected components of the released bodies over the live interfaces **not** in
+   the certificate's `Hinging` list (bodies joined by a non-hinging interface share the
+   certified rigid motion; TRAPS: a cluster released as one body must be a certified mechanism,
+   and this one is the certificate's). For each cluster, ascending by lowest body slot: sever
+   every live interface between a cluster body and a body outside it (stamped `Pass`, recorded
+   as a `FailedInterface` with `bSevered` and the reading's axis and utilisation), then
+   `RemoveBody` every cluster body (its internal joints go with it, `Removed`, no stamp). The
+   cluster's `Motion` is the certificate's motion of its lowest-slot body.
+3. **Crack.** For every component with Verdict `Overstressed`: the eligible joints are its live
+   `Intact` interfaces whose profile is bonded (`TensileStrengthPa > 0` or
+   `ShearCohesionPa > 0`) with crack ratio `max(TensionUtilisation, ShearUtilisation)` not
+   `≤ 1` (so NaN is over). `R_max` is the largest **finite** eligible ratio; a joint cracks when
+   its ratio is NaN or `+inf` (every pass it is eligible) or `≥ R_max · (1 − δ) · (1 − 1e-9)`
+   (the relative edge keeps two identical joints that differ by rounding in the same pass).
+   Cracked joints are stamped `Pass` and recorded with the crack ratio and its axis. A joint over
+   one on compression only (crushing) stands and logs: no crack action, as in the old project; a
+   dry joint over one cannot be Overstressed on a crackable axis and is never eligible.
+   `Undecided` and `Stands` components change nothing.
+4. A pass that released or cracked anything is **counted** and the loop repeats with
+   `Pass + 1`; a pass that changed nothing ends the run and is not counted. Termination is
+   structural: joints never heal, every counted pass stamps at least one, so the run ends within
+   the live interface count; `MaxPasses` is a budget, and reaching it after a counted pass ends
+   the run as `PassCapReached` with the structure as it stands then (the host sees a partial
+   cascade and calls again; the next run continues from `HighestPass`).
+
+The final `State` is the last judge's `Worst` mapped to `CascadeState` (`Stands`,
+`Overstressed`, `Undecided`), or `PassCapReached`; `Collapses` cannot be final because every
+collapsing component was released in its pass. `Readings` and `Components` are the final
+judge's, so a host reading utilisations after a cascade reads the structure that remains. The
+run is deterministic: ordered by slot everywhere, no state outside the structure.
+
+### What slice 3 must pin
+
+- Structure: the state machine (`Crack` only from `Intact`, `Sever` from `Intact` or `Cracked`,
+  nothing from `Severed` or `Removed`, pass 0 refused, stamps written once), `HighestPass`,
+  liveness of `Cracked` and not of `Severed`, `RemoveBody` keeping a `Severed` interface and
+  its stamp, `EffectiveProfile` on each state, the file reader/writer round-tripping state and
+  stamps or a recorded decision that they do not (CURRENT_STATE has the format note).
+- Readings: the three per-axis ratios agree with `Utilisation` and `Axis` on the slice-2
+  anchors (brick under uplift: tension; sliding brick: shear; crushed brick: compression).
+- Both authorities on a cracked joint: a bonded brick that stands under an uplift below
+  `ft · A` Collapses (certificate) and reads Mechanism or Undecided (elastic) once the bed is
+  cracked; the cracked joint keeps friction (a cracked bed on a 20° slope at μ 0.7 still stands).
+- Cascade: a dry brick past friction releases `{brick}` on pass 1 with the bed severed and
+  stamped, the structure left empty and `State = Stands`; the two-brick stack past friction at
+  the ground releases both as **one** cluster (the joint between them is not hinging); the
+  harmonic three-stack with the top block pushed past its edge releases `{top}` alone; a bonded
+  three-brick pier with a lateral point load that over-stresses the base joint in tension
+  (ratio over one) and leaves the others under one cracks the base on pass 1, then on pass 2
+  the dry base tips and the pier is released as one cluster (sever stamped 2), `Passes = 2`; the
+  top band: three bonded joints at ratios about 3, 2 and 1.2 with `δ = 0.5` crack the first two
+  on pass 1 and not the third, with `δ = 0` only the first, with `δ = 1` all three; a crushing
+  overload cracks nothing and ends `Overstressed` with `Passes = 0`; an Undecided component
+  ends `Undecided` with nothing stamped; `MaxPasses = 1` on the pier ends `PassCapReached`
+  after pass 1 with the base cracked, and a second `Run` continues at pass 2 and finishes; a
+  grounded-only structure is `Stands` with `Passes = 0`; `CrackBandFraction` NaN or 1.5 is
+  `InvalidInput` with nothing stamped; a free body with no interface is released on pass 1 as
+  its own cluster; two independent collapsing components in one pass give two clusters in slot
+  order; running the same input twice gives identical verdicts.
