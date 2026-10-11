@@ -1,0 +1,120 @@
+{
+  "version": 1,
+  "joints": [
+    {
+      "name": "clay_gp_mortar_bed_ec6",
+      "kind": "bed",
+      "basis": "characteristic",
+      "compressive_mpa": 8.93,
+      "cohesion_mpa": 0.30,
+      "tensile_mpa": 0.10,
+      "friction": 0.4,
+      "shear_cap_mpa": 1.30,
+      "normal_stiffness_gpa_per_m": 893,
+      "tangential_stiffness_gpa_per_m": 357,
+      "source": "https://dnaop.com/html/60058_6.html ; https://dnaop.com/html/60058_5.html (EN 1996-1-1 §3.6, §3.6.2)",
+      "note": "Clay unit Group 1, general-purpose mortar M10, f_b = 20 MPa, f_m = 10 MPa. Cohesion f_vk0 = 0.30 MPa (Table 3.4, M10-M20). Tension f_xk1 = 0.10 MPa (§3.6.3, failure plane parallel to the bed). Friction 0.4 from the 0.4 sigma_d term of eq. 3.5. Cap 0.065 f_b = 0.065 x 20 = 1.30 MPa. Compression eq. 3.2 f_k = K f_b^0.7 f_m^0.3 with K = 0.55 (Table 3.3): 0.55 x 20^0.7 x 10^0.3 = 0.55 x 8.1418 x 1.9953 = 8.935, taken as 8.93 MPa. Stiffness E = K_E f_k with K_E = 1000 (§3.7.2): 8.93 GPa over a 10 mm joint = 8.93 / 0.010 = 893 GPa/m normal; G = 0.4 E (§3.7.3): 0.4 x 893 = 357.2, taken as 357 GPa/m tangential."
+    },
+    {
+      "name": "clay_gp_mortar_perpend_ec6",
+      "kind": "perpend",
+      "basis": "characteristic",
+      "compressive_mpa": 8.93,
+      "cohesion_mpa": 0.15,
+      "tensile_mpa": 0.20,
+      "friction": 0.4,
+      "shear_cap_mpa": 0.90,
+      "normal_stiffness_gpa_per_m": 893,
+      "tangential_stiffness_gpa_per_m": 357,
+      "source": "https://dnaop.com/html/60058_6.html ; https://dnaop.com/html/60058_5.html (EN 1996-1-1 §3.6, §3.6.2)",
+      "note": "The bed row for unfilled perpends: cohesion 0.5 f_vk0 = 0.5 x 0.30 = 0.15 MPa and cap 0.045 f_b = 0.045 x 20 = 0.90 MPa (eq. 3.6). Tension f_xk2 = 0.20 MPa, the low end of 0.20-0.40 (§3.6.3, failure plane perpendicular to the bed). Compression, friction and stiffness as the bed row."
+    },
+    {
+      "name": "clay_gp_mortar_bed_gooch_mean",
+      "kind": "bed",
+      "basis": "mean",
+      "compressive_mpa": 8.93,
+      "cohesion_mpa": 0.60,
+      "tensile_mpa": 0.20,
+      "friction": 1.05,
+      "normal_stiffness_gpa_per_m": 893,
+      "tangential_stiffness_gpa_per_m": 357,
+      "friction_normal_stress_mpa": 0.2,
+      "source": "https://researchonline.jcu.edu.au/87642/ ; https://researchonline.jcu.edu.au/87638/1/Experimental%20characterisation%20of%20the%20friction%20coefficient%20of%20mortar%20bed%20joints%20in%20clay-brick%20masonry.pdf ; https://www.canadamasonrydesigncentre.com/wp-content/uploads/15th_symposium/019-Gooch.pdf",
+      "note": "Gooch et al. 2023/2025, 1:1:6 mortar on Australian clay brick. Direct tension 0.20 MPa, the middle of 0.15-0.25. Cohesion 0.60 MPa, the low end of the couplet shear bond 0.58-1.04. Friction 1.05 measured at 0.2 MPa normal stress (mu = 1.12 e^(-0.35 sigma_n) gives 1.04-1.16 at 0.22 MPa). No shear cap measured. Compression and stiffness are not measured there: the code row's values."
+    },
+    {
+      "name": "lime_mortar_handmade_brick_upc_mean",
+      "kind": "bed",
+      "basis": "mean",
+      "compressive_mpa": 8.93,
+      "cohesion_mpa": 0.16,
+      "tensile_mpa": 0,
+      "friction": 0.667169287134503,
+      "normal_stiffness_gpa_per_m": 893,
+      "tangential_stiffness_gpa_per_m": 357,
+      "source": "https://upcommons.upc.edu/server/api/core/bitstreams/77631472-a1eb-4bc2-b2ad-5bfcb4bd5f02/content",
+      "note": "Segura, Pela, Saloustros and Roca, triplet tests: c = 0.16 MPa, phi = 33.71 deg, mu = tan 33.71 deg = 0.667169. No tension measured; the dry-bond floor. No shear cap measured. Compression and stiffness are not measured there: the EC6 code row's values."
+    },
+    {
+      "name": "c24_bearing_perp_to_grain",
+      "kind": "bearing",
+      "basis": "characteristic",
+      "compressive_mpa": 3.75,
+      "cohesion_mpa": 0,
+      "tensile_mpa": 0,
+      "friction": 0.3,
+      "normal_stiffness_gpa_per_m": 8.2,
+      "tangential_stiffness_gpa_per_m": 4.1,
+      "source": "https://www.svenskttra.se/siteassets/5-publikationer/pdfer/sw-design-of-timber-structures-vol3-2022.pdf ; https://finesoftware.eu/help/truss4/en/compression-perpendicular-to-the-grain-in-supports-01/ ; Wood Handbook FPL-GTR-190 ch. 4 (Glass and Zelinka 2010)",
+      "note": "C24 perpendicular to grain: f_c,90,k = 2.5 MPa x k_c,90 = 1.5 (solid timber on discrete supports) = 3.75 MPa (Swedish Wood Vol. 3 Ex 3.2; EN 1995-1-1 §6.1.5). No tension, no cohesion. Friction 0.3, the low end of the Wood Handbook range 0.3 to 0.5 for smooth dry wood on hard smooth surfaces (kinetic), matched through a search snippet, PDF unopened. Stiffness E_90,mean = 0.37 GPa (EN 338 C24) over a 45 mm bearing depth: 0.37 / 0.045 = 8.22, taken as 8.2 GPa/m normal; half that, 4.1 GPa/m, tangential."
+    }
+  ],
+  "fasteners": [
+    {
+      "name": "ec5_screw_8x60_steel_to_glulam",
+      "basis": "characteristic",
+      "shear_per_plane_kn": 4.83,
+      "withdrawal_kn": 1.74,
+      "bearing_mpa": 3.75,
+      "source": "https://www.svenskttra.se/siteassets/5-publikationer/pdfer/sw-design-of-timber-structures-vol3-2022.pdf ; https://www.structuralbasics.com/tensile-capacity-of-screws-eurocode-tutorial/",
+      "note": "Swedish Wood Vol. 3 Ex 4.1-4.3: 8 x 60 mm screw, f_u = 410 MPa, 8 mm steel plate, GL30c; modes c/d/e 9.91 / 4.83 / 5.26 kN, so 4.83 kN per shear plane (mode d). Withdrawal 1.74 kN from Structural Basics by the pre-2008 ETA formula, not EN 1995-1-1/A1:2008 §8.7.2. Bearing: the C24 3.75 MPa of the member it bears on."
+    },
+    {
+      "name": "ec5_ring_nail_4x40_steel_plate",
+      "basis": "characteristic",
+      "shear_per_plane_kn": 1.607,
+      "withdrawal_kn": 0.42,
+      "bearing_mpa": 3.75,
+      "source": "https://www.svenskttra.se/siteassets/5-publikationer/pdfer/sw-design-of-timber-structures-vol3-2022.pdf ; https://www.structuralbasics.com/?p=6714",
+      "note": "Swedish Wood Vol. 3 Ex 4.1-4.3: 4.0 x 40 mm ring-shank nail through a 5 mm plate, 1.607 kN as published; a recomputation gives about 1.48 kN. Withdrawal 0.42 kN is the Structural Basics datum for a 3.1 mm ring-shank nail at 55 mm penetration (f_ax,k = 2.45 MPa), not this nail. Bearing: the C24 3.75 MPa of the member it bears on."
+    },
+    {
+      "name": "ec5_bolt_m16_double_shear",
+      "basis": "characteristic",
+      "shear_per_plane_kn": 6.45,
+      "withdrawal_kn": 0,
+      "bearing_mpa": 3.75,
+      "source": "https://www.svenskttra.se/siteassets/5-publikationer/pdfer/sw-design-of-timber-structures-vol3-2022.pdf",
+      "note": "Swedish Wood Vol. 3 Ex 4.1-4.3: M16 bolt, f_u = 360 MPa, double shear through a 90 mm member, 12.9 kN per bolt (mode k) over two planes = 6.45 kN per plane. No withdrawal given. Bearing: the C24 3.75 MPa of the member it bears on."
+    },
+    {
+      "name": "ec5_screw_8x60_steel_to_glulam_mean",
+      "basis": "mean",
+      "shear_per_plane_kn": 5.18259,
+      "withdrawal_kn": 1.74,
+      "bearing_mpa": 3.75,
+      "source": "https://publikationen.bibliothek.kit.edu/1000049999/3752771 ; https://www.svenskttra.se/siteassets/5-publikationer/pdfer/sw-design-of-timber-structures-vol3-2022.pdf",
+      "note": "The characteristic screw row x 1.073 (Blass and Colling, test / F_v,Rk for steel-to-timber, 1,588 tests): 4.83 x 1.073 = 5.18259 kN. The ratio is for lateral capacity only, so withdrawal stays the characteristic 1.74 kN."
+    },
+    {
+      "name": "ec5_bolt_m16_double_shear_mean",
+      "basis": "mean",
+      "shear_per_plane_kn": 6.9273,
+      "withdrawal_kn": 0,
+      "bearing_mpa": 3.75,
+      "source": "https://publikationen.bibliothek.kit.edu/1000049999/3752771 ; https://www.svenskttra.se/siteassets/5-publikationer/pdfer/sw-design-of-timber-structures-vol3-2022.pdf",
+      "note": "The characteristic bolt row x 1.074 (Blass and Colling, test / F_v,Rk for timber-to-timber): 6.45 x 1.074 = 6.9273 kN per plane. No withdrawal given."
+    }
+  ]
+}

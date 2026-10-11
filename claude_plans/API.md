@@ -1015,10 +1015,13 @@ its URL in the row's `source`; a value with no source is omitted, never invented
   for every fastener row: the C24 3.75 MPa above (the member they bear on, noted).
 
 **Catalogue anchors.** A brick (0.215 × 0.1025 × 0.065 m, 2000 kg/m³) on the `..._bed_ec6`
-profile: pure uplift Collapses at `ft · A` and Stands below (B-CAT-01 through the certificate,
+profile: pure uplift Collapses at `ft · A` through the certificate and Stands below; the combined
+authority reads Overstressed past the bond (the elastic field certifies the overload and the
+cascade cracks it) and Stands below (B-CAT-01,
 the number written as `Row.Profile.TensileStrengthPa × AreaM2` in the test); the perpend row's
-cohesion is half the bed row's and its cap `0.045/0.065` of it; the mean row's tension is
-between 3 and 5 times the code row's (B-CAT-02); `FastenerProfile(screw, 2, A)` on a joint of
+cohesion is half the bed row's and its cap `0.045/0.065` of it; the mean row's direct
+tension and cohesion are 2.0 × the code row's (B-CAT-02: direct tension 0.20 against f_xk1
+0.10; the 3–5 × of the research note is the flexural comparison, 2.06 × 2.0); `FastenerProfile(screw, 2, A)` on a joint of
 area `A` under pure shear Collapses at `2 × 4.83` kN and under pure tension at `2 × 1.74` kN,
 whatever `A` (the area cancels: B-CAT-06/08); the bolt mean row is `1.074 ×` the characteristic
 (B-CAT-09); the loader refuses a row whose tension is negative and a duplicate name with the
