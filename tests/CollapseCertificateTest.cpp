@@ -1,3 +1,4 @@
+#include "AnchorFixtures.h"
 #include "BrickFixtures.h"
 #include "CertificateTestSupport.h"
 #include "StaticsTestSupport.h"
@@ -420,5 +421,49 @@ TEST_CASE("Certificate.Mechanics.ListsCollectEveryCollapsingComponentAndEdgeStat
 		CHECK(Result.State == CertificateState::Collapses);
 		CHECK(Result.UnconstrainedBodies.size() == 1u);
 		CHECK(HasBody(Result.UnconstrainedBodies, Sliding));
+	}
+}
+
+TEST_CASE("Certificate.Mechanics.StandsSurvivesAnOuterSolveThatDoesNotConverge")
+{
+	const double TiltRad = 20.0 * RadPerDegree;
+	const BrickOnGround F = MakeBrickOnGround(Bonded(1000.0, 200.0, 0.3));
+	const CertificateResult Full = DecideWith(F.Model, CertificateTilt(TiltRad));
+	const int IterationLimit = 10;
+	INFO("unlimited: state " << Full.State << ", load factors [" << Full.LoadFactorLower << ", " << Full.LoadFactorUpper << "], iterations " << Full.Iterations);
+	REQUIRE(Full.State == CertificateState::Stands);
+	REQUIRE(Full.LoadFactorUpper < CertificateOptions{}.LoadFactorCap);
+	REQUIRE(Full.Iterations > IterationLimit);
+	CertificateOptions Limited = CertificateTilt(TiltRad);
+	Limited.MaxIterations = IterationLimit;
+	const CertificateResult Result = DecideWith(F.Model, Limited);
+	INFO("limited to " << IterationLimit << ": state " << Result.State << ", load factors [" << Result.LoadFactorLower << ", " << Result.LoadFactorUpper << "]");
+	CHECK(Result.State == CertificateState::Stands);
+	CHECK(Result.LoadFactorLower >= 1.0);
+	CHECK(std::abs(Result.LoadFactorLower - Full.LoadFactorLower) <= LoadFactorRelative * Full.LoadFactorLower);
+	CHECK(Result.LoadFactorUpper == Limited.LoadFactorCap);
+	CHECK(Result.Mechanism.empty());
+}
+
+TEST_CASE("Certificate.Mechanics.SelectionFailureIsUndecidedNotAnOverRelease")
+{
+	const Stack S = BuildOnTable(HarmonicStack(2, 1.0 + 1.0e-6), 0.0);
+	const BodyId Top = S.Blocks.front();
+	const BodyId Lower = S.Blocks.back();
+	const CertificateResult Result = DecideWith(S.Model, CertificateOptions{});
+	INFO("state " << Result.State << ", moving " << Describe(Result.UnconstrainedBodies) << ", hinging " << Describe(Result.HingingInterfaces));
+	CHECK((Result.State == CertificateState::Collapses || Result.State == CertificateState::Undecided));
+	CHECK_FALSE(HasBody(Result.UnconstrainedBodies, Lower));
+	if (Result.State == CertificateState::Collapses)
+	{
+		CHECK(Result.UnconstrainedBodies.size() == 1u);
+		CHECK(HasBody(Result.UnconstrainedBodies, Top));
+		CHECK(Result.HingingInterfaces.size() == 1u);
+	}
+	else
+	{
+		CHECK(Result.UnconstrainedBodies.empty());
+		CHECK(Result.HingingInterfaces.empty());
+		CHECK(Result.Mechanism.empty());
 	}
 }

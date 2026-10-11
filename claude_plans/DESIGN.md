@@ -123,7 +123,7 @@ its two designs, which should be read, not copied:
   corner springs per interface, no tension past the profile's limit, slip capped by friction).
   Every interface at or under capacity in a converged field is a lower-bound proof that the
   structure stands. `RBSM_DESIGN.md` has the formulation and the rulings R1–R31.
-- **Collapse certificate: a graph min-cut over candidate rigid motions.** A cut with negative
+- **Collapse certificate: a graph min-cut over candidate rigid motions** (superseded 2026-10-11, §10: slice 4 ships a limit-analysis LP; the graph cut remains the slice-6 scale plan). A cut with negative
   energy is an upper-bound proof that a mechanism exists, and names the cluster that moves.
   `GRAPHCUT_DESIGN.md` has the functional, the candidate dictionary and the determinism rules
   (integer capacities, minimal source set, fixed orderings).
@@ -261,3 +261,12 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   release for the host until then. At realistic friction (μ 0.4 to 1.0) the oracle found no
   violation in 3,000 random stacks and bridges; the cost of the narrowed contract is 619 of
   those 3,000 reading Undecided where collapse is provable, all fail closed.
+- *2026-10-11, orchestrator, slice 4a:* the collapse certificate is a **limit-analysis LP**
+  (API.md "Slice 4"), not the graph min-cut §5 sketched; the cut stays the slice-6 plan for
+  scale. Rulings absorbed into the contract: proportional loading; inscribed inner strength
+  region `|S| ≤ c + μN` for `N ≥ −min(ft, c/μ) A/4` against the circumscribed hull (a hull on
+  both sides read a bonded Stands at 2.4 × capacity); the homogeneous self-dual embedding;
+  mechanism selection at `t* = 0` by greatest external work per unit L1 motion, with a failed
+  selection reading Undecided rather than handing the host the analytic centre; lists collect
+  every collapsing component; static admissibility is the host's standing criterion and slice 4b
+  referees slice 2's Mechanism verdicts against it.

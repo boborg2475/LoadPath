@@ -400,6 +400,12 @@ TEST_CASE("Certificate.Anchor.CoursedFreeWallHingesAtTheBase")
 	INFO("state " << Failing.State << ", hinging " << Describe(Failing.HingingInterfaces));
 	CHECK(Failing.State == CertificateState::Collapses);
 	CHECK(HasInterface(Failing.HingingInterfaces, W.JointsBottomUp.front()));
+	CHECK(Failing.HingingInterfaces.size() == 1u);
+	CHECK(Failing.UnconstrainedBodies.size() == W.Courses.size());
+	for (const WallCourse& Course : W.Courses)
+	{
+		CHECK(HasBody(Failing.UnconstrainedBodies, Course.Body));
+	}
 }
 
 TEST_CASE("Certificate.Anchor.HarmonicStackStandsInsideItsOverhangAndCollapsesBeyond")
@@ -596,10 +602,10 @@ TEST_CASE("Certificate.Anchor.TensileStrengthBuysNoFrictionUnderCompression")
 		INFO("state " << Result.State << ", load factors [" << Result.LoadFactorLower << ", " << Result.LoadFactorUpper << "]");
 		CHECK(Result.State != CertificateState::Stands);
 		CHECK(Result.LoadFactorLower <= TrueLoadFactor * (1.0 + LoadFactorRelative) + LoadFactorAbsolute);
+		CHECK(std::abs(Result.LoadFactorLower - TrueLoadFactor) <= LoadFactorRelative * TrueLoadFactor);
 		if (TensileShare == 0.0)
 		{
 			CHECK(Result.State == CertificateState::Collapses);
-			CHECK(std::abs(Result.LoadFactorLower - TrueLoadFactor) <= LoadFactorRelative * TrueLoadFactor);
 		}
 	}
 }
@@ -641,6 +647,47 @@ TEST_CASE("Certificate.Anchor.OnlyTheOverhangingCapTips")
 	INFO("state " << Result.State);
 	CHECK(Result.State == CertificateState::Collapses);
 	CheckOnlyBodyAndInterface(Result, Cap, Joint);
+}
+
+TEST_CASE("Certificate.Anchor.OnlyTheOverhangingPairTipsAsOneBody")
+{
+	const double B2XM = 0.10;
+	const double B3XM = 0.20;
+	const Vec3 EdgePointM{BrickLengthM / 2.0, 0.0, BrickHeightM};
+	CHECK(B2XM < EdgePointM.X);
+	CHECK((B2XM + B3XM) / 2.0 > EdgePointM.X);
+	CHECK(std::abs(B3XM - B2XM) < BrickLengthM / 2.0);
+	CHECK((B2XM + B3XM) / 3.0 < BrickLengthM / 2.0);
+	Structure Model;
+	const ProfileId P = AddProfileOk(Model, DryJoint(0.6));
+	const BodyId Ground = AddGroundPlane(Model);
+	const BodyId Pillar = AddBox(Model, BrickShape(0.0, 0));
+	const BodyId B2 = AddBox(Model, BrickShape(B2XM, 1));
+	const BodyId B3 = AddBox(Model, BrickShape(B3XM, 2));
+	AddInterfaceOk(Model, OnGroundPlane(Ground, Pillar, BrickShape(0.0, 0), P));
+	const InterfaceId Joint = AddInterfaceOk(Model, *StackedFaces(Pillar, BrickShape(0.0, 0), B2, BrickShape(B2XM, 1), P));
+	AddInterfaceOk(Model, *StackedFaces(B2, BrickShape(B2XM, 1), B3, BrickShape(B3XM, 2), P));
+	const CertificateResult Result = DecideWith(Model, CertificateOptions{});
+	INFO("state " << Result.State << ", moving " << Describe(Result.UnconstrainedBodies) << ", hinging " << Describe(Result.HingingInterfaces));
+	CHECK(Result.State == CertificateState::Collapses);
+	CHECK(Result.UnconstrainedBodies.size() == 2u);
+	CHECK(HasBody(Result.UnconstrainedBodies, B2));
+	CHECK(HasBody(Result.UnconstrainedBodies, B3));
+	CHECK(Result.HingingInterfaces.size() == 1u);
+	CHECK(HasInterface(Result.HingingInterfaces, Joint));
+	const MechanismMotion* M2 = FindMotion(Result, B2);
+	const MechanismMotion* M3 = FindMotion(Result, B3);
+	REQUIRE(M2 != nullptr);
+	REQUIRE(M3 != nullptr);
+	INFO("B2 " << M2->TranslationM << " / " << M2->RotationRad << ", B3 " << M3->TranslationM << " / " << M3->RotationRad);
+	const double RotationSize = Length(M2->RotationRad);
+	CHECK(RotationSize > 0.0);
+	CHECK(Length(Minus(M2->RotationRad, M3->RotationRad)) <= 1.0e-9 * RotationSize);
+	CHECK(Length(Minus(M2->RotationRad, Times(Dot(M2->RotationRad, PlusY), PlusY))) <= ShapeTolerance * RotationSize);
+	const Vec3 AboutEdge2 = Cross(M2->RotationRad, Minus(BrickShape(B2XM, 1).CentreM, EdgePointM));
+	const Vec3 AboutEdge3 = Cross(M3->RotationRad, Minus(BrickShape(B3XM, 2).CentreM, EdgePointM));
+	CHECK(Length(Minus(M2->TranslationM, AboutEdge2)) <= ShapeTolerance * Length(AboutEdge2));
+	CHECK(Length(Minus(M3->TranslationM, AboutEdge3)) <= ShapeTolerance * Length(AboutEdge3));
 }
 
 TEST_CASE("Certificate.Anchor.OnlyTheUnsupportedEndBrickFalls")
@@ -809,4 +856,64 @@ TEST_CASE("Certificate.Oracle.SeededDrawsMatchTheOracle")
 	INFO("over " << oracle::DrawCount << " draws: certificate stands " << Stands << ", collapses " << Collapses << ", undecided " << Undecided);
 	CHECK(Stands > 0);
 	CHECK(Collapses > 0);
+}
+
+TEST_CASE("Certificate.Anchor.InnerRegionCapsTensionAtCohesionOverFriction")
+{
+	const double Friction = 0.8;
+	const double CohesionPa = 1000.0;
+	const double TensilePa = 3000.0;
+	const double TrueLoadFactor = 0.9;
+	const double Ratio = CircumscribedOverInscribed(16);
+	CHECK(CohesionPa / Friction < TensilePa);
+	const BrickOnGround F = MakeBrickOnGround(Bonded(TensilePa, CohesionPa, Friction));
+	const CertificateOptions Weightless = CertificateUnderGravity(Vec3{0.0, 0.0, 0.0});
+	const Vec3 CentroidM = F.Model.Body(F.Brick).CentroidM;
+	struct Case
+	{
+		const char* Name;
+		Vec3 ForceN;
+		double ExpectedUpper;
+	};
+	const double PullN = (CohesionPa / Friction) * BedAreaM2() / TrueLoadFactor;
+	const double ShearN = CohesionPa * BedAreaM2() / TrueLoadFactor;
+	const Case Cases[] = {
+		{"pull", Vec3{0.0, 0.0, PullN}, TensilePa * BedAreaM2() / PullN},
+		{"shear", Vec3{ShearN, 0.0, 0.0}, Ratio * (CohesionPa + Friction * TensilePa) * BedAreaM2() / ShearN},
+	};
+	CHECK(std::abs(Cases[0].ExpectedUpper - 2.16) <= 1.0e-12);
+	CHECK(std::abs(Cases[1].ExpectedUpper - 3.11995) <= 1.0e-5);
+	for (const Case& Each : Cases)
+	{
+		INFO(doctest::String(Each.Name) << ", force " << Each.ForceN << " N, expected [" << TrueLoadFactor << ", " << Each.ExpectedUpper << "]");
+		const BodyLoad Loads[] = {BodyLoad{F.Brick, Each.ForceN, CentroidM}};
+		const CertificateResult Result = DecideWith(F.Model, Weightless, Loads);
+		INFO("state " << Result.State << ", load factors [" << Result.LoadFactorLower << ", " << Result.LoadFactorUpper << "]");
+		CHECK(Result.State == CertificateState::Undecided);
+		CHECK(std::abs(Result.LoadFactorLower - TrueLoadFactor) <= LoadFactorRelative * TrueLoadFactor);
+		CHECK(std::abs(Result.LoadFactorUpper - Each.ExpectedUpper) <= LoadFactorRelative * Each.ExpectedUpper);
+	}
+}
+
+TEST_CASE("Certificate.Anchor.OnlyTheCapSlidesOffABondedPier")
+{
+	const double LambdaX = 0.5;
+	const double CapFriction = 0.3;
+	const Vec3 PierHalfM{0.1, 0.05, 0.5};
+	const Box PierShape{Vec3{0.0, 0.0, PierHalfM.Z}, PierHalfM, 272.0};
+	const Box CapShape{Vec3{0.0, 0.0, 2.0 * PierHalfM.Z + BrickHeightM / 2.0}, Vec3{BrickLengthM / 2.0, BrickWidthM / 2.0, BrickHeightM / 2.0}, BrickMassKg};
+	CHECK(LambdaX > CapFriction * CircumscribedOverInscribed(16));
+	CHECK(LambdaX * BrickHeightM / 2.0 < PierHalfM.X);
+	Structure Model;
+	const ProfileId BedProfile = AddProfileOk(Model, Bonded(1.0e6, 1.0e6, 0.6));
+	const ProfileId CapProfile = AddProfileOk(Model, DryJoint(CapFriction));
+	const BodyId Ground = AddGroundPlane(Model);
+	const BodyId Pier = AddBox(Model, PierShape);
+	const BodyId Cap = AddBox(Model, CapShape);
+	AddInterfaceOk(Model, OnGroundPlane(Ground, Pier, PierShape, BedProfile));
+	const InterfaceId Joint = AddInterfaceOk(Model, *StackedFaces(Pier, PierShape, Cap, CapShape, CapProfile));
+	const CertificateResult Result = DecideWith(Model, CertificateLateral(LambdaX));
+	INFO("state " << Result.State << ", load factors [" << Result.LoadFactorLower << ", " << Result.LoadFactorUpper << "]");
+	CHECK(Result.State == CertificateState::Collapses);
+	CheckOnlyBodyAndInterface(Result, Cap, Joint);
 }

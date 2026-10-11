@@ -17,9 +17,9 @@ reports Mechanism as a verdict, and fails closed to Undecided rather than guess)
 mechanics tests (incline tip and slide, Housner, free and coursed wall, the Itasca slope
 regimes, harmonic stack, Paterson–Zwick triangle and diamond), 20 solver characterisation and
 defect tests, a seeded locality property and a seeded static-admissibility oracle property.
-Slice 4a, the limit-analysis collapse certificate (`ICollapseCertificate`, 24 cases), is green
-at ac2e1fb and awaiting review. Default suite 137 cases (7669 assertions in Debug, 15190 in
-Release, about 6.6 s and 0.9 s);
+Slice 4a, the limit-analysis collapse certificate (`ICollapseCertificate`, 34 cases), is green
+at 6d83bba after two reviews, with a third round in flight ("Next" 1). Default suite 147 cases
+(7846 assertions in Debug, 15367 in Release, about 7.4 s and 1.3 s);
 the `Deferred.Slice4` tier holds 3 cases red by design. The design brief
 ([DESIGN.md](DESIGN.md)) has every §9 question decided and §10 carries the slice-2 rulings.
 
@@ -81,9 +81,11 @@ the `Deferred.Slice4` tier holds 3 cases red by design. The design brief
    only), F-RON-01 panel thickness, B-FTL-01 layout. B-BUR-01 needs a soil-pressure driver;
    F-PYR-01 needs a zero-extent contact; group 9 runs only in the host adapter's suite.
 3. `Scripts/Test.ps1` excludes a `Slow.` prefix from the default run once the first slow test
-   exists; today there is none, but the Debug default suite is at about 4 s after the oracle grid
-   split (Release under 1 s); the next slow candidate goes behind the prefix and the script gains
-   the exclusion then.
+   exists. Two candidates are over a second in Debug (CoursedFreeWallHingesAtTheBase 1.3 s,
+   mostly a failing selection solve the motion-normalised rescaling should remove; SingleBrickGrid
+   1.1 s); measure after the rescaling, then move what is still over a second under `Slow.` and
+   add the exclusion, fixing at the same time the caveat that any caller `-tce` drops the
+   `Deferred.` exclusion.
 
 ## Deferred
 

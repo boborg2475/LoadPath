@@ -453,7 +453,9 @@ The kinematic authority. Where the elastic standing authority fails closed (Unde
 reports a Mechanism it cannot certify, this answers from the static theorem of limit analysis
 over the same rigid blocks and interfaces (Livesley 1978; Gilbert & Melbourne 1994; Orduña &
 Lourenço 2005; the formulation BENCHMARKS groups 4 and 5 were computed with). It is a second
-implementation behind its own interface, swappable like the first (DESIGN §7).
+implementation behind its own interface, swappable like the first (DESIGN §7). This section
+is the contract as built and reviewed twice (2026-10-11); the dated rulings it absorbed are in
+DESIGN §10.
 
 ### The interface (`CollapseCertificate.h`)
 
@@ -464,18 +466,18 @@ struct CertificateOptions {
 	Vec3   Gravity = {0.0, 0.0, -GravityMPerS2};
 	int    ConeGenerators = 16;            // even, >= 4; the friction circle is approximated by this polygon
 	double LoadFactorCap = 1.0e3;          // the LP's upper bound on t; reaching it means "stands with margin >= cap"
-	double FeasibilityTolerance = 1.0e-9;  // relative, on the equilibrium residual and complementarity
-	int    MaxIterations = 200;            // interior-point iterations before Undecided
+	double FeasibilityTolerance = 1.0e-9;  // relative, on the equilibrium residual, dual residual and gap
+	int    MaxIterations = 200;            // interior-point iterations per solve before it is declared failed
 };
 
 struct CertificateResult {
 	CertificateState State = CertificateState::Undecided;
-	double LoadFactorLower = 0.0;          // t_in: the inscribed-cone collapse multiplier (a true static field exists up to here)
-	double LoadFactorUpper = 0.0;          // t_out: the circumscribed-cone multiplier (no static field exists beyond here)
-	std::vector<MechanismMotion> Mechanism;        // the dual ray at collapse, per moving body, largest component 1
+	double LoadFactorLower = 0.0;          // t_in: a statically admissible field exists up to here
+	double LoadFactorUpper = 0.0;          // t_out: no statically admissible field exists beyond here
+	std::vector<MechanismMotion> Mechanism;        // the selected mechanism of every Collapses component, whatever State
 	std::vector<BodyId> UnconstrainedBodies;
-	std::vector<InterfaceId> HingingInterfaces;    // interfaces the mechanism moves (kinematic, see the rulings)
-	int Iterations = 0;
+	std::vector<InterfaceId> HingingInterfaces;    // interfaces the selected mechanism moves (kinematic)
+	int Iterations = 0;                            // maximum over components
 	InterfaceId InvalidInterface{};
 };
 
@@ -490,122 +492,121 @@ std::unique_ptr<ICollapseCertificate> MakeLimitAnalysisCertificate();
 
 ### The problem it solves
 
-Unknowns: for every corner of every live interface (same four corners as slice 2), a
-non-negative coefficient per cone generator; one scalar `t ≥ 0`. The force on body B at a
-corner is `Σ_j α_j (n + r (cos θ_j u + sin θ_j v))`, `θ_j = 2πj / G`, with `r = μ` for the
-inscribed cone and `r = μ / cos(π/G)` for the circumscribed one; a bonded joint adds `ft · A/4`
-of allowed tension (shift of the cone apex) and `c · A/4` of cohesion (shift of the shear
-bound), `MaxShearStrengthPa · A/4` caps the shear (**not yet in the LP**, see the rulings), and compression is capped at `fc · A/4`
-(a crushing bound, so Overstressed joints read as collapse here rather than as a separate
-state). Constraints: six equilibrium rows per free body, `A α = t · b`, with `b` the gravity
-and `BodyLoad` wrench. Objective: maximise `t`, `t ≤ LoadFactorCap`. `t = 0, α = 0` is always
-feasible, so there is no infeasibility detection; the solver is a dense homogeneous self-dual primal-dual
-interior-point method (Mehrotra predictor-corrector) on the normal equations
-`A D Aᵀ`, which are `6 × free bodies` square, the same size as slice 2's stiffness, so slice 6
-swaps the factorisation behind the same interface. Deterministic: ordered assembly, no
-threads, a fixed starting point, Eigen dense storage and triangular solves only.
+**Loading is proportional.** `A α = t · b` with `b` the whole wrench, gravity and `BodyLoad`
+together (a point force acts at its point, so it carries a moment about the centroid exactly as
+in slice 2); the dead-plus-live form is not offered. `t = 0, α = 0` is always feasible, so there
+is no infeasibility detection. Objective: maximise `t` subject to `t ≤ LoadFactorCap`.
 
-Two solves per call, inscribed then circumscribed. **State**: `Stands` when `t_in ≥ 1`;
-`Collapses` when `t_out < 1`; `Undecided` when `t_in < 1 ≤ t_out` (the polygon band; raising
-`ConeGenerators` narrows it) or when the iteration cap is hit; `InvalidInput` on the slice-2
-rules (dead-body load, non-finite load or gravity, non-finite or non-positive area) plus
-`ConeGenerators` odd or under 4 and non-finite or non-positive options. Per-component solves
-and per-component scaling as in slice 2 (rotation rows divided by the component's
-characteristic length), so verdicts are local and scale-invariant.
+**Unknowns.** For every corner of every live interface (slice 2's four corners), one
+non-negative coefficient `α_j` per friction generator `g_j = n + r (cos θ_j u + sin θ_j v)`,
+`θ_j = 2πj/G`, and, when the joint has cohesion, one `κ_j ≥ 0` per cohesion generator
+`ρ (cos θ_j u + sin θ_j v)`. The corner force on B is `−T n + Σ α_j g_j + Σ κ_j c_j`: the tension
+offset `T` is a fixed force on the right-hand side (not scaled by `t`), friction acts on the
+compressive remainder, cohesion is a separate bounded polygon. Per-corner bounds:
+`Σ α_j ≤ fc A/4 + T` (crushing: `N ≤ fc A/4`) and `Σ κ_j ≤ C`; a bound that is not `> 0` drops
+its group (`!(x > 0)`), so dry joints carry no cohesion columns.
 
-**Mechanism**: the dual variables of the equilibrium rows at the inscribed-cone optimum are
-body velocities and angular velocities (the kinematic theorem's mechanism); reported like
-slice 2's `MechanismMotion`, normalised per component, with `UnconstrainedBodies` the bodies
-with any component above 1e-6 and `HingingInterfaces` the interfaces the mechanism moves (kinematic; the α-based definition fails at t* = 0); the rest of this sentence is superseded: interfaces with a corner whose
-cone constraint is active. On `Stands` these are empty.
+**Two regions, two solves.** The inscribed solve uses the **inner region**: `r = μ`, `ρ = 1`,
+`T = min(ft, c/μ) · A/4` (`ft · A/4` when `μ = 0`), `C = (c − μ · min(ft, c/μ)) · A/4`. That is
+`|S| ≤ c + μ N` for `N ≥ −T`: inside DESIGN's "only compression buys friction" envelope
+everywhere, exact in compression, conservative in tension, and the largest valid region of this
+family. The circumscribed solve uses the **hull**: `r = μ / cos(π/G)`, `ρ = 1 / cos(π/G)`,
+`T = ft · A/4`, `C = c · A/4`, which contains every admissible field. Consequences: a joint with
+`ft > 0`, `c = 0`, `μ > 0` gets `T = 0` on the inscribed side (a tension-only connection reads
+Undecided at best; slice 4b decides whether such profiles need a cohesion floor); on bonded
+joints the band is wider than the friction polygon alone. `MaxShearStrengthPa` is **not in the
+LP** (a finite cap is ignored, which over-reads capacity and is fail-open for Stands; slice 4b
+adds facet rows on the corner shear before a host trusts a Stands on a capped joint).
+
+**Rows.** Six equilibrium rows per free body (force, and moment about the centroid), a corner
+force acting on B and its negative on A; grounded bodies contribute nothing. Per component
+(union-find over free-free interfaces, as slice 2; shared code in `src/StaticsCommon.*`) the
+forces are divided by the component's total load magnitude and the arms by its characteristic
+length, so verdicts are local and scale-invariant (pinned at s = 1/16 … 16).
+
+**Solver.** The homogeneous self-dual embedding with Mehrotra predictor-corrector on the normal
+equations, `6 × free bodies` square after Schur-eliminating the diagonal bound rows and the
+rank-one cap row (the plain infeasible-start method stalls when `t* = 0`, where the feasible set
+has no interior); Eigen LLT with one regularised refactor (`1e-12 ×` the largest diagonal) on a
+failed pivot and a second failure reading Undecided; one iterative-refinement pass on the
+corrector; step 0.995 to the boundary; a feasible deterministic start (`α = min(1, bound/2G)`,
+`t = min(1, cap/2)`, complementarity products 1, duals 0, `τ = κ = 1`); termination when the
+primal residual (per block, term-size scaled), the dual residual (relative to
+`1 + max(1, |s|, |Aᵀy|)`) and the gap `xᵀs/τ²` are all under `FeasibilityTolerance`. Any
+non-finite value or the iteration cap marks that solve failed. Deterministic: ordered assembly,
+no threads, Eigen storage and factorisation only. The circumscribed solve is skipped when the
+inscribed one reaches the cap; `t_out` is clamped to at least `t_in` (exact, every inscribed
+set sits inside its circumscribed one). `t_out` is today the converged primal value; the ruling
+that it should be the circumscribed **dual objective** `bᵀy / τ` (an upper bound needs dual
+feasibility) is **open**, logged in CURRENT_STATE.
+
+**State.** `Stands` when `t_in ≥ 1` (whatever the circumscribed solve did: if it failed,
+`LoadFactorUpper = LoadFactorCap`); `Collapses` when `t_out < 1`; `Undecided` when
+`t_in < 1 ≤ t_out` (the polygon band, narrowed by raising `ConeGenerators`; on a cone-vertex
+direction a slide flips Stands → Undecided at `μ` and Undecided → Collapses at `μ / cos(π/G)`,
+on a mid-edge direction at `μ cos(π/G)` and `μ`), when the inscribed solve failed, or when the
+mechanism selection below failed; `InvalidInput` on the slice-2 rules (dead-body load,
+non-finite load or gravity) plus `ConeGenerators` odd or under 4 and non-finite or non-positive
+options, with `InvalidInterface` left default. On dry joints the cones are homogeneous, so `t`
+is exactly 0 or the cap; finite load factors come only from bonded, cohesive or crushing bounds
+(`ft A L / (W (λh − L))` for tension tipping, `c A / (W (sin θ − μ cos θ))` for cohesive sliding,
+`fc A / W` for crushing). Load factors compare at 1e-7 relative plus 1e-6 absolute. A massless
+free body with no load is Stands; a free body with no interface is Collapses at `t = 0` and is
+listed. Across components the state is the worst in the order InvalidInput > Undecided >
+Collapses > Stands, load factors are the minimum, the lists collect **every Collapses
+component whatever the overall state**, and `Iterations` is the maximum. A single state hides
+which component collapsed; the combined authority (slice 4b) reports per component.
+
+**Mechanism.** Where `t*` is finite and the dual unique, the equilibrium-row duals at the
+inscribed optimum are the body velocities (sign `−y`, rotations unscaled by the characteristic
+length, normalised per component so the largest physical component is 1). At `t* = 0` the dual
+optimal set is a cone and the interior point returns its analytic centre, which names every
+body that can move; so on a Collapses with `t_in` under the selection gate (1e-6, the tests'
+absolute tolerance, not the solver tolerance) a **selection LP** runs per component: over body
+velocities `y` and bounding variables `u`, with `±y ≤ u`, the kinematic admissibility rows
+`gᵀ (v_B − v_A) ≤ 0` for every inscribed friction and cohesion generator, the opening row
+`−Tᵀ y ≤ tol` where the inner tension offset is non-zero, and a motion normalisation, choose the
+mechanism with the greatest external work per unit of L1 motion (maximise `bᵀ y` subject to
+`Σ u = 1`; the earlier unit-work form `bᵀ y = 1, min Σ u` is the same mechanism up to scale
+but fails 1e-6 past a threshold, where unit work needs velocities near 1e6 and `τ → 0`). The
+bound-group dual variables are omitted: per corner the minimum dissipation is the support
+function of a strength region containing the origin, hence non-negative, and zero exactly for
+dilatant opening on a dry corner or zero relative motion where `T > 0`, which the rows above
+express. The selected mechanism is reported; `UnconstrainedBodies` are the bodies with any
+component above 1e-6 and `HingingInterfaces` the interfaces with a corner whose relative
+velocity exceeds 1e-6 of the component's fastest corner. "Minimal" means highest work per unit
+motion, not fewest bodies: a cap on an exactly critical end brick is reported with that brick
+(TRAPS: a cluster released as one body must be a certified mechanism; two bricks whose joint
+centroid is past a pillar's edge are named together with one rigid rotation). **If the selection
+LP does not converge the component reads Undecided with empty lists**: the analytic centre is
+never handed to a host as a release set. On `Stands` every list is empty.
 
 ### The theorem ruling (settles the question slice 2 left open)
 
-The certificate implements **associative** limit analysis: the inscribed-cone solution is a
-genuine statically admissible field, so `Stands` certifies that equilibrium within every
-strength bound is possible; the circumscribed-cone solution bounds every admissible field, so
-`Collapses` certifies that none exists for the associative problem, and since the
-non-associative collapse load never exceeds the associative one, `Collapses` holds for the
-physical joint too. The gap is the other direction: under non-associative friction a structure
-with an admissible field can still fail along a sliding path (Ferris & Tin-Loi; Orduña's pile
-reads [0.427, 0.553] for exactly this reason). **Ruling:** static admissibility is the standing
-criterion for the host. Where slice 2 reports Mechanism and the certificate says `Stands`, the
-certificate wins, nothing is released, and the disagreement is counted in the result of the
-combined authority (slice 4b). A future red on the oracle property's never-Mechanism direction
-(`Statics.Solver.VerdictsNeverContradictTheStaticAdmissibilityOracle`) is therefore a defect in
-slice 2, not a known limit. The pile's non-associative factor is pinned as a bracket on the
-certificate's `[t_in, t_out]` containing the associative value, not as the certificate's answer.
+The certificate implements **associative** limit analysis: the inscribed solution is a genuine
+statically admissible field, so `Stands` certifies that equilibrium within every strength bound
+is possible; the circumscribed solution bounds every admissible field, so `Collapses` certifies
+that none exists for the associative problem, and since the non-associative collapse load never
+exceeds the associative one, `Collapses` holds for the physical joint too. The gap is the other
+direction: under non-associative friction a structure with an admissible field can still fail
+along a sliding path (Ferris & Tin-Loi; Orduña's pile reads [0.427, 0.553] for exactly this
+reason). **Ruling:** static admissibility is the standing criterion for the host. Where slice 2
+reports Mechanism and the certificate says `Stands`, the certificate wins, nothing is released,
+and the disagreement is counted by the combined authority (slice 4b). A future red on the
+oracle property's never-Mechanism direction is therefore a defect in slice 2, not a known limit.
+The pile's non-associative factor is pinned as a bracket on `[t_in, t_out]` containing the
+associative value, not as the certificate's answer.
 
 ### Anchors slice 4 must pin
 
-The three `Deferred.Slice4.*` cases move back under `Statics.*` and assert through the
-certificate; every slice-2 single-block and stack anchor reads the same state from the
-certificate as from the elastic authority where the latter is decided; the Couplet–Heyman
-semicircular arch (B-ARC-01, radial joints, stands at `t/r = 0.1075` and collapses below, hinge
-positions within a half-voussoir of 54.5°, voussoir count from the report's discretisation
-guidance), its friction switch (B-ARC-06, stands at φ = 22°, slides at 21°), the 3DEC wedge
-(B-WDG-01, φ_crit 33.36° within 0.05°), the Orduña pile bracket (B-ORD-01), and agreement with
-the test-tier NNLS oracle on its 300 seeded draws (same `CanStand` / `CannotStand` verdicts
-outside the ambiguity band).
-
-Ratified after the 4a red set (2026-10-11): loading is **proportional**, `A α = t · b` with `b`
-the whole wrench including gravity, as written above; the dead-plus-live form (gravity fixed,
-only the live load scaled) is not offered. Consequences the tests pin: on dry joints the cones
-are homogeneous so `t` is exactly 0 or the cap; finite load factors arise only from bonded,
-cohesive or crushing bounds (`ft · A · L / (W (λh − L))` for tension tipping,
-`c · A / (W (sin θ − μ cos θ))` for cohesive sliding, `fc · A / W` for crushing). At `t* = 0` the
-dual optimal set is unbounded, so the mechanism shape is pinned only where `t*` is finite and the
-dual unique; on dry collapses the tests pin `UnconstrainedBodies` and `HingingInterfaces` only.
-The polygon band is real: along a cone-vertex direction the slide flips Stands → Undecided at
-`μ` and Undecided → Collapses at `μ / cos(π/G)`; along a mid-edge direction it flips at
-`μ cos(π/G)` and `μ`. Load factors compare at 1e-7 relative plus 1e-6 absolute (an
-interior-point method lands near, not on, zero).
-
-Ratified after the 4a green (2026-10-11, orchestrator): the solver is the **homogeneous
-self-dual embedding** with Mehrotra predictor-corrector on the `6 × free bodies` normal
-equations (the plain infeasible-start method stalls when `t* = 0`, where the feasible set has no
-interior); Eigen LLT with one regularised refactor on a failed pivot, one iterative-refinement
-pass on the corrector, a feasible deterministic start (α = min(1, bound/2G), t = min(1, cap/2),
-complementarity products 1, duals 0, τ = κ = 1), and term-size-scaled convergence tests.
-`t_out` is clamped to at least `t_in` (exact: every inscribed set sits inside its circumscribed
-one) and the circumscribed solve is skipped when the inscribed one reaches the cap. **Strength
-region:** the convex hull of DESIGN's "only compression buys friction" envelope: corner force on B
-is `−(ft A/4) n + Σ α_j g_j + Σ κ_j c_j` with the tension offset fixed on the right-hand side,
-friction generators on the remainder, separate cohesion generators bounded by `Σ κ ≤ c A/4`, and
-crushing as `Σ α ≤ (fc + ft) A/4` (so N ≤ fc A/4); this over-reads shear by at most `μ ft A/4`
-on a bonded joint in tension and is exact when `ft = 0`. **`MaxShearStrengthPa` is not in the
-LP yet** (no test drives it; a finite cap is ignored, which over-reads capacity): it needs facet
-rows on the corner shear, slice 4b. **HingingInterfaces is kinematic**: an interface whose
-relative corner velocity under the mechanism exceeds 1e-6 of the component's fastest corner
-(an α-based definition fails at `t* = 0`, where every α vanishes). Mechanism lists are filled on
-Collapses only. With several components the state is the worst, so one Collapses beside one
-Undecided reads Undecided although `LoadFactorUpper < 1`; slice 4b's combined authority decides
-per component.
-
-Ratified after the 4a review (2026-10-11, orchestrator), each a change the body text above must
-reflect once implemented:
-- **Inscribed region (fixes a fail-open Stands on bonded joints):** the hull over-reads shear by
-  exactly `μ ft A/4` at every compressive state, not only in tension, so a bonded Stands was not
-  a certificate (brick on a 40° tilt, μ 0.3, c = 0.9 W (sin θ − μ cos θ)/A: true t = 0.9, the
-  hull read Stands at ft = 0.5c and ft = c). The inscribed solve uses the inner region: tension
-  offset `T' = min(ft, c/μ) · A/4` (`ft · A/4` when μ = 0) and cohesion bound `(c − μ T') A/4`,
-  giving `|S| ≤ c + μ N` for `N ≥ −T'`, exact in compression and conservative in tension. The
-  circumscribed solve keeps the hull (an outer bound is what Collapses needs). The band widens
-  on bonded joints; that is the honest answer.
-- **Mechanism selection at `t* = 0`:** the interior point returns the analytic centre of the
-  dual optimal cone, which names every body that can move (a 4 × 4 running-bond wall with one
-  end brick removed listed all 13 bodies and 27 interfaces). On Collapses with `t_in` under the
-  tolerance, a second LP selects the mechanism: minimise the L1 norm of the body velocities
-  (bounding variables per component) subject to the kinematic admissibility rows of the
-  inscribed dual at `t = 0` and unit external work; its solution is the reported mechanism and
-  hinging set. TRAPS: a cluster released as one body must be a certified mechanism.
-- **Lists under a mixed result:** `Mechanism`, `UnconstrainedBodies` and `HingingInterfaces`
-  collect every Collapses component whatever the overall `State` (as slice 2's lists do), and
-  the header says so.
-- **Edge states:** a massless free body with no load is Stands, not Undecided; a free body with
-  no interface is Collapses with `t = 0` and is listed; when `t_in ≥ 1` the result is Stands
-  even if the circumscribed solve fails to converge (report `LoadFactorUpper = LoadFactorCap`).
-- **`t_out` is reported as the circumscribed dual objective `bᵀy/τ`** (an upper bound needs
-  dual feasibility; the primal value is only a lower bound).
-- **Point loads enter the LP** exactly as in slice 2 (force at a point, moment about the
-  centroid), pinned by tests now that the path has coverage.
+Pinned in 4a: the single-brick closed forms and the polygon band, bonded tension, cohesion and
+crushing load factors, point-load tipping and eccentric crushing, the slice-2 anchors through
+the certificate, the deferred stack and bridge rows, the inner-region cap at `c/μ`, mechanism
+selection on a sliding cap, an overhanging cap, a two-brick cluster, a bonded pier and a
+running-bond wall with an end brick removed, and agreement with the test-tier NNLS oracle (0
+disagreements on 300 seeded draws). Still to pin (4b): the three `Deferred.Slice4.*` cases move
+back under `Statics.*` through the combined authority; the Couplet–Heyman semicircular arch
+(B-ARC-01, radial joints, stands at `t/r = 0.1075` and collapses below, hinge positions within a
+half-voussoir of 54.5°, voussoir count from the report's discretisation guidance); its friction
+switch (B-ARC-06, stands at φ = 22°, slides at 21°); the 3DEC wedge (B-WDG-01, φ_crit 33.36°
+within 0.05°); the Orduña pile bracket (B-ORD-01); the shear cap.

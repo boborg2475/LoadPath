@@ -41,10 +41,10 @@ struct CertificateResult
 	double LoadFactorLower = 0.0;
 	// The circumscribed-cone multiplier: no statically admissible field exists beyond here.
 	double LoadFactorUpper = 0.0;
-	// The dual ray at collapse, per moving body, normalised per component so its largest component is 1.
+	// The selected mechanism of every Collapses component whatever State, per moving body, normalised per component so its largest component is 1.
 	std::vector<MechanismMotion> Mechanism;
 	std::vector<BodyId> UnconstrainedBodies;
-	// Interfaces the collapse mechanism moves: a corner's relative velocity above 1e-6 of the component's fastest corner.
+	// Interfaces the selected mechanism moves: a corner's relative velocity above 1e-6 of the component's fastest corner; empty on Stands.
 	std::vector<InterfaceId> HingingInterfaces;
 	int Iterations = 0;
 	InterfaceId InvalidInterface{};
