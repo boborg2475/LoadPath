@@ -7,6 +7,7 @@
 #include "doctest.h"
 
 #include <cmath>
+#include <vector>
 
 using namespace loadpath;
 using namespace loadpath::test;
@@ -138,4 +139,56 @@ TEST_CASE("Certificate.ShearCap.ZeroCapCarriesNoShear")
 	const CertificateResult TinyPushed = DecideWith(T.Model, CertificateLateral(0.1));
 	INFO("cap 1e-9 Pa at lambda 0.1: state " << TinyPushed.State << ", load factors [" << TinyPushed.LoadFactorLower << ", " << TinyPushed.LoadFactorUpper << "]");
 	CHECK(TinyPushed.State != CertificateState::Stands);
+}
+
+namespace
+{
+constexpr double LiftExcessOverWeight = 0.25;
+
+StrengthProfile ZeroCapTensileJoint()
+{
+	StrengthProfile Profile = DryJoint(0.7);
+	Profile.TensileStrengthPa = 2.0 * LiftExcessOverWeight * BrickWeightN() / BedAreaM2();
+	Profile.ShearCohesionPa = Profile.TensileStrengthPa;
+	Profile.MaxShearStrengthPa = 0.0;
+	return Profile;
+}
+
+StrengthProfile ZeroCapCrushedUnderOwnWeight()
+{
+	StrengthProfile Profile = DryJoint(0.7);
+	Profile.TensileStrengthPa = 1.0e4;
+	Profile.ShearCohesionPa = 1.0e4;
+	Profile.CompressiveStrengthPa = 0.5 * BrickWeightN() / BedAreaM2();
+	Profile.MaxShearStrengthPa = 0.0;
+	return Profile;
+}
+}
+
+TEST_CASE("Certificate.ShearCap.ZeroCapKeepsTensionAndCrushing")
+{
+	SUBCASE("lifted brick holds by tension alone")
+	{
+		const StrengthProfile Profile = ZeroCapTensileJoint();
+		CHECK(Profile.ShearCohesionPa >= Profile.FrictionCoefficient * Profile.TensileStrengthPa);
+		const BrickOnGround F = MakeBrickOnGround(Profile);
+		const std::vector<BodyLoad> Loads{BodyLoad{F.Brick, Vec3{0.0, 0.0, (1.0 + LiftExcessOverWeight) * BrickWeightN()}, BrickShape().CentreM}};
+		const CertificateResult Result = DecideWith(F.Model, CertificateOptions{}, Loads);
+		const double Expected = Profile.TensileStrengthPa * BedAreaM2() / (LiftExcessOverWeight * BrickWeightN());
+		INFO("state " << Result.State << ", load factors [" << Result.LoadFactorLower << ", " << Result.LoadFactorUpper << "], expected " << Expected);
+		CHECK(Result.State == CertificateState::Stands);
+		CheckRelative(Result.LoadFactorLower, Expected, LoadFactorRelative, "inscribed load factor under lift");
+		CheckRelative(Result.LoadFactorUpper, Expected, LoadFactorRelative, "circumscribed load factor under lift");
+	}
+	SUBCASE("brick crushed under its own weight")
+	{
+		const StrengthProfile Profile = ZeroCapCrushedUnderOwnWeight();
+		const BrickOnGround F = MakeBrickOnGround(Profile);
+		const CertificateResult Result = DecideWith(F.Model, CertificateOptions{});
+		const double Expected = Profile.CompressiveStrengthPa * BedAreaM2() / BrickWeightN();
+		INFO("state " << Result.State << ", load factors [" << Result.LoadFactorLower << ", " << Result.LoadFactorUpper << "], expected " << Expected);
+		CHECK(Result.State == CertificateState::Collapses);
+		CheckRelative(Result.LoadFactorLower, Expected, LoadFactorRelative, "inscribed load factor at rest");
+		CheckRelative(Result.LoadFactorUpper, Expected, LoadFactorRelative, "circumscribed load factor at rest");
+	}
 }

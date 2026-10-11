@@ -11,6 +11,7 @@
 #include <cstdint>
 #include <memory>
 #include <random>
+#include <string>
 #include <vector>
 
 using namespace loadpath;
@@ -21,8 +22,14 @@ namespace
 constexpr double StoneDensityKgPerM3 = 2000.0;
 constexpr double CubeFriction = 0.7;
 constexpr double LocalityRelative = 1.0e-12;
+constexpr double ReadingRelative = 1.0e-9;
 constexpr std::uint32_t MasterSeed = 20261011u;
 constexpr int DrawCount = 50;
+#if defined(NDEBUG)
+constexpr int CombinedDrawCount = 50;
+#else
+constexpr int CombinedDrawCount = 15;
+#endif
 
 struct Scene
 {
@@ -162,35 +169,131 @@ struct MixedScene
 	Structure Model;
 	std::vector<BodyId> Free;
 	std::vector<BodyLoad> Loads;
+	std::vector<std::vector<BodyId>> SiteBodies;
+	std::vector<std::vector<InterfaceId>> SiteInterfaces;
+	std::vector<double> SiteWeightN;
+	std::vector<double> SiteSizeM;
 };
 
 MixedScene MakeMixedScene(std::mt19937& Rng)
 {
 	MixedScene S;
 	const BodyId Ground = AddGroundPlane(S.Model);
-	const int BoxCount = 2 + static_cast<int>(Rng() % 3u);
-	for (int K = 0; K < BoxCount; ++K)
+	const int SiteCount = 2 + static_cast<int>(Rng() % 3u);
+	for (int K = 0; K < SiteCount; ++K)
 	{
-		const double EdgeM = Uniform(Rng, 0.05, 0.5);
-		const Box Shape = BoxOnGround(10.0 * K, Vec3{EdgeM, Uniform(Rng, 0.05, 0.5), Uniform(Rng, 0.05, 0.5)});
+		const Vec3 EdgesM{Uniform(Rng, 0.05, 0.5), Uniform(Rng, 0.05, 0.5), Uniform(Rng, 0.05, 0.5)};
+		const int Height = 1 + static_cast<int>(Rng() % 3u);
 		StrengthProfile Profile = DryJoint(Uniform(Rng, 0.3, 0.9));
 		if (Rng() % 2u == 0u)
 		{
 			Profile.TensileStrengthPa = 1.0e4;
 			Profile.ShearCohesionPa = 1.0e4;
-			Profile.CompressiveStrengthPa = Uniform(Rng, 0.5, 2.0) * StoneDensityKgPerM3 * GravityMPerS2 * 2.0 * Shape.HalfExtentsM.Z;
+			Profile.CompressiveStrengthPa = Uniform(Rng, 0.5, 2.0) * StoneDensityKgPerM3 * GravityMPerS2 * EdgesM.Z * Height;
 		}
 		const ProfileId P = AddProfileOk(S.Model, Profile);
-		const BodyId Id = AddBox(S.Model, Shape);
-		AddInterfaceOk(S.Model, OnGroundPlane(Ground, Id, Shape, P));
-		S.Free.push_back(Id);
-		if (Rng() % 2u == 0u)
+		S.SiteBodies.emplace_back();
+		S.SiteInterfaces.emplace_back();
+		S.SiteWeightN.push_back(0.0);
+		S.SiteSizeM.push_back(std::max({EdgesM.X, EdgesM.Y, EdgesM.Z * Height}));
+		BodyId Below{};
+		Box BelowShape{};
+		for (int Level = 0; Level < Height; ++Level)
 		{
-			const double PushN = Uniform(Rng, 0.0, 1.0) * Shape.MassKg * GravityMPerS2;
-			S.Loads.push_back(BodyLoad{Id, Vec3{PushN, 0.0, 0.0}, Shape.CentreM});
+			const Box Shape = BoxOfDensity(Vec3{10.0 * K, 0.0, (Level + 0.5) * EdgesM.Z}, Times(0.5, EdgesM), StoneDensityKgPerM3);
+			const BodyId Id = AddBox(S.Model, Shape);
+			const InterfaceId Joint = Level == 0 ? AddInterfaceOk(S.Model, OnGroundPlane(Ground, Id, Shape, P)) : AddInterfaceOk(S.Model, *StackedFaces(Below, BelowShape, Id, Shape, P));
+			S.Free.push_back(Id);
+			S.SiteBodies.back().push_back(Id);
+			S.SiteInterfaces.back().push_back(Joint);
+			S.SiteWeightN.back() += Shape.MassKg * GravityMPerS2;
+			if (Rng() % 2u == 0u)
+			{
+				const double PushN = Uniform(Rng, 0.0, 1.0) * Shape.MassKg * GravityMPerS2;
+				S.Loads.push_back(BodyLoad{Id, Vec3{PushN, 0.0, 0.0}, Shape.CentreM});
+			}
+			Below = Id;
+			BelowShape = Shape;
 		}
 	}
 	return S;
+}
+
+const InterfaceReading* FindIn(const std::vector<InterfaceReading>& Readings, InterfaceId Id)
+{
+	for (const InterfaceReading& Reading : Readings)
+	{
+		if (SameHandle(Reading.Id, Id))
+		{
+			return &Reading;
+		}
+	}
+	return nullptr;
+}
+
+bool Matches(double Got, double Want, double ScaleAbs)
+{
+	if (std::isnan(Got) || std::isnan(Want))
+	{
+		return std::isnan(Got) && std::isnan(Want);
+	}
+	if (std::isinf(Got) || std::isinf(Want))
+	{
+		return Got == Want;
+	}
+	return std::abs(Got - Want) <= ReadingRelative * std::max({std::abs(Got), std::abs(Want), ScaleAbs});
+}
+
+void CheckMatch(double Got, double Want, double ScaleAbs, const char* What)
+{
+	INFO(doctest::String(What) << ": whole " << Got << ", component alone " << Want);
+	CHECK(Matches(Got, Want, ScaleAbs));
+}
+
+void CheckMatchVec3(const Vec3& Got, const Vec3& Want, double ScaleAbs, const char* What)
+{
+	CheckMatch(Got.X, Want.X, ScaleAbs, What);
+	CheckMatch(Got.Y, Want.Y, ScaleAbs, What);
+	CheckMatch(Got.Z, Want.Z, ScaleAbs, What);
+}
+
+void CheckSameReadings(const std::vector<InterfaceReading>& Whole, const std::vector<InterfaceReading>& Alone, const std::vector<InterfaceId>& Interfaces, double WeightN, double SizeM)
+{
+	CHECK(Alone.size() == Interfaces.size());
+	for (const InterfaceId Id : Interfaces)
+	{
+		const InterfaceReading* W = FindIn(Whole, Id);
+		const InterfaceReading* A = FindIn(Alone, Id);
+		INFO("interface index " << Id.Index);
+		CHECK(W != nullptr);
+		CHECK(A != nullptr);
+		if (W == nullptr || A == nullptr)
+		{
+			continue;
+		}
+		CheckMatch(W->Utilisation, A->Utilisation, 1.0, "utilisation");
+		CheckMatch(W->NormalForceN, A->NormalForceN, WeightN, "normal force");
+		CheckMatchVec3(W->ShearForceN, A->ShearForceN, WeightN, "shear force");
+		CheckMatchVec3(W->MomentNm, A->MomentNm, WeightN * SizeM, "moment");
+		for (std::size_t C = 0; C < 4; ++C)
+		{
+			INFO("corner " << C);
+			CheckMatch(W->Corners[C].NormalForceN, A->Corners[C].NormalForceN, WeightN, "corner normal force");
+			CheckMatchVec3(W->Corners[C].ShearForceN, A->Corners[C].ShearForceN, WeightN, "corner shear force");
+		}
+	}
+}
+
+int SiteOf(const MixedScene& S, BodyId Body)
+{
+	for (std::size_t Site = 0; Site < S.SiteBodies.size(); ++Site)
+	{
+		if (HasBody(S.SiteBodies[Site], Body))
+		{
+			return static_cast<int>(Site);
+		}
+	}
+	return -1;
 }
 
 bool SameBodyList(const std::vector<BodyId>& A, const std::vector<BodyId>& B)
@@ -232,7 +335,11 @@ TEST_CASE("Statics.Combined.ComponentVerdictsAreLocalAcrossSeededStructures")
 	int Overstressed = 0;
 	int Undecided = 0;
 	int Consulted = 0;
-	for (int Draw = 0; Draw < DrawCount; ++Draw)
+	int MultiBody = 0;
+	int Collapsing = 0;
+	int Disagreed = 0;
+	int Table[5][5] = {};
+	for (int Draw = 0; Draw < CombinedDrawCount; ++Draw)
 	{
 		const std::uint32_t Seed = MasterSeed + 1000u + static_cast<std::uint32_t>(Draw);
 		INFO("seed " << Seed);
@@ -245,7 +352,7 @@ TEST_CASE("Statics.Combined.ComponentVerdictsAreLocalAcrossSeededStructures")
 		Options.Certificate = CertificateTilt(TiltRad);
 		INFO("tilt " << TiltRad / RadPerDegree << " deg, pass cap " << Options.Standing.MaxActiveSetIterations << ", bodies " << Whole.Free.size() << ", loads " << Whole.Loads.size());
 		const AuthorityResult All = Authority->Judge(Whole.Model, Whole.Loads, Options);
-		CHECK(All.Components.size() == Whole.Free.size());
+		CHECK(All.Components.size() == Whole.SiteBodies.size());
 		for (const ComponentReport& Report : All.Components)
 		{
 			Structure Alone = Whole.Model;
@@ -271,6 +378,14 @@ TEST_CASE("Statics.Combined.ComponentVerdictsAreLocalAcrossSeededStructures")
 				continue;
 			}
 			const ComponentReport& Own = Single.Components.front();
+			const int Site = SiteOf(Whole, Report.Bodies.front());
+			CHECK(Site >= 0);
+			if (Site >= 0)
+			{
+				const std::size_t Index = static_cast<std::size_t>(Site);
+				CHECK(SameBodyList(Report.Bodies, Whole.SiteBodies[Index]));
+				CheckSameReadings(All.Readings, Single.Readings, Whole.SiteInterfaces[Index], Whole.SiteWeightN[Index], Whole.SiteSizeM[Index]);
+			}
 			INFO("component " << Describe(Report.Bodies) << ": whole verdict " << static_cast<int>(Report.Verdict) << " elastic " << Report.Elastic << " kinematic " << static_cast<int>(Report.Kinematic) << " consulted " << Report.bConsultedCertificate << "; alone verdict " << static_cast<int>(Own.Verdict) << " elastic " << Own.Elastic << " kinematic " << static_cast<int>(Own.Kinematic) << " consulted " << Own.bConsultedCertificate);
 			CHECK(SameBodyList(Own.Bodies, Report.Bodies));
 			CHECK(Own.Verdict == Report.Verdict);
@@ -282,9 +397,26 @@ TEST_CASE("Statics.Combined.ComponentVerdictsAreLocalAcrossSeededStructures")
 			Overstressed += Own.Elastic == StandingState::Overstressed ? 1 : 0;
 			Undecided += Own.Elastic == StandingState::Undecided ? 1 : 0;
 			Consulted += Own.bConsultedCertificate ? 1 : 0;
+			MultiBody += Report.Bodies.size() > 1u ? 1 : 0;
+			Collapsing += Own.Verdict == ComponentVerdict::Collapses ? 1 : 0;
+			Disagreed += Own.bDisagreed ? 1 : 0;
+			++Table[static_cast<int>(Own.Elastic)][Own.bConsultedCertificate ? static_cast<int>(Own.Kinematic) : 4];
 		}
 	}
-	INFO("overstressed " << Overstressed << ", undecided " << Undecided << ", consulted " << Consulted);
+	for (int E = 0; E < 5; ++E)
+	{
+		for (int K = 0; K < 5; ++K)
+		{
+			if (Table[E][K] > 0)
+			{
+				MESSAGE("elastic " << static_cast<StandingState>(E) << " / certificate " << std::string(K == 4 ? "not consulted" : CertificateStateName(static_cast<CertificateState>(K))) << ": " << Table[E][K]);
+			}
+		}
+	}
+	MESSAGE("multi-body " << MultiBody << ", collapses " << Collapsing << ", disagreements " << Disagreed);
+	INFO("overstressed " << Overstressed << ", undecided " << Undecided << ", consulted " << Consulted << ", multi-body " << MultiBody << ", collapses " << Collapsing);
+	CHECK(MultiBody > 0);
+	CHECK(Collapsing > 0);
 	CHECK(Overstressed > 0);
 	CHECK(Undecided > 0);
 	CHECK(Consulted > 0);
