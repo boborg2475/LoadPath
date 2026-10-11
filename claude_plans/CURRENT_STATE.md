@@ -144,11 +144,9 @@ question decided and §10 carries the slice-2, 4a and 4b rulings.
     `!(LargestComponent > 0)` (the finiteness check runs first) and the stored-length check
     `|len - 1| <= 1e-9` after scaled normalisation (a scaled vector's length is in [1, sqrt 3], so
     the division lands within ulps of one). Neither can be driven red by a test.
-  - `IsLive(InterfaceId)` means "not Removed"; slice 3 decides whether `Cracked` or `Severed`
-    count as live (API.md).
-- Structure file, open rulings from the 1b review (2026-10-11): the format carries no interface
-  state or pass stamps, so once slice 3 produces Cracked or Severed joints load(write(x)) would
-  read them Intact; slice 3 decides whether to write state and passes or omit severed joints.
+- Structure file, open rulings from the 1b review (2026-10-11; the format now carries state,
+  stamps and an optional interface name, slice 3): the reader rejects an unknown state string,
+  a non-integer pass and a stamp/state mismatch, and none of those rejection paths has a test.
   A non-object array element (`"bodies": [3]`) is refused with a misleading `missing name`
   message rather than "not an object" (fails closed, unpinned). Any duplicate in a caller-built
   name vector, generated or explicit, writes a file the reader refuses. A UTF-8 BOM is refused
