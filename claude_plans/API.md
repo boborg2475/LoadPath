@@ -269,9 +269,11 @@ never mutates the structure. The host may call it on any thread.
 
 ### States
 
-- **Stands**: the active set converged, the stiffness matrix is non-singular, and every
-  interface reads utilisation ≤ 1. By the lower-bound theorem this is a standing certificate
-  for a rigid-block structure whose corner forces are within every bound.
+- **Stands**: the active set converged (full rank, or singular with a zero load projection,
+  which is neutral equilibrium) and every interface reads utilisation ≤ 1 on every axis the
+  active set does not release. By the lower-bound theorem this is a standing certificate for a
+  rigid-block structure whose corner forces are within every bound, with the caveat that under
+  non-associative friction the theorem bounds, not decides (see Mechanism below).
 - **Overstressed**: converged and non-singular, but some interface reads > 1 on an axis the
   active set does not release (compression on any joint; tension or cohesive shear on a
   bonded joint). Slice 3's crack round acts on it. In slice 2 the readings are the answer.
@@ -316,8 +318,9 @@ never mutates the structure. The host may call it on any thread.
   `μ N` (and the cap `MaxShearStrengthPa · A/4`), after which its shear is held at capacity
   opposite the trial slip direction with no stiffness along that direction and **no dilation**
   (non-associative, DESIGN §9 row 8). Transverse to the held direction, in the joint plane, a
-  slipping corner carries the tangent of its held friction, `kt · capacity / |trial S|` (never
-  above `kt`): the stiffness with which the friction vector rotates to follow the slip
+  slipping corner carries the tangent of its held friction, `kt · capacity / |trial S|` (at most
+  `kt / (1 − 1e-9)`, since a corner slips only while its trial is at least the capacity less
+  the stick margin; the explicit clamp was withdrawn as moot): the stiffness with which the friction vector rotates to follow the slip
   (dev-expert 2026-10-11, ratified by the orchestrator the same day, DESIGN §10). It adds no force at convergence, since the
   trial slip it was built from lies along the held direction, so the converged readings are
   the model above; it changes the iteration and the null space. Without it the held direction

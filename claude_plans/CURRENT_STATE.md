@@ -7,89 +7,23 @@ Deferring something? Add it here with enough context to pick up cold.
 
 Repository scaffolded: CMake + Visual Studio 2022 generator, vendored doctest 2.4.11 and Eigen
 3.4.0, the compiler contract (no exceptions, no RTTI, `/W4 /WX`, `/fp:precise`) enforced.
-Slice 1 (the model: handles, profiles, bodies, interfaces, validation, removal) and slice 1b
-(JSON structure reader/writer, `RunCli`, the `loadpath_cli` binary) are committed and reviewed:
-every green-on-arrival row proven by a recorded mutation (commit messages). Slice 2a, the
-standing authority, is committed through 6dd4102 (112 default cases, 5995 assertions, 2 red `Deferred.Slice4` cases, Debug and
-Release): `IStandingAuthority`, the RBSM corner-spring implementation with per-component
-Schur-pivoted dense LDLT solves and the free active set, 18 anchor and mechanics tests (incline
-tip and slide, Housner, free and coursed wall, the Itasca slope regimes, harmonic stack,
-Paterson–Zwick triangle and diamond), 19 solver characterisation and defect tests and a seeded
-locality property. **Two reviews so far (2026-10-11); the second left the items in "Next" 1
-open and the slice is not done.** The design brief ([DESIGN.md](DESIGN.md)) has every §9
-question decided and §10 carries the slice-2 rulings.
+Slice 1 (the model: handles, profiles, bodies, interfaces, validation, removal), slice 1b (JSON
+structure reader/writer, `RunCli`, the `loadpath_cli` binary) and slice 2a (the standing
+authority) are committed and reviewed, every green-on-arrival row proven by a recorded mutation
+(commit messages). Slice 2a, through 1025bd9 and four reviews: `IStandingAuthority`, the RBSM
+corner-spring implementation with per-component Schur-pivoted dense LDLT solves and the free
+active set, under the narrowed contract of DESIGN §10 (it certifies Stands and Overstressed,
+reports Mechanism as a verdict, and fails closed to Undecided rather than guess); 18 anchor and
+mechanics tests (incline tip and slide, Housner, free and coursed wall, the Itasca slope
+regimes, harmonic stack, Paterson–Zwick triangle and diamond), 20 solver characterisation and
+defect tests, a seeded locality property and a seeded static-admissibility oracle property.
+Default suite 113 cases (6288 assertions in Debug, 10081 in Release, about 1.8 s and 0.3 s);
+the `Deferred.Slice4` tier holds 3 cases red by design. The design brief
+([DESIGN.md](DESIGN.md)) has every §9 question decided and §10 carries the slice-2 rulings.
 
 ## Next
 
-1. Close the slice-2a review (findings and rulings are in API.md "Slice 2", DESIGN §10
-   2026-10-11 and the review-round tests `Statics.Solver.*`). State after the dev round on the
-   ruling "The elastic authority does not guess" (2026-10-11; default suite 112/112 in Debug
-   and Release, the `Deferred.` tier 0/2 as intended):
-   - implemented: a restored dry corner re-enters slipping with `μ · N⁺` from its own normal in
-     the last full-rank solve, opposite the motion's tangential part, zero transverse tangent;
-     a cohesive one re-enters stuck; nothing is seeded from the singular solve; a corner open
-     in the last full-rank solve (or with none yet) makes the component Undecided with the last
-     full-rank readings and no mechanism. `RestoredCornerTangentDoesNotInflateThePivots` is
-     green (bridge beds carry 3W, motion a +x translation). The two cases the elastic field
-     cannot certify are split: the default suite pins never-Mechanism on the six bridge rows
-     and never-Stands on the stack past friction; `Deferred.Slice4.*` holds the strong
-     assertions (Stands on all six bridge rows, Mechanism on the stack), red until slice 4,
-     excluded from the default run by `Scripts/Test.ps1`.
-   - not implemented, held at the TDD gate because no test bites them (mutation: identical
-     suite failures): `SolveInRange` on Load − Projection and the `min(kt, …)` transverse clamp
-     (neither changes any of the 3366 probe verdicts; the clamp can only bind inside the 1e-9
-     stick margin now that restored corners re-enter with zero tangent), and "a corner restored
-     a second time is Undecided" (changes two probe points: bridge μ 5 (2.5, 0.125)
-     Undecided → Stands, bridge μ 0.6 (0.5, 0.375) Undecided → Mechanism). Each needs a red:
-     a toppling-brick Mechanism whose readings are checked against the range load; a reachable
-     clamp case, or a ruling that drops the clamp; a fixture that reaches a second restoration.
-   - deferred to slice 4 (`Deferred.Slice4.*`): the two-brick stack μ 0.6, shift 0.03 m,
-     λ (0.625, 0.875), a provable mechanism (|λ| > μ) that reads Undecided after 3 passes (bed
-     corner 2 opens in pass 1, is open in the pass-2 full-rank solve, and the pass-3 motion
-     closes it: the fail-closed clause); and the bridge μ 5 rows (2.5, 0.75), (2.25, 0.5),
-     (2.25, 0.625), (2.125, 0.625), all Undecided by the same clause ((2.0, 0) and (2.125, 0)
-     stand after 12 passes). Without the clause (2.5, 0.75) and (2.25, 0.5) read false
-     Mechanisms, which the default-suite never-Mechanism assertion now guards.
-   - probe (561 points each, λx 0..4 × λy 0..2 step 0.125; brick, 0.08 m stack, three-brick
-     bridge; μ 0.6 then μ 5) Undecided counts, c50e7d3 → now: brick 0/0 → 0/0, stack 12/0 →
-     48/102, bridge 11/19 → 65/136. No Stands ↔ Mechanism flips. Stands → Undecided: bridge
-     μ 5 (2.375, 0.25), (2.375, 0.625), (2.5, 0.75). Undecided → Stands: bridge μ 5
-     (2.5, 0.125). Eleven Undecided → Mechanism, every one at |λ| > μ. The 318 Mechanism →
-     Undecided points are slice-4 territory.
-   - third review (2026-10-11): the code meets the narrowed contract; what blocked was the
-     record, fixed the same day (API.md states, readings ruling restored, the three held clauses
-     withdrawn, DESIGN §10, ANCHORS rows 33 and 40 and the two Deferred rows). Without the
-     open-in-last-full-rank clause **three** bridge rows read false Mechanisms ((2.5, 0.75),
-     (2.25, 0.5), (2.25, 0.625)), guarded by the default-suite never-Mechanism assertion.
-   - **RBSM's Mechanism is a verdict, not a certificate** (DESIGN §10): the dry bridge at μ 5
-     reads Mechanism at λ = (2.5, 0.875), (2.375, 0.875), (2.25, 0.875) (5, 5, 7 passes) while
-     an NNLS static-admissibility oracle finds an admissible field there (at 0.7 μ and 1.02 × the
-     load for the first); a cohesive no-tension bridge at μ 0.6 does the same at (2.375, 0.875),
-     (2.5, 0.875), (2.625, 0.25 / 0.375 / 0.75). Unchanged since f85bc54, no restoration on
-     those paths. Pinned as `Deferred.Slice4` (TS1) once test-expert lands it; slice 4 referees
-     Mechanism verdicts as well as Undecided ones. TS1 landed as
-     `Deferred.Slice4.ThreeBrickBridgeIsNotAMechanismWhereAnAdmissibleFieldExists` (red, 3
-     rows); TS2 landed as `Statics.Solver.VerdictsNeverContradictTheStaticAdmissibilityOracle`
-     (300 draws in Release, 20 in Debug, 0 violations).
-   - internals still unpinned (mutants survive the default suite): the restored corner's held
-     magnitude (zero survives; only 2 of 4,488 probe points restore a corner with a positive
-     full-rank normal), its held direction (flipping changes only a mechanism shape at bridge
-     μ 0.6 (0, 0.75)), transverse stiffness kt instead of 0 on re-entry, a cohesive corner
-     re-entering slipping instead of stuck (reachable at 278 points of a cohesive bridge grid,
-     flips 6 from Undecided to Mechanism), the Undecided-readings source (always reading the
-     current pass survives; bridge μ 0.6 at (0, 0.875) has residual 0.010 W at HEAD and 1.50 W
-     under the mutant), and the no-full-rank-yet restoration branch (unreachable: any component
-     with a stuck interface is full rank on pass 1).
-   - Mechanism readings can show tension on a slipping dry corner that re-entered with zero
-     held force (0.08 m stack, μ 0.6, λx 1.5: N = −0.43 N on the bed, −2.10 N on the joint),
-     and both interfaces then read utilisation +inf on the tension axis (so the `bNonFinite`
-     term in `IsOverstressed` is reachable there, harmlessly); informative, not a certificate.
-   - a component that is InvalidInput through its assembled stiffness returns InvalidInput for
-     the whole solve with `InvalidInterface` unset.
-   - `Scripts/Test.ps1`: any caller `-tce` (for example a future `-tce="Slow.*"`) silently
-     includes the Deferred tests; the "skipped" trigger also counts `doctest::skip` cases.
-   Then a light re-review of the record and TS2, and slice 2a is done.
-2. Slice 4 pulled forward (DESIGN §10, 2026-10-11): the kinematic collapse certificate behind
+1. Slice 4 pulled forward (DESIGN §10, 2026-10-11): the kinematic collapse certificate behind
    its own swappable interface (API.md contract to write first), a limit-analysis LP over the
    same interfaces (associative friction for the LP bound, HiGHS vendored as the solver, the
    referee DESIGN §8 planned for slice 7 arrives with it), used to referee every component the
@@ -102,7 +36,7 @@ question decided and §10 carries the slice-2 rulings.
    `Deferred.Slice4.*` cases go green and move back under `Statics.*`; the probe grids' 318
    fail-closed Undecided points resolve; the arch (B-ARC-01/06), Orduña (B-ORD-01) and wedge
    (B-WDG-01) rows become reachable.
-3. Slice 2b, the remaining slice-2 anchors (BENCHMARKS groups 2 and 3): B-WAL-03 (wall slides at
+2. Slice 2b, the remaining slice-2 anchors (BENCHMARKS groups 2 and 3): B-WAL-03 (wall slides at
    λ = μ), B-STK-04 (constant-step stack), B-WDG-02, B-ROK-02, F-CHC-01, F-LIB-01/02, F-EMI-01,
    the 5-diamond (hits the 50-pass cap today, logged below), and the arch and pile rows that
    API.md "Anchors slice 2 must pin" lists but BENCHMARKS marks slice 4 (B-ARC-01/06 Couplet–
@@ -112,8 +46,8 @@ question decided and §10 carries the slice-2 rulings.
    pier geometry (Portioli 2012), B-DER-01 wall geometry, B-SW-01 exact limit load (graphical
    only), F-RON-01 panel thickness, B-FTL-01 layout. B-BUR-01 needs a soil-pressure driver;
    F-PYR-01 needs a zero-extent contact; group 9 runs only in the host adapter's suite.
-4. `Scripts/Test.ps1` excludes a `Slow.` prefix from the default run once the first slow test
-   exists; today there is none (the whole suite runs in under a second).
+3. `Scripts/Test.ps1` excludes a `Slow.` prefix from the default run once the first slow test
+   exists; today there is none (the default suite runs in about 1.8 s in Debug, 0.3 s in Release).
 
 ## Deferred
 
@@ -209,3 +143,32 @@ question decided and §10 carries the slice-2 rulings.
     the duplicate). No test and no ruling.
   - Loaded `InterfaceNames` holds one empty string per interface as ratified; the count is
     pinned, the empty content is not.
+- Slice 2a internals left unpinned after four reviews (2026-10-11; a mutant survives the default
+  suite for each): the restored corner's held magnitude (zero survives; only 2 of 4,488 probe
+  points restore a corner with a positive full-rank normal) and held direction (flipping
+  changes only a mechanism shape at bridge μ 0.6 (0, 0.75)); transverse stiffness kt instead
+  of 0 on re-entry; a cohesive corner re-entering slipping instead of stuck (reachable at 278
+  points of a cohesive bridge grid, flips 6 from Undecided to Mechanism); the Undecided-readings
+  source (always reading the current pass survives; bridge μ 0.6 at (0, 0.875) has residual
+  0.010 W at HEAD and 1.50 W under the mutant); the no-full-rank-yet restoration branch
+  (unreachable: any component with a stuck interface is full rank on pass 1).
+- Slice 2a readings caveats (informative only; slice 3 reads standing components, API.md):
+  mechanism readings can show tension on a slipping dry corner that re-entered with zero held
+  force (0.08 m stack, μ 0.6, λx 1.5: N = −0.43 N on the bed, −2.10 N on the joint), and both
+  interfaces then read +inf on the tension axis, so the `bNonFinite` term in `IsOverstressed`
+  is reachable there; a component that is InvalidInput through its assembled stiffness returns
+  InvalidInput for the whole solve with `InvalidInterface` unset.
+- `Scripts/Test.ps1`: any caller `-tce` (for example a future `-tce="Slow.*"`) silently includes
+  the `Deferred.` tests; the "skipped" trigger also counts `doctest::skip` cases.
+- `tests/StaticsOracleTest.cpp` draws bridge half-spans from 0.10 m, below the 0.1075 m that
+  keeps the two legs apart, so about a quarter of bridge draws interpenetrate by up to 15 mm;
+  both sides see the same model so the property is unaffected, but start the range at 0.1075
+  or record why not. Test spec from the fourth review: move the oracle into a shared test
+  header so the two bridge `Deferred.Slice4` cases CHECK `Oracle == CanStand` as a
+  precondition (`MakeBridge(5.0, 0.12, 0.0)` at (2.5, 0.875), (2.375, 0.875), (2.25, 0.875)
+  reads CanStand with inner residual about 1e-16 at μ 5 and 3.5).
+- Slice 4's contract must settle the theorem question the slice-2 tests presuppose: API.md says
+  which answer is physical under non-associative friction is open, while TS1 and TS2's
+  never-Mechanism direction assert the lower-bound answer and the `Deferred.Slice4` cases are
+  the slice-4 acceptance; say what a future red on TS2's never-Mechanism direction means (a
+  defect, or a known limit that moves under `Deferred.`).
