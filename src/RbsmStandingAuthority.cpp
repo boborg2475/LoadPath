@@ -1,6 +1,7 @@
 #include "loadpath/StandingAuthority.h"
 
 #include "EigenInclude.h"
+#include "StaticsCommon.h"
 
 #include <algorithm>
 #include <array>
@@ -14,16 +15,20 @@ namespace loadpath
 {
 namespace
 {
-constexpr int DofPerBody = 6;
-constexpr std::size_t CornerCount = 4;
+using statics::Add;
+using statics::AddForceAt;
+using statics::CornerCount;
+using statics::CornerJacobian;
+using statics::DofPerBody;
+using statics::Scale;
+using statics::Sub;
+
 constexpr double StickMarginRelative = 1.0e-9;
 constexpr double HeldForceToleranceRelative = 1.0e-12;
 constexpr double NeutralLoadToleranceRelative = 1.0e-12;
 constexpr double AdmissibilityToleranceRelative = 1.0e-9;
 constexpr double UnconstrainedComponent = 1.0e-6;
 constexpr double Infinity = std::numeric_limits<double>::infinity();
-constexpr std::array<double, CornerCount> CornerSignU{1.0, -1.0, -1.0, 1.0};
-constexpr std::array<double, CornerCount> CornerSignV{1.0, 1.0, -1.0, -1.0};
 
 enum class CornerStatus : std::uint8_t
 {
@@ -32,16 +37,8 @@ enum class CornerStatus : std::uint8_t
 	Open
 };
 
-struct Joint
+struct Joint : statics::JointGeometry
 {
-	InterfaceId Id;
-	Vec3 Normal;
-	Vec3 CentreM;
-	std::array<Vec3, CornerCount> CornerM;
-	int OffsetA = -1;
-	int OffsetB = -1;
-	Vec3 CentroidAM;
-	Vec3 CentroidBM;
 	double NormalStiffnessNPerM = 0;
 	double TangentialStiffnessNPerM = 0;
 	double CompressiveCapacityN = 0;
@@ -107,21 +104,6 @@ struct CornerRatios
 	double Shear = 0;
 };
 
-Vec3 Add(const Vec3& A, const Vec3& B)
-{
-	return Vec3{A.X + B.X, A.Y + B.Y, A.Z + B.Z};
-}
-
-Vec3 Sub(const Vec3& A, const Vec3& B)
-{
-	return Vec3{A.X - B.X, A.Y - B.Y, A.Z - B.Z};
-}
-
-Vec3 Scale(double S, const Vec3& V)
-{
-	return Vec3{S * V.X, S * V.Y, S * V.Z};
-}
-
 double PositivePart(double X)
 {
 	return X < 0.0 ? 0.0 : X;
@@ -163,38 +145,13 @@ bool FindInvalidInput(const Structure& Model, std::span<const BodyLoad> Loads, c
 	return !IsFinite(Options.Gravity);
 }
 
-void AddForceAt(Eigen::VectorXd& Load, int Offset, const Vec3& CentroidM, const Vec3& PointM, const Vec3& ForceN)
-{
-	if (Offset < 0)
-	{
-		return;
-	}
-	const Vec3 MomentNm = Cross(Sub(PointM, CentroidM), ForceN);
-	Load(Offset + 0) += ForceN.X;
-	Load(Offset + 1) += ForceN.Y;
-	Load(Offset + 2) += ForceN.Z;
-	Load(Offset + 3) += MomentNm.X;
-	Load(Offset + 4) += MomentNm.Y;
-	Load(Offset + 5) += MomentNm.Z;
-}
-
 Joint MakeJoint(const Structure& Model, InterfaceId Id, const std::vector<int>& OffsetOfSlot)
 {
 	const InterfaceRecord& Record = Model.Interface(Id);
 	const StrengthProfile& Profile = Model.Profile(Record.Profile);
 	const double CornerAreaM2 = Record.AreaM2 / 4.0;
 	Joint J;
-	J.Id = Id;
-	J.Normal = Record.NormalAToB;
-	J.CentreM = Record.CentreM;
-	for (std::size_t C = 0; C < CornerCount; ++C)
-	{
-		J.CornerM[C] = Add(Record.CentreM, Add(Scale(CornerSignU[C] * Record.HalfExtentUM, Record.AxisU), Scale(CornerSignV[C] * Record.HalfExtentVM, Record.AxisV)));
-	}
-	J.OffsetA = OffsetOfSlot[Record.BodyA.Index];
-	J.OffsetB = OffsetOfSlot[Record.BodyB.Index];
-	J.CentroidAM = Model.Body(Record.BodyA).CentroidM;
-	J.CentroidBM = Model.Body(Record.BodyB).CentroidM;
+	static_cast<statics::JointGeometry&>(J) = statics::MakeJointGeometry(Model, Id, OffsetOfSlot);
 	J.NormalStiffnessNPerM = Profile.NormalStiffnessPaPerM * CornerAreaM2;
 	J.TangentialStiffnessNPerM = Profile.TangentialStiffnessPaPerM * CornerAreaM2;
 	J.CompressiveCapacityN = Profile.CompressiveStrengthPa * CornerAreaM2;
@@ -207,46 +164,9 @@ Joint MakeJoint(const Structure& Model, InterfaceId Id, const std::vector<int>& 
 	return J;
 }
 
-std::size_t FindRoot(std::vector<std::size_t>& Parent, std::size_t Slot)
-{
-	while (Parent[Slot] != Slot)
-	{
-		Parent[Slot] = Parent[Parent[Slot]];
-		Slot = Parent[Slot];
-	}
-	return Slot;
-}
-
-void Unite(std::vector<std::size_t>& Parent, std::size_t SlotA, std::size_t SlotB)
-{
-	const std::size_t RootA = FindRoot(Parent, SlotA);
-	const std::size_t RootB = FindRoot(Parent, SlotB);
-	Parent[std::max(RootA, RootB)] = std::min(RootA, RootB);
-}
-
-double CharacteristicLengthM(const Problem& P)
-{
-	double LengthM = 0.0;
-	for (const Joint& J : P.Joints)
-	{
-		for (std::size_t C = 0; C < CornerCount; ++C)
-		{
-			if (J.OffsetA >= 0)
-			{
-				LengthM = std::max(LengthM, Length(Sub(J.CornerM[C], J.CentroidAM)));
-			}
-			if (J.OffsetB >= 0)
-			{
-				LengthM = std::max(LengthM, Length(Sub(J.CornerM[C], J.CentroidBM)));
-			}
-		}
-	}
-	return LengthM > 0.0 ? LengthM : 1.0;
-}
-
 Eigen::VectorXd RotationalScaling(const Problem& P)
 {
-	const double InverseLengthPerM = 1.0 / CharacteristicLengthM(P);
+	const double InverseLengthPerM = 1.0 / statics::CharacteristicLengthM(P.Joints);
 	Eigen::VectorXd Scaling = Eigen::VectorXd::Ones(P.DofCount);
 	for (int Offset = 0; Offset < P.DofCount; Offset += DofPerBody)
 	{
@@ -257,43 +177,15 @@ Eigen::VectorXd RotationalScaling(const Problem& P)
 
 std::vector<Problem> BuildProblems(const Structure& Model, std::span<const BodyLoad> Loads, const StandingOptions& Options)
 {
-	const std::vector<BodyId> Bodies = Model.LiveBodies();
-	const std::size_t SlotCount = Bodies.empty() ? 0 : static_cast<std::size_t>(Bodies.back().Index) + 1;
-	std::vector<std::size_t> Parent(SlotCount);
-	for (std::size_t Slot = 0; Slot < SlotCount; ++Slot)
+	const statics::ComponentPartition Partition = statics::PartitionFreeBodies(Model);
+	const std::vector<int>& OffsetOfSlot = Partition.OffsetOfSlot;
+	std::vector<Problem> Problems(Partition.FreeBodies.size() + 1);
+	for (std::size_t K = 0; K < Partition.FreeBodies.size(); ++K)
 	{
-		Parent[Slot] = Slot;
+		Problems[K + 1].FreeBodies = Partition.FreeBodies[K];
+		Problems[K + 1].DofCount = DofPerBody * static_cast<int>(Partition.FreeBodies[K].size());
 	}
 	const std::vector<InterfaceId> Interfaces = Model.LiveInterfaces();
-	for (const InterfaceId Id : Interfaces)
-	{
-		const InterfaceRecord& Record = Model.Interface(Id);
-		if (!Model.Body(Record.BodyA).bGrounded && !Model.Body(Record.BodyB).bGrounded)
-		{
-			Unite(Parent, Record.BodyA.Index, Record.BodyB.Index);
-		}
-	}
-	std::vector<Problem> Problems(1);
-	std::vector<int> ComponentOfSlot(SlotCount, -1);
-	std::vector<int> OffsetOfSlot(SlotCount, -1);
-	for (const BodyId Id : Bodies)
-	{
-		if (Model.Body(Id).bGrounded)
-		{
-			continue;
-		}
-		const std::size_t Root = FindRoot(Parent, Id.Index);
-		if (ComponentOfSlot[Root] < 0)
-		{
-			ComponentOfSlot[Root] = static_cast<int>(Problems.size());
-			Problems.emplace_back();
-		}
-		ComponentOfSlot[Id.Index] = ComponentOfSlot[Root];
-		Problem& P = Problems[static_cast<std::size_t>(ComponentOfSlot[Id.Index])];
-		OffsetOfSlot[Id.Index] = P.DofCount;
-		P.FreeBodies.push_back(Id);
-		P.DofCount += DofPerBody;
-	}
 	for (Problem& P : Problems)
 	{
 		P.AppliedLoad = Eigen::VectorXd::Zero(P.DofCount);
@@ -310,7 +202,7 @@ std::vector<Problem> BuildProblems(const Structure& Model, std::span<const BodyL
 		const int Offset = OffsetOfSlot[Load.Body.Index];
 		if (Offset >= 0)
 		{
-			Problem& P = Problems[static_cast<std::size_t>(ComponentOfSlot[Load.Body.Index])];
+			Problem& P = Problems[static_cast<std::size_t>(Partition.ComponentOfSlot[Load.Body.Index] + 1)];
 			AddForceAt(P.AppliedLoad, Offset, Model.Body(Load.Body).CentroidM, Load.PointM, Load.ForceN);
 			P.ForceScaleN += Length(Load.ForceN);
 		}
@@ -318,8 +210,8 @@ std::vector<Problem> BuildProblems(const Structure& Model, std::span<const BodyL
 	for (std::size_t Slot = 0; Slot < Interfaces.size(); ++Slot)
 	{
 		const InterfaceRecord& Record = Model.Interface(Interfaces[Slot]);
-		const int Component = std::max(ComponentOfSlot[Record.BodyA.Index], ComponentOfSlot[Record.BodyB.Index]);
-		Problem& P = Problems[Component < 0 ? 0 : static_cast<std::size_t>(Component)];
+		const int Component = statics::ComponentOf(Partition, Record);
+		Problem& P = Problems[static_cast<std::size_t>(Component + 1)];
 		P.Joints.push_back(MakeJoint(Model, Interfaces[Slot], OffsetOfSlot));
 		P.ReadingSlots.push_back(Slot);
 	}
@@ -328,15 +220,6 @@ std::vector<Problem> BuildProblems(const Structure& Model, std::span<const BodyL
 		P.Scaling = RotationalScaling(P);
 	}
 	return Problems;
-}
-
-Eigen::Matrix<double, 3, 6> CornerJacobian(const Vec3& ArmM)
-{
-	Eigen::Matrix<double, 3, 6> G;
-	G << 1.0, 0.0, 0.0, 0.0, ArmM.Z, -ArmM.Y,
-		0.0, 1.0, 0.0, -ArmM.Z, 0.0, ArmM.X,
-		0.0, 0.0, 1.0, ArmM.Y, -ArmM.X, 0.0;
-	return G;
 }
 
 Eigen::Matrix3d CornerStiffness(const Joint& J, const JointState& State, std::size_t C)

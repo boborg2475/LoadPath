@@ -560,3 +560,24 @@ The polygon band is real: along a cone-vertex direction the slide flips Stands �
 `μ` and Undecided → Collapses at `μ / cos(π/G)`; along a mid-edge direction it flips at
 `μ cos(π/G)` and `μ`. Load factors compare at 1e-7 relative plus 1e-6 absolute (an
 interior-point method lands near, not on, zero).
+
+Ratified after the 4a green (2026-10-11, orchestrator): the solver is the **homogeneous
+self-dual embedding** with Mehrotra predictor-corrector on the `6 × free bodies` normal
+equations (the plain infeasible-start method stalls when `t* = 0`, where the feasible set has no
+interior); Eigen LLT with one regularised refactor on a failed pivot, one iterative-refinement
+pass on the corrector, a feasible deterministic start (α = min(1, bound/2G), t = min(1, cap/2),
+complementarity products 1, duals 0, τ = κ = 1), and term-size-scaled convergence tests.
+`t_out` is clamped to at least `t_in` (exact: every inscribed set sits inside its circumscribed
+one) and the circumscribed solve is skipped when the inscribed one reaches the cap. **Strength
+region:** the convex hull of DESIGN's "only compression buys friction" envelope: corner force on B
+is `−(ft A/4) n + Σ α_j g_j + Σ κ_j c_j` with the tension offset fixed on the right-hand side,
+friction generators on the remainder, separate cohesion generators bounded by `Σ κ ≤ c A/4`, and
+crushing as `Σ α ≤ (fc + ft) A/4` (so N ≤ fc A/4); this over-reads shear by at most `μ ft A/4`
+on a bonded joint in tension and is exact when `ft = 0`. **`MaxShearStrengthPa` is not in the
+LP yet** (no test drives it; a finite cap is ignored, which over-reads capacity): it needs facet
+rows on the corner shear, slice 4b. **HingingInterfaces is kinematic**: an interface whose
+relative corner velocity under the mechanism exceeds 1e-6 of the component's fastest corner
+(an α-based definition fails at `t* = 0`, where every α vanishes). Mechanism lists are filled on
+Collapses only. With several components the state is the worst, so one Collapses beside one
+Undecided reads Undecided although `LoadFactorUpper < 1`; slice 4b's combined authority decides
+per component.

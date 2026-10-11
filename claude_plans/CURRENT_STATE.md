@@ -12,7 +12,7 @@ structure reader/writer, `RunCli`, the `loadpath_cli` binary) and slice 2a (the 
 authority) are committed and reviewed, every green-on-arrival row proven by a recorded mutation
 (commit messages). Slice 2a, through 1025bd9 and four reviews: `IStandingAuthority`, the RBSM
 corner-spring implementation with per-component Schur-pivoted dense LDLT solves and the free
-active set, under the narrowed contract of DESIGN §10 (it certifies Stands and Overstressed,
+Default suite 137 cases (7669 assertions in Debug, 15190 in Release, about 6.6 s and 0.9 s; the
 reports Mechanism as a verdict, and fails closed to Undecided rather than guess); 18 anchor and
 mechanics tests (incline tip and slide, Housner, free and coursed wall, the Itasca slope
 regimes, harmonic stack, Paterson–Zwick triangle and diamond), 20 solver characterisation and
@@ -23,19 +23,40 @@ the `Deferred.Slice4` tier holds 3 cases red by design. The design brief
 
 ## Next
 
-1. Slice 4 pulled forward (DESIGN §10, 2026-10-11): the kinematic collapse certificate behind
-   its own swappable interface (API.md contract to write first), a limit-analysis LP over the
-   same interfaces (associative friction for the LP bound, HiGHS vendored as the solver, the
-   referee DESIGN §8 planned for slice 7 arrives with it), used to referee every component the
-   elastic authority leaves Undecided **and every Mechanism it reports** (DESIGN §10: RBSM's
-   Mechanism is a verdict, not a certificate), and to report mechanism shapes. The contract
-   must say which theorem governs under non-associative friction (the associative LP is an
-   upper bound on the collapse load; a Mechanism the LP rejects is a false release). The
-   seeded oracle property TS2 (never Stands where the outer cone oracle is infeasible, never
-   Mechanism where the inner one is feasible) is its first cross-check. Acceptance: the
-   `Deferred.Slice4.*` cases go green and move back under `Statics.*`; the probe grids' 318
-   fail-closed Undecided points resolve; the arch (B-ARC-01/06), Orduña (B-ORD-01) and wedge
-   (B-WDG-01) rows become reachable.
+1. Slice 4 pulled forward (DESIGN §10, 2026-10-11). The contract is API.md "Slice 4: the
+   collapse certificate". Slice 4a, `MakeLimitAnalysisCertificate`
+   (`src/LimitAnalysisCertificate.cpp`), is implemented and green, not yet reviewed: 24
+   `Certificate.*` cases, a homogeneous self-dual Mehrotra interior point on the per-component
+   normal equations (Eigen LLT), inscribed solve first and the circumscribed one skipped when the
+   inscribed reaches the cap. Union-find, corner points, corner Jacobian and characteristic length
+   now live in `src/StaticsCommon.h`, shared with the RBSM authority. Still open in slice 4:
+   - Slice 4b, the combined authority: referee every component the elastic authority leaves
+     Undecided and every Mechanism it reports, count the disagreements, and move the three
+     `Deferred.Slice4.*` cases under `Statics.*` asserting through the certificate; the probe
+     grids' 318 fail-closed Undecided points resolve there.
+   - Anchors with no test yet: Couplet–Heyman arch (B-ARC-01/06), Orduña pile bracket (B-ORD-01),
+     3DEC wedge (B-WDG-01, its skipped test still drives the elastic authority).
+   - `MaxShearStrengthPa` is not in the LP: no test drives it, so a finite cap is ignored and the
+     certificate over-reads shear capacity (fail open for Stands). Needs a test and a formulation:
+     facet rows on the corner shear. Bounding `r Σα ≤ cap` turns a shear cap into a compression
+     cap, so that one is wrong.
+   - Bonded corners are `F = -ft A/4 n + Σ α_j g_j + Σ κ_j c_j` with `Σ κ_j ≤ c A/4`: the convex
+     hull of DESIGN's truncated envelope, which it over-reads by up to `μ ft A/4` of shear at
+     `N ≥ 0`. Exact when ft = 0. Ratify or replace.
+   - Severity Undecided > Collapses: a structure with one Collapses and one Undecided component
+     reads Undecided while `LoadFactorUpper < 1`. The single-component tests pin
+     `(State == Collapses) == (Upper < 1)`; decide which way multi-component results go.
+   - Unpinned choices: HingingInterfaces is kinematic (an interface whose corner relative
+     velocity in the inscribed mechanism exceeds 1e-6 of the component's fastest corner);
+     mechanism lists are filled on Collapses only, not on Undecided; non-convergence reports
+     Undecided with `[0, cap]`; a free body with no interface fails the factorisation and reads
+     Undecided.
+   - Debug runtime: the default suite went from 2.0 s to 6.6 s in Debug (0.9 s Release);
+     `Certificate.Oracle` alone is 3.7 s (its 1,122-point closed-form grid; 0.5 s Release).
+     About half is Eigen LLT factor and solve in Debug. Options: a `Slow.` prefix or a
+     Debug-sized grid for that case, or a hand-written dense Cholesky.
+   - HiGHS is not vendored: the contract chose a dense interior point. The DESIGN §8 referee is
+     still slice 7's question.
 2. Slice 2b, the remaining slice-2 anchors (BENCHMARKS groups 2 and 3): B-WAL-03 (wall slides at
    λ = μ), B-STK-04 (constant-step stack), B-WDG-02, B-ROK-02, F-CHC-01, F-LIB-01/02, F-EMI-01,
    the 5-diamond (hits the 50-pass cap today, logged below), and the arch and pile rows that

@@ -1,15 +1,998 @@
 #include "loadpath/CollapseCertificate.h"
 
+#include "EigenInclude.h"
+#include "StaticsCommon.h"
+
+#include <algorithm>
+#include <array>
+#include <cmath>
+#include <cstddef>
+#include <limits>
+#include <vector>
+
 namespace loadpath
 {
 namespace
 {
+using statics::CornerCount;
+using statics::DofPerBody;
+using statics::Scale;
+using statics::Sub;
+
+constexpr double Pi = 3.14159265358979323846;
+constexpr double StepToBoundary = 0.995;
+constexpr int RefinementPasses = 1;
+constexpr double RegularisationRelative = 1.0e-12;
+constexpr double UnconstrainedComponent = 1.0e-6;
+constexpr double ObjectiveNorm = 1.0;
+constexpr double Unbounded = std::numeric_limits<double>::infinity();
+
+struct Site
+{
+	int OffsetA = -1;
+	int OffsetB = -1;
+	Vec3 ArmA;
+	Vec3 ArmB;
+};
+
+struct JointData
+{
+	InterfaceId Id;
+	Vec3 Normal;
+	Vec3 AxisU;
+	Vec3 AxisV;
+	double Friction = 0.0;
+	double TensionN = 0.0;
+	double CohesionN = 0.0;
+	double CrushingN = 0.0;
+	std::size_t FirstSite = 0;
+};
+
+struct Component
+{
+	int Rows = 0;
+	std::vector<BodyId> FreeBodies;
+	std::vector<JointData> Joints;
+	std::vector<Site> Sites;
+	Eigen::VectorXd Demand;
+	Eigen::VectorXd Offset;
+	double ForceScaleN = 1.0;
+	double LengthM = 1.0;
+};
+
+struct Group
+{
+	std::size_t SiteIndex = 0;
+	std::size_t First = 0;
+	std::size_t Count = 0;
+	double Bound = 0.0;
+};
+
+struct Program
+{
+	std::vector<Group> Groups;
+	std::vector<Vec3> Directions;
+	double Cap = 0.0;
+	Eigen::Index LoadFactor = 0;
+	Eigen::Index FirstSlack = 0;
+	Eigen::Index CapSlack = 0;
+	Eigen::Index Variables = 0;
+	Eigen::Index FirstGroupRow = 0;
+	Eigen::Index CapRow = 0;
+	Eigen::Index RowCount = 0;
+};
+
+struct Normal
+{
+	Eigen::VectorXd D;
+	std::vector<Vec3> Z;
+	std::vector<double> H;
+	double Ht = 0.0;
+	Eigen::LLT<Eigen::MatrixXd> Factor;
+};
+
+struct Embedding
+{
+	Eigen::VectorXd X;
+	Eigen::VectorXd S;
+	Eigen::VectorXd Y;
+	double Tau = 1.0;
+	double Kappa = 1.0;
+};
+
+struct Outcome
+{
+	bool bConverged = false;
+	double LoadFactor = 0.0;
+	Eigen::VectorXd Y;
+	int Iterations = 0;
+};
+
+struct ComponentVerdict
+{
+	CertificateState State = CertificateState::Undecided;
+	double Lower = 0.0;
+	double Upper = 0.0;
+	int Iterations = 0;
+	std::vector<MechanismMotion> Mechanism;
+	std::vector<BodyId> Moving;
+	std::vector<InterfaceId> Hinging;
+};
+
+bool IsPositiveFinite(double X)
+{
+	return X > 0.0 && IsFinite(X);
+}
+
+bool IsInputValid(const Structure& Model, std::span<const BodyLoad> Loads, const CertificateOptions& Options)
+{
+	const bool bOptionsValid = IsFinite(Options.Gravity) && Options.ConeGenerators >= 4 && Options.ConeGenerators % 2 == 0 &&
+		IsPositiveFinite(Options.LoadFactorCap) && IsPositiveFinite(Options.FeasibilityTolerance) && Options.MaxIterations >= 1;
+	if (!bOptionsValid)
+	{
+		return false;
+	}
+	return std::all_of(Loads.begin(), Loads.end(), [&](const BodyLoad& Load) { return Model.IsLive(Load.Body) && IsFinite(Load.ForceN) && IsFinite(Load.PointM); });
+}
+
+void AddWrench(double* Out, int Offset, const Vec3& Arm, const Vec3& Force)
+{
+	if (Offset < 0)
+	{
+		return;
+	}
+	const Vec3 Moment = Cross(Arm, Force);
+	double* Row = Out + Offset;
+	Row[0] += Force.X;
+	Row[1] += Force.Y;
+	Row[2] += Force.Z;
+	Row[3] += Moment.X;
+	Row[4] += Moment.Y;
+	Row[5] += Moment.Z;
+}
+
+void ApplyCornerForce(double* Out, const Site& S, const Vec3& ForceOnB)
+{
+	AddWrench(Out, S.OffsetB, S.ArmB, ForceOnB);
+	AddWrench(Out, S.OffsetA, S.ArmA, Scale(-1.0, ForceOnB));
+}
+
+Vec3 PointVelocity(const double* Y, int Offset, const Vec3& Arm)
+{
+	if (Offset < 0)
+	{
+		return Vec3{};
+	}
+	const double* Row = Y + Offset;
+	return statics::Add(Vec3{Row[0], Row[1], Row[2]}, Cross(Vec3{Row[3], Row[4], Row[5]}, Arm));
+}
+
+Vec3 RelativeVelocity(const Site& S, const double* Y)
+{
+	return Sub(PointVelocity(Y, S.OffsetB, S.ArmB), PointVelocity(Y, S.OffsetA, S.ArmA));
+}
+
+std::vector<Component> BuildComponents(const Structure& Model, std::span<const BodyLoad> Loads, const Vec3& Gravity)
+{
+	const statics::ComponentPartition Partition = statics::PartitionFreeBodies(Model);
+	std::vector<Component> Components(Partition.FreeBodies.size());
+	std::vector<std::vector<statics::JointGeometry>> Geometry(Components.size());
+	for (std::size_t K = 0; K < Components.size(); ++K)
+	{
+		Components[K].FreeBodies = Partition.FreeBodies[K];
+		Components[K].Rows = DofPerBody * static_cast<int>(Partition.FreeBodies[K].size());
+	}
+	for (const InterfaceId Id : Model.LiveInterfaces())
+	{
+		const InterfaceRecord& Record = Model.Interface(Id);
+		const int K = statics::ComponentOf(Partition, Record);
+		if (K < 0)
+		{
+			continue;
+		}
+		const StrengthProfile& Profile = Model.Profile(Record.Profile);
+		const double CornerAreaM2 = Record.AreaM2 / 4.0;
+		JointData J;
+		J.Id = Id;
+		J.Normal = Record.NormalAToB;
+		J.AxisU = Record.AxisU;
+		J.AxisV = Record.AxisV;
+		J.Friction = Profile.FrictionCoefficient;
+		J.TensionN = Profile.TensileStrengthPa * CornerAreaM2;
+		J.CohesionN = Profile.ShearCohesionPa * CornerAreaM2;
+		J.CrushingN = Profile.CompressiveStrengthPa * CornerAreaM2;
+		Components[static_cast<std::size_t>(K)].Joints.push_back(J);
+		Geometry[static_cast<std::size_t>(K)].push_back(statics::MakeJointGeometry(Model, Id, Partition.OffsetOfSlot));
+	}
+	std::vector<Eigen::VectorXd> Applied(Components.size());
+	for (std::size_t K = 0; K < Components.size(); ++K)
+	{
+		Component& C = Components[K];
+		C.LengthM = statics::CharacteristicLengthM(Geometry[K]);
+		Applied[K] = Eigen::VectorXd::Zero(C.Rows);
+		C.ForceScaleN = 0.0;
+		for (const BodyId Id : C.FreeBodies)
+		{
+			const Vec3 WeightN = Scale(Model.Body(Id).MassKg, Gravity);
+			AddWrench(Applied[K].data(), Partition.OffsetOfSlot[Id.Index], Vec3{}, WeightN);
+			C.ForceScaleN += Length(WeightN);
+		}
+	}
+	for (const BodyLoad& Load : Loads)
+	{
+		const int K = Partition.ComponentOfSlot[Load.Body.Index];
+		if (K < 0)
+		{
+			continue;
+		}
+		Component& C = Components[static_cast<std::size_t>(K)];
+		const Vec3 Arm = Scale(1.0 / C.LengthM, Sub(Load.PointM, Model.Body(Load.Body).CentroidM));
+		AddWrench(Applied[static_cast<std::size_t>(K)].data(), Partition.OffsetOfSlot[Load.Body.Index], Arm, Load.ForceN);
+		C.ForceScaleN += Length(Load.ForceN);
+	}
+	for (std::size_t K = 0; K < Components.size(); ++K)
+	{
+		Component& C = Components[K];
+		if (!(C.ForceScaleN > 0.0))
+		{
+			C.ForceScaleN = 1.0;
+		}
+		C.Demand = Applied[K] / -C.ForceScaleN;
+		C.Offset = Eigen::VectorXd::Zero(C.Rows);
+		const double InverseLengthPerM = 1.0 / C.LengthM;
+		for (std::size_t I = 0; I < C.Joints.size(); ++I)
+		{
+			JointData& J = C.Joints[I];
+			const statics::JointGeometry& G = Geometry[K][I];
+			J.FirstSite = C.Sites.size();
+			for (std::size_t Corner = 0; Corner < CornerCount; ++Corner)
+			{
+				Site S;
+				S.OffsetA = G.OffsetA;
+				S.OffsetB = G.OffsetB;
+				S.ArmA = Scale(InverseLengthPerM, Sub(G.CornerM[Corner], G.CentroidAM));
+				S.ArmB = Scale(InverseLengthPerM, Sub(G.CornerM[Corner], G.CentroidBM));
+				C.Sites.push_back(S);
+				ApplyCornerForce(C.Offset.data(), S, Scale(J.TensionN / C.ForceScaleN, J.Normal));
+			}
+		}
+	}
+	return Components;
+}
+
+void AddGroup(Program& P, std::size_t SiteIndex, double Bound, const std::vector<Vec3>& Directions)
+{
+	if (!(Bound > 0.0))
+	{
+		return;
+	}
+	P.Groups.push_back(Group{SiteIndex, P.Directions.size(), Directions.size(), Bound});
+	P.Directions.insert(P.Directions.end(), Directions.begin(), Directions.end());
+}
+
+Program BuildProgram(const Component& C, int Generators, double RadiusScale, double Cap)
+{
+	Program P;
+	P.Cap = Cap;
+	const std::size_t Count = static_cast<std::size_t>(Generators);
+	std::vector<Vec3> Friction(Count);
+	std::vector<Vec3> Cohesion(Count);
+	for (const JointData& J : C.Joints)
+	{
+		for (std::size_t K = 0; K < Count; ++K)
+		{
+			const double AngleRad = 2.0 * Pi * static_cast<double>(K) / static_cast<double>(Generators);
+			const Vec3 InPlane = statics::Add(Scale(std::cos(AngleRad), J.AxisU), Scale(std::sin(AngleRad), J.AxisV));
+			Friction[K] = statics::Add(J.Normal, Scale(RadiusScale * J.Friction, InPlane));
+			Cohesion[K] = Scale(RadiusScale, InPlane);
+		}
+		for (std::size_t Corner = 0; Corner < CornerCount; ++Corner)
+		{
+			const std::size_t SiteIndex = J.FirstSite + Corner;
+			AddGroup(P, SiteIndex, (J.CrushingN + J.TensionN) / C.ForceScaleN, Friction);
+			AddGroup(P, SiteIndex, J.CohesionN / C.ForceScaleN, Cohesion);
+		}
+	}
+	const Eigen::Index GroupCount = static_cast<Eigen::Index>(P.Groups.size());
+	P.LoadFactor = static_cast<Eigen::Index>(P.Directions.size());
+	P.FirstSlack = P.LoadFactor + 1;
+	P.CapSlack = P.FirstSlack + GroupCount;
+	P.Variables = P.CapSlack + 1;
+	P.FirstGroupRow = C.Rows;
+	P.CapRow = P.FirstGroupRow + GroupCount;
+	P.RowCount = P.CapRow + 1;
+	return P;
+}
+
+Eigen::VectorXd RowBounds(const Component& C, const Program& P)
+{
+	Eigen::VectorXd B(P.RowCount);
+	B.head(C.Rows) = C.Offset;
+	for (std::size_t G = 0; G < P.Groups.size(); ++G)
+	{
+		B(P.FirstGroupRow + static_cast<Eigen::Index>(G)) = P.Groups[G].Bound;
+	}
+	B(P.CapRow) = P.Cap;
+	return B;
+}
+
+Eigen::VectorXd Apply(const Component& C, const Program& P, const Eigen::VectorXd& V)
+{
+	Eigen::VectorXd Out(P.RowCount);
+	double* O = Out.data();
+	const double* Values = V.data();
+	const double* Demand = C.Demand.data();
+	const double T = Values[P.LoadFactor];
+	for (int R = 0; R < C.Rows; ++R)
+	{
+		O[R] = -T * Demand[R];
+	}
+	for (std::size_t G = 0; G < P.Groups.size(); ++G)
+	{
+		const Group& Gr = P.Groups[G];
+		Vec3 Force;
+		double Sum = 0.0;
+		for (std::size_t J = Gr.First; J < Gr.First + Gr.Count; ++J)
+		{
+			const Vec3& Dir = P.Directions[J];
+			Force.X += Values[J] * Dir.X;
+			Force.Y += Values[J] * Dir.Y;
+			Force.Z += Values[J] * Dir.Z;
+			Sum += Values[J];
+		}
+		ApplyCornerForce(O, C.Sites[Gr.SiteIndex], Force);
+		O[P.FirstGroupRow + static_cast<Eigen::Index>(G)] = Sum + Values[P.FirstSlack + static_cast<Eigen::Index>(G)];
+	}
+	O[P.CapRow] = T + Values[P.CapSlack];
+	return Out;
+}
+
+double DemandDot(const Component& C, const double* Y)
+{
+	const double* Demand = C.Demand.data();
+	double Sum = 0.0;
+	for (int R = 0; R < C.Rows; ++R)
+	{
+		Sum += Demand[R] * Y[R];
+	}
+	return Sum;
+}
+
+Eigen::VectorXd ApplyTranspose(const Component& C, const Program& P, const Eigen::VectorXd& Y)
+{
+	Eigen::VectorXd Out(P.Variables);
+	double* O = Out.data();
+	const double* Duals = Y.data();
+	for (std::size_t G = 0; G < P.Groups.size(); ++G)
+	{
+		const Group& Gr = P.Groups[G];
+		const Vec3 V = RelativeVelocity(C.Sites[Gr.SiteIndex], Duals);
+		const double GroupDual = Duals[P.FirstGroupRow + static_cast<Eigen::Index>(G)];
+		for (std::size_t J = Gr.First; J < Gr.First + Gr.Count; ++J)
+		{
+			O[J] = Dot(P.Directions[J], V) + GroupDual;
+		}
+		O[P.FirstSlack + static_cast<Eigen::Index>(G)] = GroupDual;
+	}
+	O[P.LoadFactor] = -DemandDot(C, Duals) + Duals[P.CapRow];
+	O[P.CapSlack] = Duals[P.CapRow];
+	return Out;
+}
+
+bool HasPositivePivots(const Eigen::LLT<Eigen::MatrixXd>& Factor)
+{
+	if (Factor.info() != Eigen::Success)
+	{
+		return false;
+	}
+	const Eigen::VectorXd Pivots = Factor.matrixLLT().diagonal();
+	return std::all_of(Pivots.data(), Pivots.data() + Pivots.size(), [](double Pivot) { return Pivot > 0.0 && IsFinite(Pivot); });
+}
+
+using Matrix3 = std::array<double, 9>;
+using Jacobian = std::array<double, 18>;
+
+void AddSiteBlock(double* M, int Rows, int OffsetRow, const Jacobian& RowSide, int OffsetColumn, const Jacobian& ColumnSide, double Sign, const Matrix3& K)
+{
+	std::array<double, 18> KG{};
+	for (std::size_t R = 0; R < 3; ++R)
+	{
+		for (std::size_t J = 0; J < 6; ++J)
+		{
+			KG[R * 6 + J] = K[R * 3 + 0] * ColumnSide[0 * 6 + J] + K[R * 3 + 1] * ColumnSide[1 * 6 + J] + K[R * 3 + 2] * ColumnSide[2 * 6 + J];
+		}
+	}
+	for (std::size_t J = 0; J < 6; ++J)
+	{
+		double* Column = M + static_cast<std::size_t>(OffsetColumn + static_cast<int>(J)) * static_cast<std::size_t>(Rows) + static_cast<std::size_t>(OffsetRow);
+		for (std::size_t I = 0; I < 6; ++I)
+		{
+			Column[I] += Sign * (RowSide[0 * 6 + I] * KG[0 * 6 + J] + RowSide[1 * 6 + I] * KG[1 * 6 + J] + RowSide[2 * 6 + I] * KG[2 * 6 + J]);
+		}
+	}
+}
+
+bool FactorNormal(const Component& C, const Program& P, Normal& N)
+{
+	N.Z.resize(P.Groups.size());
+	N.H.resize(P.Groups.size());
+	const double* D = N.D.data();
+	std::vector<Matrix3> SiteMatrix(C.Sites.size(), Matrix3{});
+	for (std::size_t G = 0; G < P.Groups.size(); ++G)
+	{
+		const Group& Gr = P.Groups[G];
+		double Sum = D[P.FirstSlack + static_cast<Eigen::Index>(G)];
+		std::array<double, 3> Z{};
+		Matrix3& K = SiteMatrix[Gr.SiteIndex];
+		for (std::size_t J = Gr.First; J < Gr.First + Gr.Count; ++J)
+		{
+			const std::array<double, 3> Dir{P.Directions[J].X, P.Directions[J].Y, P.Directions[J].Z};
+			Sum += D[J];
+			for (std::size_t R = 0; R < 3; ++R)
+			{
+				const double Weighted = D[J] * Dir[R];
+				Z[R] += Weighted;
+				for (std::size_t Col = 0; Col < 3; ++Col)
+				{
+					K[R * 3 + Col] += Weighted * Dir[Col];
+				}
+			}
+		}
+		for (std::size_t R = 0; R < 3; ++R)
+		{
+			for (std::size_t Col = 0; Col < 3; ++Col)
+			{
+				K[R * 3 + Col] -= Z[R] * Z[Col] / Sum;
+			}
+		}
+		N.H[G] = Sum;
+		N.Z[G] = Vec3{Z[0], Z[1], Z[2]};
+	}
+	Eigen::MatrixXd M = Eigen::MatrixXd::Zero(C.Rows, C.Rows);
+	for (std::size_t I = 0; I < C.Sites.size(); ++I)
+	{
+		const Site& S = C.Sites[I];
+		const std::array<int, 2> Offsets{S.OffsetA, S.OffsetB};
+		const std::array<double, 2> Signs{-1.0, 1.0};
+		const std::array<Jacobian, 2> Jac{statics::CornerJacobianRows(S.ArmA), statics::CornerJacobianRows(S.ArmB)};
+		for (std::size_t A = 0; A < 2; ++A)
+		{
+			for (std::size_t B = 0; B < 2; ++B)
+			{
+				if (Offsets[A] >= 0 && Offsets[B] >= 0)
+				{
+					AddSiteBlock(M.data(), C.Rows, Offsets[A], Jac[A], Offsets[B], Jac[B], Signs[A] * Signs[B], SiteMatrix[I]);
+				}
+			}
+		}
+	}
+	const double Dt = D[P.LoadFactor];
+	const double DeltaT = D[P.CapSlack];
+	N.Ht = Dt + DeltaT;
+	const double Coupling = Dt * DeltaT / N.Ht;
+	const double* Demand = C.Demand.data();
+	double* Mp = M.data();
+	for (int Col = 0; Col < C.Rows; ++Col)
+	{
+		for (int Row = 0; Row < C.Rows; ++Row)
+		{
+			Mp[static_cast<std::size_t>(Col) * static_cast<std::size_t>(C.Rows) + static_cast<std::size_t>(Row)] += Coupling * Demand[Row] * Demand[Col];
+		}
+	}
+	N.Factor.compute(M);
+	if (HasPositivePivots(N.Factor))
+	{
+		return true;
+	}
+	const double LargestDiagonal = M.diagonal().maxCoeff();
+	if (!(LargestDiagonal > 0.0))
+	{
+		return false;
+	}
+	M.diagonal().array() += RegularisationRelative * LargestDiagonal;
+	N.Factor.compute(M);
+	return HasPositivePivots(N.Factor);
+}
+
+Eigen::VectorXd SolveNormal(const Component& C, const Program& P, const Normal& N, const Eigen::VectorXd& R)
+{
+	const double* Rp = R.data();
+	const double* Demand = C.Demand.data();
+	const double Dt = N.D(P.LoadFactor);
+	const double CapShare = Dt * Rp[P.CapRow] / N.Ht;
+	Eigen::VectorXd Y(P.RowCount);
+	double* Yp = Y.data();
+	for (int Row = 0; Row < C.Rows; ++Row)
+	{
+		Yp[Row] = Rp[Row] + CapShare * Demand[Row];
+	}
+	for (std::size_t G = 0; G < P.Groups.size(); ++G)
+	{
+		const double Share = Rp[P.FirstGroupRow + static_cast<Eigen::Index>(G)] / N.H[G];
+		ApplyCornerForce(Yp, C.Sites[P.Groups[G].SiteIndex], Scale(-Share, N.Z[G]));
+	}
+	auto Equilibrium = Y.head(C.Rows);
+	N.Factor.solveInPlace(Equilibrium);
+	for (std::size_t G = 0; G < P.Groups.size(); ++G)
+	{
+		const Eigen::Index Row = P.FirstGroupRow + static_cast<Eigen::Index>(G);
+		Yp[Row] = (Rp[Row] - Dot(N.Z[G], RelativeVelocity(C.Sites[P.Groups[G].SiteIndex], Yp))) / N.H[G];
+	}
+	Yp[P.CapRow] = (Rp[P.CapRow] + Dt * DemandDot(C, Yp)) / N.Ht;
+	return Y;
+}
+
+Embedding StartingPoint(const Program& P)
+{
+	Embedding E;
+	E.X = Eigen::VectorXd::Zero(P.Variables);
+	double* X = E.X.data();
+	for (std::size_t G = 0; G < P.Groups.size(); ++G)
+	{
+		const Group& Gr = P.Groups[G];
+		const double Start = std::min(1.0, Gr.Bound / (2.0 * static_cast<double>(Gr.Count)));
+		for (std::size_t J = Gr.First; J < Gr.First + Gr.Count; ++J)
+		{
+			X[J] = Start;
+		}
+		X[P.FirstSlack + static_cast<Eigen::Index>(G)] = Gr.Bound - Start * static_cast<double>(Gr.Count);
+	}
+	X[P.LoadFactor] = std::min(1.0, 0.5 * P.Cap);
+	X[P.CapSlack] = P.Cap - X[P.LoadFactor];
+	E.S = Eigen::VectorXd(P.Variables);
+	for (Eigen::Index I = 0; I < P.Variables; ++I)
+	{
+		E.S.data()[I] = 1.0 / X[I];
+	}
+	E.Y = Eigen::VectorXd::Zero(P.RowCount);
+	return E;
+}
+
+struct Direction
+{
+	Eigen::VectorXd X;
+	Eigen::VectorXd S;
+	Eigen::VectorXd Y;
+	double Tau = 0.0;
+	double Kappa = 0.0;
+};
+
+struct Residuals
+{
+	Eigen::VectorXd Primal;
+	Eigen::VectorXd Dual;
+	Eigen::VectorXd Reaction;
+	double Gap = 0.0;
+};
+
+struct NewtonRhs
+{
+	Eigen::VectorXd R1;
+	Eigen::VectorXd R2;
+	double R3 = 0.0;
+	Eigen::VectorXd R4;
+	double R5 = 0.0;
+};
+
+struct NewtonContext
+{
+	const Component* C = nullptr;
+	const Program* P = nullptr;
+	const Normal* N = nullptr;
+	const Eigen::VectorXd* Bounds = nullptr;
+	Eigen::VectorXd Q;
+	Eigen::VectorXd U1;
+	double Denominator = 0.0;
+};
+
+double DotProduct(const Eigen::VectorXd& A, const Eigen::VectorXd& B)
+{
+	const double* Ap = A.data();
+	const double* Bp = B.data();
+	double Sum = 0.0;
+	for (Eigen::Index I = 0; I < A.size(); ++I)
+	{
+		Sum += Ap[I] * Bp[I];
+	}
+	return Sum;
+}
+
+double LargestMagnitude(const double* Values, Eigen::Index Count)
+{
+	double Largest = 0.0;
+	for (Eigen::Index I = 0; I < Count; ++I)
+	{
+		Largest = std::max(Largest, std::abs(Values[I]));
+	}
+	return Largest;
+}
+
+Direction SolveLinearised(const NewtonContext& Ctx, const Embedding& E, const NewtonRhs& Rhs)
+{
+	const Component& C = *Ctx.C;
+	const Program& P = *Ctx.P;
+	const Normal& N = *Ctx.N;
+	const Eigen::Index Count = P.Variables;
+	const double* D = N.D.data();
+	const double* X = E.X.data();
+	const double* S = E.S.data();
+	Eigen::VectorXd Through(Count);
+	Eigen::VectorXd Weighted(Count);
+	for (Eigen::Index I = 0; I < Count; ++I)
+	{
+		Through.data()[I] = Rhs.R4.data()[I] / X[I] - Rhs.R2.data()[I];
+		Weighted.data()[I] = D[I] * Through.data()[I];
+	}
+	Eigen::VectorXd Reduced = Apply(C, P, Weighted);
+	for (Eigen::Index Row = 0; Row < P.RowCount; ++Row)
+	{
+		Reduced.data()[Row] = Rhs.R1.data()[Row] - Reduced.data()[Row];
+	}
+	Direction Dir;
+	Dir.Y = SolveNormal(C, P, N, Reduced);
+	Dir.X = ApplyTranspose(C, P, Dir.Y);
+	for (Eigen::Index I = 0; I < Count; ++I)
+	{
+		Dir.X.data()[I] = D[I] * (Dir.X.data()[I] + Through.data()[I]);
+	}
+	Dir.Tau = (Rhs.R3 - ObjectiveNorm * Dir.X.data()[P.LoadFactor] - DotProduct(*Ctx.Bounds, Dir.Y) + Rhs.R5 / E.Tau) / Ctx.Denominator;
+	for (Eigen::Index Row = 0; Row < P.RowCount; ++Row)
+	{
+		Dir.Y.data()[Row] += Dir.Tau * Ctx.Q.data()[Row];
+	}
+	Dir.S = Eigen::VectorXd(Count);
+	for (Eigen::Index I = 0; I < Count; ++I)
+	{
+		Dir.X.data()[I] += Dir.Tau * Ctx.U1.data()[I];
+		Dir.S.data()[I] = (Rhs.R4.data()[I] - S[I] * Dir.X.data()[I]) / X[I];
+	}
+	Dir.Kappa = (Rhs.R5 - E.Kappa * Dir.Tau) / E.Tau;
+	return Dir;
+}
+
+Direction SolveNewton(const NewtonContext& Ctx, const Embedding& E, const Residuals& R, double Reduction, const Eigen::VectorXd& R4, double R5, int Passes)
+{
+	NewtonRhs Rhs;
+	Rhs.R1 = -Reduction * R.Primal;
+	Rhs.R2 = -Reduction * R.Dual;
+	Rhs.R3 = -Reduction * R.Gap;
+	Rhs.R4 = R4;
+	Rhs.R5 = R5;
+	Direction Dir = SolveLinearised(Ctx, E, Rhs);
+	for (int Pass = 0; Pass < Passes; ++Pass)
+	{
+		NewtonRhs Error;
+		Error.R1 = Apply(*Ctx.C, *Ctx.P, Dir.X);
+		for (Eigen::Index Row = 0; Row < Ctx.P->RowCount; ++Row)
+		{
+			Error.R1.data()[Row] = Rhs.R1.data()[Row] - (Error.R1.data()[Row] - Dir.Tau * Ctx.Bounds->data()[Row]);
+		}
+		Error.R2 = Eigen::VectorXd::Zero(Ctx.P->Variables);
+		Error.R4 = Error.R2;
+		const Direction Fix = SolveLinearised(Ctx, E, Error);
+		for (Eigen::Index I = 0; I < Ctx.P->Variables; ++I)
+		{
+			Dir.X.data()[I] += Fix.X.data()[I];
+			Dir.S.data()[I] += Fix.S.data()[I];
+		}
+		for (Eigen::Index Row = 0; Row < Ctx.P->RowCount; ++Row)
+		{
+			Dir.Y.data()[Row] += Fix.Y.data()[Row];
+		}
+		Dir.Tau += Fix.Tau;
+		Dir.Kappa += Fix.Kappa;
+	}
+	return Dir;
+}
+
+double MaxStep(const Embedding& E, const Direction& Dir)
+{
+	double Limit = Unbounded;
+	const double* X = E.X.data();
+	const double* S = E.S.data();
+	const double* DX = Dir.X.data();
+	const double* DS = Dir.S.data();
+	for (Eigen::Index I = 0; I < E.X.size(); ++I)
+	{
+		if (DX[I] < 0.0)
+		{
+			Limit = std::min(Limit, -X[I] / DX[I]);
+		}
+		if (DS[I] < 0.0)
+		{
+			Limit = std::min(Limit, -S[I] / DS[I]);
+		}
+	}
+	if (Dir.Tau < 0.0)
+	{
+		Limit = std::min(Limit, -E.Tau / Dir.Tau);
+	}
+	if (Dir.Kappa < 0.0)
+	{
+		Limit = std::min(Limit, -E.Kappa / Dir.Kappa);
+	}
+	return Limit;
+}
+
+double Complementarity(const Embedding& E)
+{
+	return DotProduct(E.X, E.S) + E.Tau * E.Kappa;
+}
+
+double ComplementarityAfter(const Embedding& E, const Direction& Dir, double Step)
+{
+	const double* X = E.X.data();
+	const double* S = E.S.data();
+	const double* DX = Dir.X.data();
+	const double* DS = Dir.S.data();
+	double Sum = (E.Tau + Step * Dir.Tau) * (E.Kappa + Step * Dir.Kappa);
+	for (Eigen::Index I = 0; I < E.X.size(); ++I)
+	{
+		Sum += (X[I] + Step * DX[I]) * (S[I] + Step * DS[I]);
+	}
+	return Sum;
+}
+
+Residuals ComputeResiduals(const Component& C, const Program& P, const Embedding& E, const Eigen::VectorXd& Bounds)
+{
+	Residuals R;
+	R.Primal = Apply(C, P, E.X);
+	for (Eigen::Index Row = 0; Row < P.RowCount; ++Row)
+	{
+		R.Primal.data()[Row] -= E.Tau * Bounds.data()[Row];
+	}
+	R.Reaction = ApplyTranspose(C, P, E.Y);
+	R.Dual = Eigen::VectorXd(P.Variables);
+	for (Eigen::Index I = 0; I < P.Variables; ++I)
+	{
+		R.Dual.data()[I] = R.Reaction.data()[I] + E.S.data()[I];
+	}
+	R.Dual.data()[P.LoadFactor] += E.Tau * ObjectiveNorm;
+	R.Gap = ObjectiveNorm * E.X.data()[P.LoadFactor] + DotProduct(Bounds, E.Y) - E.Kappa;
+	return R;
+}
+
+bool IsConverged(const Component& C, const Program& P, const Embedding& E, const Residuals& R, double Tolerance, bool& bFinite)
+{
+	const double T = E.X.data()[P.LoadFactor] / E.Tau;
+	const double* Primal = R.Primal.data();
+	const double EquilibriumScale = 1.0 + std::max(LargestMagnitude(C.Offset.data(), C.Rows), std::abs(T) * LargestMagnitude(C.Demand.data(), C.Rows));
+	double PrimalRelative = std::max(LargestMagnitude(Primal, C.Rows) / EquilibriumScale, std::abs(Primal[P.CapRow]) / (1.0 + P.Cap));
+	for (std::size_t G = 0; G < P.Groups.size(); ++G)
+	{
+		PrimalRelative = std::max(PrimalRelative, std::abs(Primal[P.FirstGroupRow + static_cast<Eigen::Index>(G)]) / (1.0 + P.Groups[G].Bound));
+	}
+	PrimalRelative /= E.Tau;
+	const double DualScale = 1.0 + std::max({ObjectiveNorm, LargestMagnitude(E.S.data(), P.Variables) / E.Tau, LargestMagnitude(R.Reaction.data(), P.Variables) / E.Tau});
+	const double DualRelative = LargestMagnitude(R.Dual.data(), P.Variables) / E.Tau / DualScale;
+	const double GapRelative = DotProduct(E.X, E.S) / (E.Tau * E.Tau) / (1.0 + std::abs(T));
+	bFinite = IsFinite(PrimalRelative) && IsFinite(DualRelative) && IsFinite(GapRelative) && IsFinite(T);
+	return PrimalRelative <= Tolerance && DualRelative <= Tolerance && GapRelative <= Tolerance;
+}
+
+void PrepareContext(const Component& C, const Program& P, const Embedding& E, NewtonContext& Ctx)
+{
+	const Normal& N = *Ctx.N;
+	const double Dt = N.D.data()[P.LoadFactor];
+	Eigen::VectorXd Rhs = *Ctx.Bounds;
+	for (int Row = 0; Row < C.Rows; ++Row)
+	{
+		Rhs.data()[Row] += Dt * ObjectiveNorm * C.Demand.data()[Row];
+	}
+	Rhs.data()[P.CapRow] -= Dt * ObjectiveNorm;
+	Ctx.Q = SolveNormal(C, P, N, Rhs);
+	Ctx.U1 = ApplyTranspose(C, P, Ctx.Q);
+	Ctx.U1.data()[P.LoadFactor] += ObjectiveNorm;
+	for (Eigen::Index I = 0; I < P.Variables; ++I)
+	{
+		Ctx.U1.data()[I] *= N.D.data()[I];
+	}
+	Ctx.Denominator = ObjectiveNorm * Ctx.U1.data()[P.LoadFactor] + DotProduct(*Ctx.Bounds, Ctx.Q) + E.Kappa / E.Tau;
+}
+
+void Advance(Embedding& E, const Direction& Dir, double Step)
+{
+	for (Eigen::Index I = 0; I < E.X.size(); ++I)
+	{
+		E.X.data()[I] += Step * Dir.X.data()[I];
+		E.S.data()[I] += Step * Dir.S.data()[I];
+	}
+	for (Eigen::Index Row = 0; Row < E.Y.size(); ++Row)
+	{
+		E.Y.data()[Row] += Step * Dir.Y.data()[Row];
+	}
+	E.Tau += Step * Dir.Tau;
+	E.Kappa += Step * Dir.Kappa;
+}
+
+Outcome SolveProgram(const Component& C, const Program& P, const CertificateOptions& Options)
+{
+	Outcome Out;
+	const Eigen::VectorXd Bounds = RowBounds(C, P);
+	Embedding E = StartingPoint(P);
+	const double PairCount = static_cast<double>(P.Variables + 1);
+	for (int Iteration = 0;; ++Iteration)
+	{
+		const Residuals R = ComputeResiduals(C, P, E, Bounds);
+		bool bFinite = false;
+		const bool bConverged = IsConverged(C, P, E, R, Options.FeasibilityTolerance, bFinite);
+		Out.Iterations = Iteration;
+		if (!bFinite)
+		{
+			return Out;
+		}
+		if (bConverged)
+		{
+			Out.bConverged = true;
+			Out.LoadFactor = E.X.data()[P.LoadFactor] / E.Tau;
+			Out.Y = E.Y.head(C.Rows) / E.Tau;
+			return Out;
+		}
+		if (Iteration >= Options.MaxIterations)
+		{
+			return Out;
+		}
+		Normal N;
+		N.D = Eigen::VectorXd(P.Variables);
+		for (Eigen::Index I = 0; I < P.Variables; ++I)
+		{
+			N.D.data()[I] = E.X.data()[I] / E.S.data()[I];
+		}
+		if (!FactorNormal(C, P, N))
+		{
+			return Out;
+		}
+		NewtonContext Ctx;
+		Ctx.C = &C;
+		Ctx.P = &P;
+		Ctx.N = &N;
+		Ctx.Bounds = &Bounds;
+		PrepareContext(C, P, E, Ctx);
+		const double Mu = Complementarity(E) / PairCount;
+		Eigen::VectorXd R4(P.Variables);
+		for (Eigen::Index I = 0; I < P.Variables; ++I)
+		{
+			R4.data()[I] = -E.X.data()[I] * E.S.data()[I];
+		}
+		const Direction Affine = SolveNewton(Ctx, E, R, 1.0, R4, -E.Tau * E.Kappa, 0);
+		const double AffineMu = ComplementarityAfter(E, Affine, std::min(1.0, MaxStep(E, Affine))) / PairCount;
+		const double Ratio = AffineMu / Mu;
+		const double Centring = Ratio * Ratio * Ratio;
+		for (Eigen::Index I = 0; I < P.Variables; ++I)
+		{
+			R4.data()[I] += Centring * Mu - Affine.X.data()[I] * Affine.S.data()[I];
+		}
+		const double R5 = Centring * Mu - E.Tau * E.Kappa - Affine.Tau * Affine.Kappa;
+		const Direction Dir = SolveNewton(Ctx, E, R, 1.0 - Centring, R4, R5, RefinementPasses);
+		const double Step = std::min(1.0, StepToBoundary * MaxStep(E, Dir));
+		Advance(E, Dir, Step);
+	}
+}
+
+void FillMechanism(const Component& C, const Eigen::VectorXd& Y, ComponentVerdict& V)
+{
+	Eigen::VectorXd Motion = -Y;
+	for (int Offset = 0; Offset < C.Rows; Offset += DofPerBody)
+	{
+		Motion.segment(Offset + 3, 3) /= C.LengthM;
+	}
+	const double Largest = Motion.cwiseAbs().maxCoeff();
+	if (!(Largest > 0.0))
+	{
+		return;
+	}
+	const Eigen::VectorXd Unit = Motion / Largest;
+	for (std::size_t K = 0; K < C.FreeBodies.size(); ++K)
+	{
+		const int O = static_cast<int>(K) * DofPerBody;
+		if (!(Unit.segment(O, DofPerBody).cwiseAbs().maxCoeff() > UnconstrainedComponent))
+		{
+			continue;
+		}
+		V.Moving.push_back(C.FreeBodies[K]);
+		V.Mechanism.push_back(MechanismMotion{C.FreeBodies[K], Vec3{Unit(O + 0), Unit(O + 1), Unit(O + 2)}, Vec3{Unit(O + 3), Unit(O + 4), Unit(O + 5)}});
+	}
+	std::vector<double> Speeds;
+	Speeds.reserve(C.Sites.size());
+	for (const Site& S : C.Sites)
+	{
+		Speeds.push_back(Length(RelativeVelocity(S, Y.data())));
+	}
+	double Fastest = 0.0;
+	for (const double Speed : Speeds)
+	{
+		Fastest = std::max(Fastest, Speed);
+	}
+	for (const JointData& J : C.Joints)
+	{
+		for (std::size_t Corner = 0; Corner < CornerCount; ++Corner)
+		{
+			if (Speeds[J.FirstSite + Corner] > UnconstrainedComponent * Fastest)
+			{
+				V.Hinging.push_back(J.Id);
+				break;
+			}
+		}
+	}
+}
+
+ComponentVerdict DecideComponent(const Component& C, const CertificateOptions& Options)
+{
+	ComponentVerdict V;
+	V.Upper = Options.LoadFactorCap;
+	const Outcome Inner = SolveProgram(C, BuildProgram(C, Options.ConeGenerators, 1.0, Options.LoadFactorCap), Options);
+	V.Iterations = Inner.Iterations;
+	if (!Inner.bConverged)
+	{
+		return V;
+	}
+	double OuterLoadFactor = Options.LoadFactorCap;
+	if (Inner.LoadFactor < Options.LoadFactorCap * (1.0 - Options.FeasibilityTolerance))
+	{
+		const double Circumscribed = 1.0 / std::cos(Pi / static_cast<double>(Options.ConeGenerators));
+		const Outcome Outer = SolveProgram(C, BuildProgram(C, Options.ConeGenerators, Circumscribed, Options.LoadFactorCap), Options);
+		V.Iterations = std::max(V.Iterations, Outer.Iterations);
+		if (!Outer.bConverged)
+		{
+			return V;
+		}
+		OuterLoadFactor = Outer.LoadFactor;
+	}
+	V.Lower = Inner.LoadFactor;
+	V.Upper = std::max(OuterLoadFactor, Inner.LoadFactor);
+	if (V.Lower >= 1.0)
+	{
+		V.State = CertificateState::Stands;
+	}
+	else if (V.Upper < 1.0)
+	{
+		V.State = CertificateState::Collapses;
+		FillMechanism(C, Inner.Y, V);
+	}
+	return V;
+}
+
+int Severity(CertificateState State)
+{
+	switch (State)
+	{
+	case CertificateState::Stands: return 0;
+	case CertificateState::Collapses: return 1;
+	case CertificateState::Undecided: return 2;
+	case CertificateState::InvalidInput: return 3;
+	}
+	return 3;
+}
+
 class LimitAnalysisCertificate final : public ICollapseCertificate
 {
 public:
-	CertificateResult Decide(const Structure&, std::span<const BodyLoad>, const CertificateOptions&) const override
+	CertificateResult Decide(const Structure& Model, std::span<const BodyLoad> Loads, const CertificateOptions& Options) const override
 	{
-		return CertificateResult{};
+		CertificateResult Result;
+		if (!IsInputValid(Model, Loads, Options))
+		{
+			Result.State = CertificateState::InvalidInput;
+			return Result;
+		}
+		Result.State = CertificateState::Stands;
+		Result.LoadFactorLower = Options.LoadFactorCap;
+		Result.LoadFactorUpper = Options.LoadFactorCap;
+		for (const Component& C : BuildComponents(Model, Loads, Options.Gravity))
+		{
+			const ComponentVerdict V = DecideComponent(C, Options);
+			if (Severity(V.State) > Severity(Result.State))
+			{
+				Result.State = V.State;
+			}
+			Result.LoadFactorLower = std::min(Result.LoadFactorLower, V.Lower);
+			Result.LoadFactorUpper = std::min(Result.LoadFactorUpper, V.Upper);
+			Result.Iterations = std::max(Result.Iterations, V.Iterations);
+			Result.Mechanism.insert(Result.Mechanism.end(), V.Mechanism.begin(), V.Mechanism.end());
+			Result.UnconstrainedBodies.insert(Result.UnconstrainedBodies.end(), V.Moving.begin(), V.Moving.end());
+			Result.HingingInterfaces.insert(Result.HingingInterfaces.end(), V.Hinging.begin(), V.Hinging.end());
+		}
+		return Result;
 	}
 };
 }

@@ -5,6 +5,7 @@
 #pragma warning(push)
 #pragma warning(disable : 4702)
 #endif
+#include <Eigen/Cholesky>
 #include <Eigen/Core>
 #if defined(_MSC_VER)
 #pragma warning(pop)
