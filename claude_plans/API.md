@@ -446,3 +446,104 @@ Couplet–Heyman semicircular arch with radial joints stands at `t/r = 0.1075` a
 (voussoir count from the benchmark report's discretisation guidance; hinge positions asserted
 within a half-voussoir of 54.5°); the friction switch on that arch (stands at φ = 22°, slides at
 21°). Bracket: the Orduña hollow pile's non-associative load factor inside [0.427, 0.553].
+
+## Slice 4: the collapse certificate (limit analysis, pulled forward 2026-10-11)
+
+The kinematic authority. Where the elastic standing authority fails closed (Undecided) or
+reports a Mechanism it cannot certify, this answers from the static theorem of limit analysis
+over the same rigid blocks and interfaces (Livesley 1978; Gilbert & Melbourne 1994; Orduña &
+Lourenço 2005; the formulation BENCHMARKS groups 4 and 5 were computed with). It is a second
+implementation behind its own interface, swappable like the first (DESIGN §7).
+
+### The interface (`CollapseCertificate.h`)
+
+```cpp
+enum class CertificateState : uint8_t { Stands, Collapses, Undecided, InvalidInput };
+
+struct CertificateOptions {
+	Vec3   Gravity = {0.0, 0.0, -GravityMPerS2};
+	int    ConeGenerators = 16;            // even, >= 4; the friction circle is approximated by this polygon
+	double LoadFactorCap = 1.0e3;          // the LP's upper bound on t; reaching it means "stands with margin >= cap"
+	double FeasibilityTolerance = 1.0e-9;  // relative, on the equilibrium residual and complementarity
+	int    MaxIterations = 200;            // interior-point iterations before Undecided
+};
+
+struct CertificateResult {
+	CertificateState State = CertificateState::Undecided;
+	double LoadFactorLower = 0.0;          // t_in: the inscribed-cone collapse multiplier (a true static field exists up to here)
+	double LoadFactorUpper = 0.0;          // t_out: the circumscribed-cone multiplier (no static field exists beyond here)
+	std::vector<MechanismMotion> Mechanism;        // the dual ray at collapse, per moving body, largest component 1
+	std::vector<BodyId> UnconstrainedBodies;
+	std::vector<InterfaceId> HingingInterfaces;    // interfaces whose cone constraint is active at collapse (opening or slipping)
+	int Iterations = 0;
+	InterfaceId InvalidInterface{};
+};
+
+class ICollapseCertificate {
+public:
+	virtual ~ICollapseCertificate() = default;
+	virtual CertificateResult Decide(const Structure&, std::span<const BodyLoad>, const CertificateOptions&) const = 0;
+};
+
+std::unique_ptr<ICollapseCertificate> MakeLimitAnalysisCertificate();
+```
+
+### The problem it solves
+
+Unknowns: for every corner of every live interface (same four corners as slice 2), a
+non-negative coefficient per cone generator; one scalar `t ≥ 0`. The force on body B at a
+corner is `Σ_j α_j (n + r (cos θ_j u + sin θ_j v))`, `θ_j = 2πj / G`, with `r = μ` for the
+inscribed cone and `r = μ / cos(π/G)` for the circumscribed one; a bonded joint adds `ft · A/4`
+of allowed tension (shift of the cone apex) and `c · A/4` of cohesion (shift of the shear
+bound), `MaxShearStrengthPa · A/4` caps the shear, and compression is capped at `fc · A/4`
+(a crushing bound, so Overstressed joints read as collapse here rather than as a separate
+state). Constraints: six equilibrium rows per free body, `A α = t · b`, with `b` the gravity
+and `BodyLoad` wrench. Objective: maximise `t`, `t ≤ LoadFactorCap`. `t = 0, α = 0` is always
+feasible, so there is no infeasibility detection; the solver is a dense primal-dual
+interior-point method (Mehrotra predictor-corrector) on the normal equations
+`A D Aᵀ`, which are `6 × free bodies` square, the same size as slice 2's stiffness, so slice 6
+swaps the factorisation behind the same interface. Deterministic: ordered assembly, no
+threads, a fixed starting point, Eigen dense storage and triangular solves only.
+
+Two solves per call, inscribed then circumscribed. **State**: `Stands` when `t_in ≥ 1`;
+`Collapses` when `t_out < 1`; `Undecided` when `t_in < 1 ≤ t_out` (the polygon band; raising
+`ConeGenerators` narrows it) or when the iteration cap is hit; `InvalidInput` on the slice-2
+rules (dead-body load, non-finite load or gravity, non-finite or non-positive area) plus
+`ConeGenerators` odd or under 4 and non-finite or non-positive options. Per-component solves
+and per-component scaling as in slice 2 (rotation rows divided by the component's
+characteristic length), so verdicts are local and scale-invariant.
+
+**Mechanism**: the dual variables of the equilibrium rows at the inscribed-cone optimum are
+body velocities and angular velocities (the kinematic theorem's mechanism); reported like
+slice 2's `MechanismMotion`, normalised per component, with `UnconstrainedBodies` the bodies
+with any component above 1e-6 and `HingingInterfaces` the interfaces with a corner whose
+cone constraint is active. On `Stands` these are empty.
+
+### The theorem ruling (settles the question slice 2 left open)
+
+The certificate implements **associative** limit analysis: the inscribed-cone solution is a
+genuine statically admissible field, so `Stands` certifies that equilibrium within every
+strength bound is possible; the circumscribed-cone solution bounds every admissible field, so
+`Collapses` certifies that none exists for the associative problem, and since the
+non-associative collapse load never exceeds the associative one, `Collapses` holds for the
+physical joint too. The gap is the other direction: under non-associative friction a structure
+with an admissible field can still fail along a sliding path (Ferris & Tin-Loi; Orduña's pile
+reads [0.427, 0.553] for exactly this reason). **Ruling:** static admissibility is the standing
+criterion for the host. Where slice 2 reports Mechanism and the certificate says `Stands`, the
+certificate wins, nothing is released, and the disagreement is counted in the result of the
+combined authority (slice 4b). A future red on the oracle property's never-Mechanism direction
+(`Statics.Solver.VerdictsNeverContradictTheStaticAdmissibilityOracle`) is therefore a defect in
+slice 2, not a known limit. The pile's non-associative factor is pinned as a bracket on the
+certificate's `[t_in, t_out]` containing the associative value, not as the certificate's answer.
+
+### Anchors slice 4 must pin
+
+The three `Deferred.Slice4.*` cases move back under `Statics.*` and assert through the
+certificate; every slice-2 single-block and stack anchor reads the same state from the
+certificate as from the elastic authority where the latter is decided; the Couplet–Heyman
+semicircular arch (B-ARC-01, radial joints, stands at `t/r = 0.1075` and collapses below, hinge
+positions within a half-voussoir of 54.5°, voussoir count from the report's discretisation
+guidance), its friction switch (B-ARC-06, stands at φ = 22°, slides at 21°), the 3DEC wedge
+(B-WDG-01, φ_crit 33.36° within 0.05°), the Orduña pile bracket (B-ORD-01), and agreement with
+the test-tier NNLS oracle on its 300 seeded draws (same `CanStand` / `CannotStand` verdicts
+outside the ambiguity band).
