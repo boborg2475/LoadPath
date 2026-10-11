@@ -50,9 +50,12 @@ struct StrengthProfile {
 };
 ```
 
-Validation on `AddProfile`: every field finite (`NonFiniteInput`); strengths and friction not
-negative (`NegativeStrength`); stiffnesses may be zero in slice 1 (slice 2 decides whether zero
-is refused). Zero tensile strength and zero cohesion are the dry-joint profile and are valid.
+Validation on `AddProfile`: every field finite (`NonFiniteInput`), except that
+`MaxShearStrengthPa` may be `+infinity` (its default); a NaN or `-infinity` cap is
+`NonFiniteInput`. Strengths, friction and the cap not negative (`NegativeStrength`);
+stiffnesses may be zero in slice 1 (slice 2 decides whether zero is refused). Zero tensile
+strength and zero cohesion are the dry-joint profile and are valid. Non-finite is checked
+across all fields before negativity is checked on any.
 
 ### Bodies (`Body.h`)
 
@@ -78,8 +81,8 @@ struct InterfaceDesc {
 enum class InterfaceState : uint8_t { Intact, Cracked, Severed, Removed };
 ```
 
-`AddInterface` validation, in this order, first failure wins: both bodies known and live
-(`UnknownBody`, `BodyRemoved`); distinct (`SameBody`); profile known (`UnknownProfile`); every
+`AddInterface` validation, in this order, first failure wins: both bodies known (`UnknownBody`,
+A then B), then both live (`BodyRemoved`, A then B); distinct (`SameBody`); profile known (`UnknownProfile`); every
 scalar finite (`NonFiniteInput`); the normal's length `> 0` after which it is normalised
 (`DegenerateNormal`; a NaN length fails this test because `!(len > 0)` is true for NaN); `U` and
 `V` unit length within 1e-9, mutually orthogonal and orthogonal to the normal within 1e-9, and

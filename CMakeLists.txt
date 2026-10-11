@@ -29,10 +29,12 @@ else()
 		$<$<BOOL:${LOADPATH_WARNINGS_AS_ERRORS}>:-Werror>)
 endif()
 
-# The engine. Header-only until the first slice adds a source file; then STATIC.
-add_library(loadpath INTERFACE)
-target_include_directories(loadpath INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/include)
-target_link_libraries(loadpath INTERFACE loadpath_contract)
+# The engine.
+add_library(loadpath STATIC
+	src/Handles.cpp
+	src/Structure.cpp)
+target_include_directories(loadpath PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_link_libraries(loadpath PUBLIC loadpath_contract)
 
 if(LOADPATH_BUILD_TESTS)
 	enable_testing()

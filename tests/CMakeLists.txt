@@ -4,7 +4,12 @@ target_compile_definitions(doctest INTERFACE DOCTEST_CONFIG_NO_EXCEPTIONS_BUT_WI
 
 add_executable(loadpath_tests
 	TestMain.cpp
-	SmokeTest.cpp)
+	SmokeTest.cpp
+	HandlesTest.cpp
+	ProfileTest.cpp
+	BodyTest.cpp
+	InterfaceTest.cpp
+	StructureTest.cpp)
 target_link_libraries(loadpath_tests PRIVATE loadpath doctest)
 
 add_test(NAME loadpath_tests COMMAND loadpath_tests)
