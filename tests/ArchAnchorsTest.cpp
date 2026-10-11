@@ -10,6 +10,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstddef>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -29,27 +30,27 @@ bool ArchStands(double Eta, const CertificateOptions& Options = CertificateOptio
 	return CertificateStands(Arch.Model, Options);
 }
 
-std::vector<int> HingeAnglesDeg(const SemicircularArch& Arch, const std::vector<InterfaceId>& Hinging)
+std::vector<double> HingeAnglesDeg(const SemicircularArch& Arch, const std::vector<InterfaceId>& Hinging)
 {
-	std::vector<int> Angles;
+	std::vector<double> Angles;
 	for (std::size_t Joint = 0; Joint < Arch.Joints.size(); ++Joint)
 	{
 		if (HasInterface(Hinging, Arch.Joints[Joint]))
 		{
-			Angles.push_back(static_cast<int>(ArchJointAngleDeg(static_cast<int>(Joint))));
+			Angles.push_back(Arch.JointAnglesDeg[Joint]);
 		}
 	}
 	return Angles;
 }
 
-std::string DescribeAngles(const std::vector<int>& Angles)
+std::string DescribeAngles(const std::vector<double>& Angles)
 {
-	std::string Out;
-	for (const int Angle : Angles)
+	std::ostringstream Out;
+	for (const double Angle : Angles)
 	{
-		Out += std::to_string(Angle) + " ";
+		Out << Angle << " ";
 	}
-	return Out;
+	return Out.str();
 }
 
 double PileThresholdLambda(const Structure& Model, bool bCollapseThreshold)
@@ -77,30 +78,29 @@ TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Certificate.Anchor.CoupletHeymanArchStandsAbov
 	CHECK(Failing.State == CertificateState::Collapses);
 	CHECK(Failing.LoadFactorUpper < 1.0);
 
-	const ThresholdBracket Bracket = Threshold([](double Eta) { return ArchStands(Eta); }, StandingEta, FailingEta, 1.0e-4);
+	const ThresholdBracket Bracket = Threshold([](double Eta) { return ArchStands(Eta); }, StandingEta, FailingEta, 1.0e-6);
 	const double Seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - Start).count();
 	INFO("eta bracket: last standing " << Bracket.LastStanding << ", first failing " << Bracket.FirstFailing << ", " << Seconds << " s");
 	MESSAGE("arch eta bracket [" << Bracket.FirstFailing << ", " << Bracket.LastStanding << "] in " << Seconds << " s");
 	CHECK(Bracket.bBracketed);
-	CHECK(Bracket.LastStanding >= ContinuousLeastEta);
-	CHECK(Bracket.FirstFailing >= 0.1074);
-	CHECK(Bracket.LastStanding <= StandingEta);
+	CHECK(Bracket.LastStanding <= ContinuousLeastEta + 1.0e-5);
+	CHECK(Bracket.FirstFailing >= ContinuousLeastEta - 1.0e-5);
 }
 
 TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Certificate.Anchor.CoupletHeymanArchHingesAtTheCrownTheHaunchesAndTheSpringings")
 {
 	const SemicircularArch Arch = MakeSemicircularArch(FailingEta, DryJoint(ArchFriction));
 	const CertificateResult Result = DecideWith(Arch.Model, CertificateOptions{});
-	const std::vector<int> Angles = HingeAnglesDeg(Arch, Result.HingingInterfaces);
+	const std::vector<double> Angles = HingeAnglesDeg(Arch, Result.HingingInterfaces);
 	INFO("state " << Result.State << ", hinges at " << DescribeAngles(Angles) << "deg, moving " << Describe(Result.UnconstrainedBodies));
 	CHECK(Result.State == CertificateState::Collapses);
 	CHECK(Angles.size() == Result.HingingInterfaces.size());
 	bool bCrown = false;
 	bool bHaunch = false;
-	for (const int Angle : Angles)
+	for (const double Angle : Angles)
 	{
-		const int Magnitude = std::abs(Angle);
-		const bool bHaunchJoint = Magnitude == 51 || Magnitude == 54 || Magnitude == 57;
+		const double Magnitude = std::abs(Angle);
+		const bool bHaunchJoint = Magnitude == 51.0 || Magnitude == 54.0 || Magnitude == ArchHaunchJointDeg || Magnitude == 57.0;
 		INFO("hinge at " << Angle << " deg");
 		CHECK((Angle == 0 || bHaunchJoint || Magnitude == 90));
 		bCrown = bCrown || Angle == 0;
@@ -140,14 +140,15 @@ TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Certificate.Anchor.OrdunaHollowPileCollapseFac
 	INFO("certificate stands up to lambda " << StandsUpTo << ", collapses from " << CollapsesFrom << ", " << Seconds << " s");
 	MESSAGE("pile lambda [" << StandsUpTo << ", " << CollapsesFrom << "] in " << Seconds << " s");
 	CHECK(StandsUpTo >= 0.427);
-	CHECK(CollapsesFrom <= 0.70);
+	CHECK(CollapsesFrom <= 0.553);
 
 	AuthorityOptions Options;
 	Options.Standing = LateralLoad(0.4);
 	Options.Certificate = CertificateLateral(0.4);
 	const AuthorityResult Combined = MakeCombinedAuthority(MakeRbsmStandingAuthority(), MakeLimitAnalysisCertificate())->Judge(Pile.Model, {}, Options);
 	const StandingResult Elastic = SolveWith(Pile.Model, LateralLoad(0.4));
-	INFO("lambda 0.4: elastic " << Elastic.State << ", combined components " << Combined.Components.size());
+	INFO("lambda 0.4: elastic " << Elastic.State << ", combined worst " << static_cast<int>(Combined.Worst) << ", components " << Combined.Components.size());
 	CHECK(Combined.Components.size() == 1u);
-	CHECK(Combined.Worst != ComponentVerdict::Collapses);
+	CHECK(Combined.Worst == ComponentVerdict::Stands);
+	CHECK(Elastic.State != StandingState::Mechanism);
 }

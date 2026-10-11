@@ -1,11 +1,13 @@
 #include "BrickFixtures.h"
 #include "CertificateTestSupport.h"
 #include "StaticsTestSupport.h"
+#include "WedgeFixture.h"
 
 #include "loadpath/StructuralAuthority.h"
 
 #include "doctest.h"
 
+#include <array>
 #include <cmath>
 #include <cstddef>
 #include <memory>
@@ -405,4 +407,139 @@ TEST_CASE("Statics.Combined.ElasticInvalidInputPropagates")
 	INFO(DescribeResult(Result));
 	CHECK(SolveWith(F.Model, StandingOptions{}, Loads).State == StandingState::InvalidInput);
 	CHECK(Result.Worst == ComponentVerdict::InvalidInput);
+}
+
+TEST_CASE("Statics.Combined.ComponentVerdictsAreLocal")
+{
+	const double TiltRad = 29.0 * RadPerDegree;
+	Structure Model;
+	const BodyId Ground = AddGroundPlane(Model);
+	const ProfileId Crushed = AddProfileOk(Model, CrushedUnderOwnWeight());
+	const ProfileId Dry = AddProfileOk(Model, DryJoint(0.6));
+	const BodyId CrushedBrick = AddBox(Model, BrickShape(0.0));
+	AddInterfaceOk(Model, OnGroundPlane(Ground, CrushedBrick, BrickShape(0.0), Crushed));
+	const BodyId CappedBrick = AddBox(Model, BrickShape(1.0));
+	AddInterfaceOk(Model, OnGroundPlane(Ground, CappedBrick, BrickShape(1.0), Dry));
+	AuthorityOptions Options = Tilted(TiltRad);
+	Options.Standing.MaxActiveSetIterations = 1;
+	const AuthorityResult Result = JudgeWith(Model, Options);
+	INFO(DescribeResult(Result));
+	CHECK(Result.Components.size() == 2u);
+	if (Result.Components.size() != 2u)
+	{
+		return;
+	}
+	const ComponentReport& First = Result.Components[0];
+	const ComponentReport& Second = Result.Components[1];
+	CHECK(SameIds(First.Bodies, {CrushedBrick}));
+	CHECK(First.Elastic == StandingState::Overstressed);
+	CHECK(First.Verdict == ComponentVerdict::Overstressed);
+	CHECK_FALSE(First.bConsultedCertificate);
+	CHECK(First.Release.empty());
+	CHECK(SameIds(Second.Bodies, {CappedBrick}));
+	CHECK(Second.Elastic == StandingState::Undecided);
+	CHECK(Second.bConsultedCertificate);
+}
+
+TEST_CASE("Statics.Combined.NonFiniteReadingsNeverStand")
+{
+	Structure Model;
+	const BodyId Ground = AddGroundPlane(Model);
+	const ProfileId Crushed = AddProfileOk(Model, CrushedUnderOwnWeight());
+	const ProfileId Dry = AddProfileOk(Model, DryJoint(0.7));
+	const BodyId CrushedBrick = AddBox(Model, BrickShape(0.0));
+	AddInterfaceOk(Model, OnGroundPlane(Ground, CrushedBrick, BrickShape(0.0), Crushed));
+	const BodyId LoadedBrick = AddBox(Model, BrickShape(1.0));
+	AddInterfaceOk(Model, OnGroundPlane(Ground, LoadedBrick, BrickShape(1.0), Dry));
+	const Vec3 HugeForceN{0.0, 0.0, -1.0e308};
+	const std::array<BodyLoad, 2> Loads{BodyLoad{LoadedBrick, HugeForceN, BrickShape(1.0).CentreM}, BodyLoad{LoadedBrick, HugeForceN, BrickShape(1.0).CentreM}};
+	const AuthorityResult Result = JudgeWith(Model, AuthorityOptions{}, Loads);
+	INFO(DescribeResult(Result));
+	CHECK(Result.Worst != ComponentVerdict::Stands);
+	CHECK(Result.Components.size() == 2u);
+	if (Result.Components.size() != 2u)
+	{
+		return;
+	}
+	const ComponentReport& Loaded = Result.Components[1];
+	CHECK(SameIds(Loaded.Bodies, {LoadedBrick}));
+	CHECK(Loaded.Verdict != ComponentVerdict::Stands);
+	CHECK(Loaded.Elastic != StandingState::Stands);
+}
+
+TEST_CASE("Statics.Combined.InvalidCertificateOptionsAreInvalidInput")
+{
+	const BrickOnGround F = MakeBrickOnGround(DryJoint(0.7));
+	AuthorityOptions Options;
+	Options.Certificate.ConeGenerators = 3;
+	const AuthorityResult Result = JudgeWith(F.Model, Options);
+	INFO(DescribeResult(Result));
+	CHECK(Result.Worst == ComponentVerdict::InvalidInput);
+	CHECK(Result.Components.empty());
+	CHECK(Result.Readings.empty());
+}
+
+TEST_CASE("Statics.Combined.ElasticMechanismWithCertificateUndecidedReleasesNothing")
+{
+	const double Friction = 0.6;
+	const double Lambda = 0.7;
+	CHECK(Lambda > Friction);
+	CHECK(Lambda < Friction * CircumscribedOverInscribed(4));
+	CHECK(Lambda < BrickLengthM / BrickHeightM);
+	const BrickOnGround F = MakeBrickOnGround(DryJoint(Friction));
+	AuthorityOptions Options = Biaxial(Lambda, 0.0);
+	Options.Certificate.ConeGenerators = 4;
+	const StandingResult Elastic = SolveWith(F.Model, Options.Standing);
+	const CertificateResult Kinematic = DecideWith(F.Model, Options.Certificate);
+	const AuthorityResult Result = JudgeWith(F.Model, Options);
+	INFO("elastic " << Elastic.State << ", certificate " << Kinematic.State << "; " << DescribeResult(Result));
+	CHECK(Elastic.State == StandingState::Mechanism);
+	CHECK(Kinematic.State == CertificateState::Undecided);
+	CHECK(Result.Components.size() == 1u);
+	if (Result.Components.size() != 1u)
+	{
+		return;
+	}
+	const ComponentReport& Only = Result.Components.front();
+	CHECK(Only.Verdict == ComponentVerdict::Undecided);
+	CHECK(Only.bConsultedCertificate);
+	CHECK(Only.Kinematic == CertificateState::Undecided);
+	CHECK(Only.Release.empty());
+	CHECK(Only.Mechanism.empty());
+	CHECK(Only.Hinging.empty());
+	CHECK_FALSE(Only.bDisagreed);
+	CHECK(Result.Disagreements == 0);
+}
+
+TEST_CASE("Statics.Combined.LoadFactorsAreNaNWhenNotConsulted")
+{
+	const BrickOnGround F = MakeBrickOnGround(DryJoint(0.7));
+	const AuthorityResult Result = JudgeWith(F.Model, AuthorityOptions{});
+	INFO(DescribeResult(Result));
+	CHECK(Result.Components.size() == 1u);
+	if (Result.Components.size() != 1u)
+	{
+		return;
+	}
+	const ComponentReport& Only = Result.Components.front();
+	CHECK_FALSE(Only.bConsultedCertificate);
+	CHECK(std::isnan(Only.LoadFactorLower));
+	CHECK(std::isnan(Only.LoadFactorUpper));
+}
+
+TEST_CASE("Deferred.Slice7.ItascaWedgeSlidesBelowThePhysicalCriticalFrictionAngle")
+{
+	const double FrictionAngleRad = 32.5 * RadPerDegree;
+	CHECK(FrictionAngleRad < ClassicalWedgeFrictionAngleRad(ItascaWedgeGeometry()));
+	CHECK(FrictionAngleRad > AssociativeWedgeFrictionAngleRad(ItascaWedgeGeometry()));
+	const Wedge W = MakeItascaWedge(FrictionAngleRad);
+	const AuthorityResult Result = JudgeWith(W.Model, AuthorityOptions{});
+	INFO(DescribeResult(Result));
+	CHECK(Result.Worst == ComponentVerdict::Collapses);
+	CHECK(Result.Components.size() == 1u);
+	if (Result.Components.size() != 1u)
+	{
+		return;
+	}
+	CHECK(SameIds(Result.Components.front().Release, {W.Body}));
 }

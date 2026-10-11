@@ -2,6 +2,8 @@
 #include "CertificateTestSupport.h"
 #include "StaticsTestSupport.h"
 
+#include "loadpath/StructuralAuthority.h"
+
 #include "doctest.h"
 
 #include <cmath>
@@ -84,4 +86,56 @@ TEST_CASE("Certificate.ShearCap.BoundsShearOnlySoABrickAtRestStands")
 	INFO("state " << Result.State << ", load factors [" << Result.LoadFactorLower << ", " << Result.LoadFactorUpper << "]");
 	CHECK(Result.State == CertificateState::Stands);
 	CheckRelative(Result.LoadFactorLower, Options.LoadFactorCap, LoadFactorRelative, "inscribed load factor at rest");
+}
+
+TEST_CASE("Certificate.ShearCap.ZeroCapCarriesNoShear")
+{
+	StrengthProfile Profile = DryJoint(0.7);
+	Profile.MaxShearStrengthPa = 0.0;
+	const BrickOnGround F = MakeBrickOnGround(Profile);
+	const Vec3 PlusX{1.0, 0.0, 0.0};
+	const Vec3 PlusZ{0.0, 0.0, 1.0};
+
+	const CertificateResult Pushed = DecideWith(F.Model, CertificateLateral(0.1));
+	INFO("lambda 0.1: state " << Pushed.State << ", load factors [" << Pushed.LoadFactorLower << ", " << Pushed.LoadFactorUpper << "], moving " << Describe(Pushed.UnconstrainedBodies) << ", hinging " << Describe(Pushed.HingingInterfaces));
+	CHECK(Pushed.State == CertificateState::Collapses);
+	CHECK(std::abs(Pushed.LoadFactorLower) <= 1.0e-6);
+	CHECK(std::abs(Pushed.LoadFactorUpper) <= 1.0e-6);
+	CHECK(Pushed.UnconstrainedBodies.size() == 1u);
+	CHECK(HasBody(Pushed.UnconstrainedBodies, F.Brick));
+	CHECK(Pushed.HingingInterfaces.size() == 1u);
+	CHECK(HasInterface(Pushed.HingingInterfaces, F.Bed));
+	const MechanismMotion* Motion = FindMotion(Pushed, F.Brick);
+	CHECK(Motion != nullptr);
+	if (Motion != nullptr)
+	{
+		CheckTranslationAlong(*Motion, PlusX, 1.0e-6);
+		CHECK(Dot(Motion->TranslationM, PlusZ) <= 1.0e-9 * Length(Motion->TranslationM));
+	}
+
+	AuthorityOptions Options;
+	Options.Standing = LateralLoad(0.1);
+	Options.Certificate = CertificateLateral(0.1);
+	const AuthorityResult Combined = MakeCombinedAuthority(MakeRbsmStandingAuthority(), MakeLimitAnalysisCertificate())->Judge(F.Model, {}, Options);
+	INFO("combined worst " << static_cast<int>(Combined.Worst) << ", components " << Combined.Components.size());
+	CHECK(Combined.Worst == ComponentVerdict::Collapses);
+	CHECK(Combined.Components.size() == 1u);
+	if (Combined.Components.size() == 1u)
+	{
+		CHECK(Combined.Components.front().Release.size() == 1u);
+		CHECK(HasBody(Combined.Components.front().Release, F.Brick));
+	}
+
+	const CertificateOptions AtRestOptions;
+	const CertificateResult AtRest = DecideWith(F.Model, AtRestOptions);
+	INFO("at rest: state " << AtRest.State << ", load factors [" << AtRest.LoadFactorLower << ", " << AtRest.LoadFactorUpper << "]");
+	CHECK(AtRest.State == CertificateState::Stands);
+	CheckRelative(AtRest.LoadFactorLower, AtRestOptions.LoadFactorCap, LoadFactorRelative, "inscribed load factor at rest");
+
+	StrengthProfile Tiny = DryJoint(0.7);
+	Tiny.MaxShearStrengthPa = 1.0e-9;
+	const BrickOnGround T = MakeBrickOnGround(Tiny);
+	const CertificateResult TinyPushed = DecideWith(T.Model, CertificateLateral(0.1));
+	INFO("cap 1e-9 Pa at lambda 0.1: state " << TinyPushed.State << ", load factors [" << TinyPushed.LoadFactorLower << ", " << TinyPushed.LoadFactorUpper << "]");
+	CHECK(TinyPushed.State != CertificateState::Stands);
 }

@@ -1,4 +1,7 @@
+#include "CertificateTestSupport.h"
 #include "StaticsTestSupport.h"
+
+#include "loadpath/StructuralAuthority.h"
 
 #include "doctest.h"
 
@@ -6,6 +9,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 #include <random>
 #include <vector>
 
@@ -149,4 +153,139 @@ TEST_CASE("Statics.Solver.VerdictsAreLocalToTheConnectedComponent")
 		CHECK(StandsAlone > 0);
 		CHECK(MechanismAlone > 0);
 	}
+}
+
+namespace
+{
+struct MixedScene
+{
+	Structure Model;
+	std::vector<BodyId> Free;
+	std::vector<BodyLoad> Loads;
+};
+
+MixedScene MakeMixedScene(std::mt19937& Rng)
+{
+	MixedScene S;
+	const BodyId Ground = AddGroundPlane(S.Model);
+	const int BoxCount = 2 + static_cast<int>(Rng() % 3u);
+	for (int K = 0; K < BoxCount; ++K)
+	{
+		const double EdgeM = Uniform(Rng, 0.05, 0.5);
+		const Box Shape = BoxOnGround(10.0 * K, Vec3{EdgeM, Uniform(Rng, 0.05, 0.5), Uniform(Rng, 0.05, 0.5)});
+		StrengthProfile Profile = DryJoint(Uniform(Rng, 0.3, 0.9));
+		if (Rng() % 2u == 0u)
+		{
+			Profile.TensileStrengthPa = 1.0e4;
+			Profile.ShearCohesionPa = 1.0e4;
+			Profile.CompressiveStrengthPa = Uniform(Rng, 0.5, 2.0) * StoneDensityKgPerM3 * GravityMPerS2 * 2.0 * Shape.HalfExtentsM.Z;
+		}
+		const ProfileId P = AddProfileOk(S.Model, Profile);
+		const BodyId Id = AddBox(S.Model, Shape);
+		AddInterfaceOk(S.Model, OnGroundPlane(Ground, Id, Shape, P));
+		S.Free.push_back(Id);
+		if (Rng() % 2u == 0u)
+		{
+			const double PushN = Uniform(Rng, 0.0, 1.0) * Shape.MassKg * GravityMPerS2;
+			S.Loads.push_back(BodyLoad{Id, Vec3{PushN, 0.0, 0.0}, Shape.CentreM});
+		}
+	}
+	return S;
+}
+
+bool SameBodyList(const std::vector<BodyId>& A, const std::vector<BodyId>& B)
+{
+	if (A.size() != B.size())
+	{
+		return false;
+	}
+	for (std::size_t I = 0; I < A.size(); ++I)
+	{
+		if (!SameHandle(A[I], B[I]))
+		{
+			return false;
+		}
+	}
+	return true;
+}
+
+bool SameInterfaceList(const std::vector<InterfaceId>& A, const std::vector<InterfaceId>& B)
+{
+	if (A.size() != B.size())
+	{
+		return false;
+	}
+	for (std::size_t I = 0; I < A.size(); ++I)
+	{
+		if (!SameHandle(A[I], B[I]))
+		{
+			return false;
+		}
+	}
+	return true;
+}
+}
+
+TEST_CASE("Statics.Combined.ComponentVerdictsAreLocalAcrossSeededStructures")
+{
+	const std::unique_ptr<IStructuralAuthority> Authority = MakeCombinedAuthority(MakeRbsmStandingAuthority(), MakeLimitAnalysisCertificate());
+	int Overstressed = 0;
+	int Undecided = 0;
+	int Consulted = 0;
+	for (int Draw = 0; Draw < DrawCount; ++Draw)
+	{
+		const std::uint32_t Seed = MasterSeed + 1000u + static_cast<std::uint32_t>(Draw);
+		INFO("seed " << Seed);
+		std::mt19937 Rng(Seed);
+		const MixedScene Whole = MakeMixedScene(Rng);
+		const double TiltRad = Uniform(Rng, 0.0, 35.0) * RadPerDegree;
+		AuthorityOptions Options;
+		Options.Standing = TiltedPlane(TiltRad);
+		Options.Standing.MaxActiveSetIterations = 1 + static_cast<int>(Rng() % 3u);
+		Options.Certificate = CertificateTilt(TiltRad);
+		INFO("tilt " << TiltRad / RadPerDegree << " deg, pass cap " << Options.Standing.MaxActiveSetIterations << ", bodies " << Whole.Free.size() << ", loads " << Whole.Loads.size());
+		const AuthorityResult All = Authority->Judge(Whole.Model, Whole.Loads, Options);
+		CHECK(All.Components.size() == Whole.Free.size());
+		for (const ComponentReport& Report : All.Components)
+		{
+			Structure Alone = Whole.Model;
+			for (const BodyId Other : Whole.Free)
+			{
+				if (!HasBody(Report.Bodies, Other))
+				{
+					CHECK(Alone.RemoveBody(Other));
+				}
+			}
+			std::vector<BodyLoad> Loads;
+			for (const BodyLoad& Load : Whole.Loads)
+			{
+				if (HasBody(Report.Bodies, Load.Body))
+				{
+					Loads.push_back(Load);
+				}
+			}
+			const AuthorityResult Single = Authority->Judge(Alone, Loads, Options);
+			CHECK(Single.Components.size() == 1u);
+			if (Single.Components.size() != 1u)
+			{
+				continue;
+			}
+			const ComponentReport& Own = Single.Components.front();
+			INFO("component " << Describe(Report.Bodies) << ": whole verdict " << static_cast<int>(Report.Verdict) << " elastic " << Report.Elastic << " kinematic " << static_cast<int>(Report.Kinematic) << " consulted " << Report.bConsultedCertificate << "; alone verdict " << static_cast<int>(Own.Verdict) << " elastic " << Own.Elastic << " kinematic " << static_cast<int>(Own.Kinematic) << " consulted " << Own.bConsultedCertificate);
+			CHECK(SameBodyList(Own.Bodies, Report.Bodies));
+			CHECK(Own.Verdict == Report.Verdict);
+			CHECK(Own.Elastic == Report.Elastic);
+			CHECK(Own.Kinematic == Report.Kinematic);
+			CHECK(Own.bConsultedCertificate == Report.bConsultedCertificate);
+			CHECK(SameBodyList(Own.Release, Report.Release));
+			CHECK(SameInterfaceList(Own.Hinging, Report.Hinging));
+			Overstressed += Own.Elastic == StandingState::Overstressed ? 1 : 0;
+			Undecided += Own.Elastic == StandingState::Undecided ? 1 : 0;
+			Consulted += Own.bConsultedCertificate ? 1 : 0;
+		}
+	}
+	INFO("overstressed " << Overstressed << ", undecided " << Undecided << ", consulted " << Consulted);
+	CHECK(Overstressed > 0);
+	CHECK(Undecided > 0);
+	CHECK(Consulted > 0);
 }

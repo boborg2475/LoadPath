@@ -3,6 +3,7 @@
 #include "StaticsTestSupport.h"
 
 #include <cmath>
+#include <cstddef>
 #include <optional>
 #include <vector>
 
@@ -12,25 +13,36 @@ inline constexpr double ArchRadiusM = 1.0;
 inline constexpr double ArchDepthM = 1.0;
 inline constexpr double ArchDensityKgPerM3 = 2000.0;
 inline constexpr int ArchJointStepDeg = 3;
-inline constexpr int ArchVoussoirCount = 180 / ArchJointStepDeg;
+inline constexpr double ArchHaunchJointDeg = 54.484;
+
+// Every 3 degrees from -90 to 90, plus joints at +-54.484 degrees where the continuous least-thickness haunch hinge sits.
+inline std::vector<double> ArchJointAnglesDeg()
+{
+	std::vector<double> Angles;
+	for (int Step = 0; Step <= 180 / ArchJointStepDeg; ++Step)
+	{
+		const double AngleDeg = -90.0 + ArchJointStepDeg * Step;
+		if (AngleDeg == -54.0)
+		{
+			Angles.push_back(-ArchHaunchJointDeg);
+		}
+		Angles.push_back(AngleDeg);
+		if (AngleDeg == 54.0)
+		{
+			Angles.push_back(ArchHaunchJointDeg);
+		}
+	}
+	return Angles;
+}
 
 struct SemicircularArch
 {
 	Structure Model;
 	std::vector<BodyId> Voussoirs;
-	// Joint K sits at -90 + 3K degrees from the crown; joints 0 and 60 are the springings.
+	// Joint K sits at JointAnglesDeg[K] from the crown; the first and last are the springings.
 	std::vector<InterfaceId> Joints;
+	std::vector<double> JointAnglesDeg;
 };
-
-inline double ArchJointAngleDeg(int Joint)
-{
-	return -90.0 + ArchJointStepDeg * Joint;
-}
-
-inline int ArchJointAt(int AngleDeg)
-{
-	return (AngleDeg + 90) / ArchJointStepDeg;
-}
 
 // The true centroid of an annular sector of half-angle HalfAngleRad: on the bisector at (2/3)(sin d / d)(re^3 - ri^3)/(re^2 - ri^2).
 inline double AnnularSectorCentroidRadiusM(double InnerM, double OuterM, double HalfAngleRad)
@@ -53,34 +65,35 @@ inline InterfaceDesc ArchJoint(BodyId A, BodyId B, double AngleRad, double Thick
 	return Desc;
 }
 
-// A semicircle of centreline radius 1 m centred on the origin, crown at (0, 0, 1), radial joints every 3 degrees, thickness Eta times the radius.
+// A semicircle of centreline radius 1 m centred on the origin, crown at (0, 0, 1), radial joints at ArchJointAnglesDeg, thickness Eta times the radius.
 inline SemicircularArch MakeSemicircularArch(double Eta, const StrengthProfile& Profile)
 {
 	SemicircularArch Arch;
+	Arch.JointAnglesDeg = ArchJointAnglesDeg();
+	const std::size_t VoussoirCount = Arch.JointAnglesDeg.size() - 1;
 	const double ThicknessM = Eta * ArchRadiusM;
 	const double InnerM = ArchRadiusM - ThicknessM / 2.0;
 	const double OuterM = ArchRadiusM + ThicknessM / 2.0;
-	const double HalfAngleRad = 0.5 * ArchJointStepDeg * RadPerDegree;
-	const double CentroidRadiusM = AnnularSectorCentroidRadiusM(InnerM, OuterM, HalfAngleRad);
-	const double MassKg = ArchDensityKgPerM3 * ArchDepthM * HalfAngleRad * (OuterM * OuterM - InnerM * InnerM);
 	const ProfileId P = AddProfileOk(Arch.Model, Profile);
 	const BodyId LeftGround = AddBox(Arch.Model, Box{Vec3{-ArchRadiusM, 0.0, -0.5}, Vec3{0.5, 0.5, 0.5}, 0.0}, true);
 	const BodyId RightGround = AddBox(Arch.Model, Box{Vec3{ArchRadiusM, 0.0, -0.5}, Vec3{0.5, 0.5, 0.5}, 0.0}, true);
-	for (int Index = 0; Index < ArchVoussoirCount; ++Index)
+	for (std::size_t Index = 0; Index < VoussoirCount; ++Index)
 	{
-		const double BisectorRad = (ArchJointAngleDeg(Index) + 0.5 * ArchJointStepDeg) * RadPerDegree;
+		const double HalfAngleRad = 0.5 * (Arch.JointAnglesDeg[Index + 1] - Arch.JointAnglesDeg[Index]) * RadPerDegree;
+		const double BisectorRad = 0.5 * (Arch.JointAnglesDeg[Index] + Arch.JointAnglesDeg[Index + 1]) * RadPerDegree;
+		const double CentroidRadiusM = AnnularSectorCentroidRadiusM(InnerM, OuterM, HalfAngleRad);
 		BodyDesc Desc;
-		Desc.MassKg = MassKg;
+		Desc.MassKg = ArchDensityKgPerM3 * ArchDepthM * HalfAngleRad * (OuterM * OuterM - InnerM * InnerM);
 		Desc.CentroidM = Vec3{CentroidRadiusM * std::sin(BisectorRad), 0.0, CentroidRadiusM * std::cos(BisectorRad)};
 		const Result<BodyId> Added = Arch.Model.AddBody(Desc);
 		CHECK(Added.Ok());
 		Arch.Voussoirs.push_back(Added.Value);
 	}
-	for (int Joint = 0; Joint <= ArchVoussoirCount; ++Joint)
+	for (std::size_t Joint = 0; Joint <= VoussoirCount; ++Joint)
 	{
-		const BodyId A = Joint == 0 ? LeftGround : Arch.Voussoirs[static_cast<std::size_t>(Joint - 1)];
-		const BodyId B = Joint == ArchVoussoirCount ? RightGround : Arch.Voussoirs[static_cast<std::size_t>(Joint)];
-		Arch.Joints.push_back(AddInterfaceOk(Arch.Model, ArchJoint(A, B, ArchJointAngleDeg(Joint) * RadPerDegree, ThicknessM, P)));
+		const BodyId A = Joint == 0 ? LeftGround : Arch.Voussoirs[Joint - 1];
+		const BodyId B = Joint == VoussoirCount ? RightGround : Arch.Voussoirs[Joint];
+		Arch.Joints.push_back(AddInterfaceOk(Arch.Model, ArchJoint(A, B, Arch.JointAnglesDeg[Joint] * RadPerDegree, ThicknessM, P)));
 	}
 	return Arch;
 }
