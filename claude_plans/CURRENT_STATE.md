@@ -205,3 +205,10 @@ carries the slice-2, 3, 4a and 4b rulings.
   make the two bridge `Statics.Combined.ThreeBrickBridge*` cases CHECK `Oracle == CanStand` as a
   precondition (`MakeBridge(5.0, 0.12, 0.0)` at (2.5, 0.875), (2.375, 0.875), (2.25, 0.875)
   reads CanStand with inner residual about 1e-16 at μ 5 and 3.5).
+- Slice 5a items left open (2026-10-11): `FastenerProfile` has no guard for `Count ≤ 0` or
+  `AreaM2 ≤ 0` (a zero area gives inf or NaN strengths, which the Structure then refuses, so it
+  fails closed one step later; a test-first guard would name it); the mean screw row keeps the
+  characteristic withdrawal 1.74 kN because Blass & Colling's ratio is lateral only (the note
+  says so); the nail row's withdrawal 0.42 kN is the 3.1 mm nail's datum on a 4.0 mm nail row
+  (noted); the timber bearing friction 0.3 is the Wood Handbook range's low end matched through
+  a search snippet, the PDF host unreachable from here: open it and confirm the sentence.
