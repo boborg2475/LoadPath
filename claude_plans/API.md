@@ -691,12 +691,12 @@ back under `Statics.*`.
 
 `MaxShearStrengthPa · A/4` bounds the corner shear with facet rows: for each of the `G` facet
 directions `d_j = cos θ_j u + sin θ_j v` the shear component along `d_j` of the corner force is
-at most `cap · A/4` on the inscribed solve and `cap · A/4 / cos(π/G)` on the circumscribed one
+at most `cap · A/4 · cos(π/G)` on the inscribed solve and `cap · A/4` on the circumscribed one (a facet row bounds the apothem, so the plain cap is already the circumscribed polygon and the inscribed one is its cos(π/G) scaling)
 (the same polygon pair as the friction cone, a bound on the force not on `Σ α`, which would turn
-a shear cap into a compression cap). A dry brick with `μ` large and a small cap slides through
-the certificate at lateral factor `λ = cap · A / W` (the lateral load factor form, every corner
-at its cap), and at tilt `θ = asin(cap · A / W)` as slice 2's test already pins for the
-elastic authority.
+a shear cap into a compression cap). A dry brick with `μ` large and a small cap Collapses past lateral factor `λ = cap · A / W`
+(every corner at its cap) and Stands below `cos(π/G)` of it, Undecided between; at tilt the
+switch is `θ = asin(cap · A / W)`, which slice 2 already pins for the elastic authority. The
+cap bounds shear only: a brick at rest under a cap far below its weight Stands.
 
 ### Anchors slice 4b must pin
 
