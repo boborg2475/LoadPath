@@ -1093,3 +1093,47 @@ TEST_CASE("File.Write.ShortBodyNamesGetGeneratedNames")
 		CHECK(NameOf(FromShort->BodyNames, J.BodyB.Index) == "b1");
 	}
 }
+
+TEST_CASE("Model.StructureFile.RejectsBadInterfaceStateAndStamps")
+{
+	struct Case
+	{
+		const char* Name;
+		const char* State;
+		const char* CrackPass;
+		const char* SeverPass;
+		const char* Named;
+	};
+	const Case Cases[] = {
+		{"unknown state", "\"broken\"", nullptr, nullptr, "broken"},
+		{"crack_pass negative", "\"cracked\"", "-1", nullptr, "crack_pass"},
+		{"crack_pass fractional", "\"cracked\"", "1.5", nullptr, "crack_pass"},
+		{"crack_pass above 2^32 - 1", "\"cracked\"", "4294967296", nullptr, "crack_pass"},
+		{"intact with a crack stamp", "\"intact\"", "3", nullptr, "intact"},
+		{"intact with a sever stamp", "\"intact\"", nullptr, "3", "intact"},
+		{"cracked with sever_pass", "\"cracked\"", "2", "3", "cracked"},
+		{"cracked with crack_pass 0", "\"cracked\"", "0", nullptr, "cracked"},
+		{"severed with sever_pass 0", "\"severed\"", nullptr, "0", "severed"},
+		{"severed with crack_pass above sever_pass", "\"severed\"", "4", "3", "severed"},
+	};
+	for (const Case& Each : Cases)
+	{
+		INFO(doctest::String(Each.Name));
+		DocSpec Spec = WithValue(ExampleSpec(), 'i', 0, "state", Each.State);
+		if (Each.CrackPass != nullptr)
+		{
+			Spec = WithValue(Spec, 'i', 0, "crack_pass", Each.CrackPass);
+		}
+		if (Each.SeverPass != nullptr)
+		{
+			Spec = WithValue(Spec, 'i', 0, "sever_pass", Each.SeverPass);
+		}
+		const BuiltDoc Doc = Build(Spec);
+		const LoadResult Result = LoadStructure(Doc.Json);
+		INFO("line " << Result.Error.Line << ": " << Result.Error.Message);
+		CHECK_FALSE(Result.Ok());
+		CHECK(Result.Error.Line == Doc.InterfaceLines[0]);
+		CHECK_MESSAGE(Contains(Result.Error.Message, Each.Named), "the message must name the field or the state");
+		CHECK_MESSAGE(Contains(Result.Error.Message, "interface"), "the message must name the element");
+	}
+}

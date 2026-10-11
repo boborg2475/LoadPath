@@ -213,6 +213,11 @@ std::uint32_t Structure::HighestPass() const
 	return HighestStamp;
 }
 
+bool Structure::MarkPass(std::uint32_t)
+{
+	return false;
+}
+
 StrengthProfile Structure::EffectiveProfile(InterfaceId Id) const
 {
 	const InterfaceRecord& Record = Interface(Id);

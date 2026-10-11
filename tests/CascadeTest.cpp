@@ -1,8 +1,13 @@
 #include "AnchorFixtures.h"
+#include "ArchFixtures.h"
 #include "CascadeTestSupport.h"
+#include "SlowInDebug.h"
+
+#include "loadpath/StructureFile.h"
 
 #include "doctest.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -107,6 +112,57 @@ void CheckPierFixture()
 	CHECK(PierCornerTensionN(0, PierPushN) > 0.0);
 	CHECK(std::abs(PierCornerTensionN(1, PierPushN) - 2.0 / 3.0 * PierCornerTensionN(0, PierPushN)) <= 1.0e-9);
 	CHECK(PierPushN / 4.0 < 0.1 * PierCohesionPa * CornerAreaM2());
+}
+
+const InterfaceReading* FindReadingOf(const std::vector<InterfaceReading>& Readings, InterfaceId Id)
+{
+	for (const InterfaceReading& Reading : Readings)
+	{
+		if (SameHandle(Reading.Id, Id))
+		{
+			return &Reading;
+		}
+	}
+	return nullptr;
+}
+
+bool SameOrBothNaN(double A, double B)
+{
+	return A == B || (std::isnan(A) && std::isnan(B));
+}
+
+struct PierInModel
+{
+	std::vector<BodyId> Bricks;
+	std::vector<InterfaceId> JointsBottomUp;
+	BodyLoad Load;
+};
+
+Box BrickShapeAtY(int Course, double YM)
+{
+	Box Shape = BrickShape(0.0, Course);
+	Shape.CentreM.Y = YM;
+	return Shape;
+}
+
+PierInModel AddUniformPier(Structure& Model, double YM, double BaseRatio)
+{
+	PierInModel P;
+	const double FtPa = PierCornerTensionN(0, PierPushN) / (BaseRatio * CornerAreaM2());
+	const ProfileId Profile = AddProfileOk(Model, BondedJoint(FtPa, PierCohesionPa, PierFriction));
+	const BodyId Ground = AddGroundPlane(Model);
+	for (int Course = 0; Course < 3; ++Course)
+	{
+		P.Bricks.push_back(AddBox(Model, BrickShapeAtY(Course, YM)));
+	}
+	P.JointsBottomUp.push_back(AddInterfaceOk(Model, OnGroundPlane(Ground, P.Bricks[0], BrickShapeAtY(0, YM), Profile)));
+	for (int Course = 1; Course < 3; ++Course)
+	{
+		const std::size_t Below = static_cast<std::size_t>(Course - 1);
+		P.JointsBottomUp.push_back(AddInterfaceOk(Model, *StackedFaces(P.Bricks[Below], BrickShapeAtY(Course - 1, YM), P.Bricks[Below + 1], BrickShapeAtY(Course, YM), Profile)));
+	}
+	P.Load = BodyLoad{P.Bricks[2], Vec3{PierPushN, 0.0, 0.0}, Vec3{0.0, YM, 3.0 * BrickHeightM}};
+	return P;
 }
 
 struct DryStack
@@ -261,9 +317,9 @@ TEST_CASE("Cascade.BondedPierCracksItsBaseThenTipsAsOneCluster")
 {
 	CheckPierFixture();
 	Pier P = MakeCrackingPier();
-		const AuthorityResult Before = Judge(P.Model, AuthorityOptions{}, P.Loads);
-		INFO("pass-1 judge: " << DescribeAuthority(Before) << "; readings" << DescribeReadings(Before.Readings));
-		CHECK(Before.Worst == ComponentVerdict::Overstressed);
+	const AuthorityResult Before = Judge(P.Model, AuthorityOptions{}, P.Loads);
+	INFO("pass-1 judge: " << DescribeAuthority(Before) << "; readings" << DescribeReadings(Before.Readings));
+	CHECK(Before.Worst == ComponentVerdict::Overstressed);
 	const CascadeVerdict V = RunCascade(P.Model, CascadeOptions{}, P.Loads);
 	INFO(DescribeVerdict(V));
 	CHECK(V.State == CascadeState::Stands);
@@ -310,10 +366,20 @@ TEST_CASE("Cascade.TopBandCracksJointsWithinTheBandOfTheWorstRatio")
 	{
 		INFO("delta " << Each.Delta);
 		Pier P = MakeBandPier();
-			const AuthorityResult Before = Judge(P.Model, AuthorityOptions{}, P.Loads);
-			INFO("pass-1 judge: " << DescribeAuthority(Before) << "; readings" << DescribeReadings(Before.Readings));
-			CHECK(Before.Worst == ComponentVerdict::Overstressed);
-			CHECK(Before.Components.size() == 1u);
+		const AuthorityResult Before = Judge(P.Model, AuthorityOptions{}, P.Loads);
+		INFO("pass-1 judge: " << DescribeAuthority(Before) << "; readings" << DescribeReadings(Before.Readings));
+		CHECK(Before.Worst == ComponentVerdict::Overstressed);
+		CHECK(Before.Components.size() == 1u);
+		const double WantRatios[3] = {3.0, 2.0, 1.2};
+		for (std::size_t K = 0; K < 3; ++K)
+		{
+			const InterfaceReading* Reading = FindReadingOf(Before.Readings, P.JointsBottomUp[K]);
+			CHECK(Reading != nullptr);
+			if (Reading != nullptr)
+			{
+				CheckRelative(std::max(Reading->TensionUtilisation, Reading->ShearUtilisation), WantRatios[K], 1.0e-9, "band pre-judge crack ratio");
+			}
+		}
 		CascadeOptions Options;
 		Options.CrackBandFraction = Each.Delta;
 		const CascadeVerdict V = RunCascade(P.Model, Options, P.Loads);
@@ -393,6 +459,29 @@ TEST_CASE("Cascade.PassCapEndsAfterTheCrackAndASecondRunContinues")
 		CHECK_FALSE(First.Failures[0].bSevered);
 		CheckStamps(P.Model, P.JointsBottomUp[0], InterfaceState::Cracked, 1, 0);
 		CHECK(P.Model.LiveBodyCount() == 4u);
+		const AuthorityResult Fresh = Judge(P.Model, AuthorityOptions{}, P.Loads);
+		INFO("fresh judge: " << DescribeAuthority(Fresh) << "; readings" << DescribeReadings(Fresh.Readings) << "; returned readings" << DescribeReadings(First.Readings));
+		const InterfaceReading* Base = FindReadingOf(First.Readings, P.JointsBottomUp[0]);
+		CHECK(Base != nullptr);
+		if (Base != nullptr)
+		{
+			CHECK_FALSE(std::abs(Base->TensionUtilisation - PierBaseRatio) <= 1.0e-6);
+		}
+		CHECK(First.Readings.size() == Fresh.Readings.size());
+		for (std::size_t I = 0; I < std::min(First.Readings.size(), Fresh.Readings.size()); ++I)
+		{
+			INFO("reading " << I);
+			CHECK(SameHandle(First.Readings[I].Id, Fresh.Readings[I].Id));
+			CHECK(SameOrBothNaN(First.Readings[I].Utilisation, Fresh.Readings[I].Utilisation));
+			CHECK(SameOrBothNaN(First.Readings[I].TensionUtilisation, Fresh.Readings[I].TensionUtilisation));
+		}
+		CHECK(First.Components.size() == Fresh.Components.size());
+		for (std::size_t I = 0; I < std::min(First.Components.size(), Fresh.Components.size()); ++I)
+		{
+			INFO("component " << I);
+			CHECK(First.Components[I].Verdict == Fresh.Components[I].Verdict);
+			CHECK(SameIdList(First.Components[I].Bodies, Fresh.Components[I].Bodies));
+		}
 	}
 	const CascadeVerdict Second = RunCascade(P.Model, CascadeOptions{}, P.Loads);
 	INFO("second run: " << DescribeVerdict(Second));
@@ -469,6 +558,21 @@ TEST_CASE("Cascade.FreeBodyIsReleasedOnPassOneAsItsOwnCluster")
 	CHECK(V.Clusters[0].Severed.empty());
 	CHECK(V.Failures.empty());
 	CHECK_FALSE(Model.IsLive(Floating));
+	CHECK(V.LastPass == 1u);
+	CHECK(Model.HighestPass() == 1u);
+	const BodyId Second = AddBox(Model, BrickShape(1.0, 3));
+	const CascadeVerdict Again = RunCascade(Model, CascadeOptions{});
+	INFO("second run: " << DescribeVerdict(Again));
+	CHECK(Again.FirstPass == 2u);
+	CHECK(Again.LastPass == 2u);
+	CHECK(Model.HighestPass() == 2u);
+	CHECK(Again.Clusters.size() == 1u);
+	if (!(Again.Clusters.size() == 1u))
+	{
+		return;
+	}
+	CHECK(Again.Clusters[0].Pass == 2u);
+	CHECK(SameIdList(Again.Clusters[0].Bodies, {Second}));
 }
 
 TEST_CASE("Cascade.TwoIndependentCollapsesGiveTwoClustersInSlotOrder")
@@ -552,4 +656,249 @@ TEST_CASE("Cascade.SameInputGivesIdenticalVerdicts")
 		CHECK(((CA.LoadFactorLower == CB.LoadFactorLower) || (std::isnan(CA.LoadFactorLower) && std::isnan(CB.LoadFactorLower))));
 		CHECK(((CA.LoadFactorUpper == CB.LoadFactorUpper) || (std::isnan(CA.LoadFactorUpper) && std::isnan(CB.LoadFactorUpper))));
 	}
+}
+
+TEST_CASE("Cascade.PassCounterSurvivesTheStructureFile")
+{
+	BrickOnGround F = MakeBrickOnGround(DryJoint(PastFriction));
+	const CascadeVerdict V = RunCascade(F.Model, Lateral(PastFrictionLateral));
+	INFO(DescribeVerdict(V));
+	CHECK(V.Clusters.size() == 1u);
+	CHECK(F.Model.HighestPass() == 1u);
+	LoadedStructure Original;
+	Original.Model = F.Model;
+	const std::string Text = WriteStructure(Original);
+	INFO(Text);
+	LoadResult Loaded = LoadStructure(Text);
+	INFO("line " << Loaded.Error.Line << ": " << Loaded.Error.Message);
+	CHECK(Loaded.Ok());
+	if (!Loaded.Ok())
+	{
+		return;
+	}
+	CHECK(Loaded.Value.Model.HighestPass() == 1u);
+	const CascadeVerdict Next = RunCascade(Loaded.Value.Model, CascadeOptions{});
+	INFO("reloaded run: " << DescribeVerdict(Next));
+	CHECK(Next.FirstPass == 2u);
+}
+
+TEST_CASE("Cascade.RunIsInvalidInputWhenThePassCounterCannotAdvance")
+{
+	BrickOnGround F = MakeBrickOnGround(DryJoint(PastFriction));
+	CHECK(F.Model.MarkPass(std::numeric_limits<std::uint32_t>::max()));
+	const CascadeVerdict V = RunCascade(F.Model, Lateral(PastFrictionLateral));
+	INFO(DescribeVerdict(V));
+	CHECK(V.State == CascadeState::InvalidInput);
+	CheckNothingChanged(V);
+	CheckStamps(F.Model, F.Bed, InterfaceState::Intact, 0, 0);
+	CHECK(F.Model.IsLive(F.Brick));
+}
+
+TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Cascade.ArchBelowLeastThicknessReleasesVoussoirRunsBetweenHinges")
+{
+	SemicircularArch Arch = MakeSemicircularArch(0.1075 - 0.002, DryJoint(0.7));
+	const std::vector<double> HingeAnglesDeg = {-90.0, -ArchHaunchJointDeg, -54.0, 0.0, 54.0, ArchHaunchJointDeg, 90.0};
+	const CascadeVerdict V = RunCascade(Arch.Model, CascadeOptions{});
+	INFO(DescribeVerdict(V));
+	CHECK(V.Passes == 1);
+	std::vector<bool> bSevered(Arch.Joints.size(), false);
+	std::size_t SeveredCount = 0;
+	for (std::size_t K = 0; K < Arch.Joints.size(); ++K)
+	{
+		INFO("joint " << K << " at " << Arch.JointAnglesDeg[K] << " deg");
+		const bool bHinge = std::any_of(HingeAnglesDeg.begin(), HingeAnglesDeg.end(), [&](double A) { return std::abs(A - Arch.JointAnglesDeg[K]) < 1.0e-9; });
+		bSevered[K] = bHinge;
+		SeveredCount += bHinge ? 1u : 0u;
+		int Listed = 0;
+		for (const FailedInterface& Failure : V.Failures)
+		{
+			if (SameHandle(Failure.Id, Arch.Joints[K]))
+			{
+				++Listed;
+				CHECK(Failure.bSevered);
+				CHECK(Failure.Pass == 1u);
+			}
+		}
+		CHECK(Listed == (bHinge ? 1 : 0));
+		if (bHinge)
+		{
+			CheckStamps(Arch.Model, Arch.Joints[K], InterfaceState::Severed, 0, 1);
+		}
+		else
+		{
+			CHECK(Arch.Model.Interface(Arch.Joints[K]).CrackPass == 0u);
+			CHECK(Arch.Model.Interface(Arch.Joints[K]).SeverPass == 0u);
+		}
+	}
+	CHECK(V.Failures.size() == SeveredCount);
+	CHECK(V.Clusters.size() == SeveredCount - 1u);
+	std::vector<int> ClusterOf(Arch.Voussoirs.size(), 0);
+	for (const ReleasedCluster& Cluster : V.Clusters)
+	{
+		INFO("cluster bodies " << Describe(Cluster.Bodies));
+		std::vector<std::size_t> Indices;
+		for (const BodyId Body : Cluster.Bodies)
+		{
+			const auto Found = std::find_if(Arch.Voussoirs.begin(), Arch.Voussoirs.end(), [&](BodyId Each) { return SameHandle(Each, Body); });
+			CHECK(Found != Arch.Voussoirs.end());
+			if (Found != Arch.Voussoirs.end())
+			{
+				const std::size_t I = static_cast<std::size_t>(Found - Arch.Voussoirs.begin());
+				Indices.push_back(I);
+				++ClusterOf[I];
+			}
+		}
+		if (Indices.empty())
+		{
+			continue;
+		}
+		std::sort(Indices.begin(), Indices.end());
+		const std::size_t First = Indices.front();
+		const std::size_t Last = Indices.back();
+		CHECK(Last - First + 1u == Indices.size());
+		CHECK(bSevered[First]);
+		CHECK(bSevered[Last + 1u]);
+		for (std::size_t K = First + 1u; K <= Last; ++K)
+		{
+			INFO("inner joint " << K);
+			CHECK_FALSE(bSevered[K]);
+		}
+	}
+	for (std::size_t I = 0; I < ClusterOf.size(); ++I)
+	{
+		INFO("voussoir " << I);
+		CHECK(ClusterOf[I] == 1);
+	}
+	for (const BodyId Body : Arch.Model.LiveBodies())
+	{
+		CHECK(Arch.Model.Body(Body).bGrounded);
+	}
+}
+
+TEST_CASE("Cascade.Crack.BandIsTakenPerOverstressedComponent")
+{
+	CheckPierFixture();
+	Structure Model;
+	const PierInModel Strong = AddUniformPier(Model, 0.0, 3.0);
+	const PierInModel Weak = AddUniformPier(Model, 5.0, PierBaseRatio);
+	const std::vector<BodyLoad> Loads = {Strong.Load, Weak.Load};
+	{
+		const AuthorityResult Before = Judge(Model, AuthorityOptions{}, Loads);
+		INFO("pass-1 judge: " << DescribeAuthority(Before) << "; readings" << DescribeReadings(Before.Readings));
+		CHECK(Before.Components.size() == 2u);
+		const InterfaceReading* StrongBase = FindReadingOf(Before.Readings, Strong.JointsBottomUp[0]);
+		const InterfaceReading* WeakBase = FindReadingOf(Before.Readings, Weak.JointsBottomUp[0]);
+		CHECK(StrongBase != nullptr);
+		CHECK(WeakBase != nullptr);
+		if (StrongBase != nullptr && WeakBase != nullptr)
+		{
+			CheckRelative(StrongBase->TensionUtilisation, 3.0, 1.0e-6, "strong pier base ratio");
+			CheckRelative(WeakBase->TensionUtilisation, PierBaseRatio, 1.0e-6, "weak pier base ratio");
+		}
+	}
+	CascadeOptions Options;
+	Options.CrackBandFraction = 0.0;
+	const CascadeVerdict V = RunCascade(Model, Options, Loads);
+	INFO(DescribeVerdict(V));
+	CHECK(SameIdList(CrackedOnPass(V, 1), {Strong.JointsBottomUp[0], Weak.JointsBottomUp[0]}));
+}
+
+namespace
+{
+struct BondedRow
+{
+	Structure Model;
+	std::vector<InterfaceId> Joints;
+	std::vector<BodyId> Bricks;
+};
+
+BondedRow MakeBondedRow(std::size_t Count, const StrengthProfile& Profile = BondedJoint(1.0e5, 1.0e5, 0.7))
+{
+	BondedRow Row;
+	const ProfileId P = AddProfileOk(Row.Model, Profile);
+	const BodyId Ground = AddGroundPlane(Row.Model);
+	for (std::size_t I = 0; I < Count; ++I)
+	{
+		const Box Shape = BrickShape(0.5 * static_cast<double>(I));
+		Row.Bricks.push_back(AddBox(Row.Model, Shape));
+		Row.Joints.push_back(AddInterfaceOk(Row.Model, OnGroundPlane(Ground, Row.Bricks.back(), Shape, P)));
+	}
+	return Row;
+}
+
+constexpr double NaNRatio = std::numeric_limits<double>::quiet_NaN();
+constexpr double InfRatio = std::numeric_limits<double>::infinity();
+}
+
+TEST_CASE("Cascade.Crack.NaNOnEitherAxisCracks")
+{
+	struct Case
+	{
+		const char* Name;
+		double T;
+		double S;
+	};
+	const Case Cases[] = {{"tension NaN", NaNRatio, 0.5}, {"shear NaN", 0.5, NaNRatio}};
+	for (const Case& Each : Cases)
+	{
+		INFO(doctest::String(Each.Name));
+		BondedRow Row = MakeBondedRow(1);
+		const CascadeVerdict V = RunScripted(Row.Model, {OverstressedScript(Row.Model, {{Row.Joints[0], Each.T, Each.S}})});
+		INFO(DescribeVerdict(V));
+		CHECK(SameIdList(CrackedOnPass(V, 1), {Row.Joints[0]}));
+		CheckStamps(Row.Model, Row.Joints[0], InterfaceState::Cracked, 1, 0);
+	}
+}
+
+TEST_CASE("Cascade.Crack.InfiniteRatioCracksOutsideTheBand")
+{
+	BondedRow Row = MakeBondedRow(3);
+	const CascadeVerdict V = RunScripted(Row.Model, {OverstressedScript(Row.Model, {{Row.Joints[0], InfRatio, 0.0}, {Row.Joints[1], 3.0, 0.0}, {Row.Joints[2], 2.0, 0.0}}), StandsScript()}, 0.0);
+	INFO(DescribeVerdict(V));
+	CHECK(SameIdList(CrackedOnPass(V, 1), {Row.Joints[0], Row.Joints[1]}));
+	CheckStamps(Row.Model, Row.Joints[0], InterfaceState::Cracked, 1, 0);
+}
+
+TEST_CASE("Cascade.Crack.BandMaximumIgnoresNonFiniteRatios")
+{
+	BondedRow Row = MakeBondedRow(4);
+	const CascadeVerdict V = RunScripted(Row.Model, {OverstressedScript(Row.Model, {{Row.Joints[0], NaNRatio, 0.0}, {Row.Joints[1], InfRatio, 0.0}, {Row.Joints[2], 3.0, 0.0}, {Row.Joints[3], 1.2, 0.0}}), StandsScript()}, 0.5);
+	INFO(DescribeVerdict(V));
+	CHECK(SameIdList(CrackedOnPass(V, 1), {Row.Joints[0], Row.Joints[1], Row.Joints[2]}));
+	CheckStamps(Row.Model, Row.Joints[3], InterfaceState::Intact, 0, 0);
+}
+
+TEST_CASE("Cascade.Crack.ATensionShearTieRecordsTension")
+{
+	BondedRow Row = MakeBondedRow(1);
+	const CascadeVerdict V = RunScripted(Row.Model, {OverstressedScript(Row.Model, {{Row.Joints[0], 2.0, 2.0}})});
+	INFO(DescribeVerdict(V));
+	CHECK(V.Failures.size() == 1u);
+	if (!(V.Failures.size() == 1u))
+	{
+		return;
+	}
+	CHECK(V.Failures[0].Axis == GoverningAxis::Tension);
+	CHECK(V.Failures[0].Ratio == 2.0);
+}
+
+TEST_CASE("Cascade.Crack.ADryInterfaceIsNeverCracked")
+{
+	BondedRow Row = MakeBondedRow(1, DryJoint(0.7));
+	const CascadeVerdict V = RunScripted(Row.Model, {OverstressedScript(Row.Model, {{Row.Joints[0], 3.0, 2.0}})});
+	INFO(DescribeVerdict(V));
+	CHECK(V.Failures.empty());
+	CheckStamps(Row.Model, Row.Joints[0], InterfaceState::Intact, 0, 0);
+}
+
+TEST_CASE("Cascade.CollapsesWithAnEmptyReleaseEndsUndecided")
+{
+	BondedRow Row = MakeBondedRow(1);
+	const CascadeVerdict V = RunScripted(Row.Model, {CollapsesScript(Row.Model, {})});
+	INFO(DescribeVerdict(V));
+	CHECK(V.State == CascadeState::Undecided);
+	CheckNothingChanged(V);
+	CheckStamps(Row.Model, Row.Joints[0], InterfaceState::Intact, 0, 0);
+	CHECK(Row.Model.IsLive(Row.Bricks[0]));
+	CHECK(Row.Model.HighestPass() == 0u);
 }

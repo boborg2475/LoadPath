@@ -11,9 +11,11 @@
 
 #include <cmath>
 #include <cstdint>
+#include <memory>
 #include <span>
 #include <sstream>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace loadpath::test
@@ -149,5 +151,93 @@ inline void CheckStamps(const Structure& Model, InterfaceId Id, InterfaceState S
 	CHECK(R.State == State);
 	CHECK(R.CrackPass == CrackPass);
 	CHECK(R.SeverPass == SeverPass);
+}
+
+struct ScriptedJoint
+{
+	InterfaceId Id;
+	double TensionUtilisation = 0.0;
+	double ShearUtilisation = 0.0;
+};
+
+// Returns Script[call] on each Judge, repeating the last entry once the script runs out.
+class ScriptedAuthority final : public IStructuralAuthority
+{
+public:
+	explicit ScriptedAuthority(std::vector<AuthorityResult> InScript)
+		: Script(std::move(InScript))
+	{
+	}
+
+	AuthorityResult Judge(const Structure&, std::span<const BodyLoad>, const AuthorityOptions&) const override
+	{
+		const std::size_t At = Calls < Script.size() ? Calls : Script.size() - 1;
+		++Calls;
+		return Script[At];
+	}
+
+	std::vector<AuthorityResult> Script;
+	mutable std::size_t Calls = 0;
+};
+
+inline AuthorityResult OverstressedScript(const Structure& Model, const std::vector<ScriptedJoint>& Joints)
+{
+	AuthorityResult Result;
+	Result.Worst = ComponentVerdict::Overstressed;
+	ComponentReport Component;
+	for (const BodyId Id : Model.LiveBodies())
+	{
+		if (!Model.Body(Id).bGrounded)
+		{
+			Component.Bodies.push_back(Id);
+		}
+	}
+	Component.Verdict = ComponentVerdict::Overstressed;
+	Component.Elastic = StandingState::Overstressed;
+	Result.Components.push_back(Component);
+	for (const ScriptedJoint& Joint : Joints)
+	{
+		InterfaceReading Reading;
+		Reading.Id = Joint.Id;
+		Reading.TensionUtilisation = Joint.TensionUtilisation;
+		Reading.ShearUtilisation = Joint.ShearUtilisation;
+		const bool bTension = !(Joint.TensionUtilisation < Joint.ShearUtilisation);
+		Reading.Utilisation = bTension ? Joint.TensionUtilisation : Joint.ShearUtilisation;
+		Reading.Axis = bTension ? GoverningAxis::Tension : GoverningAxis::Shear;
+		Result.Readings.push_back(Reading);
+	}
+	return Result;
+}
+
+inline AuthorityResult CollapsesScript(const Structure& Model, const std::vector<BodyId>& Release)
+{
+	AuthorityResult Result = OverstressedScript(Model, {});
+	Result.Worst = ComponentVerdict::Collapses;
+	Result.Components[0].Verdict = ComponentVerdict::Collapses;
+	Result.Components[0].Elastic = StandingState::Mechanism;
+	Result.Components[0].Kinematic = CertificateState::Collapses;
+	Result.Components[0].bConsultedCertificate = true;
+	Result.Components[0].Release = Release;
+	for (const InterfaceId Id : Model.LiveInterfaces())
+	{
+		InterfaceReading Reading;
+		Reading.Id = Id;
+		Result.Readings.push_back(Reading);
+	}
+	return Result;
+}
+
+inline AuthorityResult StandsScript()
+{
+	AuthorityResult Result;
+	Result.Worst = ComponentVerdict::Stands;
+	return Result;
+}
+
+inline CascadeVerdict RunScripted(Structure& Model, std::vector<AuthorityResult> Script, double CrackBandFraction = 0.5)
+{
+	CascadeOptions Options;
+	Options.CrackBandFraction = CrackBandFraction;
+	return MakeCascade(std::make_unique<ScriptedAuthority>(std::move(Script)))->Run(Model, {}, Options);
 }
 }

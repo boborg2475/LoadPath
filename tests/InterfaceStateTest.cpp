@@ -256,3 +256,58 @@ TEST_CASE("Model.StructureFile.AFileWithoutInterfaceStateReadsIntactUnstamped")
 	}
 	CHECK(Loaded->Model.HighestPass() == 0u);
 }
+
+TEST_CASE("Model.Structure.MarkPassRaisesTheCounterWithoutStamping")
+{
+	Column F = MakeColumn();
+	CHECK(F.Model.MarkPass(3));
+	CHECK(F.Model.HighestPass() == 3u);
+	CheckRecord(F.Model, F.J01, InterfaceState::Intact, 0, 0);
+	CheckRecord(F.Model, F.J12, InterfaceState::Intact, 0, 0);
+	CheckRecord(F.Model, F.J23, InterfaceState::Intact, 0, 0);
+	CHECK(F.Model.MarkPass(2));
+	CHECK(F.Model.HighestPass() == 3u);
+	CHECK_FALSE(F.Model.MarkPass(0));
+	CHECK(F.Model.HighestPass() == 3u);
+}
+
+TEST_CASE("Model.Structure.SeverRefusesAPassBelowTheCrackPass")
+{
+	Column F = MakeColumn();
+	CHECK(F.Model.Crack(F.J12, 5));
+	CHECK_FALSE(F.Model.Sever(F.J12, 4));
+	CheckRecord(F.Model, F.J12, InterfaceState::Cracked, 5, 0);
+	CHECK(F.Model.Sever(F.J12, 5));
+	CheckRecord(F.Model, F.J12, InterfaceState::Severed, 5, 5);
+}
+
+TEST_CASE("Model.StructureFile.HighestPassIsTheLargerOfTheFieldAndTheStamps")
+{
+	struct Case
+	{
+		const char* Name;
+		const char* HighestPass;
+		const char* State;
+		const char* CrackPass;
+		std::uint32_t Want;
+	};
+	const Case Cases[] = {{"highest_pass 7, no stamps", "7", nullptr, nullptr, 7u}, {"highest_pass 2, crack stamp 5", "2", "\"cracked\"", "5", 5u}};
+	for (const Case& Each : Cases)
+	{
+		INFO(doctest::String(Each.Name));
+		DocSpec Spec = ExampleSpec();
+		if (Each.State != nullptr)
+		{
+			Spec = WithValue(WithValue(Spec, 'i', 0, "state", Each.State), 'i', 0, "crack_pass", Each.CrackPass);
+		}
+		std::string Json = Build(Spec).Json;
+		Json.insert(2, std::string("  \"highest_pass\": ") + Each.HighestPass + ",\n");
+		INFO(Json);
+		const std::optional<LoadedStructure> Loaded = LoadOk(Json);
+		if (!Loaded)
+		{
+			continue;
+		}
+		CHECK(Loaded->Model.HighestPass() == Each.Want);
+	}
+}

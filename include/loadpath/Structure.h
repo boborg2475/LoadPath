@@ -29,6 +29,8 @@ public:
 	bool Sever(InterfaceId Id, std::uint32_t Pass);
 	// The largest crack or sever stamp ever written, 0 when none.
 	std::uint32_t HighestPass() const;
+	// Raises the pass counter to Pass without stamping; false for 0.
+	bool MarkPass(std::uint32_t Pass);
 	// The profile with TensileStrengthPa and ShearCohesionPa zeroed unless Intact, so a dead joint reads the weaker form.
 	StrengthProfile EffectiveProfile(InterfaceId Id) const;
 
