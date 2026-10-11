@@ -64,7 +64,7 @@ ComponentPartition PartitionFreeBodies(const Structure& Model);
 // -1 when both bodies are grounded.
 int ComponentOf(const ComponentPartition& Partition, const InterfaceRecord& Record);
 
-// The slice-4 option checks, shared so the combined authority rejects exactly what the certificate rejects.
+// Shared so the combined authority rejects exactly what the certificate rejects.
 bool AreCertificateOptionsValid(const CertificateOptions& Options);
 
 // Row-major 3x6: the velocity of a point at ArmM from its body's (translation, rotation).

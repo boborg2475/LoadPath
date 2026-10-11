@@ -672,13 +672,13 @@ std::unique_ptr<IStructuralAuthority> MakeCombinedAuthority(std::unique_ptr<ISta
 and the certificate options must pass the slice-4 checks (`ConeGenerators` even and at least
 4, finite positive cap, tolerance and iterations), or the result is `InvalidInput` with no
 readings and no components. The elastic authority then runs once over the whole structure for
-the result.s readings, and once more per connected component on that component.s
+the result's readings, and once more per connected component on that component's
 sub-structure (its free bodies, every grounded body, the loads on those bodies): **the
-sub-solve.s `State` is the component.s elastic verdict, never inferred from the whole-structure
+sub-solve's `State` is the component's elastic verdict, never inferred from the whole-structure
 state.** One global state cannot say which component is Overstressed, and an elastic Undecided
 coexists with listed bodies; the first version inferred it and relabelled an Overstressed brick
 Undecided beside an unrelated pass-capped one, and read NaN readings as Stands. Locality
-(slice 2) makes the sub-solve.s readings equal the whole-structure ones, so the cost is a second
+(slice 2) makes the sub-solve's readings equal the whole-structure ones, so the cost is a second
 solve, logged for slice 6. Per component (the same partition both implementations use, the
 shared partition code, so the mapping of bodies to components is one definition):
 - elastic `Stands` → `Stands`; elastic `Overstressed` → `Overstressed` (slice 3's domain; the
@@ -710,7 +710,7 @@ a real cap** (the joint carries no shear; `+inf` is the only "no cap"), so a cap
 any lateral load Collapses at `t = 0`; in the mechanism selection a cap-0 corner contributes
 only its normal row (tangential slip dissipates nothing there), and a finite positive cap adds
 no selection rows (its prism contains the origin, so the zero-dissipation set is the friction
-cone.s).
+cone's).
 
 ### Anchors slice 4b must pin
 
@@ -720,14 +720,16 @@ cone.s).
 - B-ARC-01 and B-ARC-02, the Couplet–Heyman semicircle: radial joints, centreline radius `r`,
   unit depth, density any, `μ ≥ 0.5` (use 0.7). Stands at `t/r = 0.1075 + 0.002`, Collapses at
   `0.1075 − 0.001`; the haunch hinge within one joint of 54.48° from the crown (joints every 5°
-  plus a joint at ±54.484°, or voussoirs of 2°; B-ARC-09.s "discretisation only raises the least
+  plus a joint at ±54.484°, or voussoirs of 2°; B-ARC-09's "discretisation only raises the least
   thickness" is a DDA observation and is **false for exact sector voussoirs**: the joints are
   a subset of the continuous sections, so the discrete least thickness is at or below the
   continuous one (0.1074601 at 3° joints by a thrust-line oracle); with joints at ±54.484° it
   is exactly 0.107478, which is the pin). On Collapses the
   hinging set is the crown, the two haunches and the two springings (symmetric mechanism; the
   selection may return one side's four hinges, so assert the haunch and crown hinges and that
-  every hinge is one of the five).
+  every hinge is one of the seven joints 0°, ±54°, ±54.484°, ±90°; the 0.484° sliver between
+  54° and 54.484° lists both of its joints, the selection mixing two admissible mechanisms
+  below least thickness, not a physical event).
 - B-ARC-06, the friction switch on that arch at least thickness: Collapses (sliding) at φ = 21°
   (μ 0.384) and Stands at 22° (μ 0.404) with `G = 32` so the band (0.5 % of μ) clears the 0.3 %
   gap between tan 22° and tan 21.57°.

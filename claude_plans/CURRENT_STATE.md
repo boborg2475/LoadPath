@@ -21,7 +21,7 @@ homogeneous self-dual interior point and mechanism selection. Slice 4b: `IStruct
 authority and referees its Mechanism and Undecided components with the certificate, counting
 disagreements and releasing only what the certificate lists; `MaxShearStrengthPa` as per-corner
 facet rows (cap 0 is a cap); the Couplet–Heyman arch pinned exactly at Milankovitch's 0.107478
-with hinges at 0°, ±54.484°, ±90° and its friction switch, the Orduña pile at λ 0.5005, the
+with hinges at 0°, ±54°, ±54.484°, ±90° (the sliver lists both joints) and its friction switch, the Orduña pile at λ 0.5005, the
 3DEC wedge at the certificate's associative 31.07°. Default suite 175 cases in Debug (11,085
 assertions, about 10 s) and 179 in Release (25,742 assertions, 4 s; the four arch and pile
 anchors run only there under `LOADPATH_SLOW_IN_DEBUG`); the `Deferred.Slice7` tier holds the one
@@ -35,9 +35,23 @@ question decided and §10 carries the slice-2, 4a and 4b rulings.
    - the mechanism selection ignores finite positive shear caps (harmless at `t* = 0`, the prism
      contains the origin; for `0 < t* < 1e-9`, a cap near 1e-9 Pa, it reads Undecided, which
      fails closed);
-   - the combined authority copies the whole structure per consulted component and solves the
-     elastic sub-structure even when there is one component: O(components × N), one redundant
-     solve on single-component structures; slice 6's cost pass;
+   - the combined authority copies the structure for EVERY component (RemoveBody scans every
+     interface per call, so building the sub-structures is O(C · B · I)) and solves every
+     structure twice (the whole for readings, then the sum of its parts): slice 6 exposes the
+     RBSM.s per-component states instead, removing the copies and the second solve;
+   - two InvalidInput branches in CombinedAuthority.cpp are unreachable today (a sub-solve
+     InvalidInput, since the RBSM already fails the whole solve; a per-component certificate
+     InvalidInput, since options are validated up front and the load checks match): both fail
+     closed, untested; pin with a fake authority or add the API line on how a certificate
+     InvalidInput maps;
+   - a cap-0 corner on the inscribed side still uses the inner tension offset min(ft, c/μ)
+     although it has no cone or cohesion set: conservative (wider Undecided band), not unsafe;
+     use ft there when a test asks for it;
+   - the arch sliver (0.484° between 54° and 54.484°) lists both joints as hinging below least
+     thickness, a selection mixture; if slice 3 severs every hinging interface the sliver
+     drops out as its own body, so slice 3 decides whether a hinge needs a minimum rotation;
+   - B-ARC-09, the voussoir-count sweep, is not pinned: expect convergence to 0.107478 from
+     at or below (BENCHMARKS row rewritten 2026-10-11), cheap in Release;
    - the LP and the RBSM ignore `InterfaceState` (Cracked/Severed carry no reduced strength
      yet); slice 3 decides what a cracked joint keeps;
    - the reverse hinge property only checks that a cluster of listed bodies touches a hinge; a
