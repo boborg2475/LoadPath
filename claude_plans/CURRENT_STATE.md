@@ -21,32 +21,58 @@ question decided and §10 carries the slice-2 rulings.
 
 ## Next
 
-1. Close the slice-2a review (findings and the rulings that answer them are in API.md "Slice 2",
-   DESIGN §10 2026-10-11 and the review-round tests `Statics.Solver.*`). Open after the second
-   review (2026-10-11):
-   - a restored slipping corner takes its held capacity and transverse tangent from the
-     singular range solution, so the tangent reached 1e47 × kt and the capacity 1.2e6 N on a
-     27 N brick; the inflated pivot then throws every real pivot under the tolerance (rank 1 of
-     12 on the 0.08 m stack at μ 0.6, λ = (1.5, 0)); a standing bridge point (μ 5, λ = (2.125,
-     0.625)) reads Undecided. Ruling in API.md: seed from the interface's closed corners' mean
-     N⁺ in the last non-singular solve, zero transverse tangent on the re-entry pass;
-   - the restored corner's held magnitude is unpinned (capacity 0 survives the suite but gives
-     three false Mechanisms on a three-brick bridge at μ 5: λ = (2.5, 0.75), (2.25, 0.5),
-     (2.25, 0.625), which provably stand);
-   - the rotational scaling direction is unpinned (scaling by L_c instead of 1/L_c survives);
-     pin with a geometric-similarity property (lengths × s, masses × s³, s = 2^±4, identical
-     states and corner forces × s³);
-   - the component combination is unpinned: Undecided vs Mechanism and Overstressed vs
-     Mechanism ordering, the `ActiveSetIterations` maximum, and `Mechanism` /
-     `UnconstrainedBodies` populated under an overall Undecided (ruled in API.md and the header);
-   - a mechanism component's range-space readings are unpinned (dropping the range solve
-     survives);
+1. Close the slice-2a review (findings and rulings are in API.md "Slice 2", DESIGN §10
+   2026-10-11 and the review-round tests `Statics.Solver.*`). State after the dev round on the
+   ruling "The elastic authority does not guess" (2026-10-11; default suite 112/112 in Debug
+   and Release, the `Deferred.` tier 0/2 as intended):
+   - implemented: a restored dry corner re-enters slipping with `μ · N⁺` from its own normal in
+     the last full-rank solve, opposite the motion's tangential part, zero transverse tangent;
+     a cohesive one re-enters stuck; nothing is seeded from the singular solve; a corner open
+     in the last full-rank solve (or with none yet) makes the component Undecided with the last
+     full-rank readings and no mechanism. `RestoredCornerTangentDoesNotInflateThePivots` is
+     green (bridge beds carry 3W, motion a +x translation). The two cases the elastic field
+     cannot certify are split: the default suite pins never-Mechanism on the six bridge rows
+     and never-Stands on the stack past friction; `Deferred.Slice4.*` holds the strong
+     assertions (Stands on all six bridge rows, Mechanism on the stack), red until slice 4,
+     excluded from the default run by `Scripts/Test.ps1`.
+   - not implemented, held at the TDD gate because no test bites them (mutation: identical
+     suite failures): `SolveInRange` on Load − Projection and the `min(kt, …)` transverse clamp
+     (neither changes any of the 3366 probe verdicts; the clamp can only bind inside the 1e-9
+     stick margin now that restored corners re-enter with zero tangent), and "a corner restored
+     a second time is Undecided" (changes two probe points: bridge μ 5 (2.5, 0.125)
+     Undecided → Stands, bridge μ 0.6 (0.5, 0.375) Undecided → Mechanism). Each needs a red:
+     a toppling-brick Mechanism whose readings are checked against the range load; a reachable
+     clamp case, or a ruling that drops the clamp; a fixture that reaches a second restoration.
+   - deferred to slice 4 (`Deferred.Slice4.*`): the two-brick stack μ 0.6, shift 0.03 m,
+     λ (0.625, 0.875), a provable mechanism (|λ| > μ) that reads Undecided after 3 passes (bed
+     corner 2 opens in pass 1, is open in the pass-2 full-rank solve, and the pass-3 motion
+     closes it: the fail-closed clause); and the bridge μ 5 rows (2.5, 0.75), (2.25, 0.5),
+     (2.25, 0.625), (2.125, 0.625), all Undecided by the same clause ((2.0, 0) and (2.125, 0)
+     stand after 12 passes). Without the clause (2.5, 0.75) and (2.25, 0.5) read false
+     Mechanisms, which the default-suite never-Mechanism assertion now guards.
+   - probe (561 points each, λx 0..4 × λy 0..2 step 0.125; brick, 0.08 m stack, three-brick
+     bridge; μ 0.6 then μ 5) Undecided counts, c50e7d3 → now: brick 0/0 → 0/0, stack 12/0 →
+     48/102, bridge 11/19 → 65/136. No Stands ↔ Mechanism flips. Stands → Undecided: bridge
+     μ 5 (2.375, 0.25), (2.375, 0.625), (2.5, 0.75). Undecided → Stands: bridge μ 5
+     (2.5, 0.125). Eleven Undecided → Mechanism, every one at |λ| > μ. The 318 Mechanism →
+     Undecided points are slice-4 territory.
+   - the restored corner's held magnitude is unpinned (re-entering with zero held force
+     survives the suite).
+   - Mechanism readings can show tension on a slipping dry corner that re-entered with zero
+     held force (0.08 m stack, μ 0.6, λx 1.5: N = −0.43 N on the bed, −2.10 N on the joint);
+     informative, not a certificate, and unasserted.
    - a component that is InvalidInput through its assembled stiffness returns InvalidInput for
-     the whole solve with `InvalidInterface` unset; `NonFiniteOptionsAreInvalidInput` accepts
-     Undecided for the overflowing stiffness where the ruling says InvalidInput; the
-     `Tolerance < 1` boundary is unpinned.
+     the whole solve with `InvalidInterface` unset.
    Then re-review.
-2. Slice 2b, the remaining slice-2 anchors (BENCHMARKS groups 2 and 3): B-WAL-03 (wall slides at
+2. Slice 4 pulled forward (DESIGN §10, 2026-10-11): the kinematic collapse certificate behind
+   its own swappable interface (API.md contract to write first), a limit-analysis LP over the
+   same interfaces (associative friction for the LP bound, HiGHS vendored as the solver, the
+   referee DESIGN §8 planned for slice 7 arrives with it), used to decide every component the
+   elastic authority leaves Undecided and to report mechanism shapes. Acceptance: the two
+   `Deferred.Slice4.*` cases go green and move back under `Statics.*`; the probe grids' 318
+   fail-closed Undecided points resolve; the arch (B-ARC-01/06), Orduña (B-ORD-01) and wedge
+   (B-WDG-01) rows become reachable.
+3. Slice 2b, the remaining slice-2 anchors (BENCHMARKS groups 2 and 3): B-WAL-03 (wall slides at
    λ = μ), B-STK-04 (constant-step stack), B-WDG-02, B-ROK-02, F-CHC-01, F-LIB-01/02, F-EMI-01,
    the 5-diamond (hits the 50-pass cap today, logged below), and the arch and pile rows that
    API.md "Anchors slice 2 must pin" lists but BENCHMARKS marks slice 4 (B-ARC-01/06 Couplet–
@@ -56,7 +82,7 @@ question decided and §10 carries the slice-2 rulings.
    pier geometry (Portioli 2012), B-DER-01 wall geometry, B-SW-01 exact limit load (graphical
    only), F-RON-01 panel thickness, B-FTL-01 layout. B-BUR-01 needs a soil-pressure driver;
    F-PYR-01 needs a zero-extent contact; group 9 runs only in the host adapter's suite.
-3. `Scripts/Test.ps1` excludes a `Slow.` prefix from the default run once the first slow test
+4. `Scripts/Test.ps1` excludes a `Slow.` prefix from the default run once the first slow test
    exists; today there is none (the whole suite runs in under a second).
 
 ## Deferred

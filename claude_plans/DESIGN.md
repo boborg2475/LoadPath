@@ -237,3 +237,18 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   status-only cycle detection is removed (the cap is the only early exit), readings on a
   Mechanism are the range-space solution of the last active set, and options are validated.
   All in [API.md](API.md) "Slice 2".
+- *2026-10-11, orchestrator, after the third slice-2a red round:* **the elastic standing
+  authority stops guessing.** Three rounds of heuristics on its mechanism path (restore
+  re-closing stuck, then slipping; seeding from the singular solve, then from neighbours; a
+  consistency pass; held-force re-derivation) each fixed one fixture and regressed another, and
+  a non-associative frictional active set has no convergence theory to lean on. So RBSM's
+  contract is narrowed to what it can certify: `Stands` and `Overstressed` from a converged
+  full-rank active set, `Mechanism` only when the singular active set is admissible with no
+  restoration needed, and `Undecided` (fail closed, nothing released) whenever a restored
+  corner would need a value the last full-rank solve does not supply or the cap is reached.
+  The kinematic collapse certificate (DESIGN §8 slice 4: limit-analysis LP with the referee
+  solver, later the graph cut) is the authority for Undecided and for mechanism shapes, and is
+  pulled forward ahead of the remaining slice-2 anchors because the arch, pile and wedge rows
+  are kinematic answers anyway. Tests that pin a Stands the elastic field cannot yet certify
+  are kept red under the `Deferred.` prefix, excluded from the default run, and listed in
+  CURRENT_STATE.

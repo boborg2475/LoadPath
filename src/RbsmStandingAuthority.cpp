@@ -80,6 +80,13 @@ struct Factorisation
 	Eigen::Index Rank = 0;
 };
 
+enum class Restoration : std::uint8_t
+{
+	None,
+	Restored,
+	Undecided
+};
+
 struct UpdateOutcome
 {
 	bool bStatusChanged = false;
@@ -633,19 +640,17 @@ UpdateOutcome UpdateActiveSet(const Problem& P, const Eigen::VectorXd& X, const 
 	return Outcome;
 }
 
-void ReCloseSlipping(const Joint& J, std::size_t C, const Vec3& TangentialMotionM, const Eigen::VectorXd& X, JointState& State)
+void ReEnterSlipping(const Joint& J, std::size_t C, const Vec3& TangentialMotionM, double FullRankNormalN, JointState& State)
 {
-	const TrialForces T = Trial(J, C, X);
-	const double CapacityN = SlipCapacityN(J, T.NormalN);
 	State.Status[C] = CornerStatus::Slipping;
-	State.HeldN[C] = HeldForce(Scale(-1.0, TangentialMotionM), CapacityN);
-	State.TransverseNPerM[C] = TransverseStiffnessNPerM(J, T.ShearN, CapacityN);
+	State.HeldN[C] = HeldForce(Scale(-1.0, TangentialMotionM), SlipCapacityN(J, FullRankNormalN));
+	State.TransverseNPerM[C] = 0.0;
 }
 
-bool RestoreInadmissibleReleases(const Problem& P, const Eigen::VectorXd& Motion, const Eigen::VectorXd& X, std::vector<JointState>& States)
+Restoration RestoreInadmissibleReleases(const Problem& P, const Eigen::VectorXd& Motion, const std::vector<JointState>* FullRankStates, const Eigen::VectorXd& FullRankX, std::vector<JointState>& States)
 {
 	const double ToleranceM = AdmissibilityToleranceRelative * MotionScaleM(P, Motion);
-	bool bRestored = false;
+	Restoration Outcome = Restoration::None;
 	for (std::size_t I = 0; I < P.Joints.size(); ++I)
 	{
 		const Joint& J = P.Joints[I];
@@ -659,20 +664,32 @@ bool RestoreInadmissibleReleases(const Problem& P, const Eigen::VectorXd& Motion
 			const bool bCloses = State.Status[C] == CornerStatus::Open && GapM < -ToleranceM;
 			const bool bSlidesWithFriction = State.Status[C] == CornerStatus::Slipping && HeldSizeN > 0.0 &&
 				Dot(TangentialM, State.HeldN[C]) > ToleranceM * HeldSizeN;
-			if (bCloses && J.bReleasesSlip)
+			if (bCloses)
 			{
-				ReCloseSlipping(J, C, TangentialM, X, State);
-				bRestored = true;
+				if (FullRankStates == nullptr || (*FullRankStates)[I].Status[C] == CornerStatus::Open)
+				{
+					return Restoration::Undecided;
+				}
+				if (J.bReleasesSlip)
+				{
+					ReEnterSlipping(J, C, TangentialM, Trial(J, C, FullRankX).NormalN, State);
+				}
+				else
+				{
+					State.Status[C] = CornerStatus::Stuck;
+					State.HeldN[C] = Vec3{};
+				}
+				Outcome = Restoration::Restored;
 			}
-			else if (bCloses || bSlidesWithFriction)
+			else if (bSlidesWithFriction)
 			{
 				State.Status[C] = CornerStatus::Stuck;
 				State.HeldN[C] = Vec3{};
-				bRestored = true;
+				Outcome = Restoration::Restored;
 			}
 		}
 	}
-	return bRestored;
+	return Outcome;
 }
 
 double Ratio(double DemandN, double CapacityN)
@@ -799,6 +816,9 @@ StandingResult SolveProblem(const Problem& P, const StandingOptions& Options)
 		Result.State = bOverstressed ? StandingState::Overstressed : StandingState::Stands;
 		return Result;
 	}
+	std::vector<JointState> FullRankStates;
+	Eigen::VectorXd FullRankX;
+	bool bHaveFullRank = false;
 	const auto D = P.Scaling.asDiagonal();
 	for (int Iteration = 1; Iteration <= Options.MaxActiveSetIterations; ++Iteration)
 	{
@@ -820,7 +840,14 @@ StandingResult SolveProblem(const Problem& P, const StandingOptions& Options)
 			{
 				const Eigen::VectorXd Motion = D * Projection;
 				X = D * SolveInRange(F, Load);
-				if (!RestoreInadmissibleReleases(P, Motion, X, States))
+				const Restoration Outcome = RestoreInadmissibleReleases(P, Motion, bHaveFullRank ? &FullRankStates : nullptr, FullRankX, States);
+				if (Outcome == Restoration::Undecided)
+				{
+					Result.Readings = bHaveFullRank ? ReadAll(P, FullRankStates, FullRankX, bOverstressed) : ReadAll(P, States, X, bOverstressed);
+					Result.State = StandingState::Undecided;
+					return Result;
+				}
+				if (Outcome == Restoration::None)
 				{
 					Result.Readings = ReadAll(P, States, X, bOverstressed);
 					Result.State = StandingState::Mechanism;
@@ -835,6 +862,12 @@ StandingResult SolveProblem(const Problem& P, const StandingOptions& Options)
 			}
 		}
 		X = D * SolveInRange(F, Load);
+		if (F.Rank == P.DofCount)
+		{
+			FullRankStates = States;
+			FullRankX = X;
+			bHaveFullRank = true;
+		}
 		std::vector<JointState> Next = States;
 		const UpdateOutcome Outcome = UpdateActiveSet(P, X, NeutralMotions, Next);
 		if (!Outcome.bStatusChanged && Outcome.bHeldSettled)

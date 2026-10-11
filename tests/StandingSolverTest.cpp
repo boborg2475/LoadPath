@@ -713,6 +713,17 @@ TEST_CASE("Statics.Solver.StatusRevisitIsNotACycleWhileHeldForcesStillMove")
 	const TwoBrickStack S = MakeTwoBrickStack(DryJoint(StackFriction), 0.03);
 	const StandingResult Result = SolveWith(S.Model, StackLoad);
 	INFO("two-brick stack: state " << Result.State << " after " << Result.ActiveSetIterations << " passes");
+	CHECK(Result.State != StandingState::Stands);
+}
+
+TEST_CASE("Deferred.Slice4.TwoBrickStackPastFrictionIsAMechanism")
+{
+	const double StackFriction = 0.6;
+	const StandingOptions StackLoad = BiaxialLateralLoad(0.625, 0.875);
+	CHECK(LateralOverVertical(StackLoad) > StackFriction);
+	const TwoBrickStack S = MakeTwoBrickStack(DryJoint(StackFriction), 0.03);
+	const StandingResult Result = SolveWith(S.Model, StackLoad);
+	INFO("two-brick stack: state " << Result.State << " after " << Result.ActiveSetIterations << " passes");
 	CHECK(Result.State == StandingState::Mechanism);
 }
 
@@ -902,6 +913,28 @@ TEST_CASE("Statics.Solver.RestoredCornerHoldsFrictionOnABridge")
 		const StandingResult Result = SolveWith(B.Model, BiaxialLateralLoad(Each.LambdaX, Each.LambdaY));
 		const CornerCounts Counts = CountCorners(Result);
 		INFO("state " << Result.State << " after " << Result.ActiveSetIterations << " passes, open " << Counts.Open << ", slipping " << Counts.Slipping);
+		CHECK(Result.State != StandingState::Mechanism);
+		CHECK(Result.Mechanism.empty());
+		if (Each.LambdaY == 0.0)
+		{
+			CHECK(Result.State == StandingState::Stands);
+		}
+	}
+}
+
+TEST_CASE("Deferred.Slice4.ThreeBrickBridgeStandsAtEveryProvableBiaxialPoint")
+{
+	struct Case
+	{
+		double LambdaX;
+		double LambdaY;
+	};
+	const Case Cases[] = {{2.5, 0.75}, {2.25, 0.5}, {2.25, 0.625}, {2.125, 0.625}, {2.0, 0.0}, {2.125, 0.0}};
+	const ThreeBrickBridge B = MakeThreeBrickBridge(DryJoint(5.0));
+	for (const Case& Each : Cases)
+	{
+		const StandingResult Result = SolveWith(B.Model, BiaxialLateralLoad(Each.LambdaX, Each.LambdaY));
+		INFO("lambda x " << Each.LambdaX << ", lambda y " << Each.LambdaY << ": state " << Result.State << " after " << Result.ActiveSetIterations << " passes");
 		CHECK(Result.State == StandingState::Stands);
 	}
 }

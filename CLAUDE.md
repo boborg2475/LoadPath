@@ -95,6 +95,12 @@ prints to stdout. The suite is expected to run in seconds; a test that needs mor
 second goes behind a `Slow.` prefix and is excluded from the default run by the script once one
 exists.
 
+**Deliberately red tests live under the `Deferred.` prefix.** A test that pins an answer the
+current implementation cannot yet give (owed to a later slice, named in the test's second
+segment, e.g. `Deferred.Slice4.*`) stays red there and the script excludes it from the default
+run; it prints how many it skipped. Run them with `-tc="Deferred.*"`. Every one has a
+CURRENT_STATE entry saying which slice turns it green and moves it back under its real prefix.
+
 The compiler contract is enforced by the build: `/W4 /WX`, no exceptions, no RTTI,
 `/fp:precise`. Code that needs any of those will not port to an Unreal module, so the build
 refuses it here.

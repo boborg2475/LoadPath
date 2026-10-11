@@ -376,34 +376,27 @@ never mutates the structure. The host may call it on any thread.
   overall state (a host releases those bodies even while another component is undecided), each
   component's motion normalised on its own; `ActiveSetIterations` is the maximum over
   components.
-- **A restored corner is seeded from physical scales, never from the singular solve** (second
-  review ruling 2026-10-11). The range-space solution of a singular active set is not an
-  equilibrium field, so a corner it re-closes must not take its normal force or trial shear from
-  it (the transverse tangent reached 1e47 × kt and the held capacity 1.2e6 N on a 27 N brick).
-  On the pass it re-enters, a restored slipping corner carries held force μ · N̄⁺ opposite the
-  tangential part of the projected motion, where N̄⁺ is the mean positive normal force of its
-  interface's closed corners in the last non-singular solve (if none, the component's weight
-  divided by its corner count), and **zero transverse tangent**; from the next pass the
-  standard slip rules apply with a trial from a solve in which it was closed. The transverse
-  tangent is `min(kt, kt · capacity / |trial S|)` for every corner: the clamp is enforced, not
-  assumed (a tiny trial from a corner whose status just changed inflated it on the standard
-  path too, to 7.7e6 × W on the bridge).
-- **A Mechanism is accepted only from a consistent active set** (second review ruling
-  2026-10-11, third red round). Before a singular, admissible active set is returned as a
-  Mechanism, the standard release rules are applied to its range-space solution: a stuck corner
-  whose trial shear exceeds its capacity slips, and a closed corner on a dry joint whose trial
-  normal is tensile opens; if anything changed, the loop continues. Without this the 0.08 m
-  stack reported only the upper brick moving while its base carried 58.5 N of shear against a
-  32 N capacity. On the pass that returns the Mechanism, every slipping corner's held force is
-  re-derived as `μ · N⁺` from the range-space normals (one re-derivation, no re-solve), so a
-  mechanism component's readings satisfy `|S| = μ N` on every slipping corner and equilibrium
-  in every direction the null space does not span.
-- **Readings on Mechanism and Undecided** (review ruling 2026-10-11): a standing component's
-  readings are its converged readings whatever the overall state. A mechanism component's
-  readings are the range-space solution of its last active set, with the released corners
-  marked open or slipping; they are in equilibrium with the load's range component and are
-  informative, not a certificate. An undecided component's readings are its last pass. Slice 3
-  consumes readings only from standing components.
+- **The elastic authority does not guess** (orchestrator ruling 2026-10-11, DESIGN §10, after
+  three heuristic rounds each regressed a fixture). `Stands` and `Overstressed` are certificates
+  from a converged full-rank active set. `Mechanism` is reported only when the singular active
+  set is admissible as it stands, with the held forces the last full-rank solve gave. When the
+  projected motion would close an open corner, the corner is restored once: stuck on a cohesive
+  joint; on a dry joint slipping with held force `μ · N⁺` taken from **that corner's own**
+  normal in the last full-rank solve, opposite the motion's tangential part, and zero transverse
+  tangent on the re-entry pass. If that corner was open in the last full-rank solve too (no
+  physical value exists), the component is `Undecided`. Nothing is ever seeded from a singular
+  solution. Three clauses of this ruling are **specified but not yet in the code**, because no
+  test reaches them and the TDD gate held (dev-expert, 2026-10-11, each verified by mutation to
+  change no test and no probe verdict): a second restoration of the same corner is `Undecided`;
+  the transverse tangent is clamped at `kt` (unreachable now that restored corners re-enter
+  with zero tangent); `SolveInRange` back-substitutes the load minus its null-space projection
+  (today the full load, which is only in equilibrium with the range load when the projection
+  lies wholly in the dropped pivots, as it does for a pure translation; a toppling mechanism's
+  readings would expose it). Points the elastic field cannot certify (several provably standing
+  three-brick-bridge points at μ 5, and a two-brick stack past friction that it cannot call a
+  Mechanism) read Undecided and are owned by the slice-4 kinematic certificate; the default
+  suite pins them as never-Mechanism or never-Stands, and the strong assertions live under the
+  `Deferred.` test prefix, excluded from the default run by `Scripts/Test.ps1`.
 - **Options are validated** (review ruling 2026-10-11): `PivotToleranceRelative` must be finite
   and in `(0, 1)` and `MaxActiveSetIterations` at least 1, else `InvalidInput`. An assembled
   stiffness that is not finite is `InvalidInput` (it is a profile or geometry fault); a load
