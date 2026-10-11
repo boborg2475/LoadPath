@@ -353,7 +353,38 @@ never mutates the structure. The host may call it on any thread.
   would carry along its held friction re-sticks, and the active-set loop continues; a Mechanism
   is returned only when nothing needs restoring. In a neutral solve an open corner whose gap
   moves along the null space is indeterminate and is not re-closed (otherwise a corner at
-  exactly zero force cycles open/closed until the cap).
+  exactly zero force cycles open/closed until the cap). **Restored corners re-enter as
+  slipping, not stuck, on a joint with `c == 0`** (review ruling 2026-10-11): an open corner the
+  motion would close re-closes with its shear held at capacity along the tangential component
+  of the projected motion, because re-closing it stuck re-opens it on the next pass and the
+  loop cycles (a squat dry block past both its sliding and tipping thresholds read Undecided
+  instead of Mechanism). On a cohesive joint it re-closes stuck.
+- **No status-only cycle detection** (review ruling 2026-10-11). A repeated status set while
+  the held forces are still moving is normal convergence, not a cycle; treating it as one turned
+  decided answers into Undecided. The iteration cap is the only early exit, and it reads
+  Undecided.
+- **Solves are per connected component** (review ruling 2026-10-11). Free bodies linked by
+  live interfaces form a component (grounded bodies are sinks, not links). Each component is
+  assembled, scaled, factored and judged on its own: its rank tolerance is relative to its own
+  largest pivot and its neutral test to its own load norm, so adding bodies with no interface
+  path to X never changes X's verdict or readings (a 1 cm cube read Mechanism once a 10 m slab
+  stood elsewhere on the ground). Rotational unknowns are scaled by the component's
+  characteristic length (the largest corner lever arm `|p − c|` in it) before factoring, so
+  every pivot carries N/m and the tolerance compares like with like. The overall `State` is the
+  worst over components in the order InvalidInput > Undecided > Mechanism > Overstressed >
+  Stands; `Mechanism` and `UnconstrainedBodies` collect every mechanism component.
+- **Readings on Mechanism and Undecided** (review ruling 2026-10-11): a standing component's
+  readings are its converged readings whatever the overall state. A mechanism component's
+  readings are the range-space solution of its last active set, with the released corners
+  marked open or slipping; they are in equilibrium with the load's range component and are
+  informative, not a certificate. An undecided component's readings are its last pass. Slice 3
+  consumes readings only from standing components.
+- **Options are validated** (review ruling 2026-10-11): `PivotToleranceRelative` must be finite
+  and in `(0, 1)` and `MaxActiveSetIterations` at least 1, else `InvalidInput`. An assembled
+  stiffness or load that is not finite is `InvalidInput`, never a release.
+- **Stands** means every bonded axis and compression is at or under 1 and every free release is
+  consistent; a slipping corner reads shear utilisation 1 by construction and may land a few
+  ulp over it, which is not Overstressed.
 - **Loads**: gravity `m · g⃗` at every free body's centroid (no moment); each `BodyLoad` adds
   its force and `(PointM − CentroidM) × ForceN` to its body. A tilt test rotates `g⃗`; a
   lateral load factor λ uses `g⃗ = (λ g, 0, −g)`. The test does any bisection; one solve is

@@ -139,6 +139,57 @@ void CheckBondedSlopeCorners(const InterfaceReading& Bed, double TiltRad)
 		CheckRelative(Length(Bed.Corners[C].ShearForceN), CornerShareOfSlopeShearN(TiltRad), 1.0e-9, "shear force");
 	}
 }
+
+struct TwoBrickStack
+{
+	Structure Model;
+	BodyId Lower;
+	BodyId Upper;
+	InterfaceId Bed;
+	InterfaceId Joint;
+};
+
+TwoBrickStack MakeTwoBrickStack(const StrengthProfile& Profile, double ShiftXM)
+{
+	TwoBrickStack S;
+	const ProfileId P = AddProfileOk(S.Model, Profile);
+	const BodyId Ground = AddGroundPlane(S.Model);
+	S.Lower = AddBox(S.Model, BrickShape(0.0, 0));
+	S.Upper = AddBox(S.Model, BrickShape(ShiftXM, 1));
+	S.Bed = AddInterfaceOk(S.Model, OnGroundPlane(Ground, S.Lower, BrickShape(0.0, 0), P));
+	S.Joint = AddInterfaceOk(S.Model, *StackedFaces(S.Lower, BrickShape(0.0, 0), S.Upper, BrickShape(ShiftXM, 1), P));
+	return S;
+}
+
+Vec3 InPlaneLoadDirection(const StandingOptions& Options)
+{
+	return Unit(Vec3{Options.Gravity.X, Options.Gravity.Y, 0.0});
+}
+
+double LateralOverVertical(const StandingOptions& Options)
+{
+	return std::hypot(Options.Gravity.X, Options.Gravity.Y) / -Options.Gravity.Z;
+}
+
+struct CornerCounts
+{
+	int Open = 0;
+	int Slipping = 0;
+};
+
+CornerCounts CountCorners(const StandingResult& Result)
+{
+	CornerCounts Counts;
+	for (const InterfaceReading& Reading : Result.Readings)
+	{
+		for (const CornerReading& Corner : Reading.Corners)
+		{
+			Counts.Open += Corner.bOpen ? 1 : 0;
+			Counts.Slipping += Corner.bSlipping ? 1 : 0;
+		}
+	}
+	return Counts;
+}
 }
 
 TEST_CASE("Statics.Solver.CompressionOverCapacityIsOverstressed")
@@ -446,14 +497,8 @@ TEST_CASE("Statics.Solver.TwoBrickStackOverturnedByABiaxialLoadIsAMechanism")
 	const double LambdaX = 1.5;
 	const double LambdaY = 0.875;
 	CHECK(LambdaY * BrickHeightM > BrickWidthM / 2.0);
-	Structure Model;
-	const ProfileId P = AddProfileOk(Model, Bonded(0.0, 1.0e7, 0.7));
-	const BodyId Ground = AddGroundPlane(Model);
-	const BodyId Lower = AddBox(Model, BrickShape(0.0, 0));
-	const BodyId Upper = AddBox(Model, BrickShape(ShiftXM, 1));
-	AddInterfaceOk(Model, OnGroundPlane(Ground, Lower, BrickShape(0.0, 0), P));
-	AddInterfaceOk(Model, *StackedFaces(Lower, BrickShape(0.0, 0), Upper, BrickShape(ShiftXM, 1), P));
-	const StandingResult Result = SolveWith(Model, BiaxialLateralLoad(LambdaX, LambdaY));
+	const TwoBrickStack S = MakeTwoBrickStack(Bonded(0.0, 1.0e7, 0.7), ShiftXM);
+	const StandingResult Result = SolveWith(S.Model, BiaxialLateralLoad(LambdaX, LambdaY));
 	INFO("state " << Result.State << " after " << Result.ActiveSetIterations << " passes");
 	CHECK(Result.State == StandingState::Mechanism);
 }
@@ -499,7 +544,7 @@ TEST_CASE("Statics.Solver.BrickOverturnedByABiaxialLoadIsAMechanismAboutItsToe")
 		{
 			continue;
 		}
-		CheckRotationAboutEdge(*Motion, BrickShape().CentreM, Vec3{BrickLengthM / 2.0, 0.0, 0.0}, Vec3{0.0, 1.0, 0.0}, ShapeTolerance);
+		CheckRotationAboutEdge(*Motion, BrickShape().CentreM, Vec3{BrickLengthM / 2.0, 0.0, 0.0}, Vec3{0.0, 1.0, 0.0}, Vec3{Each.LambdaX, Each.LambdaY, 0.0}, ShapeTolerance);
 	}
 }
 
@@ -512,6 +557,235 @@ TEST_CASE("Statics.Solver.BrickPushedIntoAWallIsNeverAMechanism")
 		INFO("lambda " << Lambda << ": state " << Result.State << " after " << Result.ActiveSetIterations << " passes");
 		const MechanismMotion Moving = Result.Mechanism.empty() ? MechanismMotion{} : Result.Mechanism.front();
 		INFO("motion translation " << Moving.TranslationM << ", rotation " << Moving.RotationRad);
-		CHECK(Result.State != StandingState::Mechanism);
+		CHECK(Result.State == StandingState::Stands);
 	}
+}
+
+TEST_CASE("Statics.Solver.SquatDryBlockPastBothThresholdsIsAMechanism")
+{
+	const double Friction = 0.6;
+	CHECK(Friction < BrickLengthM / BrickHeightM);
+	CHECK(Friction < BrickWidthM / BrickHeightM);
+	struct Case
+	{
+		const char* Name;
+		StandingOptions Options;
+	};
+	const Case Cases[] = {
+		{"lateral 3.375", LateralLoad(3.375)},
+		{"lateral 4", LateralLoad(4.0)},
+		{"biaxial (0, 1.75)", BiaxialLateralLoad(0.0, 1.75)},
+		{"tilt 75 deg", TiltedPlane(75.0 * RadPerDegree)},
+		{"tilt 80 deg", TiltedPlane(80.0 * RadPerDegree)},
+	};
+	const BrickOnGround F = MakeBrickOnGround(DryJoint(Friction));
+	for (const Case& Each : Cases)
+	{
+		INFO("case: " << doctest::String(Each.Name));
+		const Vec3 G = Each.Options.Gravity;
+		CHECK(LateralOverVertical(Each.Options) > Friction);
+		CHECK((std::abs(G.X) * BrickHeightM > -G.Z * BrickLengthM || std::abs(G.Y) * BrickHeightM > -G.Z * BrickWidthM));
+		const StandingResult Result = SolveWith(F.Model, Each.Options);
+		INFO("state " << Result.State << " after " << Result.ActiveSetIterations << " passes");
+		CHECK(Result.State == StandingState::Mechanism);
+		const MechanismMotion* Motion = FindMotion(Result, F.Brick);
+		CHECK(Motion != nullptr);
+		if (Motion == nullptr)
+		{
+			continue;
+		}
+		CheckTranslationAlong(*Motion, InPlaneLoadDirection(Each.Options), ShapeTolerance);
+	}
+}
+
+TEST_CASE("Statics.Solver.ReStickHoldsATwoBrickStackUnderBiaxialLoad")
+{
+	const TwoBrickStack S = MakeTwoBrickStack(DryJoint(5.0), 0.03);
+	const StandingResult Result = SolveWith(S.Model, BiaxialLateralLoad(1.375, 0.625));
+	INFO("state " << Result.State << " after " << Result.ActiveSetIterations << " passes");
+	CHECK(Result.State == StandingState::Stands);
+	CHECK(Result.Readings.size() == 2u);
+	const CornerCounts Counts = CountCorners(Result);
+	INFO("open " << Counts.Open << ", slipping " << Counts.Slipping);
+	CHECK(Counts.Slipping == 1);
+	CHECK(Counts.Open == 2);
+}
+
+TEST_CASE("Statics.Solver.StatusRevisitIsNotACycleWhileHeldForcesStillMove")
+{
+	struct Case
+	{
+		double LambdaX;
+		double LambdaY;
+	};
+	const double SingleFriction = 5.0;
+	const BrickOnGround F = MakeBrickOnGround(DryJoint(SingleFriction));
+	for (const Case& Each : {Case{3.0, 0.875}, Case{3.25, 0.75}})
+	{
+		INFO("single brick, lambda x " << Each.LambdaX << ", lambda y " << Each.LambdaY);
+		CHECK(Each.LambdaX * BrickHeightM < BrickLengthM);
+		CHECK(Each.LambdaY * BrickHeightM < BrickWidthM);
+		CHECK(std::hypot(Each.LambdaX, Each.LambdaY) < SingleFriction);
+		const StandingResult Result = SolveWith(F.Model, BiaxialLateralLoad(Each.LambdaX, Each.LambdaY));
+		INFO("state " << Result.State << " after " << Result.ActiveSetIterations << " passes");
+		CHECK(Result.State == StandingState::Stands);
+	}
+
+	const double StackFriction = 0.6;
+	const StandingOptions StackLoad = BiaxialLateralLoad(0.625, 0.875);
+	CHECK(LateralOverVertical(StackLoad) > StackFriction);
+	const TwoBrickStack S = MakeTwoBrickStack(DryJoint(StackFriction), 0.03);
+	const StandingResult Result = SolveWith(S.Model, StackLoad);
+	INFO("two-brick stack: state " << Result.State << " after " << Result.ActiveSetIterations << " passes");
+	CHECK(Result.State == StandingState::Mechanism);
+}
+
+TEST_CASE("Statics.Solver.UnconstrainedBodiesListsOnlyTheMovingBodies")
+{
+	BrickOnGround F = MakeBrickOnGround(DryJoint(0.7));
+	const Box FloatingShape{Vec3{1.0, 0.0, 1.0}, BrickShape().HalfExtentsM, BrickMassKg};
+	const BodyId Floating = AddBox(F.Model, FloatingShape);
+	const StandingResult Result = SolveWith(F.Model, StandingOptions{});
+	INFO("state " << Result.State << ", unconstrained " << Describe(Result.UnconstrainedBodies));
+	CHECK(Result.State == StandingState::Mechanism);
+	CHECK(Result.UnconstrainedBodies.size() == 1u);
+	CHECK(HasBody(Result.UnconstrainedBodies, Floating));
+	CHECK_FALSE(HasBody(Result.UnconstrainedBodies, F.Brick));
+	CHECK(FindMotion(Result, F.Brick) == nullptr);
+	const InterfaceReading* Bed = RequireReading(Result, F.Bed);
+	if (Bed == nullptr)
+	{
+		return;
+	}
+	CheckRelative(Bed->NormalForceN, BrickWeightN(), 1.0e-9, "standing brick bed normal force");
+	CHECK(Bed->Utilisation > 0.0);
+}
+
+TEST_CASE("Statics.Solver.TransverseTangentMagnitudeIsCapacityOverTrialShear")
+{
+	const double Friction = 5.0;
+	const double LambdaX = 2.5;
+	const double LambdaY = 0.25;
+	CHECK(LambdaX * BrickHeightM < BrickLengthM);
+	CHECK(LambdaY * BrickHeightM < BrickWidthM);
+	CHECK(std::hypot(LambdaX, LambdaY) < Friction);
+	const BrickOnGround F = MakeBrickOnGround(DryJoint(Friction));
+	const StandingResult Result = SolveWith(F.Model, BiaxialLateralLoad(LambdaX, LambdaY));
+	const CornerCounts Counts = CountCorners(Result);
+	INFO("state " << Result.State << " after " << Result.ActiveSetIterations << " passes, open " << Counts.Open << ", slipping " << Counts.Slipping);
+	CHECK(Result.State == StandingState::Stands);
+	CHECK(Counts.Slipping >= 1);
+}
+
+TEST_CASE("Statics.Solver.SlipCapacityIsZeroForACornerInTension")
+{
+	const double TiltRad = 75.0 * RadPerDegree;
+	const double Friction = 5.0;
+	const double TensileStrengthPa = 1.0e4;
+	const double WeightN = BrickWeightN();
+	const double DownhillShareN = WeightN * std::sin(TiltRad) / 2.0;
+	CHECK(UphillCornerNormalN(TiltRad) < 0.0);
+	CHECK(-UphillCornerNormalN(TiltRad) < CornerCapacityN(TensileStrengthPa));
+	CHECK(DownhillShareN < Friction * DownhillCornerNormalN(TiltRad));
+	const BrickOnGround F = MakeBrickOnGround(Bonded(TensileStrengthPa, 0.0, Friction));
+	const StandingResult Result = SolveWith(F.Model, TiltedPlane(TiltRad));
+	INFO("state " << Result.State << " after " << Result.ActiveSetIterations << " passes");
+	CHECK(Result.State == StandingState::Stands);
+	const InterfaceReading* Bed = RequireReading(Result, F.Bed);
+	if (Bed == nullptr)
+	{
+		return;
+	}
+	CheckSlopeNormals(*Bed, TiltRad);
+	for (const std::size_t C : UphillCorners)
+	{
+		INFO("uphill corner " << C << ", shear " << Bed->Corners[C].ShearForceN);
+		CHECK(Bed->Corners[C].NormalForceN < 0.0);
+		CHECK_FALSE(Bed->Corners[C].bOpen);
+		CHECK(Bed->Corners[C].bSlipping);
+		CHECK(Length(Bed->Corners[C].ShearForceN) <= 1.0e-12 * WeightN);
+	}
+	for (const std::size_t C : DownhillCorners)
+	{
+		INFO("downhill corner " << C);
+		CHECK_FALSE(Bed->Corners[C].bOpen);
+		CHECK_FALSE(Bed->Corners[C].bSlipping);
+		CheckRelative(Length(Bed->Corners[C].ShearForceN), DownhillShareN, 1.0e-9, "shear force");
+	}
+}
+
+TEST_CASE("Statics.Solver.AnInterfaceBetweenGroundedBodiesReadsZeroWithAxisNone")
+{
+	Structure Model;
+	const ProfileId P = AddProfileOk(Model, DryJoint(0.7));
+	const Box Footing{Vec3{-1.0, 0.0, 0.25}, Vec3{0.25, 0.25, 0.25}, 125.0};
+	const Box Plinth{Vec3{-1.0, 0.0, 0.75}, Vec3{0.25, 0.25, 0.25}, 125.0};
+	const BodyId FootingId = AddBox(Model, Footing, true);
+	const BodyId PlinthId = AddBox(Model, Plinth, true);
+	const InterfaceId Between = AddInterfaceOk(Model, *StackedFaces(FootingId, Footing, PlinthId, Plinth, P));
+	const BodyId Ground = AddGroundPlane(Model);
+	const BodyId Brick = AddBox(Model, BrickShape(1.0));
+	AddInterfaceOk(Model, OnGroundPlane(Ground, Brick, BrickShape(1.0), P));
+	const StandingResult Result = SolveWith(Model, StandingOptions{});
+	INFO("state " << Result.State);
+	CHECK(Result.State == StandingState::Stands);
+	const InterfaceReading* Reading = RequireReading(Result, Between);
+	if (Reading == nullptr)
+	{
+		return;
+	}
+	CHECK(Reading->Utilisation == 0.0);
+	CHECK(Reading->Axis == GoverningAxis::None);
+	CHECK(Reading->NormalForceN == 0.0);
+	for (std::size_t C = 0; C < 4; ++C)
+	{
+		INFO("corner " << C);
+		CHECK_FALSE(Reading->Corners[C].bOpen);
+		CHECK_FALSE(Reading->Corners[C].bSlipping);
+	}
+}
+
+TEST_CASE("Statics.Solver.NonFiniteOptionsAreInvalidInput")
+{
+	struct Case
+	{
+		const char* Name;
+		double PivotToleranceRelative;
+		int MaxActiveSetIterations;
+	};
+	const StandingOptions Defaults;
+	const Case Cases[] = {
+		{"NaN pivot tolerance", NaN, Defaults.MaxActiveSetIterations},
+		{"zero pivot tolerance", 0.0, Defaults.MaxActiveSetIterations},
+		{"negative pivot tolerance", -1.0, Defaults.MaxActiveSetIterations},
+		{"infinite pivot tolerance", Infinity, Defaults.MaxActiveSetIterations},
+		{"zero iteration cap", Defaults.PivotToleranceRelative, 0},
+	};
+	const BrickOnGround F = MakeBrickOnGround(DryJoint(0.7));
+	for (const Case& Each : Cases)
+	{
+		INFO("case: " << doctest::String(Each.Name));
+		StandingOptions Options;
+		Options.PivotToleranceRelative = Each.PivotToleranceRelative;
+		Options.MaxActiveSetIterations = Each.MaxActiveSetIterations;
+		const StandingResult Result = SolveWith(F.Model, Options);
+		INFO("state " << Result.State);
+		CHECK(Result.State == StandingState::InvalidInput);
+	}
+
+	const double StiffnessPaPerM = 1.0e308;
+	const Box Big = BoxOfDensity(Vec3{0.0, 0.0, 5.0}, Vec3{5.0, 5.0, 5.0}, 2000.0);
+	CHECK(IsFinite(StiffnessPaPerM));
+	CHECK_FALSE(IsFinite(StiffnessPaPerM * (2.0 * Big.HalfExtentsM.X) * (2.0 * Big.HalfExtentsM.Y) / 4.0));
+	StrengthProfile Stiff = DryJoint(0.7);
+	Stiff.NormalStiffnessPaPerM = StiffnessPaPerM;
+	Stiff.TangentialStiffnessPaPerM = StiffnessPaPerM;
+	Structure Model;
+	const ProfileId P = AddProfileOk(Model, Stiff);
+	const BodyId Ground = AddGroundPlane(Model);
+	const BodyId Block = AddBox(Model, Big);
+	AddInterfaceOk(Model, OnGroundPlane(Ground, Block, Big, P));
+	const StandingResult Result = SolveWith(Model, StandingOptions{});
+	INFO("overflowing assembled stiffness: state " << Result.State);
+	CHECK((Result.State == StandingState::InvalidInput || Result.State == StandingState::Undecided));
 }

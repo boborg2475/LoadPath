@@ -9,28 +9,43 @@ Repository scaffolded: CMake + Visual Studio 2022 generator, vendored doctest 2.
 3.4.0, the compiler contract (no exceptions, no RTTI, `/W4 /WX`, `/fp:precise`) enforced.
 Slice 1 (the model: handles, profiles, bodies, interfaces, validation, removal) and slice 1b
 (JSON structure reader/writer, `RunCli`, the `loadpath_cli` binary) are committed and reviewed:
-68 cases, 1826 assertions, green in Debug and Release, every green-on-arrival row proven by a
-recorded mutation (commit messages). No physics exists yet; slice 2 (the standing authority,
-API.md) is next. The design brief ([DESIGN.md](DESIGN.md)) has every §9 question decided.
+every green-on-arrival row proven by a recorded mutation (commit messages). Slice 2a, the
+standing authority, is committed through 3d39b2a (98 cases, 2948 assertions, Debug and Release):
+`IStandingAuthority`, the RBSM corner-spring implementation with a Schur-pivoted dense LDLT and
+the free active set, 18 anchor and mechanics tests (incline tip and slide, Housner, free and
+coursed wall, the Itasca slope regimes, harmonic stack, Paterson–Zwick triangle and diamond) and
+10 solver characterisation tests. **Its first review (2026-10-11) found five blocking items and
+the slice is not done**: see "Next" 1. The design brief ([DESIGN.md](DESIGN.md)) has every §9
+question decided and §10 carries the slice-2 rulings.
 
 ## Next
 
-1. `claude_plans/BENCHMARKS.md` (2026-10-11) holds the 100 known-answer rows from both
-   reports, in nine adoption groups, each with its earliest slice. Tier-1 set for slice 2
-   (orchestrator, autonomous mode): every group-2 and group-3 row marked slice 2, in the order
-   API.md "Anchors slice 2 must pin" lists them; each row becomes a test in the slice it
-   names. Rows with inputs still to retrieve: B-COR-01 corner geometry, F-PSY-01 friction
-   angle, F-FOR-01 and F-STR-01 pier geometry (Portioli 2012), B-DER-01 wall geometry,
-   B-SW-01 exact limit load (graphical only), F-RON-01 panel thickness, B-FTL-01 layout.
-   B-BUR-01 needs a soil-pressure driver; F-PYR-01 needs a zero-extent contact; group 9 runs
-   only in the host adapter's suite.
-2. Slice 2, the standing authority (API.md "Slice 2"): the `IStandingAuthority` interface, the
-   RBSM implementation with four corner springs and a dense pivoted LDLT, the free active set,
-   mechanism reporting, and the tier-1 anchors from BENCHMARKS.md groups 2 and 3.
+1. Close the slice-2a review (findings and the rulings that answer them are in API.md "Slice 2",
+   DESIGN §10 2026-10-11 and the review-round tests `Statics.Solver.*` T1–T11):
+   - a squat dry block past both thresholds reads Undecided (restore re-closes open corners
+     stuck, which re-open; ruling: restored corners re-enter slipping on a dry joint);
+   - status-only cycle detection turns decided answers into Undecided (ruling: remove it);
+   - verdicts depend on unrelated bodies through a global, unit-mixing pivot tolerance (ruling:
+     per-component solves with rotational scaling by the component's characteristic length);
+   - readings on a Mechanism come from a stale or zero displacement (ruling: range-space
+     solution of the last active set, per component);
+   - options are not validated (NaN pivot tolerance reads Mechanism; ruling: InvalidInput);
+   - unpinned declared behaviour: re-stick, the open-corner restore, the transverse tangent
+     magnitude, the slip-capacity clamp in tension, `UnconstrainedBodies`' negative side, Axis
+     None on a zero-force interface; weak `!=` assertions and sign-blind shape helpers.
+   Then re-review.
+2. Slice 2b, the remaining slice-2 anchors (BENCHMARKS groups 2 and 3): B-WAL-03 (wall slides at
+   λ = μ), B-STK-04 (constant-step stack), B-WDG-02, B-ROK-02, F-CHC-01, F-LIB-01/02, F-EMI-01,
+   the 5-diamond (hits the 50-pass cap today, logged below), and the arch and pile rows that
+   API.md "Anchors slice 2 must pin" lists but BENCHMARKS marks slice 4 (B-ARC-01/06 Couplet–
+   Heyman, B-ORD-01 Orduña): attempt them with the elastic no-tension field in 2b and move the
+   ones it cannot reach to slice 4 with the reason recorded, as the wedge was. Rows with inputs
+   still to retrieve: B-COR-01 corner geometry, F-PSY-01 friction angle, F-FOR-01 and F-STR-01
+   pier geometry (Portioli 2012), B-DER-01 wall geometry, B-SW-01 exact limit load (graphical
+   only), F-RON-01 panel thickness, B-FTL-01 layout. B-BUR-01 needs a soil-pressure driver;
+   F-PYR-01 needs a zero-extent contact; group 9 runs only in the host adapter's suite.
 3. `Scripts/Test.ps1` excludes a `Slow.` prefix from the default run once the first slow test
-   exists; today there is none.
-3b. `claude_plans/ANCHORS.md` has no rows yet; slice 2 pins the first anchor and adds its row
-   (the brick dimensions in `tests/ModelTestSupport.h` are fixture inputs, not asserted numbers).
+   exists; today there is none (the whole suite runs in under a second).
 
 ## Deferred
 
@@ -45,24 +60,23 @@ API.md) is next. The design brief ([DESIGN.md](DESIGN.md)) has every §9 questio
   `==` (orchestrator 2026-10-11): unknowns are ordered by body slot, so a different insertion
   order changes the assembly and pivot order and the last bit. Bit-identity is pinned only for
   repeated solves of the same structure.
-- Slice 2 behaviour still with no test (characterisation round 2026-10-11, `tests/StandingSolverTest.cpp`,
-  every other item proven by mutation): the 1e-9 stick hysteresis (margins 0 and 1e-3 both survive;
+- Slice 2 behaviour still with no test after the characterisation round (2026-10-11,
+  `tests/StandingSolverTest.cpp`): the 1e-9 stick hysteresis (margins 0 and 1e-3 both survive;
   no fixture leaves a slipping corner's trial shear within the margin of capacity, and on a single
-  block the slip and re-stick conditions exclude each other); status-cycle detection (see the
-  entry below); the `bNonFinite` term in `IsOverstressed`, which looks unreachable
-  because `Ratio` already maps a non-finite ratio to +inf and a NaN corner force trips compression.
-- Status-cycle detection (`WasVisited`) compares statuses only, so a path that passes through
-  the answer's status set while a held force is still unsettled, then comes back to it, reads
-  Undecided (found by dev-expert 2026-10-11 after the R1/R2 fixes). A probe of 8,445 solves
-  (single brick, two bridges, two stacks on a λx 0..4 × λy 0..2 grid at bonded, μ 5 and μ 0.6,
-  plus the wall fixture) leaves 135 Undecided, 134 of them status revisits after 3 to 9
-  passes. Seven were decided before the transverse tangent: single brick μ 5 at λ = (3, 0.875)
-  and (3.25, 0.75) (Stands at HEAD, the answer's status set {stuck, slip, open, stuck} is
-  visited at pass 3 and revisited at pass 4); stack shift 0.03 μ 0.6 at (0.625, 0.875) and
-  shift 0.08 μ 0.6 at (0.75, 1) and (0.875, 0.875) (Mechanism at HEAD; a restore lands back on
-  pass 2's status set); wall μ 0.7 λ 0.8 (see the magnitude entry below). All fail closed.
-  Pin the detection with one of these fixtures, then make a revisit count only when the held
-  forces also match.
+  block the slip and re-stick conditions exclude each other); the `bNonFinite` term in
+  `IsOverstressed`, which looks unreachable because `Ratio` already maps a non-finite ratio to
+  +inf and a NaN corner force trips compression; the determinate side of the indeterminate-gap
+  rule (a mutant that keeps every open corner open in any neutral solve survives).
+- Undecided probe results (dev-expert and review, 2026-10-11; 8,445- and 3,366-solve grids over
+  a single brick, bridges and stacks at bonded, μ 5 and μ 0.6): two causes, both under "Next" 1.
+  The 30 single-brick μ 0.6 cases are the open-corner restore re-closing stuck (118 grid verdicts
+  flip Undecided → Mechanism when that half of restore is removed, no decided verdict changes);
+  the μ 5 single-brick and stack cases are status-only cycle detection (removing it recovers 40
+  of 109 Undecided on the review grid, every one to the right verdict). The projected motion is
+  also not unit-invariant (it mixes m with rad); the per-component rotational scaling in API.md
+  addresses the tolerance side of that, and the restore ruling the cycling side. If the 2b
+  anchors still cycle after both, the next step is a search of the admissible cone rather than
+  one projected direction.
 - The held-force magnitude loop still converges at roughly μ per pass where friction at one
   joint sets the normal force at another: the brick pushed into a wall takes 22 passes at
   μ = 0.3, 37 to 38 at μ = 0.5 and hits the 50-pass cap at μ = 0.7, λ = 0.8, matching

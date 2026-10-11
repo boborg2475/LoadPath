@@ -121,8 +121,7 @@ TEST_CASE("Statics.Anchor.HarmonicStackStandsInsideItsOverhangAndNotBeyond")
 		const Stack Beyond = BuildOnTable(HarmonicStack(Count, 1.0 + 1.0e-6), 0.0);
 		const StandingResult BeyondResult = SolveWith(Beyond.Model, StandingOptions{});
 		INFO("beyond reads " << BeyondResult.State);
-		CHECK(BeyondResult.State != StandingState::Stands);
-		CHECK(BeyondResult.State != StandingState::InvalidInput);
+		CHECK(BeyondResult.State == StandingState::Mechanism);
 	}
 }
 
@@ -133,8 +132,7 @@ TEST_CASE("Statics.Anchor.InvertedThreeTriangleFallsAndFourDiamondStands")
 	CHECK(Triangle.Model.LiveInterfaceCount() == 7u);
 	const StandingResult TriangleResult = SolveWith(Triangle.Model, StandingOptions{});
 	INFO("inverted 3-triangle reads " << TriangleResult.State);
-	CHECK(TriangleResult.State != StandingState::Stands);
-	CHECK(TriangleResult.State != StandingState::InvalidInput);
+	CHECK(TriangleResult.State == StandingState::Mechanism);
 
 	const Stack Diamond = BuildOnTable(BrickRows({1, 2, 3, 4, 3, 2, 1}), 5.0);
 	CHECK(Diamond.Model.LiveBodyCount() == 17u);

@@ -230,3 +230,10 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   is a right-looking LDLT pivoting on the Schur diagonal, because `Eigen::LDLT` picks pivots
   before the Schur update and cannot reveal rank. The 3DEC wedge (B-WDG-01) moves to slice 4:
   its published threshold is a kinematic answer the elastic field does not reproduce.
+- *2026-10-11, orchestrator, after the slice-2a review:* verdicts are **local**: the authority
+  solves each connected component of free bodies on its own, with rotational unknowns scaled by
+  the component's characteristic length, so a body's state never depends on bodies it has no
+  interface path to. Restored open corners re-enter the active set slipping on a dry joint,
+  status-only cycle detection is removed (the cap is the only early exit), readings on a
+  Mechanism are the range-space solution of the last active set, and options are validated.
+  All in [API.md](API.md) "Slice 2".

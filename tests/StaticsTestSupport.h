@@ -260,8 +260,8 @@ inline void CheckRelative(double Got, double Want, double Relative, const char* 
 	CHECK(std::abs(Got - Want) <= Relative * std::abs(Want));
 }
 
-// The sign of a null vector is free, so the edge axis is compared up to sign.
-inline void CheckRotationAboutEdge(const MechanismMotion& Motion, const Vec3& CentroidM, const Vec3& EdgePointM, const Vec3& EdgeAxis, double Relative)
+// A tip must move the centroid along the in-plane load, so the motion does positive work with it.
+inline void CheckRotationAboutEdge(const MechanismMotion& Motion, const Vec3& CentroidM, const Vec3& EdgePointM, const Vec3& EdgeAxis, const Vec3& LoadDirection, double Relative)
 {
 	INFO("translation " << Motion.TranslationM << ", rotation " << Motion.RotationRad);
 	const double RotationSize = Length(Motion.RotationRad);
@@ -271,16 +271,19 @@ inline void CheckRotationAboutEdge(const MechanismMotion& Motion, const Vec3& Ce
 	CHECK(Length(OffAxis) <= Relative * RotationSize);
 	const Vec3 AboutEdge = Cross(Motion.RotationRad, Minus(CentroidM, EdgePointM));
 	CHECK(Length(Minus(Motion.TranslationM, AboutEdge)) <= Relative * Length(AboutEdge));
+	CHECK(Dot(Motion.TranslationM, Unit(LoadDirection)) > 0.0);
 }
 
-inline void CheckTranslationAlong(const MechanismMotion& Motion, const Vec3& Direction, double Relative)
+// A slide must translate along the in-plane load, never against it.
+inline void CheckTranslationAlong(const MechanismMotion& Motion, const Vec3& LoadDirection, double Relative)
 {
 	INFO("translation " << Motion.TranslationM << ", rotation " << Motion.RotationRad);
 	const double TranslationSize = Length(Motion.TranslationM);
 	CHECK(TranslationSize > 0.0);
-	const Vec3 Along = Unit(Direction);
+	const Vec3 Along = Unit(LoadDirection);
 	const Vec3 OffLine = Minus(Motion.TranslationM, Times(Dot(Motion.TranslationM, Along), Along));
 	CHECK(Length(OffLine) <= Relative * TranslationSize);
 	CHECK(Length(Motion.RotationRad) <= Relative * TranslationSize);
+	CHECK(Dot(Motion.TranslationM, Along) > 0.0);
 }
 }

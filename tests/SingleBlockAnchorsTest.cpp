@@ -55,7 +55,7 @@ void CheckTipsAboutTheDownhillEdge(const StandingResult& Result, BodyId Block, c
 	{
 		return;
 	}
-	CheckRotationAboutEdge(*Motion, Shape.CentreM, DownhillEdgePointM(Shape), EdgeAxis, ShapeTolerance);
+	CheckRotationAboutEdge(*Motion, Shape.CentreM, DownhillEdgePointM(Shape), EdgeAxis, SlopeDirection, ShapeTolerance);
 }
 
 void CheckSlidesDownhill(const StandingResult& Result, BodyId Block)
