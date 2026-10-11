@@ -381,7 +381,10 @@ never mutates the structure. The host may call it on any thread.
   consumes readings only from standing components.
 - **Options are validated** (review ruling 2026-10-11): `PivotToleranceRelative` must be finite
   and in `(0, 1)` and `MaxActiveSetIterations` at least 1, else `InvalidInput`. An assembled
-  stiffness or load that is not finite is `InvalidInput`, never a release.
+  stiffness that is not finite is `InvalidInput` (it is a profile or geometry fault); a load
+  that overflows in assembly keeps the overflow path already pinned, reading `+inf` utilisation
+  and never Stands. Neither is ever a release. Rotational unknowns are stored as `L_c · θ`
+  (the scaling matrix carries `1 / L_c` on rotations) so every pivot is in N/m.
 - **Stands** means every bonded axis and compression is at or under 1 and every free release is
   consistent; a slipping corner reads shear utilisation 1 by construction and may land a few
   ulp over it, which is not Overstressed.

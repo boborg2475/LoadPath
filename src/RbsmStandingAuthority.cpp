@@ -65,7 +65,9 @@ struct Problem
 	int DofCount = 0;
 	std::vector<BodyId> FreeBodies;
 	std::vector<Joint> Joints;
+	std::vector<std::size_t> ReadingSlots;
 	Eigen::VectorXd AppliedLoad;
+	Eigen::VectorXd Scaling;
 	double ForceScaleN = 0;
 };
 
@@ -123,8 +125,18 @@ bool IsUsableStiffness(double StiffnessPaPerM)
 	return StiffnessPaPerM > 0.0 && IsFinite(StiffnessPaPerM);
 }
 
+bool AreOptionsValid(const StandingOptions& Options)
+{
+	const double Tolerance = Options.PivotToleranceRelative;
+	return Tolerance > 0.0 && Tolerance < 1.0 && Options.MaxActiveSetIterations >= 1;
+}
+
 bool FindInvalidInput(const Structure& Model, std::span<const BodyLoad> Loads, const StandingOptions& Options, InterfaceId& Offending)
 {
+	if (!AreOptionsValid(Options))
+	{
+		return true;
+	}
 	for (const InterfaceId Id : Model.LiveInterfaces())
 	{
 		const StrengthProfile& Profile = Model.Profile(Model.Interface(Id).Profile);
@@ -188,45 +200,127 @@ Joint MakeJoint(const Structure& Model, InterfaceId Id, const std::vector<int>& 
 	return J;
 }
 
-Problem BuildProblem(const Structure& Model, std::span<const BodyLoad> Loads, const StandingOptions& Options)
+std::size_t FindRoot(std::vector<std::size_t>& Parent, std::size_t Slot)
 {
-	Problem P;
-	std::vector<int> OffsetOfSlot;
-	for (const BodyId Id : Model.LiveBodies())
+	while (Parent[Slot] != Slot)
 	{
-		if (OffsetOfSlot.size() <= Id.Index)
+		Parent[Slot] = Parent[Parent[Slot]];
+		Slot = Parent[Slot];
+	}
+	return Slot;
+}
+
+void Unite(std::vector<std::size_t>& Parent, std::size_t SlotA, std::size_t SlotB)
+{
+	const std::size_t RootA = FindRoot(Parent, SlotA);
+	const std::size_t RootB = FindRoot(Parent, SlotB);
+	Parent[std::max(RootA, RootB)] = std::min(RootA, RootB);
+}
+
+double CharacteristicLengthM(const Problem& P)
+{
+	double LengthM = 0.0;
+	for (const Joint& J : P.Joints)
+	{
+		for (std::size_t C = 0; C < CornerCount; ++C)
 		{
-			OffsetOfSlot.resize(static_cast<std::size_t>(Id.Index) + 1, -1);
-		}
-		if (!Model.Body(Id).bGrounded)
-		{
-			OffsetOfSlot[Id.Index] = P.DofCount;
-			P.FreeBodies.push_back(Id);
-			P.DofCount += DofPerBody;
+			if (J.OffsetA >= 0)
+			{
+				LengthM = std::max(LengthM, Length(Sub(J.CornerM[C], J.CentroidAM)));
+			}
+			if (J.OffsetB >= 0)
+			{
+				LengthM = std::max(LengthM, Length(Sub(J.CornerM[C], J.CentroidBM)));
+			}
 		}
 	}
-	P.AppliedLoad = Eigen::VectorXd::Zero(P.DofCount);
-	for (const BodyId Id : P.FreeBodies)
+	return LengthM > 0.0 ? LengthM : 1.0;
+}
+
+Eigen::VectorXd RotationalScaling(const Problem& P)
+{
+	const double InverseLengthPerM = 1.0 / CharacteristicLengthM(P);
+	Eigen::VectorXd Scaling = Eigen::VectorXd::Ones(P.DofCount);
+	for (int Offset = 0; Offset < P.DofCount; Offset += DofPerBody)
 	{
-		const BodyDesc& Body = Model.Body(Id);
-		const Vec3 WeightN = Scale(Body.MassKg, Options.Gravity);
-		AddForceAt(P.AppliedLoad, OffsetOfSlot[Id.Index], Body.CentroidM, Body.CentroidM, WeightN);
-		P.ForceScaleN += Length(WeightN);
+		Scaling.segment(Offset + 3, 3).setConstant(InverseLengthPerM);
+	}
+	return Scaling;
+}
+
+std::vector<Problem> BuildProblems(const Structure& Model, std::span<const BodyLoad> Loads, const StandingOptions& Options)
+{
+	const std::vector<BodyId> Bodies = Model.LiveBodies();
+	const std::size_t SlotCount = Bodies.empty() ? 0 : static_cast<std::size_t>(Bodies.back().Index) + 1;
+	std::vector<std::size_t> Parent(SlotCount);
+	for (std::size_t Slot = 0; Slot < SlotCount; ++Slot)
+	{
+		Parent[Slot] = Slot;
+	}
+	const std::vector<InterfaceId> Interfaces = Model.LiveInterfaces();
+	for (const InterfaceId Id : Interfaces)
+	{
+		const InterfaceRecord& Record = Model.Interface(Id);
+		if (!Model.Body(Record.BodyA).bGrounded && !Model.Body(Record.BodyB).bGrounded)
+		{
+			Unite(Parent, Record.BodyA.Index, Record.BodyB.Index);
+		}
+	}
+	std::vector<Problem> Problems(1);
+	std::vector<int> ComponentOfSlot(SlotCount, -1);
+	std::vector<int> OffsetOfSlot(SlotCount, -1);
+	for (const BodyId Id : Bodies)
+	{
+		if (Model.Body(Id).bGrounded)
+		{
+			continue;
+		}
+		const std::size_t Root = FindRoot(Parent, Id.Index);
+		if (ComponentOfSlot[Root] < 0)
+		{
+			ComponentOfSlot[Root] = static_cast<int>(Problems.size());
+			Problems.emplace_back();
+		}
+		ComponentOfSlot[Id.Index] = ComponentOfSlot[Root];
+		Problem& P = Problems[static_cast<std::size_t>(ComponentOfSlot[Id.Index])];
+		OffsetOfSlot[Id.Index] = P.DofCount;
+		P.FreeBodies.push_back(Id);
+		P.DofCount += DofPerBody;
+	}
+	for (Problem& P : Problems)
+	{
+		P.AppliedLoad = Eigen::VectorXd::Zero(P.DofCount);
+		for (const BodyId Id : P.FreeBodies)
+		{
+			const BodyDesc& Body = Model.Body(Id);
+			const Vec3 WeightN = Scale(Body.MassKg, Options.Gravity);
+			AddForceAt(P.AppliedLoad, OffsetOfSlot[Id.Index], Body.CentroidM, Body.CentroidM, WeightN);
+			P.ForceScaleN += Length(WeightN);
+		}
 	}
 	for (const BodyLoad& Load : Loads)
 	{
 		const int Offset = OffsetOfSlot[Load.Body.Index];
 		if (Offset >= 0)
 		{
+			Problem& P = Problems[static_cast<std::size_t>(ComponentOfSlot[Load.Body.Index])];
 			AddForceAt(P.AppliedLoad, Offset, Model.Body(Load.Body).CentroidM, Load.PointM, Load.ForceN);
 			P.ForceScaleN += Length(Load.ForceN);
 		}
 	}
-	for (const InterfaceId Id : Model.LiveInterfaces())
+	for (std::size_t Slot = 0; Slot < Interfaces.size(); ++Slot)
 	{
-		P.Joints.push_back(MakeJoint(Model, Id, OffsetOfSlot));
+		const InterfaceRecord& Record = Model.Interface(Interfaces[Slot]);
+		const int Component = std::max(ComponentOfSlot[Record.BodyA.Index], ComponentOfSlot[Record.BodyB.Index]);
+		Problem& P = Problems[Component < 0 ? 0 : static_cast<std::size_t>(Component)];
+		P.Joints.push_back(MakeJoint(Model, Interfaces[Slot], OffsetOfSlot));
+		P.ReadingSlots.push_back(Slot);
 	}
-	return P;
+	for (Problem& P : Problems)
+	{
+		P.Scaling = RotationalScaling(P);
+	}
+	return Problems;
 }
 
 Eigen::Matrix<double, 3, 6> CornerJacobian(const Vec3& ArmM)
@@ -539,7 +633,16 @@ UpdateOutcome UpdateActiveSet(const Problem& P, const Eigen::VectorXd& X, const 
 	return Outcome;
 }
 
-bool RestoreInadmissibleReleases(const Problem& P, const Eigen::VectorXd& Motion, std::vector<JointState>& States)
+void ReCloseSlipping(const Joint& J, std::size_t C, const Vec3& TangentialMotionM, const Eigen::VectorXd& X, JointState& State)
+{
+	const TrialForces T = Trial(J, C, X);
+	const double CapacityN = SlipCapacityN(J, T.NormalN);
+	State.Status[C] = CornerStatus::Slipping;
+	State.HeldN[C] = HeldForce(Scale(-1.0, TangentialMotionM), CapacityN);
+	State.TransverseNPerM[C] = TransverseStiffnessNPerM(J, T.ShearN, CapacityN);
+}
+
+bool RestoreInadmissibleReleases(const Problem& P, const Eigen::VectorXd& Motion, const Eigen::VectorXd& X, std::vector<JointState>& States)
 {
 	const double ToleranceM = AdmissibilityToleranceRelative * MotionScaleM(P, Motion);
 	bool bRestored = false;
@@ -551,11 +654,17 @@ bool RestoreInadmissibleReleases(const Problem& P, const Eigen::VectorXd& Motion
 		{
 			const Vec3 Delta = RelativeDisplacement(J, C, Motion);
 			const double GapM = Dot(Delta, J.Normal);
+			const Vec3 TangentialM = Sub(Delta, Scale(GapM, J.Normal));
 			const double HeldSizeN = Length(State.HeldN[C]);
 			const bool bCloses = State.Status[C] == CornerStatus::Open && GapM < -ToleranceM;
 			const bool bSlidesWithFriction = State.Status[C] == CornerStatus::Slipping && HeldSizeN > 0.0 &&
-				Dot(Sub(Delta, Scale(GapM, J.Normal)), State.HeldN[C]) > ToleranceM * HeldSizeN;
-			if (bCloses || bSlidesWithFriction)
+				Dot(TangentialM, State.HeldN[C]) > ToleranceM * HeldSizeN;
+			if (bCloses && J.bReleasesSlip)
+			{
+				ReCloseSlipping(J, C, TangentialM, X, State);
+				bRestored = true;
+			}
+			else if (bCloses || bSlidesWithFriction)
 			{
 				State.Status[C] = CornerStatus::Stuck;
 				State.HeldN[C] = Vec3{};
@@ -660,21 +769,22 @@ void FillMechanism(const Problem& P, const Eigen::VectorXd& Motion, StandingResu
 	}
 }
 
-bool SameStatuses(const std::vector<JointState>& A, const std::vector<JointState>& B)
+bool IsAllFinite(const Eigen::MatrixXd& M)
 {
-	for (std::size_t I = 0; I < A.size(); ++I)
-	{
-		if (A[I].Status != B[I].Status)
-		{
-			return false;
-		}
-	}
-	return true;
+	return std::all_of(M.data(), M.data() + M.size(), [](double Value) { return std::isfinite(Value); });
 }
 
-bool WasVisited(const std::vector<std::vector<JointState>>& Visited, const std::vector<JointState>& States)
+int Severity(StandingState State)
 {
-	return std::any_of(Visited.begin(), Visited.end(), [&](const std::vector<JointState>& Each) { return SameStatuses(Each, States); });
+	switch (State)
+	{
+	case StandingState::Stands: return 0;
+	case StandingState::Overstressed: return 1;
+	case StandingState::Mechanism: return 2;
+	case StandingState::Undecided: return 3;
+	case StandingState::InvalidInput: return 4;
+	}
+	return 4;
 }
 
 StandingResult SolveProblem(const Problem& P, const StandingOptions& Options)
@@ -689,37 +799,42 @@ StandingResult SolveProblem(const Problem& P, const StandingOptions& Options)
 		Result.State = bOverstressed ? StandingState::Overstressed : StandingState::Stands;
 		return Result;
 	}
-	std::vector<std::vector<JointState>> Visited{States};
+	const auto D = P.Scaling.asDiagonal();
 	for (int Iteration = 1; Iteration <= Options.MaxActiveSetIterations; ++Iteration)
 	{
 		Result.ActiveSetIterations = Iteration;
-		const Eigen::VectorXd Load = AssembleLoad(P, States);
-		const Factorisation F = Factorise(AssembleStiffness(P, States), Options.PivotToleranceRelative);
+		const Eigen::VectorXd Load = D * AssembleLoad(P, States);
+		const Eigen::MatrixXd K = D * AssembleStiffness(P, States) * D;
+		if (Iteration == 1 && !IsAllFinite(K))
+		{
+			Result.State = StandingState::InvalidInput;
+			return Result;
+		}
+		const Factorisation F = Factorise(K, Options.PivotToleranceRelative);
 		std::vector<Eigen::VectorXd> NeutralMotions;
 		if (F.Rank < P.DofCount)
 		{
-			NeutralMotions = NullBasis(F);
-			const Eigen::VectorXd Motion = ProjectOntoSpan(NeutralMotions, Load);
-			if (!(Motion.norm() <= NeutralLoadToleranceRelative * Load.norm()))
+			const std::vector<Eigen::VectorXd> Basis = NullBasis(F);
+			const Eigen::VectorXd Projection = ProjectOntoSpan(Basis, Load);
+			if (!(Projection.norm() <= NeutralLoadToleranceRelative * Load.norm()))
 			{
-				std::vector<JointState> Restored = States;
-				if (!RestoreInadmissibleReleases(P, Motion, Restored))
+				const Eigen::VectorXd Motion = D * Projection;
+				X = D * SolveInRange(F, Load);
+				if (!RestoreInadmissibleReleases(P, Motion, X, States))
 				{
 					Result.Readings = ReadAll(P, States, X, bOverstressed);
 					Result.State = StandingState::Mechanism;
 					FillMechanism(P, Motion, Result);
 					return Result;
 				}
-				if (WasVisited(Visited, Restored))
-				{
-					break;
-				}
-				Visited.push_back(Restored);
-				States = Restored;
 				continue;
 			}
+			for (const Eigen::VectorXd& V : Basis)
+			{
+				NeutralMotions.push_back(D * V);
+			}
 		}
-		X = SolveInRange(F, Load);
+		X = D * SolveInRange(F, Load);
 		std::vector<JointState> Next = States;
 		const UpdateOutcome Outcome = UpdateActiveSet(P, X, NeutralMotions, Next);
 		if (!Outcome.bStatusChanged && Outcome.bHeldSettled)
@@ -728,18 +843,39 @@ StandingResult SolveProblem(const Problem& P, const StandingOptions& Options)
 			Result.State = bOverstressed ? StandingState::Overstressed : StandingState::Stands;
 			return Result;
 		}
-		if (Outcome.bStatusChanged)
-		{
-			if (WasVisited(Visited, Next))
-			{
-				break;
-			}
-			Visited.push_back(Next);
-		}
 		States = Next;
 	}
 	Result.Readings = ReadAll(P, States, X, bOverstressed);
 	Result.State = StandingState::Undecided;
+	return Result;
+}
+
+StandingResult SolveComponents(const std::vector<Problem>& Problems, std::size_t InterfaceCount, const StandingOptions& Options)
+{
+	StandingResult Result;
+	Result.State = StandingState::Stands;
+	Result.Readings.resize(InterfaceCount);
+	for (const Problem& P : Problems)
+	{
+		const StandingResult Component = SolveProblem(P, Options);
+		if (Component.State == StandingState::InvalidInput)
+		{
+			StandingResult Invalid;
+			Invalid.State = StandingState::InvalidInput;
+			return Invalid;
+		}
+		if (Severity(Component.State) > Severity(Result.State))
+		{
+			Result.State = Component.State;
+		}
+		for (std::size_t K = 0; K < P.ReadingSlots.size(); ++K)
+		{
+			Result.Readings[P.ReadingSlots[K]] = Component.Readings[K];
+		}
+		Result.Mechanism.insert(Result.Mechanism.end(), Component.Mechanism.begin(), Component.Mechanism.end());
+		Result.UnconstrainedBodies.insert(Result.UnconstrainedBodies.end(), Component.UnconstrainedBodies.begin(), Component.UnconstrainedBodies.end());
+		Result.ActiveSetIterations = std::max(Result.ActiveSetIterations, Component.ActiveSetIterations);
+	}
 	return Result;
 }
 
@@ -756,7 +892,7 @@ public:
 			Result.InvalidInterface = Offending;
 			return Result;
 		}
-		return SolveProblem(BuildProblem(Model, Loads, Options), Options);
+		return SolveComponents(BuildProblems(Model, Loads, Options), Model.LiveInterfaces().size(), Options);
 	}
 };
 }

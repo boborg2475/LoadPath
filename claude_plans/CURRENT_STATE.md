@@ -21,18 +21,26 @@ question decided and §10 carries the slice-2 rulings.
 ## Next
 
 1. Close the slice-2a review (findings and the rulings that answer them are in API.md "Slice 2",
-   DESIGN §10 2026-10-11 and the review-round tests `Statics.Solver.*` T1–T11):
-   - a squat dry block past both thresholds reads Undecided (restore re-closes open corners
-     stuck, which re-open; ruling: restored corners re-enter slipping on a dry joint);
-   - status-only cycle detection turns decided answers into Undecided (ruling: remove it);
-   - verdicts depend on unrelated bodies through a global, unit-mixing pivot tolerance (ruling:
-     per-component solves with rotational scaling by the component's characteristic length);
-   - readings on a Mechanism come from a stale or zero displacement (ruling: range-space
-     solution of the last active set, per component);
-   - options are not validated (NaN pivot tolerance reads Mechanism; ruling: InvalidInput);
+   DESIGN §10 2026-10-11 and the review-round tests `Statics.Solver.*` T1–T11). The five
+   red review-round cases are green in Debug and Release (restored corners re-close slipping on
+   a dry joint, no status-only cycle detection, per-component solves with rotational scaling,
+   range-space readings on a mechanism component, options and assembled stiffness validated;
+   uncommitted at the time of writing). Still open:
    - unpinned declared behaviour: re-stick, the open-corner restore, the transverse tangent
      magnitude, the slip-capacity clamp in tension, `UnconstrainedBodies`' negative side, Axis
-     None on a zero-force interface; weak `!=` assertions and sign-blind shape helpers.
+     None on a zero-force interface; weak `!=` assertions and sign-blind shape helpers;
+   - unpinned in the review-round fix: a re-closed slipping corner's held magnitude and
+     direction (mutating its capacity to 0 keeps all 107 cases green), its transverse tangent
+     (`kt · capacity / |trial S|` from the range field, which can exceed `kt` against API.md's
+     "never above kt"; a clamp was tried and nothing bites it, so it was left out), and the
+     mechanism component's range-space readings (only the standing component's are asserted);
+   - the ruling "an assembled load that is not finite is InvalidInput" contradicts
+     `Statics.Solver.LoadsThatOverflowReadInfiniteUtilisationAndNeverStand`, whose two finite
+     -1e308 loads sum to -inf in the assembled load and which asserts `State != InvalidInput`.
+     Only the assembled stiffness is checked (first pass, per component); the orchestrator
+     decides which side moves;
+   - a component that is InvalidInput through its assembled stiffness returns InvalidInput for
+     the whole solve with `InvalidInterface` unset (no interface is named).
    Then re-review.
 2. Slice 2b, the remaining slice-2 anchors (BENCHMARKS groups 2 and 3): B-WAL-03 (wall slides at
    λ = μ), B-STK-04 (constant-step stack), B-WDG-02, B-ROK-02, F-CHC-01, F-LIB-01/02, F-EMI-01,
@@ -67,16 +75,18 @@ question decided and §10 carries the slice-2 rulings.
   `IsOverstressed`, which looks unreachable because `Ratio` already maps a non-finite ratio to
   +inf and a NaN corner force trips compression; the determinate side of the indeterminate-gap
   rule (a mutant that keeps every open corner open in any neutral solve survives).
-- Undecided probe results (dev-expert and review, 2026-10-11; 8,445- and 3,366-solve grids over
-  a single brick, bridges and stacks at bonded, μ 5 and μ 0.6): two causes, both under "Next" 1.
-  The 30 single-brick μ 0.6 cases are the open-corner restore re-closing stuck (118 grid verdicts
-  flip Undecided → Mechanism when that half of restore is removed, no decided verdict changes);
-  the μ 5 single-brick and stack cases are status-only cycle detection (removing it recovers 40
-  of 109 Undecided on the review grid, every one to the right verdict). The projected motion is
-  also not unit-invariant (it mixes m with rad); the per-component rotational scaling in API.md
-  addresses the tolerance side of that, and the restore ruling the cycling side. If the 2b
-  anchors still cycle after both, the next step is a search of the admissible cone rather than
-  one projected direction.
+- Undecided probe results: the two causes found on 2026-10-11 (open corners re-closed stuck,
+  status-only cycle detection) are fixed. A single brick at μ 0.6 and μ 5 over λx 0..4 ×
+  λy 0..2 (step 0.125, 561 solves each) went from 30 + 8 Undecided to 0, and the Stands counts
+  (22 and 351) match the rigid-block answer exactly. The bridge and stack grids (8,445 and 3,366
+  solves) were not re-run; do that before 2b. If the 2b anchors still cycle, the next step is a
+  search of the admissible cone rather than one projected direction.
+- On the same μ 0.6 grid, 25 biaxial points just past the sliding threshold (for example
+  λ = (0.625, 0.5)) read Mechanism with a twist about z and a translation off the load line,
+  before and after the review-round fix. For a block whose corners all slip, the centre of
+  pressure lies on the load line, so the collapse mode is a pure translation; the reported motion
+  is a null vector of an intermediate active set with some corners still stuck. The verdict is
+  right, the shape is not the collapse mode, and no test asserts it.
 - The held-force magnitude loop still converges at roughly μ per pass where friction at one
   joint sets the normal force at another: the brick pushed into a wall takes 22 passes at
   μ = 0.3, 37 to 38 at μ = 0.5 and hits the 50-pass cap at μ = 0.7, λ = 0.8, matching
