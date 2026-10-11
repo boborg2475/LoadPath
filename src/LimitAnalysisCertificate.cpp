@@ -1248,16 +1248,16 @@ bool SolveSelection(const Selection& Sel, const CertificateOptions& Options, Eig
 		Pr.H(RowCount - 1) = Sel.OpeningBound;
 	}
 	Pr.Cost = Eigen::VectorXd::Zero(2 * N);
-	Pr.Cost.tail(N).setOnes();
+	Pr.Cost.head(N) = -Sel.C->Demand;
 	Pr.Work = Eigen::VectorXd::Zero(2 * N);
-	Pr.Work.head(N) = Sel.C->Demand;
+	Pr.Work.tail(N).setOnes();
 	SelectionState X;
 	X.Z = Eigen::VectorXd::Zero(2 * N);
 	X.S = Eigen::VectorXd::Ones(RowCount);
 	X.L = Eigen::VectorXd::Ones(RowCount);
 	const double Tolerance = Options.FeasibilityTolerance;
 	const double BoundScale = 1.0 + Sel.OpeningBound;
-	const double WorkScale = 1.0 + LargestMagnitude(Pr.Work.data(), Pr.Work.size());
+	const double WorkScale = 1.0 + LargestMagnitude(Pr.Cost.data(), Pr.Cost.size());
 	const double PairCount = static_cast<double>(RowCount + 1);
 	for (int Iteration = 0; Iteration <= Options.MaxIterations; ++Iteration)
 	{
@@ -1333,11 +1333,14 @@ ComponentVerdict DecideComponent(const Component& C, const CertificateOptions& O
 		const double Circumscribed = 1.0 / std::cos(Pi / static_cast<double>(Options.ConeGenerators));
 		const Outcome Outer = SolveProgram(C, BuildProgram(C, Options.ConeGenerators, Circumscribed, Options.LoadFactorCap, false), Options);
 		V.Iterations = std::max(V.Iterations, Outer.Iterations);
-		if (!Outer.bConverged)
+		if (Outer.bConverged)
+		{
+			OuterLoadFactor = Outer.LoadFactor;
+		}
+		else if (!(Inner.LoadFactor >= 1.0))
 		{
 			return V;
 		}
-		OuterLoadFactor = Outer.LoadFactor;
 	}
 	V.Lower = Inner.LoadFactor;
 	V.Upper = std::max(OuterLoadFactor, Inner.LoadFactor);
@@ -1351,10 +1354,10 @@ ComponentVerdict DecideComponent(const Component& C, const CertificateOptions& O
 		Eigen::VectorXd Velocity = Inner.Y;
 		if (Inner.LoadFactor < Options.FeasibilityTolerance)
 		{
-			Eigen::VectorXd Selected;
-			if (SolveSelection(BuildSelection(C, InnerProgram, Options.FeasibilityTolerance), Options, Selected))
+			if (!SolveSelection(BuildSelection(C, InnerProgram, Options.FeasibilityTolerance), Options, Velocity))
 			{
-				Velocity = Selected;
+				V.State = CertificateState::Undecided;
+				return V;
 			}
 		}
 		FillMechanism(C, Velocity, V);

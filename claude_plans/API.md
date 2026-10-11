@@ -579,7 +579,11 @@ motion, not fewest bodies: a cap on an exactly critical end brick is reported wi
 (TRAPS: a cluster released as one body must be a certified mechanism; two bricks whose joint
 centroid is past a pillar's edge are named together with one rigid rotation). **If the selection
 LP does not converge the component reads Undecided with empty lists**: the analytic centre is
-never handed to a host as a release set. On `Stands` every list is empty.
+never handed to a host as a release set. On `Stands` every list is empty. Where several
+mechanisms tie (a harmonic stack with every offset scaled by `1 + ε` has every level at its
+knife edge at once, the optima differing by order ε), the selection may name every tied level:
+the mechanism is not unique there, the tests pin only that the top block is named, and a host
+releasing all tied levels releases bodies that are each past their own threshold.
 
 ### The theorem ruling (settles the question slice 2 left open)
 

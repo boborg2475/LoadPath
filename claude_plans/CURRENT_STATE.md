@@ -45,26 +45,45 @@ the `Deferred.Slice4` tier holds 3 cases red by design. The design brief
    - The two 4a-review rulings are implemented and green, not yet reviewed: the inner strength
      region on the inscribed solve (`T' = min(ft, c/μ)`, cohesion `c − μT'`; the hull stays on
      the circumscribed one), and mechanism selection at `t_in` under tolerance. The selection is
-     a second HSD Mehrotra on the 6n velocity normal equations: minimise `Σ|y|` subject to
-     `gᵀ v_corner(y) ≤ 0` for every generator of every inscribed group (`w_G = 0`: every
-     dissipation term is non-negative, so zero dissipation forces each to zero, and the
-     `Bound·w` form was ill-posed at Bound ≈ 1e7), `−offsetᵀ y ≤ tol` when any tension offset
-     exists, and `Demandᵀ y = 1`. It falls back to the analytic-centre mechanism when it does
-     not converge. Open: 4 of the ~1,026 selections in the default suite hit the 200-iteration
-     cap (τ → 0, objective 1e6 to 1e7: an almost-empty zero-dissipation face), falling back and
-     costing 800 iterations; an early infeasibility exit would save that. No test covers
-     selection on a bonded component (the opening row). API.md's body text does not yet reflect
-     either ruling.
+     a second HSD Mehrotra on the 6n velocity normal equations, now in the motion-normalised
+     form of API.md: maximise `Demandᵀ y` subject to `Σ u = 1`, `±y ≤ u`, `gᵀ v_corner(y) ≤ 0`
+     per inscribed generator, and `−offsetᵀ y ≤ tol` when any tension offset exists. A
+     selection that does not converge reads Undecided with empty lists (the analytic-centre
+     fallback is gone), and `Stands` survives a failed circumscribed solve with
+     `LoadFactorUpper = LoadFactorCap`. `CoursedFreeWallHingesAtTheBase` (0.19 s Debug, was
+     1.2 s) and the 30-course wall at `λ(1 + 1e-4)` (30 moving, 1 hinge) now select correctly;
+     no selection in the default suite hits the iteration cap. The selection gate is still
+     `t_in < 1e-9` (FeasibilityTolerance), not API.md's 1e-6: every selection in the suite runs
+     at `t_in ≤ 3e-10`, so no test drives the change. No test covers selection on a bonded
+     component (the opening row). Open:
+     - `SelectionFailureIsUndecidedNotAnOverRelease` is red. The selection converges on the
+       2-brick harmonic stack at `1 + 1e-6` (10 iterations) but its optimum is 3.7e-7 work per
+       unit motion against a termination gap of 2.9e-11, so the interior point returns a mix
+       with the lower brick at about 4e-5 relative, above the 1e-6 listing threshold: Collapses
+       naming both bricks. Probes: harmonic stacks n = 2..6 at margin 1e-6 all read Collapses
+       naming every brick; at 1e-8, n = 2 reads Undecided (selection fails) and n = 3..6 read
+       Collapses naming every brick (optimum 1e-9, below the gap). Every level of a scaled
+       harmonic stack is critical at once, so the candidate mechanisms differ in work per motion
+       by O(margin). Tried and rejected: gap relative to the objective (dual residual degrades
+       to 3e-7 past iteration 10, never terminates); a second solve with the cost rescaled by
+       1/optimum (τ → 0, 4 failures, breaks HarmonicStack...CollapsesBeyond); failing the
+       selection when gap > 1e-6 × optimum (breaks SingleBrickTips, a one-body component).
+       Needs a ruling: a crossover/purification step that identifies the optimal vertex, or a
+       support-resolvability rule that reads Undecided only when an alternative body sits in
+       the uncertainty band.
+   - `t_out` ruling open (API.md "Solver"): it is today the circumscribed converged primal value;
+     an upper bound needs dual feasibility, so it should arguably be the dual objective `bᵀy / τ`.
+     No test distinguishes the two yet.
    - Severity Undecided > Collapses: a structure with one Collapses and one Undecided component
      reads Undecided while `LoadFactorUpper < 1`. The single-component tests pin
      `(State == Collapses) == (Upper < 1)`; decide which way multi-component results go.
    - Unpinned choices: HingingInterfaces is kinematic (an interface whose corner relative
      velocity in the inscribed mechanism exceeds 1e-6 of the component's fastest corner);
      mechanism lists are filled on Collapses only, not on Undecided; non-convergence reports
-     Undecided with `[0, cap]`; a free body with no interface reads Collapses at t = 0 through the
+     Undecided with `[0, cap]` unless `t_in ≥ 1`; a free body with no interface reads Collapses at t = 0 through the
      regularised refactor (pinned by the review-round mechanics test).
    - Debug runtime: the default suite is 7.3 s in Debug (1.25 s Release), of which the mechanism
-     selection LP adds about 3 s (4.3 s before it); `CoursedFreeWallHingesAtTheBase` is 1.2 s
+     selection LP adds about 3 s (4.3 s before it); `CoursedFreeWallHingesAtTheBase` is now 0.19 s
      and `Certificate.Oracle.SingleBrickGrid` 1.1 s in Debug. Most of it is Eigen LLT factor
      and solve in Debug. Options: a `Slow.` prefix or a
      Debug-sized grid for that case, or a hand-written dense Cholesky.
