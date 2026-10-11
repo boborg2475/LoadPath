@@ -867,11 +867,11 @@ entry is `InvalidInput` (the authority's rule). Then, with `Pass = HighestPass()
 
 `FirstPass` is `HighestPass() + 1` at entry and `LastPass` the last counted pass; every counted
 pass ends with `MarkPass(Pass)`, so a release that wrote no stamp (a free body, a body whose
-last joints a neighbour severed) still advances the structure.s counter and a later run never
+last joints a neighbour severed) still advances the structure's counter and a later run never
 reuses a pass number; a run that changed nothing has `LastPass = FirstPass − 1` and
 `Passes = 0`. The counter is saved: the file writes `highest_pass` and the reader takes the
 larger of that field and the stamps it reads, so a reloaded structure continues numbering.
-`Sever` refuses a pass below the joint.s `CrackPass` (the file reader refuses the same), and
+`Sever` refuses a pass below the joint's `CrackPass` (the file reader refuses the same), and
 `Run` reads `InvalidInput` when `HighestPass()` is `UINT32_MAX` (the counter cannot advance).
 
 **The structure file carries state** (slice 1b format, extended here): every interface whose

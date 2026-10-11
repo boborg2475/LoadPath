@@ -7,66 +7,74 @@ Deferring something? Add it here with enough context to pick up cold.
 
 Repository scaffolded: CMake + Visual Studio 2022 generator, vendored doctest 2.4.11 and Eigen
 3.4.0, the compiler contract (no exceptions, no RTTI, `/W4 /WX`, `/fp:precise`) enforced.
-Slice 1 (the model: handles, profiles, bodies, interfaces, validation, removal), slice 1b (JSON
-structure reader/writer, `RunCli`, the `loadpath_cli` binary), slice 2a (the standing
-authority), slice 4a (the limit-analysis collapse certificate) and slice 4b (the combined
-authority, the shear cap in the LP, the kinematic anchors) are committed and reviewed, every
-green-on-arrival row proven by a recorded mutation (commit messages). Slice 2a: `IStandingAuthority`,
-the RBSM corner-spring implementation with per-component Schur-pivoted dense LDLT solves and the
-free active set, under the narrowed contract of DESIGN §10 (it certifies Stands and
-Overstressed, reports Mechanism as a verdict, and fails closed to Undecided rather than guess).
-Slice 4a: `ICollapseCertificate`, the inscribed/circumscribed limit-analysis LP with the
-homogeneous self-dual interior point and mechanism selection. Slice 4b: `IStructuralAuthority`
-(`MakeCombinedAuthority`), one call per structure that solves every component with the elastic
-authority and referees its Mechanism and Undecided components with the certificate, counting
-disagreements and releasing only what the certificate lists; `MaxShearStrengthPa` as per-corner
-facet rows (cap 0 is a cap); the Couplet–Heyman arch pinned exactly at Milankovitch's 0.107478
-with hinges at 0°, ±54°, ±54.484°, ±90° (the sliver lists both joints) and its friction switch, the Orduña pile at λ 0.5005, the
-3DEC wedge at the certificate's associative 31.07°. Default suite 176 cases in Debug (12,333
-assertions, about 10 s) and 180 in Release (35,376 assertions, 4 s; the four arch and pile
-anchors run only there under `LOADPATH_SLOW_IN_DEBUG`); the `Deferred.Slice7` tier holds the one
-physical wedge pin, red by design. The design brief ([DESIGN.md](DESIGN.md)) has every §9
-question decided and §10 carries the slice-2, 4a and 4b rulings.
+Slices 1 (the model), 1b (JSON structure file, `RunCli`, `loadpath_cli`), 2a (the elastic
+standing authority), 4a (the limit-analysis collapse certificate), 4b (the combined authority,
+the shear cap, the kinematic anchors) and 3 (the cascade) are committed and reviewed, every
+green-on-arrival row proven by a recorded mutation (commit messages and ANCHORS). The engine
+of DESIGN §8 slices 1 to 3 therefore exists end to end: `IStandingAuthority` (RBSM corner
+springs, per-component Schur-pivoted LDLT, free active set, Stands/Overstressed certified,
+Mechanism a verdict, Undecided fail-closed), `ICollapseCertificate` (inscribed/circumscribed
+LP, homogeneous self-dual interior point, mechanism selection, shear-cap facet rows),
+`IStructuralAuthority` (every component solved alone by the elastic authority, Mechanism and
+Undecided refereed by the certificate, disagreements counted, the certificate's list the only
+release set) and `ICascade` (judge, release certified clusters severing their boundary, crack
+the top band of over-capacity bonded joints, repeat; pass stamps and a pass counter on the
+structure, carried by the file; cracked joints read dry through `EffectiveProfile`; per-axis
+utilisations in every reading). Anchors pinned from the literature: inclines, Housner, walls,
+Itasca slope regimes, harmonic stacks, Paterson–Zwick, Couplet–Heyman at Milankovitch's
+0.107478 with hinges at 0°, ±54°, ±54.484°, ±90° and its 21°/22° friction switch, the Orduña
+pile at λ 0.5005, the 3DEC wedge at the certificate's associative 31.07°, and the cascade on the
+arch below least thickness (six voussoir runs between the seven Heyman hinges). Default suite
+216 cases in Debug (13,192 assertions, about 12 s) and 221 in Release (36,776 assertions, 7 s
+with the build; the arch, pile and arch-cascade anchors run only there under
+`LOADPATH_SLOW_IN_DEBUG`); the `Deferred.Slice7` tier holds the one physical wedge pin, red by
+design. The design brief ([DESIGN.md](DESIGN.md)) has every §9 question decided and §10
+carries the slice-2, 3, 4a and 4b rulings.
 
 ## Next
 
-1. Slice 4b (API.md "Slice 4b", DESIGN §10): **done** after three reviews (2026-10-11). Open
-   items it leaves, none host-unsafe (the unsafe one, the wedge band, is under Deferred):
-   - the mechanism selection ignores finite positive shear caps (harmless at `t* = 0`, the prism
-     contains the origin; for `0 < t* < 1e-9`, a cap near 1e-9 Pa, it reads Undecided, which
-     fails closed);
+1. Slice 3, the cascade (API.md "Slice 3", DESIGN §10): **done** after two reviews and a
+   follow-up (2026-10-11). Open items it leaves, with the slice-4b ones, none host-unsafe (the
+   unsafe one, the wedge band, is under Deferred):
+   - the overflow guard (`HighestPass() == UINT32_MAX` → InvalidInput) runs only at entry; a run
+     starting at `UINT32_MAX − 1` that needs two counted passes computes pass 0 on the second,
+     where Crack/Sever/MarkPass refuse and a release removes bodies with no stamp or record;
+     practically unreachable, the fix is the same guard at the top of the loop; the
+     InvalidInput verdict at the limit also reports `FirstPass 0, LastPass UINT32_MAX`
+     (cosmetic, computed before the guard);
+   - the cap re-judge returning InvalidInput leaves `PassCapReached` with empty readings and
+     components (fails closed, undocumented);
+   - the file reader's own `crack_pass ≤ sever_pass` check is now masked by `Sever` refusing
+     the same (defence in depth, no test fails without it);
+   - a severed joint's `FailedInterface` axis and ratio are the elastic reading's, which on a
+     mechanism means little (the arch crown hinge reads `Compression 2.4e-5`); derive the axis
+     from the certificate's hinge motion (opening = Tension, slip = Shear) or pin the current
+     behaviour; a mutant that always writes `None` survives the suite;
+   - the arch's two 0.484° slivers are released as single-voussoir clusters; whether a hinge
+     needs a minimum rotation is still open, and this is the measurement against it;
+   - the mechanism selection ignores finite positive shear caps (harmless at `t* = 0`; for
+     `0 < t* < 1e-9` it reads Undecided, which fails closed);
    - the combined authority copies the structure for EVERY component (RemoveBody scans every
-     interface per call, so building the sub-structures is O(C · B · I)) and solves every
-     structure twice (the whole for readings, then the sum of its parts): slice 6 exposes the
-     RBSM's per-component states instead, removing the copies and the second solve;
+     interface per call, O(C · B · I)) and solves every structure twice; the cascade's scans
+     are quadratic (`IndexOf`/`Contains`, union-find without path compression, the release
+     scanning every interface per cluster, `FindReading` O(I) per sever, the crack band
+     O(K·I·|component|)): slice 6 exposes the RBSM's per-component states and indexes these;
    - two InvalidInput branches in CombinedAuthority.cpp are unreachable today (a sub-solve
-     InvalidInput, since the RBSM already fails the whole solve; a per-component certificate
-     InvalidInput, since options are validated up front and the load checks match): both fail
-     closed, untested; pin with a fake authority or add the API line on how a certificate
-     InvalidInput maps;
-   - a cap-0 corner on the inscribed side still uses the inner tension offset min(ft, c/μ)
-     although it has no cone or cohesion set: conservative (wider Undecided band), not unsafe;
-     use ft there when a test asks for it;
-   - the arch sliver (0.484° between 54° and 54.484°) lists both joints as hinging below least
-     thickness, a selection mixture; if slice 3 severs every hinging interface the sliver
-     drops out as its own body, so slice 3 decides whether a hinge needs a minimum rotation;
-   - B-ARC-09, the voussoir-count sweep, is not pinned: expect convergence to 0.107478 from
-     at or below (BENCHMARKS row rewritten 2026-10-11), cheap in Release;
-   - the LP and the RBSM ignore `InterfaceState` (Cracked/Severed carry no reduced strength
-     yet); slice 3 decides what a cracked joint keeps;
-   - the reverse hinge property only checks that a cluster of listed bodies touches a hinge; a
-     stronger form (every interface between a listed and an unlisted or grounded body hinges)
-     is untested;
-   - the pile anchor runs on a reconstructed bond (five 0.2 × 0.4 blocks per course, two
-     mirrored tilings, bed joints only); verify against the paper's figure when it can be read
-     and tighten the assertion to the published bracket if the layout matches;
-   - the 4a items still open: the selection gate is `FeasibilityTolerance` (largest dry `t_in`
-     seen 5.5e-10); `t_out` is the circumscribed converged primal, not the dual objective;
-     `Iterations` excludes the selection solve's count; HiGHS stays slice 7's referee question.
-   Next slice by DESIGN §8: slice 3, the cascade (top-band cracking, severing, pass stamps,
-   released bodies grouped into clusters; the verdict type is complete there) unless the owner
-   reorders; the remaining slice-2 anchors (item 2) can
-   run alongside it.
+     InvalidInput; a per-component certificate InvalidInput): fail closed, untested;
+   - a cap-0 corner on the inscribed side still uses the inner tension offset min(ft, c/μ):
+     conservative, not unsafe;
+   - the reverse hinge property only checks that a cluster of listed bodies touches a hinge;
+   - the pile anchor runs on a reconstructed bond (bed joints only); verify against the paper's
+     figure when it can be read;
+   - B-ARC-09, the voussoir-count sweep, is not pinned (expect convergence to 0.107478 from at
+     or below);
+   - the 4a items still open: the selection gate is `FeasibilityTolerance`; `t_out` is the
+     circumscribed converged primal, not the dual objective; `Iterations` excludes the
+     selection solve's count; HiGHS stays slice 7's referee question.
+   Next slice by DESIGN §8: slice 5, the catalogue and fixtures (brick, mortar, perpend, C24
+   timber, nail, screw, bolt with citations and the MPa → Pa loader with its test; a
+   running-bond wall generator; the structural fuzz with its oracle), unless the owner
+   reorders; the remaining slice-2 anchors (item 2) can run alongside it.
 2. Slice 2b, the remaining slice-2 anchors (BENCHMARKS groups 2 and 3): B-WAL-03 (wall slides at
    λ = μ), B-STK-04 (constant-step stack), B-WDG-02, B-ROK-02, F-CHC-01, F-LIB-01/02, F-EMI-01,
    the 5-diamond (hits the 50-pass cap today, logged below), and the arch and pile rows that
@@ -146,7 +154,7 @@ question decided and §10 carries the slice-2, 4a and 4b rulings.
     the division lands within ulps of one). Neither can be driven red by a test.
 - Structure file, open rulings from the 1b review (2026-10-11; the format now carries state,
   stamps and an optional interface name, slice 3): the reader rejects an unknown state string,
-  a non-integer pass and a stamp/state mismatch, and none of those rejection paths has a test.
+  a non-integer pass and a stamp/state mismatch (a ten-row table pins them).
   A non-object array element (`"bodies": [3]`) is refused with a misleading `missing name`
   message rather than "not an object" (fails closed, unpinned). Any duplicate in a caller-built
   name vector, generated or explicit, writes a file the reader refuses. A UTF-8 BOM is refused
@@ -197,21 +205,3 @@ question decided and §10 carries the slice-2, 4a and 4b rulings.
   make the two bridge `Statics.Combined.ThreeBrickBridge*` cases CHECK `Oracle == CanStand` as a
   precondition (`MakeBridge(5.0, 0.12, 0.0)` at (2.5, 0.875), (2.375, 0.875), (2.25, 0.875)
   reads CanStand with inner residual about 1e-16 at μ 5 and 3.5).
-- Slice 3 items left open by its first review (2026-10-11), none host-unsafe:
-  - a severed joint's `FailedInterface` axis and ratio come from the elastic reading, which on
-    a mechanism means little (the arch crown hinge reads `Compression 2.4e-5`); derive the axis
-    from the certificate's hinge motion (opening = Tension, slip = Shear) or pin the current
-    behaviour; a mutant that always writes `None` survives the suite today;
-  - the arch's two 0.484° slivers are released as single-voussoir clusters (bodies 14 and 51 of
-    the 62-voussoir fixture); the open question whether a hinge needs a minimum rotation now
-    has this measurement against it;
-  - cascade scans are quadratic (`IndexOf`/`Contains` linear, union-find without path
-    compression, the release scanning every interface per cluster, `FindReading` O(I) per
-    sever, the crack band O(K·I·|component|), about 84M comparisons per pass at warehouse
-    scale): slice 6;
-  - the file writer's interface loop stops on a dead-record sentinel (`BodyA.Generation == 0`,
-    generation `1u` hard-coded); a slot-count or `IsKnown` accessor on `Structure` would make
-    it explicit;
-  - interface names are not checked for duplicates on load, unlike body and profile names;
-  - a file may carry a stamp near `UINT32_MAX`; `Run` then reads InvalidInput (ruled), the
-    reader itself does not cap.
