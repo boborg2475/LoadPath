@@ -158,6 +158,11 @@ its two designs, which should be read, not copied:
 - Doubles throughout. Ordered reductions, no float atomics.
 - The public API is plain structs, integer handles and spans. Linear algebra stays behind the
   API (§9 decides the library).
+- **Anything that may change sits behind an interface with swappable implementations** (owner,
+  2026-10-10): the standing authority, the collapse search, the linear solver, the contact
+  finder, the structure file reader. Tests run against the interface, so a second
+  implementation inherits the suite, and two implementations can be run side by side as each
+  other's referee.
 - Comments: headers only, one or two sentences (CLAUDE.md).
 
 ## 8. Build order (proposed)
@@ -191,9 +196,15 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
 | 5 | STL in the public API | Yes, `std::span` and `std::vector` of plain structs; Unreal consumes them fine in a third-party module |
 | 6 | Structure file format for the CLI and fixtures | JSON, hand-written reader, no dependency |
 | 7 | License | Owner's call; nothing is published yet |
+| 8 | Friction flow rule when more than one joint slides | Non-associative (real friction: sliding does not lift the block), reported with the associative bound beside it in tests; see the benchmark report's flow-rule section |
 
 ## 10. Rulings
 
 - *2026-10-10, owner:* 3D from the start. No piece-internal failure. Unreal with Chaos is the
   eventual host. Same TDD and three-agent process as the old project. Comments in headers only,
   one or two sentences. Agents run on Opus 5.5 at high effort unless told otherwise.
+- *2026-10-10, owner:* every component that may change (solver above all) is an interface with
+  swappable implementations.
+- *2026-10-10, owner:* known-answer scenarios from published closed forms and experiments are
+  the first test anchors; a fuzz oracle comes later, for topological coverage only. The
+  catalogue is `reports/Rigid block benchmark scenarios.md`, distilled into BENCHMARKS.md.

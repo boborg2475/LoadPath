@@ -14,6 +14,12 @@ green through `Scripts/Test.ps1`. No production code exists. The design brief
 
 1. Owner reviews DESIGN.md §9 (name, units, unit types, linear algebra, API STL use, file
    format, license) and rules.
+1b. Distil `reports/Rigid block benchmark scenarios.md` (2026-10-10, five research notes under
+   `research_notes/`) into `claude_plans/BENCHMARKS.md`: one row per anchor with inputs, the
+   pinned number, the assumptions tag and the source, in the report's adoption order (seven
+   exact anchors first, then the friction switches, then the flow-rule set, then experiments
+   as bracket tests, then bonded-joint anchors). Each row becomes a test in slices 2–5. Owner
+   picks the tier-1 set before slice 2 starts.
 2. Slice 1, the model (DESIGN §8): bodies, interfaces, profiles, generational handles,
    fail-closed validation. First red: a two-body structure refuses a degenerate normal.
 3. `Scripts/Test.ps1` excludes a `Slow.` prefix from the default run once the first slow test
