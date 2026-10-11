@@ -3,6 +3,7 @@
 #include "loadpath/Units.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <limits>
 #include <numeric>
@@ -217,7 +218,8 @@ bool CrackBand(Structure& Model, const AuthorityResult& Judged, std::uint32_t Pa
 			{
 				continue;
 			}
-			const bool bTensionGoverns = !(Reading.TensionUtilisation < Reading.ShearUtilisation);
+			const bool bTensionGoverns = std::isnan(Reading.TensionUtilisation) ||
+				(!std::isnan(Reading.ShearUtilisation) && !(Reading.TensionUtilisation < Reading.ShearUtilisation));
 			const double Ratio = bTensionGoverns ? Reading.TensionUtilisation : Reading.ShearUtilisation;
 			if (Ratio <= 1.0)
 			{
@@ -257,7 +259,7 @@ public:
 		CascadeVerdict Verdict;
 		Verdict.FirstPass = Model.HighestPass() + 1;
 		Verdict.LastPass = Verdict.FirstPass - 1;
-		if (!AreOptionsValid(Options))
+		if (!AreOptionsValid(Options) || Model.HighestPass() == std::numeric_limits<std::uint32_t>::max())
 		{
 			Verdict.State = CascadeState::InvalidInput;
 			return Verdict;
@@ -296,11 +298,23 @@ public:
 				Verdict.State = FinalState(Worst);
 				return Verdict;
 			}
+			Model.MarkPass(Pass);
 			++Verdict.Passes;
 			Verdict.LastPass = Pass;
 			if (Verdict.Passes >= Options.MaxPasses)
 			{
 				Verdict.State = CascadeState::PassCapReached;
+				std::vector<BodyLoad> CapLoads;
+				for (const BodyLoad& Load : Loads)
+				{
+					if (!Contains(ReleasedThisRun, Load.Body))
+					{
+						CapLoads.push_back(Load);
+					}
+				}
+				AuthorityResult Rejudged = Authority->Judge(Model, CapLoads, Options.Authority);
+				Verdict.Readings = std::move(Rejudged.Readings);
+				Verdict.Components = std::move(Rejudged.Components);
 				return Verdict;
 			}
 		}

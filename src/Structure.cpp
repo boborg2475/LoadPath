@@ -197,7 +197,7 @@ bool Structure::Crack(InterfaceId Id, std::uint32_t Pass)
 
 bool Structure::Sever(InterfaceId Id, std::uint32_t Pass)
 {
-	if (Pass == 0 || !IsLive(Id))
+	if (Pass == 0 || !IsLive(Id) || Pass < Interfaces[Id.Index].Record.CrackPass)
 	{
 		return false;
 	}
@@ -213,9 +213,14 @@ std::uint32_t Structure::HighestPass() const
 	return HighestStamp;
 }
 
-bool Structure::MarkPass(std::uint32_t)
+bool Structure::MarkPass(std::uint32_t Pass)
 {
-	return false;
+	if (Pass == 0)
+	{
+		return false;
+	}
+	HighestStamp = std::max(HighestStamp, Pass);
+	return true;
 }
 
 StrengthProfile Structure::EffectiveProfile(InterfaceId Id) const

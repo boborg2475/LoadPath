@@ -551,10 +551,25 @@ public:
 		const JsonValue* Interfaces = nullptr;
 		return Document.Elements("profiles", Profiles) && Document.Elements("bodies", Bodies) &&
 			Document.Elements("interfaces", Interfaces) && Each(Profiles, &Loader::Profile) && Each(Bodies, &Loader::Body) &&
-			Each(Interfaces, &Loader::Interface);
+			Each(Interfaces, &Loader::Interface) && HighestPass(Document);
 	}
 
 private:
+	bool HighestPass(ElementFields& Document)
+	{
+		double Pass = 0.0;
+		if (!Document.Number("highest_pass", Pass, false))
+		{
+			return false;
+		}
+		if (!IsPassNumber(Pass))
+		{
+			return Document.Fail("highest_pass must be a whole number from 0 to 4294967295");
+		}
+		Out.Model.MarkPass(static_cast<std::uint32_t>(Pass));
+		return true;
+	}
+
 	bool Each(const JsonValue* Array, bool (Loader::*Add)(const JsonValue&))
 	{
 		if (Array == nullptr)
@@ -890,7 +905,12 @@ std::string WriteStructure(const LoadedStructure& Loaded)
 			Writer.Number("sever_pass", J.SeverPass);
 		}
 	}
-	Out += "\n  ]\n}\n";
+	Out += "\n  ]";
+	if (Model.HighestPass() > 0)
+	{
+		Out += ",\n  \"highest_pass\": " + std::to_string(Model.HighestPass());
+	}
+	Out += "\n}\n";
 	return Out;
 }
 }

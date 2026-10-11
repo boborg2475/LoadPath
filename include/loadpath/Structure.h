@@ -25,13 +25,13 @@ public:
 
 	// Intact to Cracked, stamping CrackPass; false and no change otherwise or for pass 0.
 	bool Crack(InterfaceId Id, std::uint32_t Pass);
-	// Intact or Cracked to Severed, stamping SeverPass; false and no change otherwise or for pass 0.
+	// Intact or Cracked to Severed, stamping SeverPass; false and no change otherwise, for pass 0 or below CrackPass.
 	bool Sever(InterfaceId Id, std::uint32_t Pass);
-	// The largest crack or sever stamp ever written, 0 when none.
+	// The pass counter: the largest stamp written or pass marked, 0 when none.
 	std::uint32_t HighestPass() const;
-	// Raises the pass counter to Pass without stamping; false for 0.
+	// Raises the counter to max(counter, Pass) without stamping; true for any Pass >= 1, false for 0.
 	bool MarkPass(std::uint32_t Pass);
-	// The profile with TensileStrengthPa and ShearCohesionPa zeroed unless Intact, so a dead joint reads the weaker form.
+	// Tension and cohesion zeroed unless Intact, so a dead joint reads the weaker form; an unknown id reads the NaN profile.
 	StrengthProfile EffectiveProfile(InterfaceId Id) const;
 
 	bool IsLive(BodyId Id) const;
