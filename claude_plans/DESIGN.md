@@ -336,3 +336,14 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   the crack stamp so the file reader and the structure agree. On `PassCapReached` the cascade
   judges once more so the readings describe the structure that remains. A crack ratio with a
   NaN on either axis is NaN and cracks (the order-dependent max was the slice-2 trap again).
+- *2026-10-11, orchestrator, slice 5 opening:* **the catalogue is a JSON file, converted once
+  by its loader, every row cited and labelled characteristic or mean** (API.md "Slice 5");
+  a value with no source is omitted rather than invented, so the timber bearing row ships
+  without friction unless a cited coefficient is found. **Fasteners are rows of per-fastener
+  capacities turned into an area profile with μ = 0** (independent axes, DESIGN §4), so a
+  fastened joint's capacity is count × the published value whatever contact area the host
+  gives it. **The geometry layer and the wall generator are producers above the engine**
+  (DESIGN §2.1) and nothing in the solvers includes them. **The structural fuzz checks the
+  cascade's invariants, not its answers**: every released cluster is a subset of the
+  certificate's own release list on the pre-pass structure, stamps match records, passes are
+  contiguous, the remainder re-judges to the same verdicts, the file round-trips the end state.

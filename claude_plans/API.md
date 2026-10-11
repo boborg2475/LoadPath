@@ -919,3 +919,165 @@ run is deterministic: ordered by slot everywhere, no state outside the structure
   `InvalidInput` with nothing stamped; a free body with no interface is released on pass 1 as
   its own cluster; two independent collapsing components in one pass give two clusters in slot
   order; running the same input twice gives identical verdicts.
+
+## Slice 5: the catalogue, the geometry layer and the structural fuzz
+
+Three producers above the engine (DESIGN §2.1: "a producer above the engine, like the test
+fixtures, and the engine never depends on it"). Nothing in `src/` solver code includes them.
+
+### 5a. The catalogue (`Catalogue.h`, `data/catalogue.json`)
+
+Materials and connection types are data (CLAUDE.md). The catalogue is a JSON file in the repo
+read by a loader that converts **once** (MPa → Pa, kN → N) and never again; every row cites its
+source and says whether it is a **characteristic** (5 % fractile, code) or **mean** (measured)
+value, because the mean/characteristic ratio is not uniform across axes (TRAPS "Strength data":
+tension ×3–5, cohesion ×2–3, friction ×2.5, compression ×1), so a re-anchor re-measures and
+never re-scales.
+
+```cpp
+enum class StrengthBasis : uint8_t { Characteristic, Mean };
+
+struct JointRow {                       // an area joint: masonry bed or perpend, timber bearing
+	std::string Name, Kind, Source, Note;   // Kind: "bed", "perpend", "bearing"
+	StrengthBasis Basis;
+	StrengthProfile Profile;                // Pa and Pa/m, converted by the loader
+	double FrictionNormalStressPa;          // the normal stress the friction value was measured at; NaN for a code value
+};
+
+struct FastenerRow {                    // a discrete fastener: nail, screw, bolt
+	std::string Name, Source, Note;
+	StrengthBasis Basis;
+	double ShearPerPlaneN;                  // F_v,Rk per shear plane
+	double WithdrawalN;                     // F_ax,Rk; 0 when the source gives none (a bolt)
+	double BearingStrengthPa;               // the timber's f_c,90 the fastener bears on, for the crushing bound
+};
+
+struct Catalogue {
+	std::vector<JointRow> Joints;
+	std::vector<FastenerRow> Fasteners;
+	const JointRow* FindJoint(std::string_view Name) const;        // nullptr when absent
+	const FastenerRow* FindFastener(std::string_view Name) const;
+};
+
+struct CatalogueResult { Catalogue Value; FileError Error; bool Ok() const; };   // FileError as StructureFile.h
+CatalogueResult LoadCatalogue(std::string_view Json);
+
+// μ = 0 (independent axes, DESIGN §4): cohesion = cap = Count · ShearPerPlaneN / AreaM2, tension = Count · WithdrawalN / AreaM2, compression = BearingStrengthPa.
+StrengthProfile FastenerProfile(const FastenerRow& Row, int Count, double AreaM2);
+```
+
+**File.** `{"version": 1, "joints": [...], "fasteners": [...]}`. A joint row carries `name`,
+`kind`, `basis` ("characteristic" | "mean"), `compressive_mpa`, `cohesion_mpa`, `tensile_mpa`,
+`friction`, `shear_cap_mpa` (absent = no cap), `normal_stiffness_gpa_per_m`,
+`tangential_stiffness_gpa_per_m`, `friction_normal_stress_mpa` (optional), `source`, `note`.
+A fastener row carries `name`, `basis`, `shear_per_plane_kn`, `withdrawal_kn`,
+`bearing_mpa`, `source`, `note`. The loader refuses (with the line, as `LoadStructure` does) a
+missing or mistyped field, a negative value, a duplicate name, an unknown kind or basis, and a
+profile the `Structure` would refuse (it runs `AddProfile` on a scratch structure). Conversion:
+`× 1e6` for MPa, `× 1e9` for GPa/m, `× 1e3` for kN, exactly once, in the loader; the tests
+assert `Profile.TensileStrengthPa == tensile_mpa × 1e6` for a row read from the file, not
+from a constant in the test.
+
+**Rows the first file carries** (every number from BENCHMARKS §8 and the research notes, with
+its URL in the row's `source`; a value with no source is omitted, never invented):
+- `clay_gp_mortar_bed_ec6` (bed, characteristic): EN 1996-1-1 Table 3.4 `f_vk0 = 0.30` MPa
+  (M10–M20), §3.6.3 `f_xk1 = 0.10` MPa, friction 0.4 (the `0.4 σ_d` term of eq. 3.5), cap
+  `0.065 f_b` with `f_b = 20` MPa stated in the note (1.30 MPa), compressive strength from
+  eq. 3.2 `f_k = K f_b^0.7 f_m^0.3` with `K = 0.55` (Table 3.3, clay Group 1, GP mortar),
+  `f_b = 20`, `f_m = 10` MPa (M10): `0.55 · 20^0.7 · 10^0.3 = 8.93` MPa, derived in the note;
+  stiffness `E = K_E f_k`, `K_E = 1000` (§3.7.2) over a 10 mm joint: `8.93 GPa / 0.010 m =
+  893 GPa/m` normal, `G = 0.4 E` (§3.7.3): 357 GPa/m tangential.
+- `clay_gp_mortar_perpend_ec6` (perpend, characteristic): the same row with cohesion
+  `0.5 f_vk0 = 0.15` MPa and cap `0.045 f_b = 0.90` MPa (eq. 3.6, unfilled perpends) and
+  tension `f_xk2 = 0.20` MPa (the low end of 0.20–0.40).
+- `clay_gp_mortar_bed_gooch_mean` (bed, mean): Gooch et al. 2023/2025: direct tension 0.20
+  MPa (the middle of 0.15–0.25), cohesion 0.60 MPa (the low end of the couplet 0.58–1.04),
+  friction 1.05 at `friction_normal_stress_mpa = 0.2`, compression and stiffness as the code
+  row (not measured there, the note says so).
+- `lime_mortar_handmade_brick_upc_mean` (bed, mean): Segura et al.: `c = 0.16` MPa,
+  `μ = tan 33.71° = 0.667`, tension absent in the source so `0` with the note "no tension
+  measured; the dry-bond floor", compression and stiffness as the code row with the note.
+- `c24_bearing_perp_to_grain` (bearing, characteristic): `f_c,90,k = 2.5` MPa × `k_c,90 =
+  1.5` = 3.75 MPa compressive (Swedish Wood Vol. 3 Ex 3.2; EN 1995-1-1 §6.1.5), no tension,
+  no cohesion, friction from the cited timber source or omitted (see the ANCHORS row), stiffness
+  `E_90,mean = 0.37` GPa for C24 (EN 338) over a 45 mm bearing depth: 8.2 GPa/m normal, half
+  that tangential, derived in the note.
+- Fasteners (Swedish Wood Vol. 3 Ex 4.1–4.3, Structural Basics): `ec5_screw_8x60_steel_to_glulam`
+  characteristic 4.83 kN per plane, withdrawal 1.74 kN (the pre-2008 ETA formula, the note
+  says which); `ec5_ring_nail_4x40_steel_plate` 1.607 kN as published with the note "a
+  recomputation gives about 1.48 kN", withdrawal 0.42 kN (the 3.1 mm nail datum, noted);
+  `ec5_bolt_m16_double_shear` 12.9 kN per bolt (two planes: 6.45 kN per plane, the note says
+  so), withdrawal 0; and the mean rows `..._mean` for the screw and bolt at `× 1.073` and
+  `× 1.074` (Blass & Colling), none for the nail (its ratio is second-hand). Bearing strength
+  for every fastener row: the C24 3.75 MPa above (the member they bear on, noted).
+
+**Catalogue anchors.** A brick (0.215 × 0.1025 × 0.065 m, 2000 kg/m³) on the `..._bed_ec6`
+profile: pure uplift Collapses at `ft · A` and Stands below (B-CAT-01 through the certificate,
+the number written as `Row.Profile.TensileStrengthPa × AreaM2` in the test); the perpend row's
+cohesion is half the bed row's and its cap `0.045/0.065` of it; the mean row's tension is
+between 3 and 5 times the code row's (B-CAT-02); `FastenerProfile(screw, 2, A)` on a joint of
+area `A` under pure shear Collapses at `2 × 4.83` kN and under pure tension at `2 × 1.74` kN,
+whatever `A` (the area cancels: B-CAT-06/08); the bolt mean row is `1.074 ×` the characteristic
+(B-CAT-09); the loader refuses a row whose tension is negative and a duplicate name with the
+line number.
+
+### 5b. The geometry layer (`geometry/BoxContacts.h`, `geometry/RunningBondWall.h`)
+
+```cpp
+struct Box { Vec3 CentreM; Vec3 HalfExtentsM; };
+// The overlap rectangle of two axis-aligned boxes touching on one face within Tolerance; nullopt when they do not touch or overlap in volume.
+std::optional<InterfaceDesc> FaceContact(BodyId A, const Box& BoxA, BodyId B, const Box& BoxB, ProfileId Profile, double ToleranceM = 1e-9);
+
+struct WallSpec {
+	int Courses = 10;  int BricksPerCourse = 8;
+	Vec3 BrickM = {0.215, 0.1025, 0.065};     // length along x, thickness along y, height along z
+	double DensityKgPerM3 = 2000.0;
+	ProfileId Bed, Perpend;                   // the bed also serves the base course on the ground
+	bool bRunningBond = true;                 // odd courses offset by half a brick, with half bricks at the ends
+	double GroundZM = 0.0;
+};
+struct Wall { std::vector<std::vector<BodyId>> Courses; std::vector<InterfaceId> Beds, Perpends; BodyId Ground; double LengthM, HeightM; };
+Wall BuildRunningBondWall(Structure& Model, const WallSpec& Spec);
+```
+
+Bricks are bodies (mass = density × volume, centroid at the box centre); joints are
+`FaceContact` results: beds between a brick and every brick below it that overlaps in plan (two
+per brick in running bond, one at the ends), perpends between neighbours in a course, the base
+course on a grounded body (`OnGroundPlane` semantics). Normals point from the lower or
+left body to the upper or right one. Deterministic order: courses bottom-up, bricks left to
+right. A wall of `n` courses and `m` bricks in stretcher bond has `n·m` bricks when `n` is
+even-only or `bRunningBond` is false, and half bricks (half mass, half length) at the ends of
+odd courses otherwise, so every course spans the same length.
+
+**Geometry anchors.** `FaceContact` on two unit cubes stacked gives the full 1 × 1 face at the
+shared plane with the normal +z from the lower to the upper; shifted half a cube gives a
+0.5 × 1 rectangle at the overlap's centre; separated by `2 × Tolerance` gives nullopt;
+overlapping in volume gives nullopt; a side-by-side pair gives the normal ±x. The wall: brick
+and joint counts match the closed forms; every joint passes `AddInterface`; under gravity on the
+dry profile the wall Stands (elastic and combined); a dry wall of 10 courses under a lateral
+load along y overturns at `λ = t / H` (B-WAL-01, through the certificate bisection on λ, the
+classical monolith value, since a running-bond wall with dry beds rocks as one block when
+`μ > t/H`); the same wall with the `..._bed_ec6` profile stands past that λ (bond adds
+tension) and reads Overstressed before it Collapses as λ rises; removing the middle brick of
+the base course leaves the wall standing with the beds above the gap reading higher
+utilisation than before (the load arches), through `RemoveBody` and a re-judge.
+
+### 5c. The structural fuzz (`tests/CascadeFuzzTest.cpp`)
+
+Seeded random small structures (stacks, running-bond walls of 3–6 courses with 0–3 bricks
+removed, dry or `..._bed_ec6` profiles, tilt 0–30° or lateral λ 0–1) run through the cascade,
+with these invariants checked per draw and the failing seed printed:
+- **every released cluster is certified**: on a copy of the structure taken before the pass,
+  the certificate on that component reads Collapses with every cluster body in its release
+  list (the cluster is a subset of the certificate's list, never a reachability weld);
+- **stamps are consistent**: every `Failures` entry matches the structure's record (state,
+  pass), passes are contiguous from `FirstPass` to `LastPass`, `HighestPass() == LastPass`
+  when `Passes > 0`, and no stamp outside `[FirstPass, LastPass]` was written;
+- **termination**: `Passes ≤ live interfaces at entry`;
+- **the remainder is judged**: the final `Components` carry no Collapses, and a fresh judge
+  of the remaining structure returns the same verdicts;
+- **determinism**: the same seed twice gives identical verdicts;
+- **the file round-trips the end state**: `LoadStructure(WriteStructure(end))` has the same
+  live bodies, states, stamps and `HighestPass`.
+Draw counts by build (`bOptimisedBuild`), under a second in Release; coverage guards that the
+run saw at least one crack, one multi-body cluster, one Overstressed end and one Stands end.
