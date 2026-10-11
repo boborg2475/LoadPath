@@ -727,7 +727,8 @@ cone's).
   is exactly 0.107478, which is the pin). On Collapses the
   hinging set is the crown, the two haunches and the two springings (symmetric mechanism; the
   selection may return one side's four hinges, so assert the haunch and crown hinges and that
-  every hinge is one of the seven joints 0°, ±54°, ±54.484°, ±90°; the 0.484° sliver between
+  every hinge is one of the seven joints 0°, ±54°, ±54.484°, ±90°, the haunch hinge accepted within
+  one joint (±51°, ±57°) as B-ARC-02 allows; the 0.484° sliver between
   54° and 54.484° lists both of its joints, the selection mixing two admissible mechanisms
   below least thickness, not a physical event).
 - B-ARC-06, the friction switch on that arch at least thickness: Collapses (sliding) at φ = 21°

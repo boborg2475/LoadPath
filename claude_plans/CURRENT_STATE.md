@@ -22,15 +22,15 @@ authority and referees its Mechanism and Undecided components with the certifica
 disagreements and releasing only what the certificate lists; `MaxShearStrengthPa` as per-corner
 facet rows (cap 0 is a cap); the Couplet–Heyman arch pinned exactly at Milankovitch's 0.107478
 with hinges at 0°, ±54°, ±54.484°, ±90° (the sliver lists both joints) and its friction switch, the Orduña pile at λ 0.5005, the
-3DEC wedge at the certificate's associative 31.07°. Default suite 175 cases in Debug (11,085
-assertions, about 10 s) and 179 in Release (25,742 assertions, 4 s; the four arch and pile
+3DEC wedge at the certificate's associative 31.07°. Default suite 176 cases in Debug (12,333
+assertions, about 10 s) and 180 in Release (35,376 assertions, 4 s; the four arch and pile
 anchors run only there under `LOADPATH_SLOW_IN_DEBUG`); the `Deferred.Slice7` tier holds the one
 physical wedge pin, red by design. The design brief ([DESIGN.md](DESIGN.md)) has every §9
 question decided and §10 carries the slice-2, 4a and 4b rulings.
 
 ## Next
 
-1. Slice 4b (API.md "Slice 4b", DESIGN §10): **done** after two reviews (2026-10-11). Open
+1. Slice 4b (API.md "Slice 4b", DESIGN §10): **done** after three reviews (2026-10-11). Open
    items it leaves, none host-unsafe (the unsafe one, the wedge band, is under Deferred):
    - the mechanism selection ignores finite positive shear caps (harmless at `t* = 0`, the prism
      contains the origin; for `0 < t* < 1e-9`, a cap near 1e-9 Pa, it reads Undecided, which
@@ -38,7 +38,7 @@ question decided and §10 carries the slice-2, 4a and 4b rulings.
    - the combined authority copies the structure for EVERY component (RemoveBody scans every
      interface per call, so building the sub-structures is O(C · B · I)) and solves every
      structure twice (the whole for readings, then the sum of its parts): slice 6 exposes the
-     RBSM.s per-component states instead, removing the copies and the second solve;
+     RBSM's per-component states instead, removing the copies and the second solve;
    - two InvalidInput branches in CombinedAuthority.cpp are unreachable today (a sub-solve
      InvalidInput, since the RBSM already fails the whole solve; a per-component certificate
      InvalidInput, since options are validated up front and the load checks match): both fail
