@@ -185,18 +185,18 @@ its two designs, which should be read, not copied:
 
 Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
 
-## 9. Open questions for the owner
+## 9. Decided questions (owner, 2026-10-10)
 
-| # | Question | Recommendation |
+| # | Question | Decision |
 |---|---|---|
-| 1 | Project name | `LoadPath` is a working name; rename is a folder move |
-| 2 | Metres or millimetres | Metres. Doubles carry a 0.065 m brick and a 30 m warehouse without strain |
-| 3 | Strong unit types or suffixed doubles | Suffixed doubles for now; revisit if a unit bug ever lands |
-| 4 | Linear algebra | Vendor Eigen (MPL2, header-only, already in Unreal's ThirdParty) behind the API |
-| 5 | STL in the public API | Yes, `std::span` and `std::vector` of plain structs; Unreal consumes them fine in a third-party module |
-| 6 | Structure file format for the CLI and fixtures | JSON, hand-written reader, no dependency |
-| 7 | License | Owner's call; nothing is published yet |
-| 8 | Friction flow rule when more than one joint slides | Non-associative (real friction: sliding does not lift the block), reported with the associative bound beside it in tests; see the benchmark report's flow-rule section |
+| 1 | Project name | `LoadPath`, kept |
+| 2 | Metres or millimetres | Metres |
+| 3 | Strong unit types or suffixed doubles | Owner: strong types only if they cost no performance. Orchestrator's call under that condition: **suffixed doubles in the core**. A wrapper is free in Release but not in Debug, where the suite runs, and Eigen needs plain scalars in its matrices anyway. A strong-typed façade can be added at the public API later without touching the solver. |
+| 4 | Linear algebra | Eigen, vendored under `third_party/`, behind the solver interface |
+| 5 | STL in the public API | Yes: `std::span` in, `std::vector` of plain structs out |
+| 6 | Structure file format | JSON, hand-written reader, no dependency |
+| 7 | License | None for now |
+| 8 | Friction flow rule | Non-associative is the engine's answer; tests report the associative bound beside it where a benchmark publishes both |
 
 ## 10. Rulings
 
@@ -208,3 +208,16 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
 - *2026-10-10, owner:* known-answer scenarios from published closed forms and experiments are
   the first test anchors; a fuzz oracle comes later, for topological coverage only. The
   catalogue is `reports/Rigid block benchmark scenarios.md`, distilled into BENCHMARKS.md.
+- *2026-10-10, owner:* the §9 answers above. Metres, Eigen, STL in the API, JSON, no license,
+  non-associative friction, the name kept, strong unit types only if free (decided against in
+  the core, see §9 row 3).
+- *2026-10-10, owner:* the orchestrator works the slices without stopping for approval, makes
+  the remaining calls itself on its best recommendation, and records each one here with its
+  reasoning. Documented real failures (collapses with a known cause) join the benchmarks as
+  validation cases.
+- *2026-10-10, owner:* **no test, fixture or pinned number is taken from DestructionGame's
+  suite.** Every anchor comes from a web-published source with a citation, so its correctness
+  is independent of anything either project wrote. The old project remains reference for
+  design reasoning only.
+- *2026-10-10, orchestrator:* the public API is specified in [API.md](API.md) before each slice
+  is built, so the three agents build to one contract. Slice 1's contract is there now.

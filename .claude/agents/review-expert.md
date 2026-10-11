@@ -37,7 +37,8 @@ handed back as a test specification for test-expert, never left in the scratchpa
 2. **Is the test any good?** Catches a regression rather than passing incidentally. Mechanism
    for unit, outcome for integration. **No displacement-based break assertion.** The axis under
    test governs the result. Deterministic. Not a near-duplicate of an existing table.
-   Pinned numbers have a row in `claude_plans/ANCHORS.md`.
+   Pinned numbers have a row in `claude_plans/ANCHORS.md` and trace to a web-published,
+   cited source, never to the DestructionGame project (owner, 2026-10-10).
 3. **Does it match DESIGN.md?** Force classified against the interface, never a world axis.
    Materials stay data. SI units with no conversion. The host contract (§2) is not breached: no
    callbacks, no global state, no host-shaped types in the API.

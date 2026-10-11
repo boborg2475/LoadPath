@@ -39,6 +39,9 @@ an empty function, a struct field, no logic. Logic belongs to dev-expert.
 - Expected values are written as formulas over the profile's own numbers, in SI, so the test
   fails if a constant is wrong instead of agreeing with it. Record the source of any pinned
   number in `claude_plans/ANCHORS.md` under the test case name.
+- **Every pinned number comes from a web-published source with a citation** (owner,
+  2026-10-10): `claude_plans/BENCHMARKS.md`, `reports/`, or a paper or standard you cite.
+  Never a number, fixture or test from the DestructionGame project.
 - Prefer one parameterised test over a table to one test per material. A material is a row.
 - Anything topological, or anything where a wrong answer still looks plausible, gets a
   **seeded property test against an independent oracle** that prints its failing seed. An oracle
