@@ -221,3 +221,12 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   design reasoning only.
 - *2026-10-10, orchestrator:* the public API is specified in [API.md](API.md) before each slice
   is built, so the three agents build to one contract. Slice 1's contract is there now.
+- *2026-10-11, orchestrator:* four model steps found necessary while making slice 2 green are
+  ratified in [API.md](API.md) "Slice 2": a singular active set is a Mechanism only when the
+  null-space motion is admissible against the open and slipping corners; an open corner whose
+  gap is indeterminate in a neutral solve is not re-closed; a slipping corner carries the
+  consistent transverse tangent of its held friction (`kt · capacity / |trial S|`), which adds
+  no force at convergence but stops the held direction over-correcting; and the factorisation
+  is a right-looking LDLT pivoting on the Schur diagonal, because `Eigen::LDLT` picks pivots
+  before the Schur update and cannot reveal rank. The 3DEC wedge (B-WDG-01) moves to slice 4:
+  its published threshold is a kinematic answer the elastic field does not reproduce.

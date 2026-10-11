@@ -305,11 +305,21 @@ never mutates the structure. The host may call it on any thread.
   `TensileStrengthPa == 0` opens when its trial `N < 0` and then carries nothing; a corner on an
   interface whose profile has `ShearCohesionPa == 0` slips when its trial `|S|` exceeds
   `μ N` (and the cap `MaxShearStrengthPa · A/4`), after which its shear is held at capacity
-  opposite the trial slip direction with no tangential stiffness and **no dilation**
-  (non-associative, DESIGN §9 row 8). A corner returns to closed when its gap would be `≤ 0`
-  under the field solved without it, and to stick when its trial shear falls under capacity
-  by a 1e-9 relative margin (hysteresis so it cannot chatter). The loop ends when no corner
-  changes status; it is capped by `MaxActiveSetIterations`.
+  opposite the trial slip direction with no stiffness along that direction and **no dilation**
+  (non-associative, DESIGN §9 row 8). Transverse to the held direction, in the joint plane, a
+  slipping corner carries the tangent of its held friction, `kt · capacity / |trial S|` (never
+  above `kt`): the stiffness with which the friction vector rotates to follow the slip
+  (dev-expert 2026-10-11, ratified by the orchestrator the same day, DESIGN §10). It adds no force at convergence, since the
+  trial slip it was built from lies along the held direction, so the converged readings are
+  the model above; it changes the iteration and the null space. Without it the held direction
+  lags one pass, and where `capacity / |trial δ|` times the rotational compliance exceeds 1
+  the antisymmetric mode grows by that factor every pass with alternating sign (×−5 to ×−12
+  measured on a brick pushed into a wall), breaking symmetry out of rounding. A motion
+  transverse to a slipping corner's held friction is therefore not free. A corner returns to
+  closed when its gap would be `≤ 0` under the field solved without it, and to stick when its
+  trial shear falls under capacity by a 1e-9 relative margin (hysteresis so it cannot
+  chatter). The loop ends when no corner changes status; it is capped by
+  `MaxActiveSetIterations`.
 - **Bonded nonlinearities are not released here.** A corner with `TensileStrengthPa > 0`
   stays closed in tension and reports tension utilisation `N⁻ / (ft A/4)`; with cohesion it
   reports shear utilisation `|S| / min(c A/4 + μ N⁺, cap A/4)`. Over 1 is `Overstressed`.
@@ -320,11 +330,17 @@ never mutates the structure. The host may call it on any thread.
   as above with `N⁺ = max(N, 0)`. A corner with zero force reads 0 on every axis. Non-finite
   anywhere makes the interface read `+inf` on that axis (fail closed) and the state cannot be
   Stands.
-- **Solve**: assemble the symmetric stiffness, factor with Eigen's dense LDLT (vendored under
-  `third_party/eigen`, `EIGEN_MPL2_ONLY`, single-threaded, included as a SYSTEM directory so
-  its warnings do not trip `/WX`), check the smallest pivot against the tolerance, back-
-  substitute, recover corner forces. Dense is the slice-2 choice; slice 6 swaps the
-  factorisation behind the same interface.
+- **Solve**: assemble the symmetric stiffness, factor it with a right-looking dense LDLT with
+  complete diagonal pivoting on the Schur complement, stopping at the first step whose largest
+  remaining diagonal is not above `PivotToleranceRelative` times the largest pivot; the steps
+  taken are the rank, the rest span the null space. Back-substitute on the kept block, recover
+  corner forces. Eigen (vendored under `third_party/eigen`, `EIGEN_MPL2_ONLY`, single-threaded,
+  included as a SYSTEM directory so its warnings do not trip `/WX`) supplies the dense storage
+  and triangular solves, not the factorisation (dev-expert 2026-10-11, ratified by the orchestrator the same day, DESIGN §10):
+  `Eigen::LDLT` is left-looking and picks each pivot from the diagonal before the Schur update,
+  so a zero pivot can precede a non-zero one (measured D = 1.1e8, 1.1e8, 1.1e8, 289414, 0,
+  289414) and it divides by any non-zero rounding residue. Dense is the slice-2 choice; slice 6
+  swaps the factorisation behind the same interface.
 - **Mechanism reporting**: when a pivot fails, the null vector is normalised so its largest
   absolute component is 1 and written per body as `TranslationM`/`RotationRad`;
   `UnconstrainedBodies` lists bodies with any component above 1e-6. Tests assert the motion

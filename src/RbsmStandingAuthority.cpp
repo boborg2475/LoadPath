@@ -57,6 +57,7 @@ struct JointState
 {
 	std::array<CornerStatus, CornerCount> Status{};
 	std::array<Vec3, CornerCount> HeldN{};
+	std::array<double, CornerCount> TransverseNPerM{};
 };
 
 struct Problem
@@ -68,9 +69,12 @@ struct Problem
 	double ForceScaleN = 0;
 };
 
+using IndexVector = Eigen::Matrix<Eigen::Index, Eigen::Dynamic, 1>;
+
 struct Factorisation
 {
-	Eigen::LDLT<Eigen::MatrixXd> Ldlt;
+	Eigen::MatrixXd Lower;
+	IndexVector Order;
 	Eigen::Index Rank = 0;
 };
 
@@ -234,17 +238,23 @@ Eigen::Matrix<double, 3, 6> CornerJacobian(const Vec3& ArmM)
 	return G;
 }
 
-Eigen::Matrix3d CornerStiffness(const Joint& J, CornerStatus Status)
+Eigen::Matrix3d CornerStiffness(const Joint& J, const JointState& State, std::size_t C)
 {
 	const Eigen::Vector3d N(J.Normal.X, J.Normal.Y, J.Normal.Z);
 	const Eigen::Matrix3d NormalPart = N * N.transpose();
-	if (Status == CornerStatus::Open)
+	if (State.Status[C] == CornerStatus::Open)
 	{
 		return Eigen::Matrix3d::Zero();
 	}
-	if (Status == CornerStatus::Slipping)
+	if (State.Status[C] == CornerStatus::Slipping)
 	{
-		return J.NormalStiffnessNPerM * NormalPart;
+		const double HeldSizeN = Length(State.HeldN[C]);
+		if (!(HeldSizeN > 0.0))
+		{
+			return J.NormalStiffnessNPerM * NormalPart;
+		}
+		const Eigen::Vector3d S = Eigen::Vector3d(State.HeldN[C].X, State.HeldN[C].Y, State.HeldN[C].Z) / HeldSizeN;
+		return J.NormalStiffnessNPerM * NormalPart + State.TransverseNPerM[C] * (Eigen::Matrix3d::Identity() - NormalPart - S * S.transpose());
 	}
 	return J.NormalStiffnessNPerM * NormalPart + J.TangentialStiffnessNPerM * (Eigen::Matrix3d::Identity() - NormalPart);
 }
@@ -257,7 +267,7 @@ Eigen::MatrixXd AssembleStiffness(const Problem& P, const std::vector<JointState
 		const Joint& J = P.Joints[I];
 		for (std::size_t C = 0; C < CornerCount; ++C)
 		{
-			const Eigen::Matrix3d Kc = CornerStiffness(J, States[I].Status[C]);
+			const Eigen::Matrix3d Kc = CornerStiffness(J, States[I], C);
 			const std::array<int, 2> Offsets{J.OffsetA, J.OffsetB};
 			const std::array<double, 2> Signs{-1.0, 1.0};
 			const std::array<Eigen::Matrix<double, 3, 6>, 2> G{CornerJacobian(Sub(J.CornerM[C], J.CentroidAM)), CornerJacobian(Sub(J.CornerM[C], J.CentroidBM))};
@@ -298,43 +308,70 @@ Eigen::VectorXd AssembleLoad(const Problem& P, const std::vector<JointState>& St
 
 Factorisation Factorise(const Eigen::MatrixXd& K, double PivotToleranceRelative)
 {
+	const Eigen::Index N = K.rows();
 	Factorisation F;
-	F.Ldlt.compute(K);
-	const Eigen::VectorXd D = F.Ldlt.vectorD();
-	const double LargestPivot = D.size() > 0 ? D.cwiseAbs().maxCoeff() : 0.0;
-	while (F.Rank < D.size() && std::abs(D(F.Rank)) > PivotToleranceRelative * LargestPivot)
+	F.Lower = K;
+	F.Order = IndexVector::LinSpaced(N, 0, N - 1);
+	double LargestPivot = 0.0;
+	for (Eigen::Index Step = 0; Step < N; ++Step)
 	{
-		++F.Rank;
+		Eigen::Index Pick = 0;
+		F.Lower.diagonal().tail(N - Step).maxCoeff(&Pick);
+		Pick += Step;
+		const double Pivot = F.Lower(Pick, Pick);
+		if (!(Pivot > PivotToleranceRelative * LargestPivot))
+		{
+			break;
+		}
+		LargestPivot = std::max(LargestPivot, Pivot);
+		F.Lower.row(Step).swap(F.Lower.row(Pick));
+		F.Lower.col(Step).swap(F.Lower.col(Pick));
+		std::swap(F.Order(Step), F.Order(Pick));
+		const Eigen::Index Rest = N - Step - 1;
+		F.Lower.col(Step).tail(Rest) /= Pivot;
+		F.Lower.bottomRightCorner(Rest, Rest).noalias() -= Pivot * F.Lower.col(Step).tail(Rest) * F.Lower.col(Step).tail(Rest).transpose();
+		F.Rank = Step + 1;
 	}
 	return F;
+}
+
+Eigen::VectorXd Scatter(const Factorisation& F, const Eigen::VectorXd& Permuted)
+{
+	Eigen::VectorXd Original = Eigen::VectorXd::Zero(F.Order.size());
+	for (Eigen::Index K = 0; K < Permuted.size(); ++K)
+	{
+		Original(F.Order(K)) = Permuted(K);
+	}
+	return Original;
 }
 
 Eigen::VectorXd SolveInRange(const Factorisation& F, const Eigen::VectorXd& Load)
 {
 	const Eigen::Index R = F.Rank;
-	const auto L11 = F.Ldlt.matrixLDLT().topLeftCorner(R, R).triangularView<Eigen::UnitLower>();
-	Eigen::VectorXd Z = F.Ldlt.transpositionsP() * Load;
-	Eigen::VectorXd Head = L11.solve(Z.head(R));
-	Head = Head.cwiseQuotient(F.Ldlt.vectorD().head(R));
+	const auto L11 = F.Lower.topLeftCorner(R, R).triangularView<Eigen::UnitLower>();
+	Eigen::VectorXd Head(R);
+	for (Eigen::Index K = 0; K < R; ++K)
+	{
+		Head(K) = Load(F.Order(K));
+	}
+	Head = L11.solve(Head);
+	Head = Head.cwiseQuotient(F.Lower.diagonal().head(R));
 	Head = L11.transpose().solve(Head);
-	Z.head(R) = Head;
-	Z.tail(Z.size() - R).setZero();
-	return F.Ldlt.transpositionsP().transpose() * Z;
+	return Scatter(F, Head);
 }
 
 std::vector<Eigen::VectorXd> NullBasis(const Factorisation& F)
 {
-	const Eigen::Index N = F.Ldlt.vectorD().size();
+	const Eigen::Index N = F.Order.size();
 	const Eigen::Index R = F.Rank;
-	const auto L11 = F.Ldlt.matrixLDLT().topLeftCorner(R, R).triangularView<Eigen::UnitLower>();
+	const auto L11 = F.Lower.topLeftCorner(R, R).triangularView<Eigen::UnitLower>();
 	std::vector<Eigen::VectorXd> Basis;
 	for (Eigen::Index J = R; J < N; ++J)
 	{
 		Eigen::VectorXd Z = Eigen::VectorXd::Zero(N);
 		Z(J) = 1.0;
-		const Eigen::VectorXd Coupling = F.Ldlt.matrixLDLT().row(J).head(R).transpose();
-		Z.head(R) = -L11.transpose().solve(Coupling);
-		Basis.push_back(F.Ldlt.transpositionsP().transpose() * Z);
+		Z.head(R) = -L11.transpose().solve(F.Lower.row(J).head(R).transpose());
+		Basis.push_back(Scatter(F, Z));
 	}
 	return Basis;
 }
@@ -406,6 +443,16 @@ Vec3 HeldForce(const Vec3& TrialShearN, double CapacityN)
 	return Scale(CapacityN / Size, TrialShearN);
 }
 
+double TransverseStiffnessNPerM(const Joint& J, const Vec3& TrialShearN, double CapacityN)
+{
+	const double Size = Length(TrialShearN);
+	if (!(Size > 0.0))
+	{
+		return 0.0;
+	}
+	return J.TangentialStiffnessNPerM * CapacityN / Size;
+}
+
 double MotionScaleM(const Problem& P, const Eigen::VectorXd& Motion)
 {
 	double ScaleM = 0.0;
@@ -439,6 +486,7 @@ UpdateOutcome UpdateActiveSet(const Problem& P, const Eigen::VectorXd& X, const 
 			const TrialForces T = Trial(J, C, X);
 			CornerStatus& Status = State.Status[C];
 			Vec3& HeldN = State.HeldN[C];
+			double& TransverseNPerM = State.TransverseNPerM[C];
 			if (Status == CornerStatus::Open)
 			{
 				if (T.GapM <= 0.0 && !IsGapIndeterminate(P, J, C, NeutralMotions))
@@ -467,6 +515,7 @@ UpdateOutcome UpdateActiveSet(const Problem& P, const Eigen::VectorXd& X, const 
 				{
 					Status = CornerStatus::Slipping;
 					HeldN = HeldForce(T.ShearN, CapacityN);
+					TransverseNPerM = TransverseStiffnessNPerM(J, T.ShearN, CapacityN);
 					Outcome.bStatusChanged = true;
 				}
 				continue;
@@ -484,6 +533,7 @@ UpdateOutcome UpdateActiveSet(const Problem& P, const Eigen::VectorXd& X, const 
 				Outcome.bHeldSettled = false;
 			}
 			HeldN = NextHeldN;
+			TransverseNPerM = TransverseStiffnessNPerM(J, T.ShearN, CapacityN);
 		}
 	}
 	return Outcome;

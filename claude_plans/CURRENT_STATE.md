@@ -25,7 +25,7 @@ API.md) is next. The design brief ([DESIGN.md](DESIGN.md)) has every §9 questio
    B-BUR-01 needs a soil-pressure driver; F-PYR-01 needs a zero-extent contact; group 9 runs
    only in the host adapter's suite.
 2. Slice 2, the standing authority (API.md "Slice 2"): the `IStandingAuthority` interface, the
-   RBSM implementation with four corner springs and a dense Eigen LDLT, the free active set,
+   RBSM implementation with four corner springs and a dense pivoted LDLT, the free active set,
    mechanism reporting, and the tier-1 anchors from BENCHMARKS.md groups 2 and 3.
 3. `Scripts/Test.ps1` excludes a `Slow.` prefix from the default run once the first slow test
    exists; today there is none.
@@ -45,40 +45,32 @@ API.md) is next. The design brief ([DESIGN.md](DESIGN.md)) has every §9 questio
   `==` (orchestrator 2026-10-11): unknowns are ordered by body slot, so a different insertion
   order changes the assembly and pivot order and the last bit. Bit-identity is pinned only for
   repeated solves of the same structure.
-- Slice 2 standing authority (`src/RbsmStandingAuthority.cpp`, 2026-10-11, awaiting review): two
-  model steps beyond API.md's rulings were needed for the 4-diamond and need ratifying there.
-  (1) A singular active set with load in the null space is a Mechanism only if the motion is
-  admissible: an open corner the motion would close re-closes, and a slipping corner the motion
-  would slide along its held friction re-sticks; then the loop continues. (2) In a neutral solve
-  (singular, zero load projection) an open corner whose gap the null space moves is not
-  re-closed, since its gap is indeterminate. Without (1) the diamond reads a spurious slide;
-  without (2) a corner at exactly zero force cycles open/closed until Undecided.
 - Slice 2 behaviour still with no test (characterisation round 2026-10-11, `tests/StandingSolverTest.cpp`,
   every other item proven by mutation): the 1e-9 stick hysteresis (margins 0 and 1e-3 both survive;
   no fixture leaves a slipping corner's trial shear within the margin of capacity, and on a single
-  block the slip and re-stick conditions exclude each other); status-cycle detection (every cycling
-  fixture found is driven by one of the two defects below, so pinning one would enshrine the defect;
-  pin it once they are fixed); the `bNonFinite` term in `IsOverstressed`, which looks unreachable
+  block the slip and re-stick conditions exclude each other); status-cycle detection (see the
+  entry below); the `bNonFinite` term in `IsOverstressed`, which looks unreachable
   because `Ratio` already maps a non-finite ratio to +inf and a NaN corner force trips compression.
-- Red, `Statics.Solver.BrickOverturnedByABiaxialLoadIsAMechanismAboutItsToe` (found 2026-10-11): a
-  brick past its toe under λ = (3.375, 0.375) reads Undecided after 3 passes, not Mechanism.
-  `Factorise` counts rank up to the first pivot under tolerance, but Eigen's LDLT can emit a zero
-  pivot ahead of a non-zero one (measured D = 1.1e8, 1.1e8, 1.1e8, 289414, 0, 289414 with two stuck
-  toe corners), so rank reads 4 where it is 5, `NullBasis` adds a direction that moves the stuck
-  corners, the restore re-closes a corner and the loop revisits a state. The same defect makes a dry
-  μ = 0.6 brick under λ = (0.5, 0.25) cycle (rank 4 where 5) and makes the two-brick stack
-  neighbourhood around λ = (1.5, 0.75) alternate Mechanism and Undecided.
-- Red, `Statics.Solver.BrickPushedIntoAWallIsNeverAMechanism` (found 2026-10-11): a brick pushed
-  into a grounded wall (dry μ = 0.3, λ = 0.4 to 0.9) reads Mechanism, a pure Y translation. With
-  every bed and wall corner slipping, Y is the only free motion and no load has a Y component, but
-  the held friction forces carry about 1e-10 N of Y from rounding, which beats the 1e-12 relative
-  neutral-load tolerance. At μ = 0.5, λ = 0.6 and 0.9 and μ = 0.7, λ = 0.9 the same fixture breaks
-  its Y symmetry the same way and cycles to Undecided in 19 to 25 passes. The always-settled mutant
-  makes this test pass, so the drift enters through the held-direction updates.
-- A single dry brick under a biaxial lateral load can hit the 50-pass cap with one corner slipping
-  while it plainly stands (μ = 5, λ = (0.5, 1.0) and 25 more grid points; 5 at μ = 0.6): the
-  held-direction fixed point converges slowly or not at all. Fail-closed Undecided, so not red
-  under the ruling, but the cap or the iteration scheme needs looking at before larger structures.
+- Status-cycle detection (`WasVisited`) compares statuses only, so a path that passes through
+  the answer's status set while a held force is still unsettled, then comes back to it, reads
+  Undecided (found by dev-expert 2026-10-11 after the R1/R2 fixes). A probe of 8,445 solves
+  (single brick, two bridges, two stacks on a λx 0..4 × λy 0..2 grid at bonded, μ 5 and μ 0.6,
+  plus the wall fixture) leaves 135 Undecided, 134 of them status revisits after 3 to 9
+  passes. Seven were decided before the transverse tangent: single brick μ 5 at λ = (3, 0.875)
+  and (3.25, 0.75) (Stands at HEAD, the answer's status set {stuck, slip, open, stuck} is
+  visited at pass 3 and revisited at pass 4); stack shift 0.03 μ 0.6 at (0.625, 0.875) and
+  shift 0.08 μ 0.6 at (0.75, 1) and (0.875, 0.875) (Mechanism at HEAD; a restore lands back on
+  pass 2's status set); wall μ 0.7 λ 0.8 (see the magnitude entry below). All fail closed.
+  Pin the detection with one of these fixtures, then make a revisit count only when the held
+  forces also match.
+- The held-force magnitude loop still converges at roughly μ per pass where friction at one
+  joint sets the normal force at another: the brick pushed into a wall takes 22 passes at
+  μ = 0.3, 37 to 38 at μ = 0.5 and hits the 50-pass cap at μ = 0.7, λ = 0.8, matching
+  log(1e-12) / log(μ). The `d capacity / d N` term that would remove it is non-symmetric, so it
+  cannot go into the LDLT. Fail-closed Undecided; no test drives it yet. The single-brick slow
+  convergence logged before (μ = 5, λ = (0.5, 1.0) and 25 more grid points, 5 at μ = 0.6) was
+  the held-direction lag and is gone with the transverse tangent: λ = (0.5, 1.0) stands in 5
+  passes and no single-brick probe point reaches the cap (31 at HEAD).
 - Slice 2's `IsGapIndeterminate` recomputes the motion scale per open corner per null vector
   (O(corners² · nullity)); fine at tier-1 sizes, hoist it before slice 6.
 - Eigen's no-exceptions `EIGEN_TRY`/`EIGEN_CATCH` makes MSVC emit C4702 from the backend, which
