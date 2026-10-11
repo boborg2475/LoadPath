@@ -92,8 +92,10 @@ powershell -NoProfile -ExecutionPolicy Bypass -File Scripts/Test.ps1 -tc="Model.
 `-Config Release` builds and runs the optimised build. `Scripts/Build.ps1` builds without
 running. **The exit code is meaningful**: non-zero when any assertion fails, and the summary
 prints to stdout. The suite is expected to run in seconds; a test that needs more than about a
-second goes behind a `Slow.` prefix and is excluded from the default run by the script once one
-exists.
+second goes behind a `Slow.` prefix, which `Scripts/Test.ps1` excludes from the default run (it
+prints how many it skipped). A case that is slow only in Debug puts `LOADPATH_SLOW_IN_DEBUG`
+(`tests/SlowInDebug.h`) in front of its name: Debug skips it under `Slow.`, Release runs it under
+its real prefix, so the Release default run is part of validating any such case.
 
 **Deliberately red tests live under the `Deferred.` prefix.** A test that pins an answer the
 current implementation cannot yet give (owed to a later slice, named in the test's second
