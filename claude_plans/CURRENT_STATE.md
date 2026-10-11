@@ -53,12 +53,32 @@ API.md) is next. The design brief ([DESIGN.md](DESIGN.md)) has every §9 questio
   (singular, zero load projection) an open corner whose gap the null space moves is not
   re-closed, since its gap is indeterminate. Without (1) the diamond reads a spurious slide;
   without (2) a corner at exactly zero force cycles open/closed until Undecided.
-- Slice 2 behaviour with no test, so a mutation survives the whole suite (probed 2026-10-11):
-  Overstressed (never-Overstressed mutant passes), bonded joints never releasing (ft > 0 or
-  c > 0), the tension and shear utilisation axes, the `MaxShearStrengthPa` cap on slip, the
-  1e-9 stick hysteresis, the held-force fixed point settling (an always-settled mutant
-  passes), status-cycle detection (the iteration cap catches it instead), open corners
-  re-closing, and the non-finite-reading fail-closed path. Every fixture is a dry joint.
+- Slice 2 behaviour still with no test (characterisation round 2026-10-11, `tests/StandingSolverTest.cpp`,
+  every other item proven by mutation): the 1e-9 stick hysteresis (margins 0 and 1e-3 both survive;
+  no fixture leaves a slipping corner's trial shear within the margin of capacity, and on a single
+  block the slip and re-stick conditions exclude each other); status-cycle detection (every cycling
+  fixture found is driven by one of the two defects below, so pinning one would enshrine the defect;
+  pin it once they are fixed); the `bNonFinite` term in `IsOverstressed`, which looks unreachable
+  because `Ratio` already maps a non-finite ratio to +inf and a NaN corner force trips compression.
+- Red, `Statics.Solver.BrickOverturnedByABiaxialLoadIsAMechanismAboutItsToe` (found 2026-10-11): a
+  brick past its toe under λ = (3.375, 0.375) reads Undecided after 3 passes, not Mechanism.
+  `Factorise` counts rank up to the first pivot under tolerance, but Eigen's LDLT can emit a zero
+  pivot ahead of a non-zero one (measured D = 1.1e8, 1.1e8, 1.1e8, 289414, 0, 289414 with two stuck
+  toe corners), so rank reads 4 where it is 5, `NullBasis` adds a direction that moves the stuck
+  corners, the restore re-closes a corner and the loop revisits a state. The same defect makes a dry
+  μ = 0.6 brick under λ = (0.5, 0.25) cycle (rank 4 where 5) and makes the two-brick stack
+  neighbourhood around λ = (1.5, 0.75) alternate Mechanism and Undecided.
+- Red, `Statics.Solver.BrickPushedIntoAWallIsNeverAMechanism` (found 2026-10-11): a brick pushed
+  into a grounded wall (dry μ = 0.3, λ = 0.4 to 0.9) reads Mechanism, a pure Y translation. With
+  every bed and wall corner slipping, Y is the only free motion and no load has a Y component, but
+  the held friction forces carry about 1e-10 N of Y from rounding, which beats the 1e-12 relative
+  neutral-load tolerance. At μ = 0.5, λ = 0.6 and 0.9 and μ = 0.7, λ = 0.9 the same fixture breaks
+  its Y symmetry the same way and cycles to Undecided in 19 to 25 passes. The always-settled mutant
+  makes this test pass, so the drift enters through the held-direction updates.
+- A single dry brick under a biaxial lateral load can hit the 50-pass cap with one corner slipping
+  while it plainly stands (μ = 5, λ = (0.5, 1.0) and 25 more grid points; 5 at μ = 0.6): the
+  held-direction fixed point converges slowly or not at all. Fail-closed Undecided, so not red
+  under the ruling, but the cap or the iteration scheme needs looking at before larger structures.
 - Slice 2's `IsGapIndeterminate` recomputes the motion scale per open corner per null vector
   (O(corners² · nullity)); fine at tier-1 sizes, hoist it before slice 6.
 - Eigen's no-exceptions `EIGEN_TRY`/`EIGEN_CATCH` makes MSVC emit C4702 from the backend, which

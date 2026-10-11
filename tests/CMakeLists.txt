@@ -14,7 +14,8 @@ add_executable(loadpath_tests
 	CliTest.cpp
 	StandingAuthorityTest.cpp
 	SingleBlockAnchorsTest.cpp
-	StackAnchorsTest.cpp)
+	StackAnchorsTest.cpp
+	StandingSolverTest.cpp)
 target_link_libraries(loadpath_tests PRIVATE loadpath doctest)
 
 add_test(NAME loadpath_tests COMMAND loadpath_tests)
