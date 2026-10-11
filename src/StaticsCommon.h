@@ -2,6 +2,7 @@
 
 #include "EigenInclude.h"
 
+#include "loadpath/CollapseCertificate.h"
 #include "loadpath/Handles.h"
 #include "loadpath/Interface.h"
 #include "loadpath/Structure.h"
@@ -62,6 +63,9 @@ ComponentPartition PartitionFreeBodies(const Structure& Model);
 
 // -1 when both bodies are grounded.
 int ComponentOf(const ComponentPartition& Partition, const InterfaceRecord& Record);
+
+// The slice-4 option checks, shared so the combined authority rejects exactly what the certificate rejects.
+bool AreCertificateOptionsValid(const CertificateOptions& Options);
 
 // Row-major 3x6: the velocity of a point at ArmM from its body's (translation, rotation).
 std::array<double, 18> CornerJacobianRows(const Vec3& ArmM);

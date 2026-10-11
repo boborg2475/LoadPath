@@ -125,4 +125,11 @@ void AddForceAt(Eigen::VectorXd& Load, int Offset, const Vec3& CentroidM, const 
 	Load(Offset + 4) += MomentNm.Y;
 	Load(Offset + 5) += MomentNm.Z;
 }
+
+bool AreCertificateOptionsValid(const CertificateOptions& Options)
+{
+	const auto IsPositiveFinite = [](double X) { return X > 0.0 && IsFinite(X); };
+	return IsFinite(Options.Gravity) && Options.ConeGenerators >= 4 && Options.ConeGenerators % 2 == 0 &&
+		IsPositiveFinite(Options.LoadFactorCap) && IsPositiveFinite(Options.FeasibilityTolerance) && Options.MaxIterations >= 1;
+}
 }

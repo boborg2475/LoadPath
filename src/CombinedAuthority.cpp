@@ -2,7 +2,6 @@
 
 #include "StaticsCommon.h"
 
-#include <algorithm>
 #include <cstddef>
 #include <limits>
 #include <utility>
@@ -35,32 +34,12 @@ int ComponentOfBody(const statics::ComponentPartition& Partition, BodyId Body)
 	return Slot < Partition.ComponentOfSlot.size() ? Partition.ComponentOfSlot[Slot] : -1;
 }
 
-double Ratio(double DemandN, double CapacityN)
+AuthorityResult Invalid(InterfaceId Interface)
 {
-	return DemandN == 0.0 ? 0.0 : DemandN / CapacityN;
-}
-
-bool IsReadingOverstressed(const Structure& Model, const InterfaceReading& Reading)
-{
-	const InterfaceRecord& Record = Model.Interface(Reading.Id);
-	const StrengthProfile& Profile = Model.Profile(Record.Profile);
-	const double CornerAreaM2 = Record.AreaM2 / static_cast<double>(statics::CornerCount);
-	const bool bReleasesOpening = !(Profile.TensileStrengthPa > 0.0);
-	const bool bReleasesSlip = !(Profile.ShearCohesionPa > 0.0);
-	for (const CornerReading& Corner : Reading.Corners)
-	{
-		const double CompressionN = Corner.NormalForceN > 0.0 ? Corner.NormalForceN : 0.0;
-		const double TensionN = Corner.NormalForceN < 0.0 ? -Corner.NormalForceN : 0.0;
-		const double Compression = Ratio(CompressionN, Profile.CompressiveStrengthPa * CornerAreaM2);
-		const double Tension = Ratio(TensionN, Profile.TensileStrengthPa * CornerAreaM2);
-		const double ShearCapacityN = std::min(Profile.ShearCohesionPa * CornerAreaM2 + Profile.FrictionCoefficient * CompressionN, Profile.MaxShearStrengthPa * CornerAreaM2);
-		const double Shear = Ratio(Length(Corner.ShearForceN), ShearCapacityN);
-		if (!(Compression <= 1.0) || (!bReleasesOpening && !(Tension <= 1.0)) || (!bReleasesSlip && !(Shear <= 1.0)))
-		{
-			return true;
-		}
-	}
-	return false;
+	AuthorityResult Result;
+	Result.Worst = ComponentVerdict::InvalidInput;
+	Result.InvalidInterface = Interface;
+	return Result;
 }
 
 class CombinedAuthority final : public IStructuralAuthority
@@ -74,64 +53,49 @@ public:
 
 	AuthorityResult Judge(const Structure& Model, std::span<const BodyLoad> Loads, const AuthorityOptions& Options) const override
 	{
+		if (!SameGravity(Options.Standing.Gravity, Options.Certificate.Gravity) || !statics::AreCertificateOptionsValid(Options.Certificate))
+		{
+			return Invalid(InterfaceId{});
+		}
+		StandingResult Whole = Standing->Solve(Model, Loads, Options.Standing);
+		if (Whole.State == StandingState::InvalidInput)
+		{
+			return Invalid(Whole.InvalidInterface);
+		}
 		AuthorityResult Result;
-		if (!SameGravity(Options.Standing.Gravity, Options.Certificate.Gravity))
-		{
-			Result.Worst = ComponentVerdict::InvalidInput;
-			return Result;
-		}
-		StandingResult Elastic = Standing->Solve(Model, Loads, Options.Standing);
-		if (Elastic.State == StandingState::InvalidInput)
-		{
-			Result.Worst = ComponentVerdict::InvalidInput;
-			Result.InvalidInterface = Elastic.InvalidInterface;
-			return Result;
-		}
-		Result.Readings = std::move(Elastic.Readings);
-		const statics::ComponentPartition Partition = statics::PartitionFreeBodies(Model);
-		const std::size_t ComponentCount = Partition.FreeBodies.size();
-
-		std::vector<StandingState> ElasticOf(ComponentCount, StandingState::Stands);
-		for (const BodyId Body : Elastic.UnconstrainedBodies)
-		{
-			const int C = ComponentOfBody(Partition, Body);
-			if (C >= 0)
-			{
-				ElasticOf[static_cast<std::size_t>(C)] = StandingState::Mechanism;
-			}
-		}
-		bool bAnyOverstressed = false;
-		for (const InterfaceReading& Reading : Result.Readings)
-		{
-			const int C = statics::ComponentOf(Partition, Model.Interface(Reading.Id));
-			if (C >= 0 && IsReadingOverstressed(Model, Reading) && ElasticOf[static_cast<std::size_t>(C)] != StandingState::Mechanism)
-			{
-				ElasticOf[static_cast<std::size_t>(C)] = StandingState::Overstressed;
-				bAnyOverstressed = true;
-			}
-		}
-		for (StandingState& State : ElasticOf)
-		{
-			if (State == StandingState::Mechanism)
-			{
-				continue;
-			}
-			if (Elastic.State == StandingState::Undecided)
-			{
-				State = StandingState::Undecided;
-			}
-			else if (Elastic.State == StandingState::Overstressed && !bAnyOverstressed)
-			{
-				State = StandingState::Overstressed;
-			}
-		}
-
+		Result.Readings = std::move(Whole.Readings);
 		Result.Worst = ComponentVerdict::Stands;
-		for (std::size_t C = 0; C < ComponentCount; ++C)
+		const statics::ComponentPartition Partition = statics::PartitionFreeBodies(Model);
+		for (std::size_t C = 0; C < Partition.FreeBodies.size(); ++C)
 		{
+			Structure Sub = Model;
+			for (std::size_t Other = 0; Other < Partition.FreeBodies.size(); ++Other)
+			{
+				if (Other == C)
+				{
+					continue;
+				}
+				for (const BodyId Body : Partition.FreeBodies[Other])
+				{
+					Sub.RemoveBody(Body);
+				}
+			}
+			std::vector<BodyLoad> SubLoads;
+			for (const BodyLoad& Load : Loads)
+			{
+				if (ComponentOfBody(Partition, Load.Body) == static_cast<int>(C))
+				{
+					SubLoads.push_back(Load);
+				}
+			}
+			const StandingResult Elastic = Standing->Solve(Sub, SubLoads, Options.Standing);
+			if (Elastic.State == StandingState::InvalidInput)
+			{
+				return Invalid(Elastic.InvalidInterface);
+			}
 			ComponentReport Report;
 			Report.Bodies = Partition.FreeBodies[C];
-			Report.Elastic = ElasticOf[C];
+			Report.Elastic = Elastic.State;
 			Report.LoadFactorLower = std::numeric_limits<double>::quiet_NaN();
 			Report.LoadFactorUpper = std::numeric_limits<double>::quiet_NaN();
 			if (Report.Elastic == StandingState::Stands)
@@ -144,7 +108,7 @@ public:
 			}
 			else
 			{
-				Consult(Model, Loads, Options.Certificate, Partition, C, Report);
+				Consult(Sub, SubLoads, Options.Certificate, Report);
 				if (Report.bDisagreed)
 				{
 					++Result.Disagreements;
@@ -160,28 +124,8 @@ public:
 	}
 
 private:
-	void Consult(const Structure& Model, std::span<const BodyLoad> Loads, const CertificateOptions& Options, const statics::ComponentPartition& Partition, std::size_t Component, ComponentReport& Report) const
+	void Consult(const Structure& Sub, std::span<const BodyLoad> SubLoads, const CertificateOptions& Options, ComponentReport& Report) const
 	{
-		Structure Sub = Model;
-		for (std::size_t Other = 0; Other < Partition.FreeBodies.size(); ++Other)
-		{
-			if (Other == Component)
-			{
-				continue;
-			}
-			for (const BodyId Body : Partition.FreeBodies[Other])
-			{
-				Sub.RemoveBody(Body);
-			}
-		}
-		std::vector<BodyLoad> SubLoads;
-		for (const BodyLoad& Load : Loads)
-		{
-			if (ComponentOfBody(Partition, Load.Body) == static_cast<int>(Component))
-			{
-				SubLoads.push_back(Load);
-			}
-		}
 		CertificateResult Kinematic = Certificate->Decide(Sub, SubLoads, Options);
 		Report.bConsultedCertificate = true;
 		Report.Kinematic = Kinematic.State;

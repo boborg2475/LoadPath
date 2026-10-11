@@ -146,8 +146,7 @@ bool IsPositiveFinite(double X)
 
 bool IsInputValid(const Structure& Model, std::span<const BodyLoad> Loads, const CertificateOptions& Options)
 {
-	const bool bOptionsValid = IsFinite(Options.Gravity) && Options.ConeGenerators >= 4 && Options.ConeGenerators % 2 == 0 &&
-		IsPositiveFinite(Options.LoadFactorCap) && IsPositiveFinite(Options.FeasibilityTolerance) && Options.MaxIterations >= 1;
+	const bool bOptionsValid = statics::AreCertificateOptionsValid(Options);
 	if (!bOptionsValid)
 	{
 		return false;
@@ -309,6 +308,7 @@ Program BuildProgram(const Component& C, int Generators, double RadiusScale, dou
 			Friction[K] = statics::Add(J.Normal, Scale(RadiusScale * J.Friction, InPlane));
 			Cohesion[K] = Scale(RadiusScale, InPlane);
 		}
+		const std::vector<Vec3> NormalOnly{J.Normal};
 		const double TensionN = bInscribed ? J.InnerTensionN : J.TensionN;
 		const double CohesionN = bInscribed ? J.InnerCohesionN : J.CohesionN;
 		for (std::size_t Corner = 0; Corner < CornerCount; ++Corner)
@@ -316,6 +316,11 @@ Program BuildProgram(const Component& C, int Generators, double RadiusScale, dou
 			const std::size_t SiteIndex = J.FirstSite + Corner;
 			ApplyCornerForce(P.Offset.data(), C.Sites[SiteIndex], Scale(TensionN / C.ForceScaleN, J.Normal));
 			const std::size_t GroupsBefore = P.Groups.size();
+			if (!(J.ShearCapN > 0.0))
+			{
+				AddGroup(P, SiteIndex, (J.CrushingN + TensionN) / C.ForceScaleN, NormalOnly);
+				continue;
+			}
 			AddGroup(P, SiteIndex, (J.CrushingN + TensionN) / C.ForceScaleN, Friction);
 			AddGroup(P, SiteIndex, CohesionN / C.ForceScaleN, Cohesion);
 			if (IsPositiveFinite(J.ShearCapN) && P.Groups.size() > GroupsBefore)
