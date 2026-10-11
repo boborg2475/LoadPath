@@ -132,9 +132,8 @@ tombstoned. A never-issued generation is `UnknownBody`; a tombstoned slot is `Bo
 slot reuse is ever introduced, the bump returns with it and a test.
 
 Interfaces are never removed from storage: a removed body's interfaces go to state `Removed`
-and their handles keep reading the record, so `IsLive(InterfaceId)` means "state is not Removed"
-(slice 3 decides whether `Cracked` and `Severed` count as live; the current reading is that they
-do).
+and their handles keep reading the record, so `IsLive(InterfaceId)` means "state is `Intact` or `Cracked`"
+(slice 3: a severed joint carries nothing and is not live; its record and stamps stay readable).
 
 Dead reads fail closed (review 2026-10-11): `Body()` on an unknown or removed handle returns a
 descriptor with `MassKg = NaN` (TRAPS: fail-closed for a mass is NaN, never zero); `Interface()`
@@ -180,8 +179,8 @@ missing required field (`mass_kg`, `a`, `b`, `normal`, `centre_m`, `u`, `v`, `ha
 element (`Line` is the element's opening line). Missing optional fields take the struct defaults.
 Every `Add*` refusal is surfaced as an error naming the element and the `ModelError` by name.
 `WriteStructure` emits the same format with every field, bodies in slot order, so
-load(write(load(x))) equals load(x) field for field. Removed bodies and their interfaces are
-not written.
+load(write(load(x))) equals load(x) field for field. Removed bodies are not written; an interface is written when both its bodies are live, in
+any state but `Removed` (slice 3), with a top-level `highest_pass` when it is above 0.
 
 The CLI binary `loadpath_cli` is a `main` (in `cli/Main.cpp`, its own CMake target) that reads
 the file named by its one argument into a string and calls `RunCli`, which does everything else
@@ -215,8 +214,8 @@ standard escapes decode, surrogate pairs combine, a lone surrogate is a syntax e
 Second ratification (2026-10-11, after the 1b green): a number that underflows (`1e-400`) reads
 as the nearest representable value (zero or a subnormal), never an error; only overflow to a
 non-finite value is the syntax error. Raw control characters (below U+0020) inside a string
-are a syntax error at their line. `InterfaceNames` holds one empty string per interface, since
-the format has no interface names. When a name vector is shorter than its slot vector, the
+are a syntax error at their line. `InterfaceNames` holds one string per interface, empty when
+the file gave none (an optional `name` per interface since slice 3; duplicates are not checked). When a name vector is shorter than its slot vector, the
 writer emits `b<Index>` or `p<Index>` for the missing names. A failed `LoadStructure` returns a
 default-constructed `Value` (empty structure, empty names). The round trip compares a
 re-normalised normal within 4 ulps per component (re-normalising an already-unit vector is not
@@ -757,7 +756,8 @@ another copy.
 ```cpp
 bool Crack(InterfaceId, std::uint32_t Pass);   // Intact -> Cracked, stamps CrackPass; false otherwise
 bool Sever(InterfaceId, std::uint32_t Pass);   // Intact or Cracked -> Severed, stamps SeverPass; false otherwise
-std::uint32_t HighestPass() const;             // the largest crack or sever stamp ever written, 0 when none
+std::uint32_t HighestPass() const;             // the pass counter: the largest stamp written or pass marked, 0 when none
+bool MarkPass(std::uint32_t Pass);             // raises the counter to Pass without stamping (a counted pass that wrote no stamp); false for 0
 StrengthProfile EffectiveProfile(InterfaceId) const;  // the profile with TensileStrengthPa = ShearCohesionPa = 0 when Cracked, Severed or Removed (a dead joint reads the weaker form, fail closed)
 ```
 
@@ -865,8 +865,14 @@ entry is `InvalidInput` (the authority's rule). Then, with `Pass = HighestPass()
    the run as `PassCapReached` with the structure as it stands then (the host sees a partial
    cascade and calls again; the next run continues from `HighestPass`).
 
-`FirstPass` is `HighestPass() + 1` at entry and `LastPass` the last stamp written, so a run that
-changed nothing has `LastPass = FirstPass − 1` and `Passes = 0`.
+`FirstPass` is `HighestPass() + 1` at entry and `LastPass` the last counted pass; every counted
+pass ends with `MarkPass(Pass)`, so a release that wrote no stamp (a free body, a body whose
+last joints a neighbour severed) still advances the structure.s counter and a later run never
+reuses a pass number; a run that changed nothing has `LastPass = FirstPass − 1` and
+`Passes = 0`. The counter is saved: the file writes `highest_pass` and the reader takes the
+larger of that field and the stamps it reads, so a reloaded structure continues numbering.
+`Sever` refuses a pass below the joint.s `CrackPass` (the file reader refuses the same), and
+`Run` reads `InvalidInput` when `HighestPass()` is `UINT32_MAX` (the counter cannot advance).
 
 **The structure file carries state** (slice 1b format, extended here): every interface whose
 two bodies are live is written, `Intact`, `Cracked` or `Severed`, with `state`, `crack_pass`
@@ -877,7 +883,11 @@ load.
 
 The final `State` is the last judge's `Worst` mapped to `CascadeState` (`Stands`,
 `Overstressed`, `Undecided`), or `PassCapReached`; `Collapses` cannot be final because every
-collapsing component was released in its pass. `Readings` and `Components` are the final
+collapsing component was released in its pass, and a `Collapses` component with an empty
+release list (the certificate named nothing) is reported `Undecided`, fail closed. On
+`PassCapReached` the cascade judges once more after the capped pass, so `Readings` and
+`Components` always describe the structure as it stands when the run returns.
+`Readings` and `Components` are the final
 judge's, so a host reading utilisations after a cascade reads the structure that remains. The
 run is deterministic: ordered by slot everywhere, no state outside the structure.
 
