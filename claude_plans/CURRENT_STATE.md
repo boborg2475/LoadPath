@@ -8,49 +8,51 @@ Deferring something? Add it here with enough context to pick up cold.
 Repository scaffolded: CMake + Visual Studio 2022 generator, vendored doctest 2.4.11 and Eigen
 3.4.0, the compiler contract (no exceptions, no RTTI, `/W4 /WX`, `/fp:precise`) enforced.
 Slice 1 (the model: handles, profiles, bodies, interfaces, validation, removal), slice 1b (JSON
-structure reader/writer, `RunCli`, the `loadpath_cli` binary) and slice 2a (the standing
-authority) are committed and reviewed, every green-on-arrival row proven by a recorded mutation
-(commit messages). Slice 2a, through 1025bd9 and four reviews: `IStandingAuthority`, the RBSM
-corner-spring implementation with per-component Schur-pivoted dense LDLT solves and the free
-active set, under the narrowed contract of DESIGN §10 (it certifies Stands and Overstressed,
-reports Mechanism as a verdict, and fails closed to Undecided rather than guess); 18 anchor and
-mechanics tests (incline tip and slide, Housner, free and coursed wall, the Itasca slope
-regimes, harmonic stack, Paterson–Zwick triangle and diamond), 20 solver characterisation and
-defect tests, a seeded locality property and a seeded static-admissibility oracle property.
-Slice 4a, the limit-analysis collapse certificate (`ICollapseCertificate`, 42 cases), is done
-after four reviews. Default
-suite 155 cases (8431 assertions in Debug, 19787 in Release, about 6.8 s and 1.2 s);
-the `Deferred.Slice4` tier holds 3 cases red by design. The design brief
-([DESIGN.md](DESIGN.md)) has every §9 question decided and §10 carries the slice-2 rulings.
+structure reader/writer, `RunCli`, the `loadpath_cli` binary), slice 2a (the standing
+authority), slice 4a (the limit-analysis collapse certificate) and slice 4b (the combined
+authority, the shear cap in the LP, the kinematic anchors) are committed and reviewed, every
+green-on-arrival row proven by a recorded mutation (commit messages). Slice 2a: `IStandingAuthority`,
+the RBSM corner-spring implementation with per-component Schur-pivoted dense LDLT solves and the
+free active set, under the narrowed contract of DESIGN §10 (it certifies Stands and
+Overstressed, reports Mechanism as a verdict, and fails closed to Undecided rather than guess).
+Slice 4a: `ICollapseCertificate`, the inscribed/circumscribed limit-analysis LP with the
+homogeneous self-dual interior point and mechanism selection. Slice 4b: `IStructuralAuthority`
+(`MakeCombinedAuthority`), one call per structure that solves every component with the elastic
+authority and referees its Mechanism and Undecided components with the certificate, counting
+disagreements and releasing only what the certificate lists; `MaxShearStrengthPa` as per-corner
+facet rows (cap 0 is a cap); the Couplet–Heyman arch pinned exactly at Milankovitch's 0.107478
+with hinges at 0°, ±54.484°, ±90° and its friction switch, the Orduña pile at λ 0.5005, the
+3DEC wedge at the certificate's associative 31.07°. Default suite 175 cases in Debug (11,085
+assertions, about 10 s) and 179 in Release (25,742 assertions, 4 s; the four arch and pile
+anchors run only there under `LOADPATH_SLOW_IN_DEBUG`); the `Deferred.Slice7` tier holds the one
+physical wedge pin, red by design. The design brief ([DESIGN.md](DESIGN.md)) has every §9
+question decided and §10 carries the slice-2, 4a and 4b rulings.
 
 ## Next
 
-1. Slice 4a, the limit-analysis collapse certificate (API.md "Slice 4", DESIGN §10): **done**
-   after four reviews (2026-10-11), 42 `Certificate.*` cases. Deferred to 4b or later, none
-   host-unsafe:
-   - the selection gate is `FeasibilityTolerance` (1e-9); the largest dry `t_in` seen is 5.5e-10,
-     so the margin is thin; `t_in` scales with the tolerance across 1e-6..1e-13 in probes;
-   - `t_out` is the circumscribed converged primal, not the dual objective `bᵀy/τ`; the two
-     agree within the 1e-9 termination gap, so the upper bound can be unsafe only by that much,
-     acceptable to defer;
-   - `Iterations` excludes the selection solve's count, so a host cannot see an Undecided came
-     from the selection cap;
-   Then slice 4b: first agree one shared listing definition for both authorities (the
-   certificate lists at 1e-3 with rotations scaled by the characteristic length, the elastic
-   authority at 1e-6 unscaled) so the disagreement count compares like with like; record the
-   selection's resolution limit (harmonic stacks read Undecided at ε 1e-7 for n ≥ 5 and name
-   every level at 1e-8 for n ≥ 3) for the referee; add the reverse hinge property (every listed
-   body's cluster of listed neighbours joined by non-hinging interfaces touches a hinging
-   interface, BFS over `InterfacesOf`; 0 violations in 1550 probe collapses) and the
-   top/lower-joint `HasInterface` check in the knife-edge ε 1e-4 loop. Then the combined
-   authority (referee every component the elastic authority leaves
-   Undecided and every Mechanism it reports, count disagreements, report per component, move
-   the three `Deferred.Slice4.*` cases under `Statics.*`); the arch (B-ARC-01/06), Orduña pile
-   (B-ORD-01) and 3DEC wedge (B-WDG-01) anchors; `MaxShearStrengthPa` in the LP as facet rows
-   on the corner shear (today a finite cap is ignored, fail-open for Stands); whether
-   tension-only profiles (ft > 0, c = 0) need a cohesion floor on the inscribed side; severity
-   across components (one Collapses beside one Undecided reads Undecided with Upper < 1) once
-   per-component reporting exists; HiGHS stays slice 7's referee question.
+1. Slice 4b (API.md "Slice 4b", DESIGN §10): **done** after two reviews (2026-10-11). Open
+   items it leaves, none host-unsafe (the unsafe one, the wedge band, is under Deferred):
+   - the mechanism selection ignores finite positive shear caps (harmless at `t* = 0`, the prism
+     contains the origin; for `0 < t* < 1e-9`, a cap near 1e-9 Pa, it reads Undecided, which
+     fails closed);
+   - the combined authority copies the whole structure per consulted component and solves the
+     elastic sub-structure even when there is one component: O(components × N), one redundant
+     solve on single-component structures; slice 6's cost pass;
+   - the LP and the RBSM ignore `InterfaceState` (Cracked/Severed carry no reduced strength
+     yet); slice 3 decides what a cracked joint keeps;
+   - the reverse hinge property only checks that a cluster of listed bodies touches a hinge; a
+     stronger form (every interface between a listed and an unlisted or grounded body hinges)
+     is untested;
+   - the pile anchor runs on a reconstructed bond (five 0.2 × 0.4 blocks per course, two
+     mirrored tilings, bed joints only); verify against the paper's figure when it can be read
+     and tighten the assertion to the published bracket if the layout matches;
+   - the 4a items still open: the selection gate is `FeasibilityTolerance` (largest dry `t_in`
+     seen 5.5e-10); `t_out` is the circumscribed converged primal, not the dual objective;
+     `Iterations` excludes the selection solve's count; HiGHS stays slice 7's referee question.
+   Next slice by DESIGN §8: slice 3, the cascade (top-band cracking, severing, pass stamps,
+   released bodies grouped into clusters; the verdict type is complete there) unless the owner
+   reorders; the remaining slice-2 anchors (item 2) can
+   run alongside it.
 2. Slice 2b, the remaining slice-2 anchors (BENCHMARKS groups 2 and 3): B-WAL-03 (wall slides at
    λ = μ), B-STK-04 (constant-step stack), B-WDG-02, B-ROK-02, F-CHC-01, F-LIB-01/02, F-EMI-01,
    the 5-diamond (hits the 50-pass cap today, logged below), and the arch and pile rows that
