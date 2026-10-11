@@ -621,3 +621,104 @@ back under `Statics.*` through the combined authority; the Couplet–Heyman semi
 half-voussoir of 54.5°, voussoir count from the report's discretisation guidance); its friction
 switch (B-ARC-06, stands at φ = 22°, slides at 21°); the 3DEC wedge (B-WDG-01, φ_crit 33.36°
 within 0.05°); the Orduña pile bracket (B-ORD-01); the shear cap.
+
+## Slice 4b: the combined authority, the shear cap, and the kinematic anchors
+
+### The combined authority (`StructuralAuthority.h`)
+
+One call a host makes per structure and load. It owns nothing: it is handed the two
+implementations and composes their answers under the theorem ruling above.
+
+```cpp
+enum class ComponentVerdict : uint8_t { Stands, Overstressed, Collapses, Undecided, InvalidInput };
+
+struct ComponentReport {
+	std::vector<BodyId> Bodies;                   // the free bodies of this connected component, ascending slot order
+	ComponentVerdict Verdict = ComponentVerdict::Undecided;
+	StandingState Elastic = StandingState::Undecided;        // what the elastic authority said for these bodies
+	CertificateState Kinematic = CertificateState::Undecided; // what the certificate said, or Undecided if it was not consulted
+	bool bConsultedCertificate = false;
+	bool bDisagreed = false;                      // elastic Mechanism against certificate Stands
+	double LoadFactorLower = 0.0;                 // from the certificate when consulted, else NaN
+	double LoadFactorUpper = 0.0;
+	std::vector<MechanismMotion> Mechanism;       // the certificate's selected mechanism on Collapses
+	std::vector<BodyId> Release;                  // bodies the host releases: the certificate's UnconstrainedBodies on Collapses, else empty
+	std::vector<InterfaceId> Hinging;             // the certificate's HingingInterfaces on Collapses, else empty
+};
+
+struct AuthorityOptions {
+	StandingOptions Standing;
+	CertificateOptions Certificate;               // Gravity must equal Standing.Gravity or the call is InvalidInput
+};
+
+struct AuthorityResult {
+	ComponentVerdict Worst = ComponentVerdict::Undecided;  // InvalidInput > Undecided > Collapses > Overstressed > Stands
+	std::vector<InterfaceReading> Readings;      // the elastic authority's readings, every live interface, ascending slot order
+	std::vector<ComponentReport> Components;     // ascending by lowest body slot
+	int Disagreements = 0;                       // components where the certificate overruled an elastic Mechanism
+	InterfaceId InvalidInterface{};
+};
+
+class IStructuralAuthority {
+public:
+	virtual ~IStructuralAuthority() = default;
+	virtual AuthorityResult Judge(const Structure&, std::span<const BodyLoad>, const AuthorityOptions&) const = 0;
+};
+
+std::unique_ptr<IStructuralAuthority> MakeCombinedAuthority(std::unique_ptr<IStandingAuthority>, std::unique_ptr<ICollapseCertificate>);
+```
+
+**Rules.** The elastic authority runs once over the whole structure. Its readings are the
+result's readings. Per connected component (the same partition both implementations use; the
+combined authority computes it itself through the shared partition code so the mapping of
+bodies to components is one definition):
+- elastic `Stands` → `Stands`; elastic `Overstressed` → `Overstressed` (slice 3's domain; the
+  certificate is not consulted, its crushing bound would only restate the same joint);
+- elastic `Mechanism` or `Undecided` → the certificate is consulted on that component alone (a
+  structure holding only that component's bodies, grounded bodies kept, loads filtered):
+  `Stands` → `Stands`, and `bDisagreed` with `Disagreements + 1` when the elastic said Mechanism;
+  `Collapses` → `Collapses` with the certificate's lists as `Release`, `Mechanism` and `Hinging`;
+  `Undecided` → `Undecided`, nothing released;
+- elastic `InvalidInput` → the whole result is `InvalidInput` with the elastic's interface.
+The release set is always the certificate's (listing threshold 1e-3, rotations scaled by the
+component's characteristic length); the elastic authority's own `Mechanism` lists stay
+informational and are never released, which is the shared listing definition slice 4a asked for
+(the elastic lists at 1e-6 from a direct null space and need not change). Deterministic; no
+state between calls. The three `Deferred.Slice4.*` cases assert through this authority and move
+back under `Statics.*`.
+
+### The shear cap in the LP
+
+`MaxShearStrengthPa · A/4` bounds the corner shear with facet rows: for each of the `G` facet
+directions `d_j = cos θ_j u + sin θ_j v` the shear component along `d_j` of the corner force is
+at most `cap · A/4` on the inscribed solve and `cap · A/4 / cos(π/G)` on the circumscribed one
+(the same polygon pair as the friction cone, a bound on the force not on `Σ α`, which would turn
+a shear cap into a compression cap). A dry brick with `μ` large and a small cap slides through
+the certificate at lateral factor `λ = cap · A / W` (the lateral load factor form, every corner
+at its cap), and at tilt `θ = asin(cap · A / W)` as slice 2's test already pins for the
+elastic authority.
+
+### Anchors slice 4b must pin
+
+- B-WDG-01, the 3DEC wedge, through the certificate with `ConeGenerators` high enough that the
+  polygon band is under the 0.05° tolerance (`1/cos(π/G) − 1` times μ: G = 64 gives 0.12 % of
+  μ, about 0.04° at 33°); the skipped elastic test stays skipped and says so.
+- B-ARC-01 and B-ARC-02, the Couplet–Heyman semicircle: radial joints, centreline radius `r`,
+  unit depth, density any, `μ ≥ 0.5` (use 0.7). Stands at `t/r = 0.1075 + 0.002`, Collapses at
+  `0.1075 − 0.001`; the haunch hinge within one joint of 54.48° from the crown (joints every 5°
+  plus a joint at ±54.484°, or voussoirs of 2°; B-ARC-09 says discretisation only raises the
+  least thickness, so a Stands below 0.1075 is a false stand at any count). On Collapses the
+  hinging set is the crown, the two haunches and the two springings (symmetric mechanism; the
+  selection may return one side's four hinges, so assert the haunch and crown hinges and that
+  every hinge is one of the five).
+- B-ARC-06, the friction switch on that arch at least thickness: Collapses (sliding) at φ = 21°
+  (μ 0.384) and Stands at 22° (μ 0.404) with `G = 32` so the band (0.5 % of μ) clears the 0.3 %
+  gap between tan 22° and tan 21.57°.
+- B-ORD-01, the Orduña & Lourenço hollow pile, if the block layout can be taken from the cited
+  paper or the research notes: `[t_in, t_out]` must contain a value in [0.427, 0.553] and the
+  elastic authority's verdict at λ = 0.4 must not be Mechanism; otherwise a `Deferred.Slice4b`
+  case with the reason.
+- The combined authority: the three deferred cases; a structure with one Overstressed and one
+  Collapses component reports both per component with `Worst = Collapses`; the disagreement
+  count on the dry bridge at μ 5, λ (2.5, 0.875) is 1 (elastic Mechanism, certificate Stands)
+  and the release set is empty; a pure elastic Stands never consults the certificate.
