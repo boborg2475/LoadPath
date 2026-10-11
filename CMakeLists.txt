@@ -40,6 +40,9 @@ add_library(loadpath STATIC
 target_include_directories(loadpath PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_link_libraries(loadpath PUBLIC loadpath_contract)
 
+add_executable(loadpath_cli cli/Main.cpp)
+target_link_libraries(loadpath_cli PRIVATE loadpath)
+
 if(LOADPATH_BUILD_TESTS)
 	enable_testing()
 	add_subdirectory(tests)

@@ -2,6 +2,12 @@
 
 #include "doctest.h"
 
+#include <array>
+#include <charconv>
+#include <cmath>
+#include <cstdint>
+#include <initializer_list>
+#include <limits>
 #include <string>
 
 using namespace loadpath;
@@ -189,7 +195,7 @@ struct RefusalCase
 
 const RefusalCase Refusals[] = {
 	{"negative mass", 'b', 1, "mass_kg", "-1", "b1", "NegativeMass"},
-	{"zero normal", 'i', 0, "normal", "[0, 0, 0]", nullptr, "DegenerateNormal"},
+	{"zero normal", 'i', 0, "normal", "[0, 0, 0]", "interface", "DegenerateNormal"},
 	{"negative compressive strength", 'p', 0, "compressive_pa", "-1", "mortar", "NegativeStrength"},
 };
 
@@ -208,6 +214,8 @@ const SyntaxCase SyntaxErrors[] = {
 	{"missing colon", "{\n  \"bodies\": [\n    { \"name\" \"b0\", \"mass_kg\": 1 }\n  ]\n}", 3},
 	{"unclosed brackets at end of input", "{\n  \"bodies\": [\n    { \"name\": \"b0\", \"mass_kg\": 1 }", 3},
 	{"extra closing bracket after the root", "{\n  \"bodies\": []\n}]", 3},
+	{"CRLF line endings count one line each", "{\r\n  \"bodies\": [\r\n    { \"name\" \"b0\" }\r\n  ]\r\n}", 3},
+	{"escaped newline in a name is not a line", "{\n  \"profiles\": [\n    { \"name\": \"a\\nb\",\n      \"compressive_pa\":\n        yes }\n  ]\n}", 5},
 };
 
 const char* const ForbiddenNumbers[] = {"01", ".5", "1.", "+1", "-", "1e", "--1"};
@@ -369,14 +377,13 @@ TEST_CASE("File.Load.AddRefusalNamesTheElementAndTheModelError")
 	for (const RefusalCase& Case : Refusals)
 	{
 		INFO(doctest::String(Case.Name));
-		const LoadResult Result = LoadStructure(Build(WithValue(ExampleSpec(), Case.Kind, Case.Index, Case.Key, Case.Value)).Json);
+		const BuiltDoc Doc = Build(WithValue(ExampleSpec(), Case.Kind, Case.Index, Case.Key, Case.Value));
+		const LoadResult Result = LoadStructure(Doc.Json);
 		INFO("line " << Result.Error.Line << ": " << Result.Error.Message);
 		CHECK_FALSE(Result.Ok());
+		CHECK(Result.Error.Line == LinesOf(Doc, Case.Kind)[Case.Index]);
 		CHECK(Contains(Result.Error.Message, Case.ErrorName));
-		if (Case.ElementName != nullptr)
-		{
-			CHECK(Contains(Result.Error.Message, Case.ElementName));
-		}
+		CHECK(Contains(Result.Error.Message, Case.ElementName));
 	}
 }
 
@@ -561,5 +568,528 @@ TEST_CASE("File.Write.OutputContainsEveryFieldName")
 	{
 		INFO(doctest::String(Key));
 		CHECK(Contains(Text, std::string("\"") + Key + "\""));
+	}
+}
+
+namespace
+{
+std::string Bytes(std::initializer_list<unsigned> Values)
+{
+	std::string Out;
+	for (const unsigned Value : Values)
+	{
+		Out += static_cast<char>(Value);
+	}
+	return Out;
+}
+
+std::string ProfileNameDocument(const std::string& NameSource)
+{
+	return "{\n  \"profiles\": [\n    { \"name\": \"" + NameSource + "\", \"compressive_pa\": 1e7 }\n  ]\n}";
+}
+
+std::string Esc(const char* After)
+{
+	return std::string(1, '\\') + After;
+}
+
+struct EscapeCase
+{
+	const char* Name;
+	std::string Source;
+	std::string Decoded;
+};
+
+std::vector<EscapeCase> EscapeCases()
+{
+	return {
+		{"reverse solidus", "a" + Esc("\\") + "b", std::string("a") + '\\' + "b"},
+		{"trailing reverse solidus", "a" + Esc("\\"), std::string("a") + '\\'},
+		{"solidus", "a" + Esc("/") + "b", "a/b"},
+		{"backspace form feed newline return tab", Esc("b") + Esc("f") + Esc("n") + Esc("r") + Esc("t"), "\b\f\n\r\t"},
+		{"quote and reverse solidus together", Esc("\"") + Esc("\\") + Esc("\""), std::string("\"") + '\\' + "\""},
+		{"u0000", "x" + Esc("u0000") + "y", std::string("x") + '\0' + "y"},
+		{"u0041 one byte", Esc("u0041"), "A"},
+		{"u007f largest one-byte", Esc("u007f"), Bytes({0x7F})},
+		{"u0080 smallest two-byte", Esc("u0080"), Bytes({0xC2, 0x80})},
+		{"u00e9 two bytes", Esc("u00e9"), Bytes({0xC3, 0xA9})},
+		{"u00E9 upper-case hex", Esc("u00E9"), Bytes({0xC3, 0xA9})},
+		{"u07ff largest two-byte", Esc("u07ff"), Bytes({0xDF, 0xBF})},
+		{"u0800 smallest three-byte", Esc("u0800"), Bytes({0xE0, 0xA0, 0x80})},
+		{"u20ac euro sign", Esc("u20ac"), Bytes({0xE2, 0x82, 0xAC})},
+		{"uffff largest BMP", Esc("uffff"), Bytes({0xEF, 0xBF, 0xBF})},
+		{"surrogate pair U+1F600", Esc("ud83d") + Esc("ude00"), Bytes({0xF0, 0x9F, 0x98, 0x80})},
+		{"surrogate pair U+10000", Esc("ud800") + Esc("udc00"), Bytes({0xF0, 0x90, 0x80, 0x80})},
+		{"surrogate pair U+10FFFF", Esc("udbff") + Esc("udfff"), Bytes({0xF4, 0x8F, 0xBF, 0xBF})},
+		{"escape between plain text", "left" + Esc("u00e9") + "right", "left" + Bytes({0xC3, 0xA9}) + "right"},
+		{"raw UTF-8 passes through", Bytes({0xC3, 0xA9}), Bytes({0xC3, 0xA9})},
+		{"raw DEL passes through", Bytes({0x7F}), Bytes({0x7F})},
+	};
+}
+
+struct MalformedEscapeCase
+{
+	const char* Name;
+	std::string Source;
+};
+
+std::vector<MalformedEscapeCase> MalformedEscapes()
+{
+	return {
+		{"invalid escape x", "a" + Esc("x") + "b"},
+		{"invalid escape U", Esc("U00e9")},
+		{"u with three hex digits", Esc("u00e")},
+		{"u with a non-hex digit", Esc("u00g9")},
+		{"lone high surrogate before plain text", Esc("ud83d") + "A"},
+		{"lone high surrogate before a non-surrogate escape", Esc("ud83d") + Esc("u0041")},
+		{"lone high surrogate at the end of the string", Esc("ud83d")},
+		{"high surrogate followed by a high surrogate", Esc("ud83d") + Esc("ud83d")},
+		{"lone low surrogate", Esc("ude00")},
+	};
+}
+
+struct ControlCase
+{
+	const char* Name;
+	std::string Json;
+};
+
+std::vector<ControlCase> RawControlCases()
+{
+	const std::string Before = "{\n  \"profiles\": [\n    { \"name\": \"a";
+	const std::string After = "b\", \"compressive_pa\": 1e7 }\n  ]\n}";
+	return {
+		{"raw tab", Before + '\t' + After},
+		{"raw newline", Before + '\n' + After},
+		{"raw carriage return", Before + '\r' + After},
+		{"raw 0x01", Before + '\x01' + After},
+		{"raw 0x1f", Before + '\x1f' + After},
+		{"raw NUL", Before + '\0' + After},
+		{"raw tab in an unknown key", std::string("{\n  \"profiles\": [\n    { \"name\": \"a\", \"no") + '\t' + "te\": 1, \"compressive_pa\": 1e7 }\n  ]\n}"},
+	};
+}
+
+LoadedStructure TwoBodiesOneInterface(const std::string& ProfileName, const std::string& NameA, const std::string& NameB)
+{
+	LoadedStructure L;
+	const Result<ProfileId> Profile = L.Model.AddProfile(DistinctFieldProfile());
+	const Result<BodyId> A = L.Model.AddBody(BrickAt(StackedBrickCentroidM(0), true));
+	const Result<BodyId> B = L.Model.AddBody(BrickAt(StackedBrickCentroidM(1)));
+	REQUIRE(Profile.Ok());
+	REQUIRE(A.Ok());
+	REQUIRE(B.Ok());
+	REQUIRE(L.Model.AddInterface(BedJoint(A.Value, B.Value, 1, Profile.Value)).Ok());
+	L.ProfileNames = {ProfileName};
+	L.BodyNames = {NameA, NameB};
+	L.InterfaceNames = {""};
+	return L;
+}
+
+struct FailedLoadCase
+{
+	const char* Name;
+	std::string Json;
+};
+
+std::vector<FailedLoadCase> FailedLoadCases()
+{
+	DocSpec ThirdBodyDuplicate = ExampleSpec();
+	ThirdBodyDuplicate.Bodies.push_back({{"name", "\"b0\""}, {"mass_kg", "1"}});
+	DocSpec ThirdBodyNegative = ExampleSpec();
+	ThirdBodyNegative.Bodies.push_back({{"name", "\"b2\""}, {"mass_kg", "-1"}});
+	return {
+		{"interface missing a", Build(Without(ExampleSpec(), 'i', 0, "a")).Json},
+		{"interface names an unknown profile", Build(WithValue(ExampleSpec(), 'i', 0, "profile", "\"steel\"")).Json},
+		{"interface with a zero normal", Build(WithValue(ExampleSpec(), 'i', 0, "normal", "[0, 0, 0]")).Json},
+		{"third body duplicates a name", Build(ThirdBodyDuplicate).Json},
+		{"third body has negative mass", Build(ThirdBodyNegative).Json},
+		{"syntax error in the interface", Build(WithValue(ExampleSpec(), 'i', 0, "half_u_m", "yes")).Json},
+	};
+}
+
+Vec3 Normalised(const Vec3& V)
+{
+	const double L = Length(V);
+	return Vec3{V.X / L, V.Y / L, V.Z / L};
+}
+
+Vec3 LeastAlignedAxis(const Vec3& N)
+{
+	const double X = std::abs(N.X);
+	const double Y = std::abs(N.Y);
+	const double Z = std::abs(N.Z);
+	if (X <= Y && X <= Z)
+	{
+		return Vec3{1.0, 0.0, 0.0};
+	}
+	return Y <= Z ? Vec3{0.0, 1.0, 0.0} : Vec3{0.0, 0.0, 1.0};
+}
+
+bool Within4Ulps(double Got, double Want)
+{
+	return std::abs(Got - Want) <= 4.0 * std::numeric_limits<double>::epsilon() * std::abs(Want);
+}
+
+std::string Shortest(const Vec3& V)
+{
+	const double Components[] = {V.X, V.Y, V.Z};
+	std::string Text = "(";
+	for (int Index = 0; Index < 3; ++Index)
+	{
+		std::array<char, 32> Buffer{};
+		const std::to_chars_result Written = std::to_chars(Buffer.data(), Buffer.data() + Buffer.size(), Components[Index]);
+		Text.append(Buffer.data(), Written.ptr);
+		Text += Index < 2 ? ", " : ")";
+	}
+	return Text;
+}
+
+std::string NestedUnderUnknownKey(int Levels, char Open, char Close)
+{
+	std::string Json = "{\"extra\": ";
+	for (int Level = 2; Level <= Levels; ++Level)
+	{
+		Json += Open;
+		if (Open == '{' && Level < Levels)
+		{
+			Json += "\"k\": ";
+		}
+	}
+	Json.append(static_cast<std::size_t>(Levels - 1), Close);
+	Json += "}";
+	return Json;
+}
+}
+
+TEST_CASE("File.Load.StandardEscapesDecode")
+{
+	for (const EscapeCase& Case : EscapeCases())
+	{
+		INFO(doctest::String(Case.Name));
+		const std::optional<LoadedStructure> Loaded = LoadOk(ProfileNameDocument(Case.Source));
+		if (!Loaded)
+		{
+			continue;
+		}
+		CHECK(Loaded->ProfileNames.size() == 1u);
+		if (Loaded->ProfileNames.size() != 1u)
+		{
+			continue;
+		}
+		CHECK(Loaded->ProfileNames[0] == Case.Decoded);
+	}
+
+	const std::optional<LoadedStructure> Keyed = LoadOk(std::string(R"({ "bodies": [ { "name": "b0", "mass)") + Esc("u005f") + R"(kg": 4 } ] })");
+	if (Keyed)
+	{
+		const BodyId B0 = BodyNamed(*Keyed, "b0");
+		CHECK(Keyed->Model.IsLive(B0));
+		CHECK(Keyed->Model.Body(B0).MassKg == 4.0);
+	}
+}
+
+TEST_CASE("File.Load.MalformedEscapesAreSyntaxErrorsAtTheirLine")
+{
+	for (const MalformedEscapeCase& Case : MalformedEscapes())
+	{
+		INFO(doctest::String(Case.Name));
+		const LoadResult Result = LoadStructure(ProfileNameDocument(Case.Source));
+		INFO("line " << Result.Error.Line << ": " << Result.Error.Message);
+		CHECK_FALSE(Result.Ok());
+		CHECK(Result.Error.Line == 3);
+	}
+}
+
+TEST_CASE("File.Load.RawControlCharacterInAStringIsASyntaxErrorAtItsLine")
+{
+	for (const ControlCase& Case : RawControlCases())
+	{
+		INFO(doctest::String(Case.Name));
+		const LoadResult Result = LoadStructure(Case.Json);
+		INFO("line " << Result.Error.Line << ": " << Result.Error.Message);
+		CHECK_FALSE(Result.Ok());
+		CHECK(Result.Error.Line == 3);
+	}
+}
+
+TEST_CASE("File.Write.NamesWithQuotesBackslashesAndControlCharactersRoundTrip")
+{
+	const std::string ProfileName = std::string("m\"") + '\\' + "/\b\f\n\r\t" + '\x01' + '\x1f' + '\x7f' + '\0' + Bytes({0xC3, 0xA9}) + "end";
+	const std::string NameA = std::string("a") + '\\';
+	const std::string NameB = std::string("\"") + '\n' + '\t' + "b";
+	const LoadedStructure Original = TwoBodiesOneInterface(ProfileName, NameA, NameB);
+
+	const std::optional<LoadedStructure> Reloaded = LoadOk(WriteStructure(Original));
+	if (!Reloaded)
+	{
+		return;
+	}
+	CHECK(Reloaded->ProfileNames == std::vector<std::string>{ProfileName});
+	CHECK(Reloaded->BodyNames == std::vector<std::string>{NameA, NameB});
+	const std::vector<InterfaceId> Interfaces = Reloaded->Model.LiveInterfaces();
+	CHECK(Interfaces.size() == 1u);
+	if (Interfaces.size() != 1u)
+	{
+		return;
+	}
+	const InterfaceRecord& J = Reloaded->Model.Interface(Interfaces[0]);
+	CHECK(NameOf(Reloaded->BodyNames, J.BodyA.Index) == NameA);
+	CHECK(NameOf(Reloaded->BodyNames, J.BodyB.Index) == NameB);
+	CHECK(NameOf(Reloaded->ProfileNames, J.Profile.Index) == ProfileName);
+}
+
+TEST_CASE("File.Load.UnderflowReadsAsTheNearestRepresentableValue")
+{
+	const std::optional<LoadedStructure> Loaded = LoadOk(
+		"{\n  \"bodies\": [\n    { \"name\": \"b0\", \"mass_kg\": 1e-400,\n"
+		"      \"centroid_m\": [4.9406564584124654e-324, -1e-400, 1e-320] }\n  ]\n}");
+	if (!Loaded)
+	{
+		return;
+	}
+	const BodyId B0 = BodyNamed(*Loaded, "b0");
+	REQUIRE(Loaded->Model.IsLive(B0));
+	const BodyDesc& Body = Loaded->Model.Body(B0);
+	CHECK(Body.MassKg >= 0.0);
+	CHECK(Body.MassKg < 1e-300);
+	CHECK(Body.CentroidM.X == std::numeric_limits<double>::denorm_min());
+	CHECK(Body.CentroidM.Y == 0.0);
+	CHECK(Body.CentroidM.Z == 1e-320);
+}
+
+TEST_CASE("File.Load.FailedLoadReturnsAnEmptyValue")
+{
+	for (const FailedLoadCase& Case : FailedLoadCases())
+	{
+		INFO(doctest::String(Case.Name));
+		const LoadResult Result = LoadStructure(Case.Json);
+		INFO("line " << Result.Error.Line << ": " << Result.Error.Message);
+		CHECK_FALSE(Result.Ok());
+		CHECK(Result.Value.Model.LiveBodyCount() == 0u);
+		CHECK(Result.Value.Model.LiveInterfaceCount() == 0u);
+		CHECK_FALSE(Result.Value.Model.IsValid(ProfileId{0u, 1u}));
+		CHECK(Result.Value.BodyNames.empty());
+		CHECK(Result.Value.InterfaceNames.empty());
+		CHECK(Result.Value.ProfileNames.empty());
+	}
+}
+
+TEST_CASE("File.Write.NonAxisNormalRoundTripsWithin4Ulps")
+{
+	const Vec3 Normals[] = {{0.3, 0.4, 0.866}, {1.0, 1.0, 1.0}, {-0.2, 0.7, -0.1}, {1e-3, -0.5, 2.0}};
+	for (const Vec3& Raw : Normals)
+	{
+		INFO("normal " << Shortest(Raw));
+		const Vec3 N = Normalised(Raw);
+		const Vec3 U = Normalised(Cross(LeastAlignedAxis(N), N));
+		const Vec3 V = Cross(N, U);
+
+		LoadedStructure Original = TwoBodiesOneInterface("p", "b0", "b1");
+		REQUIRE(Original.Model.RemoveBody(BodyNamed(Original, "b1")));
+		const Result<BodyId> B2 = Original.Model.AddBody(BrickAt(Vec3{0.1 + 0.2, -1.0 / 7.0, 0.0975}));
+		REQUIRE(B2.Ok());
+		Original.BodyNames.push_back("b2");
+		InterfaceDesc Desc = BedJoint(BodyNamed(Original, "b0"), B2.Value, 1, ProfileId{0u, 1u});
+		Desc.NormalAToB = Raw;
+		Desc.CentreM = Vec3{0.1 + 0.2, -1.0 / 7.0, 0.065};
+		Desc.AxisU = U;
+		Desc.AxisV = V;
+		Desc.HalfExtentUM = 1.0 / 3.0 * BrickLengthM;
+		Desc.HalfExtentVM = 2.0 / 3.0 * BrickWidthM;
+		const Result<InterfaceId> Added = Original.Model.AddInterface(Desc);
+		INFO("AddInterface: " << Added.Error);
+		REQUIRE(Added.Ok());
+		Original.InterfaceNames.push_back("");
+
+		const std::optional<LoadedStructure> Reloaded = LoadOk(WriteStructure(Original));
+		if (!Reloaded)
+		{
+			continue;
+		}
+		const std::vector<InterfaceId> Interfaces = Reloaded->Model.LiveInterfaces();
+		CHECK(Interfaces.size() == 1u);
+		if (Interfaces.size() != 1u)
+		{
+			continue;
+		}
+		const InterfaceRecord& G = Reloaded->Model.Interface(Interfaces[0]);
+		const InterfaceRecord& W = Original.Model.Interface(Added.Value);
+		INFO("stored normal " << Shortest(W.NormalAToB) << ", reloaded " << Shortest(G.NormalAToB));
+		CHECK(Within4Ulps(G.NormalAToB.X, W.NormalAToB.X));
+		CHECK(Within4Ulps(G.NormalAToB.Y, W.NormalAToB.Y));
+		CHECK(Within4Ulps(G.NormalAToB.Z, W.NormalAToB.Z));
+		CheckSameVec3(G.CentreM, W.CentreM, "centre");
+		CheckSameVec3(G.AxisU, W.AxisU, "axis U");
+		CheckSameVec3(G.AxisV, W.AxisV, "axis V");
+		CHECK(G.HalfExtentUM == W.HalfExtentUM);
+		CHECK(G.HalfExtentVM == W.HalfExtentVM);
+		CHECK(G.AreaM2 == W.AreaM2);
+		CHECK(NameOf(Reloaded->BodyNames, G.BodyA.Index) == "b0");
+		CHECK(NameOf(Reloaded->BodyNames, G.BodyB.Index) == "b2");
+		CHECK(NameOf(Reloaded->ProfileNames, G.Profile.Index) == "p");
+	}
+}
+
+TEST_CASE("File.Load.NonFiniteNumberIsASyntaxErrorAtItsLine")
+{
+	struct Placement
+	{
+		const char* Name;
+		std::string Before;
+		std::string After;
+		int Line;
+	};
+	const Placement Placements[] = {
+		{"body mass_kg", "{\n  \"bodies\": [\n    { \"name\": \"b0\",\n      \"mass_kg\": ", " }\n  ]\n}", 4},
+		{"profile max_shear_pa", "{\n  \"profiles\": [\n    { \"name\": \"p\",\n      \"max_shear_pa\": ", " }\n  ]\n}", 4},
+		{"unknown key", "{\n  \"extra\":\n    ", "\n}", 3},
+	};
+	for (const Placement& Where : Placements)
+	{
+		for (const char* Number : {"1e999", "-1e999", "1.8e308"})
+		{
+			INFO(doctest::String(Where.Name) << ": " << std::string(Number));
+			const LoadResult Result = LoadStructure(Where.Before + Number + Where.After);
+			INFO("line " << Result.Error.Line << ": " << Result.Error.Message);
+			CHECK_FALSE(Result.Ok());
+			CHECK(Result.Error.Line == Where.Line);
+		}
+	}
+
+	const std::optional<LoadedStructure> Largest = LoadOk(Placements[0].Before + "1.7976931348623157e308" + Placements[0].After);
+	if (Largest)
+	{
+		const BodyId B0 = BodyNamed(*Largest, "b0");
+		CHECK(Largest->Model.IsLive(B0));
+		CHECK(Largest->Model.Body(B0).MassKg == std::numeric_limits<double>::max());
+	}
+}
+
+TEST_CASE("File.Load.NestingOf64LevelsIsAcceptedAnd65Refused")
+{
+	for (const char Open : {'[', '{'})
+	{
+		const char Close = Open == '[' ? ']' : '}';
+		INFO("nesting with " << std::string(1, Open));
+		const LoadResult At64 = LoadStructure(NestedUnderUnknownKey(64, Open, Close));
+		INFO("64 levels: line " << At64.Error.Line << ": " << At64.Error.Message);
+		CHECK(At64.Ok());
+
+		const LoadResult At65 = LoadStructure(NestedUnderUnknownKey(65, Open, Close));
+		INFO("65 levels: line " << At65.Error.Line << ": " << At65.Error.Message);
+		CHECK_FALSE(At65.Ok());
+		CHECK(At65.Error.Line == 1);
+	}
+}
+
+TEST_CASE("File.Load.ADocumentThatIsNotAnObjectReportsLine0")
+{
+	for (const char* Json : {"", "  \n\t\n", "[]", "\n\n[]", "42", "\"text\"", "null"})
+	{
+		INFO("document <" << std::string(Json) << ">");
+		const LoadResult Result = LoadStructure(Json);
+		INFO("line " << Result.Error.Line << ": " << Result.Error.Message);
+		CHECK_FALSE(Result.Ok());
+		CHECK(Result.Error.Line == 0);
+		CHECK_FALSE(Result.Error.Message.empty());
+	}
+}
+
+TEST_CASE("File.Load.WrongTypedTopLevelArraysAndNamesAreErrorsNamingTheField")
+{
+	struct TopLevelCase
+	{
+		const char* Json;
+		const char* Field;
+	};
+	const TopLevelCase TopLevel[] = {
+		{"{ \"bodies\": {} }", "bodies"},
+		{"{ \"profiles\": 3 }", "profiles"},
+		{"{ \"interfaces\": \"none\" }", "interfaces"},
+		{"{ \"bodies\": true }", "bodies"},
+	};
+	for (const TopLevelCase& Case : TopLevel)
+	{
+		INFO("document: " << std::string(Case.Json));
+		const LoadResult Result = LoadStructure(Case.Json);
+		INFO("line " << Result.Error.Line << ": " << Result.Error.Message);
+		CHECK_FALSE(Result.Ok());
+		CHECK(Result.Error.Line >= 1);
+		CHECK(Contains(Result.Error.Message, Case.Field));
+	}
+
+	struct NameCase
+	{
+		char Kind;
+		std::size_t Index;
+		const char* Value;
+	};
+	const NameCase Names[] = {{'b', 1, "7"}, {'b', 0, "[\"b0\"]"}, {'p', 0, "true"}, {'p', 0, "{}"}};
+	for (const NameCase& Case : Names)
+	{
+		INFO("kind " << std::string(1, Case.Kind) << " name: " << std::string(Case.Value));
+		const BuiltDoc Doc = Build(WithValue(ExampleSpec(), Case.Kind, Case.Index, "name", Case.Value));
+		const LoadResult Result = LoadStructure(Doc.Json);
+		INFO("line " << Result.Error.Line << ": " << Result.Error.Message);
+		CHECK_FALSE(Result.Ok());
+		CHECK(Result.Error.Line == LinesOf(Doc, Case.Kind)[Case.Index]);
+		CHECK(Contains(Result.Error.Message, "name"));
+	}
+}
+
+TEST_CASE("File.Write.ShortProfileNamesGetGeneratedNames")
+{
+	LoadedStructure Unnamed;
+	StrengthProfile Second = DistinctFieldProfile();
+	Second.CompressiveStrengthPa = 1.0 / 3.0 * 1.0e7;
+	REQUIRE(Unnamed.Model.AddProfile(DistinctFieldProfile()).Ok());
+	REQUIRE(Unnamed.Model.AddProfile(Second).Ok());
+
+	const std::optional<LoadedStructure> FromEmpty = LoadOk(WriteStructure(Unnamed));
+	if (FromEmpty)
+	{
+		CHECK(FromEmpty->ProfileNames == std::vector<std::string>{"p0", "p1"});
+		const ProfileId P1 = ProfileNamed(*FromEmpty, "p1");
+		REQUIRE(FromEmpty->Model.IsValid(P1));
+		CHECK(FromEmpty->Model.Profile(P1).CompressiveStrengthPa == Second.CompressiveStrengthPa);
+	}
+
+	Unnamed.ProfileNames = {"lime"};
+	const std::optional<LoadedStructure> FromShort = LoadOk(WriteStructure(Unnamed));
+	if (FromShort)
+	{
+		CHECK(FromShort->ProfileNames == std::vector<std::string>{"lime", "p1"});
+	}
+}
+
+TEST_CASE("File.Write.ShortBodyNamesGetGeneratedNames")
+{
+	LoadedStructure Unnamed = TwoBodiesOneInterface("p", "b0", "b1");
+	Unnamed.BodyNames.clear();
+	Unnamed.ProfileNames.clear();
+
+	const std::optional<LoadedStructure> FromEmpty = LoadOk(WriteStructure(Unnamed));
+	if (FromEmpty)
+	{
+		CHECK(FromEmpty->BodyNames == std::vector<std::string>{"b0", "b1"});
+		CHECK(FromEmpty->ProfileNames == std::vector<std::string>{"p0"});
+		CHECK(FromEmpty->Model.LiveBodyCount() == 2u);
+		CHECK(FromEmpty->Model.LiveInterfaceCount() == 1u);
+	}
+
+	Unnamed.BodyNames = {"left"};
+	const std::optional<LoadedStructure> FromShort = LoadOk(WriteStructure(Unnamed));
+	if (FromShort)
+	{
+		CHECK(FromShort->BodyNames == std::vector<std::string>{"left", "b1"});
+		const std::vector<InterfaceId> Interfaces = FromShort->Model.LiveInterfaces();
+		CHECK(Interfaces.size() == 1u);
+		if (Interfaces.size() != 1u)
+		{
+			return;
+		}
+		const InterfaceRecord& J = FromShort->Model.Interface(Interfaces[0]);
+		CHECK(NameOf(FromShort->BodyNames, J.BodyA.Index) == "left");
+		CHECK(NameOf(FromShort->BodyNames, J.BodyB.Index) == "b1");
 	}
 }

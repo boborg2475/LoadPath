@@ -159,7 +159,7 @@ A hand-written JSON reader with no dependency. Format:
 ```
 
 ```cpp
-struct FileError { int Line = 0; std::string Message; };   // Line 0 = not a syntax error
+struct FileError { int Line = 0; std::string Message; };   // Line 0 = no location (document is not an object)
 struct LoadedStructure { Structure Model; std::vector<std::string> BodyNames, InterfaceNames, ProfileNames; };
 struct LoadResult { LoadedStructure Value; FileError Error; bool Ok() const { return Error.Message.empty(); } };
 LoadResult  LoadStructure(std::string_view Json);
@@ -211,6 +211,16 @@ standard escapes decode, surrogate pairs combine, a lone surrogate is a syntax e
 `centroid_m` is optional (default origin). Nesting: 64 levels counting the root are accepted,
 65 refused. The writer prints doubles in shortest round-trip form (`std::to_chars`) and omits
 `max_shear_pa` when it is `+infinity`, which the reader's default restores.
+
+Second ratification (2026-10-11, after the 1b green): a number that underflows (`1e-400`) reads
+as the nearest representable value (zero or a subnormal), never an error; only overflow to a
+non-finite value is the syntax error. Raw control characters (below U+0020) inside a string
+are a syntax error at their line. `InterfaceNames` holds one empty string per interface, since
+the format has no interface names. When a name vector is shorter than its slot vector, the
+writer emits `b<Index>` or `p<Index>` for the missing names. A failed `LoadStructure` returns a
+default-constructed `Value` (empty structure, empty names). The round trip compares a
+re-normalised normal within 4 ulps per component (re-normalising an already-unit vector is not
+bit-exact for arbitrary directions); every other field is compared exactly.
 
 ## Slice 2: the standing authority (statics v1)
 

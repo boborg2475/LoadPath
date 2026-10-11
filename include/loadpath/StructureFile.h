@@ -8,7 +8,7 @@
 
 namespace loadpath
 {
-// Line is 1-based; 0 = not a syntax error.
+// Line is 1-based; 0 means the error has no location (the document is not an object).
 struct FileError
 {
 	int Line = 0;
