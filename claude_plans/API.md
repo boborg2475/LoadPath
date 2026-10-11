@@ -329,7 +329,15 @@ never mutates the structure. The host may call it on any thread.
   absolute component is 1 and written per body as `TranslationM`/`RotationRad`;
   `UnconstrainedBodies` lists bodies with any component above 1e-6. Tests assert the motion
   shape: a Housner block reads rotation about the toe edge; a sliding block reads a pure
-  translation down-slope.
+  translation down-slope. When the null space has more than one direction, the reported motion
+  is the projection of the applied load onto the null space; a zero projection is neutral
+  equilibrium and reads Stands. A singular active set with a non-zero projection is a Mechanism
+  **only if the motion is admissible** (ratified 2026-10-11, driven by the Paterson–Zwick
+  diamond): an open corner the motion would close re-closes, and a slipping corner the motion
+  would carry along its held friction re-sticks, and the active-set loop continues; a Mechanism
+  is returned only when nothing needs restoring. In a neutral solve an open corner whose gap
+  moves along the null space is indeterminate and is not re-closed (otherwise a corner at
+  exactly zero force cycles open/closed until the cap).
 - **Loads**: gravity `m · g⃗` at every free body's centroid (no moment); each `BodyLoad` adds
   its force and `(PointM − CentroidM) × ForceN` to its body. A tilt test rotates `g⃗`; a
   lateral load factor λ uses `g⃗ = (λ g, 0, −g)`. The test does any bisection; one solve is

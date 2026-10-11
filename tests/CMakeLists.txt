@@ -11,7 +11,10 @@ add_executable(loadpath_tests
 	InterfaceTest.cpp
 	StructureTest.cpp
 	StructureFileTest.cpp
-	CliTest.cpp)
+	CliTest.cpp
+	StandingAuthorityTest.cpp
+	SingleBlockAnchorsTest.cpp
+	StackAnchorsTest.cpp)
 target_link_libraries(loadpath_tests PRIVATE loadpath doctest)
 
 add_test(NAME loadpath_tests COMMAND loadpath_tests)

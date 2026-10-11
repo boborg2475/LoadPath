@@ -34,15 +34,43 @@ API.md) is next. The design brief ([DESIGN.md](DESIGN.md)) has every §9 questio
 
 ## Deferred
 
-- Eigen 3.4.0 is vendored under `third_party/eigen` (2026-10-11) but not yet wired into CMake;
-  slice 2's dev-expert adds it as a SYSTEM include with `EIGEN_MPL2_ONLY`.
+- B-WDG-01 (the 3DEC tetrahedral wedge, phi_crit 33.36 deg) is written as a skipped test
+  (`Statics.Anchor.ItascaWedgeSlidesAlongTheIntersectionBelowItsCriticalFrictionAngle`,
+  orchestrator 2026-10-11) and its BENCHMARKS row now says slice 4: the published threshold is a
+  kinematic answer (friction along the line of intersection), and the elastic corner-spring field
+  with kn = kt releases every corner near 40 deg or finds a squeezing force set that stands near
+  31 deg. Un-skip it when the collapse certificate (slice 4) exists, or decide a kt << kn fixture
+  is acceptable and record why.
+- Statics.Authority.InsertionOrderChangesNoReading compares with a 1e-12 relative tolerance, not
+  `==` (orchestrator 2026-10-11): unknowns are ordered by body slot, so a different insertion
+  order changes the assembly and pivot order and the last bit. Bit-identity is pinned only for
+  repeated solves of the same structure.
+- Slice 2 standing authority (`src/RbsmStandingAuthority.cpp`, 2026-10-11, awaiting review): two
+  model steps beyond API.md's rulings were needed for the 4-diamond and need ratifying there.
+  (1) A singular active set with load in the null space is a Mechanism only if the motion is
+  admissible: an open corner the motion would close re-closes, and a slipping corner the motion
+  would slide along its held friction re-sticks; then the loop continues. (2) In a neutral solve
+  (singular, zero load projection) an open corner whose gap the null space moves is not
+  re-closed, since its gap is indeterminate. Without (1) the diamond reads a spurious slide;
+  without (2) a corner at exactly zero force cycles open/closed until Undecided.
+- Slice 2 behaviour with no test, so a mutation survives the whole suite (probed 2026-10-11):
+  Overstressed (never-Overstressed mutant passes), bonded joints never releasing (ft > 0 or
+  c > 0), the tension and shear utilisation axes, the `MaxShearStrengthPa` cap on slip, the
+  1e-9 stick hysteresis, the held-force fixed point settling (an always-settled mutant
+  passes), status-cycle detection (the iteration cap catches it instead), open corners
+  re-closing, and the non-finite-reading fail-closed path. Every fixture is a dry joint.
+- Slice 2's `IsGapIndeterminate` recomputes the motion scale per open corner per null vector
+  (O(corners² · nullity)); fine at tier-1 sizes, hoist it before slice 6.
+- Eigen's no-exceptions `EIGEN_TRY`/`EIGEN_CATCH` makes MSVC emit C4702 from the backend, which
+  `/external:W0` does not cover; `src/EigenInclude.h` wraps the include in a pragma. Any new
+  Eigen include goes through it.
 - A second compiler (clang-cl ships with this Visual Studio) as a CI-style check for
   portability; not set up.
 - The test script's run is single-configuration; a `-Both` switch for Debug and Release would
   catch optimiser-dependent float differences early.
 - Slice 1 behaviour left untested by test-expert, so unimplemented or unpinned:
-  - Negative stiffness is accepted (only negativity of strengths, friction and the cap is
-    checked); slice 2 decides whether zero or negative stiffness is refused.
+  - `AddProfile` still accepts zero and negative stiffness; slice 2 refuses them at `Solve` as
+    InvalidInput when the profile is on a live interface (pinned by the slice-2 tests).
   - A mass of `-0.0` is accepted (`!(m >= 0)` lets it through); no test says either way.
   - `Dot`, `Cross`, `Length` and `IsFinite` are exercised only through `AddInterface`.
   - Two normal guards are unreachable defence in depth: the NaN branch of

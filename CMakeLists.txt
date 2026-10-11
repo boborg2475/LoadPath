@@ -33,11 +33,15 @@ endif()
 add_library(loadpath STATIC
 	src/Cli.cpp
 	src/Handles.cpp
+	src/RbsmStandingAuthority.cpp
 	src/Structure.cpp
 	src/StructureFile.cpp
 	src/Units.cpp
 	src/Vec3.cpp)
 target_include_directories(loadpath PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+# Eigen stays behind the solver interface: private, SYSTEM so /W4 /WX does not fire inside it, MPL2 only.
+target_include_directories(loadpath SYSTEM PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/third_party/eigen)
+target_compile_definitions(loadpath PRIVATE EIGEN_MPL2_ONLY)
 target_link_libraries(loadpath PUBLIC loadpath_contract)
 
 add_executable(loadpath_cli cli/Main.cpp)
