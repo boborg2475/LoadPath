@@ -70,3 +70,9 @@ Refactoring is encouraged once green, with the tests as the net. Re-run afterwar
 - Anything you noticed and deliberately left alone
 
 Work is not finished until it has been reviewed.
+
+## Release runs are part of validation
+
+Cases marked `LOADPATH_SLOW_IN_DEBUG` (the arch and pile anchors) run only in Release, so a
+slice touching the certificate or the combined authority is validated with both
+`Scripts/Test.ps1` and `Scripts/Test.ps1 -Config Release`; report both summaries.

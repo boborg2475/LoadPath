@@ -441,7 +441,7 @@ its ANCHORS.md row: block on an incline tips at `tan θ = w/h` and slides at `ta
 lower governing, with the mechanism shape asserted; Housner block `a/g = b/h` with rotation
 about the toe; free wall `λ = t/H`; 3DEC's four regimes on a slope; the harmonic stack for
 n = 2..4 (stands at overhang `(L/2) H_n`, falls one part in 1e6 beyond); the inverted
-3-triangle falls and the 4-diamond stands; the 3DEC wedge on two planes at φ = 33.36°; the
+3-triangle falls and the 4-diamond stands; the 3DEC wedge on two planes (physical φ = 33.36°; the associative certificate switches at 31.07°); the
 Couplet–Heyman semicircular arch with radial joints stands at `t/r = 0.1075` and falls below
 (voussoir count from the benchmark report's discretisation guidance; hinge positions asserted
 within a half-voussoir of 54.5°); the friction switch on that arch (stands at φ = 22°, slides at
@@ -619,7 +619,7 @@ disagreements on 300 seeded draws). Still to pin (4b): the three `Deferred.Slice
 back under `Statics.*` through the combined authority; the Couplet–Heyman semicircular arch
 (B-ARC-01, radial joints, stands at `t/r = 0.1075` and collapses below, hinge positions within a
 half-voussoir of 54.5°, voussoir count from the report's discretisation guidance); its friction
-switch (B-ARC-06, stands at φ = 22°, slides at 21°); the 3DEC wedge (B-WDG-01, φ_crit 33.36°
+switch (B-ARC-06, stands at φ = 22°, slides at 21°); the 3DEC wedge (B-WDG-01, physical φ_crit 33.36°, the associative certificate 31.07°
 within 0.05°); the Orduña pile bracket (B-ORD-01); the shear cap.
 
 ## Slice 4b: the combined authority, the shear cap, and the kinematic anchors
@@ -668,10 +668,19 @@ public:
 std::unique_ptr<IStructuralAuthority> MakeCombinedAuthority(std::unique_ptr<IStandingAuthority>, std::unique_ptr<ICollapseCertificate>);
 ```
 
-**Rules.** The elastic authority runs once over the whole structure. Its readings are the
-result's readings. Per connected component (the same partition both implementations use; the
-combined authority computes it itself through the shared partition code so the mapping of
-bodies to components is one definition):
+**Rules.** Options are validated first: `Certificate.Gravity` must equal `Standing.Gravity`
+and the certificate options must pass the slice-4 checks (`ConeGenerators` even and at least
+4, finite positive cap, tolerance and iterations), or the result is `InvalidInput` with no
+readings and no components. The elastic authority then runs once over the whole structure for
+the result.s readings, and once more per connected component on that component.s
+sub-structure (its free bodies, every grounded body, the loads on those bodies): **the
+sub-solve.s `State` is the component.s elastic verdict, never inferred from the whole-structure
+state.** One global state cannot say which component is Overstressed, and an elastic Undecided
+coexists with listed bodies; the first version inferred it and relabelled an Overstressed brick
+Undecided beside an unrelated pass-capped one, and read NaN readings as Stands. Locality
+(slice 2) makes the sub-solve.s readings equal the whole-structure ones, so the cost is a second
+solve, logged for slice 6. Per component (the same partition both implementations use, the
+shared partition code, so the mapping of bodies to components is one definition):
 - elastic `Stands` → `Stands`; elastic `Overstressed` → `Overstressed` (slice 3's domain; the
   certificate is not consulted, its crushing bound would only restate the same joint);
 - elastic `Mechanism` or `Undecided` → the certificate is consulted on that component alone (a
@@ -696,7 +705,12 @@ at most `cap · A/4 · cos(π/G)` on the inscribed solve and `cap · A/4` on the
 a shear cap into a compression cap). A dry brick with `μ` large and a small cap Collapses past lateral factor `λ = cap · A / W`
 (every corner at its cap) and Stands below `cos(π/G)` of it, Undecided between; at tilt the
 switch is `θ = asin(cap · A / W)`, which slice 2 already pins for the elastic authority. The
-cap bounds shear only: a brick at rest under a cap far below its weight Stands.
+cap bounds shear only: a brick at rest under a cap far below its weight Stands. **A cap of 0 is
+a real cap** (the joint carries no shear; `+inf` is the only "no cap"), so a cap-0 brick under
+any lateral load Collapses at `t = 0`; in the mechanism selection a cap-0 corner contributes
+only its normal row (tangential slip dissipates nothing there), and a finite positive cap adds
+no selection rows (its prism contains the origin, so the zero-dissipation set is the friction
+cone.s).
 
 ### Anchors slice 4b must pin
 
@@ -706,8 +720,11 @@ cap bounds shear only: a brick at rest under a cap far below its weight Stands.
 - B-ARC-01 and B-ARC-02, the Couplet–Heyman semicircle: radial joints, centreline radius `r`,
   unit depth, density any, `μ ≥ 0.5` (use 0.7). Stands at `t/r = 0.1075 + 0.002`, Collapses at
   `0.1075 − 0.001`; the haunch hinge within one joint of 54.48° from the crown (joints every 5°
-  plus a joint at ±54.484°, or voussoirs of 2°; B-ARC-09 says discretisation only raises the
-  least thickness, so a Stands below 0.1075 is a false stand at any count). On Collapses the
+  plus a joint at ±54.484°, or voussoirs of 2°; B-ARC-09.s "discretisation only raises the least
+  thickness" is a DDA observation and is **false for exact sector voussoirs**: the joints are
+  a subset of the continuous sections, so the discrete least thickness is at or below the
+  continuous one (0.1074601 at 3° joints by a thrust-line oracle); with joints at ±54.484° it
+  is exactly 0.107478, which is the pin). On Collapses the
   hinging set is the crown, the two haunches and the two springings (symmetric mechanism; the
   selection may return one side's four hinges, so assert the haunch and crown hinges and that
   every hinge is one of the five).

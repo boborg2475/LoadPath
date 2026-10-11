@@ -62,3 +62,9 @@ is.
 Separate **blocking** (missing coverage, wrong assertion kind, design divergence, real defect,
 stale docs) from **non-blocking** (naming, structure, nits). End with a clear verdict: what
 blocks, and what happens next.
+
+## Release runs are part of validation
+
+Cases marked `LOADPATH_SLOW_IN_DEBUG` (the arch and pile anchors) run only in Release, so a
+slice touching the certificate or the combined authority is validated with both
+`Scripts/Test.ps1` and `Scripts/Test.ps1 -Config Release`; report both summaries.

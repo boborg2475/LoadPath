@@ -297,3 +297,18 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   **The Orduña pile is pinned on a reconstructed bond** (five 0.2 × 0.4 blocks per course in
   two mirrored tilings, six courses, bed joints only): the paper's figure was not retrievable,
   so the anchor asserts only the published bracket and is marked reconstructed in ANCHORS.
+- *2026-10-11, orchestrator, after the first slice-4b review:* **a component's elastic verdict
+  is its own solve.** The combined authority solves each component's sub-structure with the
+  elastic authority and takes that State; the whole-structure solve serves only the readings.
+  Inferring per-component states from the one global state relabelled an Overstressed brick
+  Undecided beside an unrelated pass-capped brick (and released it) and read NaN corner forces
+  as Stands through a private copy of the overstress rule; no copy of that rule exists now.
+  **A shear cap of 0 is a cap**, not "no cap": `+inf` is the only unset value, and the
+  selection LP keeps only the normal row on a cap-0 corner. **The wedge band is a known
+  unsafe gap:** the associative certificate switches at 31.07° where the physical wedge
+  switches at 33.36°, and between them the combined authority reads Stands while the elastic
+  reads Undecided, so no disagreement is counted and the host gets no signal; the physical pin
+  is a `Deferred.Slice7.*` case for the non-associative referee. **Discrete arches stand at or
+  below the continuous least thickness** when voussoirs carry exact sector weights and
+  centroids (the joints are a subset of the continuous sections); B-ARC-09's "only raises" is a
+  DDA artefact, and the anchor pins Milankovitch exactly with joints at ±54.484°.
