@@ -1,0 +1,365 @@
+<title>LoadPath Overview</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo+Narrow:wght@500;600;700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a single reading column (65ch) with full-width diagram bands; engineering-drawing restraint, one steel-blue accent, brick red reserved for "breaks". */
+:root {
+  --bg: #eef0ee;
+  --bg-2: #e2e6e3;
+  --fg: #1c2229;
+  --fg-2: #4b5560;
+  --line: #c3c9c6;
+  --accent: #2b5c8a;
+  --accent-soft: #d6e2ee;
+  --break: #9a4b3a;
+  --break-soft: #ecd9d3;
+  --ok: #3f7a4f;
+  --ok-soft: #d8e8da;
+  --warn: #9a7a1f;
+  --warn-soft: #efe7c8;
+  --display: "Archivo Narrow", "Arial Narrow", Arial, sans-serif;
+  --body: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --mono: "IBM Plex Mono", Consolas, "Courier New", monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #171b1f; --bg-2: #21272c; --fg: #e6e9ea; --fg-2: #a4adb4; --line: #3a4248;
+    --accent: #7fb0dc; --accent-soft: #233447; --break: #d98a76; --break-soft: #43302b;
+    --ok: #8cc79b; --ok-soft: #27402d; --warn: #d8bc5e; --warn-soft: #43391c;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #171b1f; --bg-2: #21272c; --fg: #e6e9ea; --fg-2: #a4adb4; --line: #3a4248;
+  --accent: #7fb0dc; --accent-soft: #233447; --break: #d98a76; --break-soft: #43302b;
+  --ok: #8cc79b; --ok-soft: #27402d; --warn: #d8bc5e; --warn-soft: #43391c;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--fg); font-family: var(--body); font-size: 17px; line-height: 1.55; margin: 0; }
+.wrap { max-width: 72rem; margin: 0 auto; padding-inline: 20px; padding-block: 2.5rem 4rem; }
+.col { max-width: 66ch; }
+h1, h2, h3 { font-family: var(--display); line-height: 1.1; text-wrap: balance; margin: 0; letter-spacing: -0.01em; }
+h1 { font-size: clamp(2.4rem, 6vw, 4rem); font-weight: 700; }
+h2 { font-size: 1.75rem; font-weight: 600; margin-top: 3.5rem; padding-top: 1rem; border-top: 2px solid var(--fg); }
+h3 { font-size: 1.2rem; font-weight: 600; margin-top: 1.8rem; }
+p { margin: 0.9rem 0; }
+.eyebrow { font-family: var(--display); text-transform: uppercase; letter-spacing: 0.12em; font-size: 0.8rem; color: var(--fg-2); font-weight: 600; }
+.lede { font-size: 1.25rem; color: var(--fg-2); max-width: 60ch; }
+.meta { font-family: var(--mono); font-size: 0.8rem; color: var(--fg-2); margin-top: 1rem; }
+code, .mono { font-family: var(--mono); font-size: 0.86em; background: var(--bg-2); padding: 0.05em 0.3em; border-radius: 3px; }
+.note { border-left: 3px solid var(--accent); background: var(--accent-soft); padding: 0.8rem 1rem; margin: 1.2rem 0; }
+.note.break { border-color: var(--break); background: var(--break-soft); }
+.note p { margin: 0.3rem 0; }
+figure { margin: 1.6rem 0; }
+figcaption { font-family: var(--display); font-size: 0.9rem; color: var(--fg-2); margin-top: 0.5rem; }
+.diagram { width: 100%; max-width: 100%; height: auto; display: block; overflow: visible; }
+.diagram text { font-family: var(--display); font-size: 14px; fill: var(--fg); }
+.diagram .small { font-size: 12px; fill: var(--fg-2); }
+.diagram .mono { font-family: var(--mono); font-size: 12px; background: none; }
+.diagram .box { fill: var(--bg-2); stroke: var(--line); stroke-width: 1.5; }
+.diagram .box.accent { fill: var(--accent-soft); stroke: var(--accent); }
+.diagram .box.break { fill: var(--break-soft); stroke: var(--break); }
+.diagram .box.ok { fill: var(--ok-soft); stroke: var(--ok); }
+.diagram .box.warn { fill: var(--warn-soft); stroke: var(--warn); }
+.diagram .arrow { stroke: var(--fg-2); stroke-width: 1.5; fill: none; marker-end: url(#ah); }
+.diagram .thin { stroke: var(--line); stroke-width: 1; fill: none; }
+.scroll { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 0.95rem; margin: 1rem 0; }
+th, td { text-align: left; vertical-align: top; padding: 0.55rem 0.7rem; border-bottom: 1px solid var(--line); }
+th { font-family: var(--display); font-weight: 600; letter-spacing: 0.02em; }
+td.num, th.num { font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pill { display: inline-block; font-family: var(--display); font-size: 0.78rem; font-weight: 600; letter-spacing: 0.04em; padding: 0.1rem 0.5rem; border-radius: 999px; white-space: nowrap; }
+.pill.done { background: var(--ok-soft); color: var(--ok); }
+.pill.doing { background: var(--warn-soft); color: var(--warn); }
+.pill.todo { background: var(--bg-2); color: var(--fg-2); }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); gap: 1rem; margin: 1.2rem 0; }
+.card { border-top: 2px solid var(--accent); padding-top: 0.6rem; min-width: 0; }
+.card h3 { margin-top: 0; font-size: 1.05rem; }
+.card ul { margin: 0.4rem 0 0; padding-left: 1.1rem; }
+.card li { margin: 0.25rem 0; font-size: 0.95rem; }
+ul.plain { padding-left: 1.2rem; }
+ul.plain li { margin: 0.35rem 0; }
+.slice { display: grid; grid-template-columns: 7rem 1fr; gap: 0.5rem 1.2rem; margin: 1.4rem 0; padding: 1rem 0; border-top: 1px solid var(--line); }
+.slice .id { font-family: var(--display); font-weight: 700; font-size: 1.6rem; line-height: 1; color: var(--accent); }
+.slice .id small { display: block; font-size: 0.8rem; font-weight: 600; letter-spacing: 0.08em; color: var(--fg-2); margin-top: 0.3rem; }
+.slice .body { min-width: 0; }
+.slice h3 { margin-top: 0; }
+.kv { display: grid; grid-template-columns: max-content 1fr; gap: 0.3rem 1rem; font-size: 0.95rem; }
+.kv dt { font-family: var(--display); font-weight: 600; color: var(--fg-2); }
+.kv dd { margin: 0; }
+@media (max-width: 600px) {
+  .slice { grid-template-columns: 1fr; }
+  .kv { grid-template-columns: 1fr; }
+  body { font-size: 16px; }
+}
+@media (prefers-reduced-motion: no-preference) { a { transition: color 120ms; } }
+a { color: var(--accent); }
+a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+</style>
+
+<div class="wrap">
+<header class="col">
+  <div class="eyebrow">Project overview, 11 October 2026</div>
+  <h1>LoadPath</h1>
+  <p class="lede">A small C++ engine that looks at a pile of rigid blocks and answers three questions: does it stand, which joints give way if it does not, and which pieces fall, as one lump or several.</p>
+  <p class="meta">standalone C++20 library · tests run in seconds · built for Unreal/Chaos later · successor to the solver inside DestructionGame</p>
+</header>
+
+<section class="col">
+<h2>What it is, in one breath</h2>
+<p>Imagine a brick wall. Each brick is a rigid block with a mass. Between touching bricks there is a <strong>joint</strong>: a rectangle of contact with a <strong>strength profile</strong> (how hard you can squash it, pull it apart, slide it, and how much friction it has). LoadPath never looks at shapes or meshes. It only sees masses, joints and strengths, and from those it works out whether gravity and any pushes can be carried by the joints without any of them exceeding its strength.</p>
+<p>If every joint can carry its share, the structure <strong>stands</strong>. If no arrangement of forces works, something has to <strong>move</strong>, and the engine says which blocks move together as a rigid cluster. The host game (Unreal with Chaos physics) then takes those clusters and lets them fall, smash and bounce. LoadPath never simulates motion itself. It decides; Chaos animates.</p>
+<div class="note"><p><strong>Why a separate library?</strong> The old solver lived inside the Unreal project, where a test run meant a minute of editor startup and the physics got tangled with game code. LoadPath is a plain library with a test suite that runs in about ten seconds, so a change can be checked hundreds of times a day. The Unreal adapter comes last, as its own module.</p></div>
+</section>
+
+<section>
+<h2 class="col">How the pieces fit</h2>
+<p class="col">Four layers, each built and tested on its own. The host feeds in the model, the two "authorities" judge it in different ways, a combiner reconciles them, and the cascade turns the judgement into cracks, breaks and released clusters.</p>
+<figure>
+<div class="scroll">
+<svg class="diagram" viewBox="0 0 980 380" role="img" aria-label="Pipeline from the host model through the two authorities, the combined authority and the cascade to the verdict">
+  <defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="var(--fg-2)"/></marker></defs>
+  <rect class="box" x="20" y="130" width="170" height="110" rx="4"/>
+  <text x="105" y="160" text-anchor="middle" font-weight="600">Structure</text>
+  <text class="small" x="105" y="182" text-anchor="middle">bodies (mass, centroid)</text>
+  <text class="small" x="105" y="200" text-anchor="middle">joints (rectangle, normal)</text>
+  <text class="small" x="105" y="218" text-anchor="middle">strength profiles</text>
+
+  <rect class="box accent" x="270" y="40" width="210" height="110" rx="4"/>
+  <text x="375" y="68" text-anchor="middle" font-weight="600">Elastic standing authority</text>
+  <text class="small" x="375" y="90" text-anchor="middle">corner springs, 6 DOF per body</text>
+  <text class="small" x="375" y="108" text-anchor="middle">proves: Stands / Overstressed</text>
+  <text class="small" x="375" y="126" text-anchor="middle">reports: Mechanism, or Undecided</text>
+
+  <rect class="box accent" x="270" y="220" width="210" height="110" rx="4"/>
+  <text x="375" y="248" text-anchor="middle" font-weight="600">Collapse certificate</text>
+  <text class="small" x="375" y="270" text-anchor="middle">limit analysis (linear program)</text>
+  <text class="small" x="375" y="288" text-anchor="middle">proves: Stands / Collapses</text>
+  <text class="small" x="375" y="306" text-anchor="middle">names the mechanism</text>
+
+  <rect class="box" x="560" y="130" width="180" height="110" rx="4"/>
+  <text x="650" y="160" text-anchor="middle" font-weight="600">Combined authority</text>
+  <text class="small" x="650" y="182" text-anchor="middle">one verdict per component</text>
+  <text class="small" x="650" y="200" text-anchor="middle">certificate referees doubts</text>
+  <text class="small" x="650" y="218" text-anchor="middle">counts disagreements</text>
+
+  <rect class="box break" x="800" y="130" width="160" height="110" rx="4"/>
+  <text x="880" y="160" text-anchor="middle" font-weight="600">Cascade</text>
+  <text class="small" x="880" y="182" text-anchor="middle">crack the top band</text>
+  <text class="small" x="880" y="200" text-anchor="middle">sever, release clusters</text>
+  <text class="small" x="880" y="218" text-anchor="middle">repeat until quiet</text>
+
+  <path class="arrow" d="M190 170 C 230 170, 230 95, 270 95"/>
+  <path class="arrow" d="M190 200 C 230 200, 230 275, 270 275"/>
+  <path class="arrow" d="M480 95 C 520 95, 520 170, 560 170"/>
+  <path class="arrow" d="M480 275 C 520 275, 520 200, 560 200"/>
+  <path class="arrow" d="M740 185 L 800 185"/>
+  <path class="arrow" d="M880 240 C 880 350, 105 350, 105 240"/>
+  <text class="small" x="490" y="345" text-anchor="middle">stamps cracks and breaks on the structure, removes released bodies, judges again</text>
+</svg>
+</div>
+<figcaption>Figure 1. The pipeline. Everything to the right of the structure is a pure function of it; the cascade is the only thing that changes it, and only by stamping and removing.</figcaption>
+</figure>
+</section>
+
+<section class="col">
+<h2>Two ways to judge, and why both</h2>
+<p>There are two classic ways to ask "does this stand?", and they fail in opposite directions. LoadPath builds both and lets one referee the other.</p>
+<h3>1. The elastic field (the standing authority)</h3>
+<p>Treat every joint as four tiny springs, one at each corner of the contact rectangle. Let the blocks settle under gravity. If the springs can carry the load with every joint inside its strength, that is a <em>proof</em> the structure stands. If a corner would be in tension on a dry joint, the spring opens; if it would slide past friction, it slips. The solver keeps releasing corners until it finds a settled state or runs out of ideas.</p>
+<p>This is the fast, physical-feeling method, and it gives a rich readout: how hard every joint is working, on which axis (crushing, pulling apart, sliding). Its weakness is that when it <em>cannot</em> find a settled state it does not know whether the structure really falls or whether it just failed to find the answer. So, by a rule set during review, it says <strong>Undecided</strong> rather than guess, and it reports <strong>Mechanism</strong> as an opinion rather than a proof.</p>
+<h3>2. Limit analysis (the collapse certificate)</h3>
+<p>Forget stiffness. Ask instead: is there <em>any</em> set of joint forces that balances the loads and stays inside every strength limit? That is a linear program. Scale the loads up by a factor <code>t</code> and find the largest <code>t</code> that still works. If the largest <code>t</code> is at least 1, the structure stands. If it is below 1, nothing can hold it and the dual solution of the program tells you the collapse motion: which bodies move and which joints hinge or slide.</p>
+<p>Friction makes the strength limit a cone, which a linear program cannot represent exactly, so it is approximated by a polygon twice: once inscribed inside the cone (so a "stands" answer is safe) and once drawn around it (so a "collapses" answer is safe). Between the two is a thin band where the engine says Undecided; raising the polygon count narrows it.</p>
+<figure>
+<svg class="diagram" viewBox="0 0 700 220" role="img" aria-label="The load factor axis with the inscribed and circumscribed brackets around the true collapse load">
+  <line class="thin" x1="40" y1="120" x2="660" y2="120"/>
+  <text class="small" x="40" y="150">load factor t</text>
+  <text class="small" x="660" y="150" text-anchor="end">larger loads carried</text>
+  <rect class="box ok" x="40" y="80" width="300" height="40" rx="3"/>
+  <text x="190" y="105" text-anchor="middle">Stands (a safe force field exists)</text>
+  <rect class="box warn" x="340" y="80" width="80" height="40" rx="3"/>
+  <text x="380" y="105" text-anchor="middle">band</text>
+  <rect class="box break" x="420" y="80" width="240" height="40" rx="3"/>
+  <text x="540" y="105" text-anchor="middle">Collapses (no field can exist)</text>
+  <line x1="340" y1="60" x2="340" y2="130" stroke="var(--fg)" stroke-width="1.5"/>
+  <text class="mono" x="340" y="50" text-anchor="middle">t_in (inscribed polygon)</text>
+  <line x1="420" y1="60" x2="420" y2="130" stroke="var(--fg)" stroke-width="1.5"/>
+  <text class="mono" x="420" y="178" text-anchor="middle">t_out (circumscribed polygon)</text>
+  <line x1="378" y1="130" x2="378" y2="195" stroke="var(--fg-2)" stroke-dasharray="3 3"/>
+  <text class="small" x="378" y="210" text-anchor="middle">the true collapse load is somewhere in here</text>
+</svg>
+<figcaption>Figure 2. The certificate never claims more than it can prove. A result of 1 inside the band reads Undecided and the host keeps the structure standing.</figcaption>
+</figure>
+<h3>3. The combined authority</h3>
+<p>One call per structure. It splits the structure into connected components (groups of blocks that touch each other), judges each with the elastic field, and whenever that field says Mechanism or Undecided it asks the certificate about that component alone. The certificate's answer wins, because a provable force field is the standing criterion. When the elastic field said "falls" and the certificate says "stands", that is counted as a disagreement, which is useful data about where the fast method is weak.</p>
+<div class="note"><p><strong>A deliberate limit.</strong> The certificate uses "associative" friction, a standard simplification in which a sliding joint also lifts slightly. Real joints do not. The consequence is that for some geometries the certificate says Stands a little past the point where the real thing slides. The tetrahedral rock wedge benchmark shows it: the engine switches at 31.1°, physical tests at 33.4°. That 2.3° gap is recorded as a known limit, with a deliberately failing test waiting for the non-associative referee planned in slice 7.</p></div>
+</section>
+
+<section>
+<h2 class="col">The cascade, in progress now</h2>
+<p class="col">A verdict is not yet a collapse. Real structures fail in sequence: one joint cracks, load shifts to its neighbours, another cracks, until a piece has nothing left holding it and falls. The cascade is that loop. It runs in <strong>passes</strong>, and every crack and break is stamped with its pass number so the host can play the failure back in order.</p>
+<figure>
+<div class="scroll">
+<svg class="diagram" viewBox="0 0 980 300" role="img" aria-label="The cascade loop: judge, release collapsing components, crack the top band of overstressed joints, repeat">
+  <defs><marker id="ah2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="var(--fg-2)"/></marker></defs>
+  <rect class="box" x="30" y="100" width="170" height="80" rx="4"/>
+  <text x="115" y="132" text-anchor="middle" font-weight="600">Judge</text>
+  <text class="small" x="115" y="154" text-anchor="middle">combined authority, pass N</text>
+
+  <rect class="box break" x="280" y="30" width="230" height="90" rx="4"/>
+  <text x="395" y="58" text-anchor="middle" font-weight="600">Collapses → release</text>
+  <text class="small" x="395" y="80" text-anchor="middle">group moving bodies into rigid clusters</text>
+  <text class="small" x="395" y="98" text-anchor="middle">sever the boundary joints, stamp N</text>
+
+  <rect class="box warn" x="280" y="160" width="230" height="90" rx="4"/>
+  <text x="395" y="188" text-anchor="middle" font-weight="600">Overstressed → crack</text>
+  <text class="small" x="395" y="210" text-anchor="middle">only the top band of the worst ratios</text>
+  <text class="small" x="395" y="228" text-anchor="middle">bond lost, friction kept, stamp N</text>
+
+  <rect class="box ok" x="590" y="100" width="170" height="80" rx="4"/>
+  <text x="675" y="132" text-anchor="middle" font-weight="600">Anything changed?</text>
+  <text class="small" x="675" y="154" text-anchor="middle">yes: pass N+1 · no: done</text>
+
+  <rect class="box" x="820" y="100" width="140" height="80" rx="4"/>
+  <text x="890" y="132" text-anchor="middle" font-weight="600">Verdict</text>
+  <text class="small" x="890" y="154" text-anchor="middle">failures, clusters, readings</text>
+
+  <path d="M200 125 C 240 125, 240 75, 280 75" class="arrow" style="marker-end:url(#ah2)"/>
+  <path d="M200 155 C 240 155, 240 205, 280 205" class="arrow" style="marker-end:url(#ah2)"/>
+  <path d="M510 75 C 550 75, 550 125, 590 125" class="arrow" style="marker-end:url(#ah2)"/>
+  <path d="M510 205 C 550 205, 550 155, 590 155" class="arrow" style="marker-end:url(#ah2)"/>
+  <path d="M760 140 L 820 140" class="arrow" style="marker-end:url(#ah2)"/>
+  <path d="M675 180 C 675 280, 115 280, 115 180" class="arrow" style="marker-end:url(#ah2)"/>
+  <text class="small" x="395" y="275" text-anchor="middle">a pass that changes nothing ends the run; joints never heal, so the loop always terminates</text>
+</svg>
+</div>
+<figcaption>Figure 3. One pass of the cascade. Each component is either collapsing or overstressed, never both, so releasing always happens before cracking.</figcaption>
+</figure>
+<div class="col">
+<p>Two lessons from the old project are built in as rules. First, <strong>crack a few joints at a time</strong>: cracking every overloaded joint at once once sent damage through an entire warehouse to the far wall, because hundreds of simultaneous cracks is not a state any real building passes through. The cascade cracks only the joints whose overload ratio is in the top band (by default, the top half of the way down from the worst). Second, <strong>a released cluster must be a certified mechanism</strong>: the bodies in a cluster are the ones the certificate proved move together, grouped across joints that do not hinge, never a "whatever is connected" guess.</p>
+</div>
+</section>
+
+<section class="col">
+<h2>What has been built, slice by slice</h2>
+<p>Work is cut into slices that each end with a reviewed, committed, fully tested piece. The order follows the design brief, with the collapse certificate pulled forward because the cascade needed it before the catalogue did.</p>
+
+<div class="slice">
+  <div class="id">1<small>MODEL</small></div>
+  <div class="body">
+    <h3>The structure and its vocabulary <span class="pill done">done</span></h3>
+    <p>Bodies, joints, strength profiles, and a <code>Structure</code> graph that holds them with stable handles.</p>
+    <dl class="kv">
+      <dt>Major</dt><dd>Validation that refuses bad input and says why (a non-unit normal, a zero-area joint, a joint to a removed body). Handles stay valid when a body is removed: nothing renumbers, so failure stamps can never be invalidated.</dd>
+      <dt>Minor</dt><dd>Dead reads fail closed (a removed body reads NaN mass, never zero). Normalisation that survives tiny and huge numbers. Seven strength numbers per profile, so adding a material is adding a row of data.</dd>
+      <dt>Units</dt><dd>SI only, inside the library. The old project lost days to a 100× unit factor; here it cannot exist because there is no conversion.</dd>
+    </dl>
+  </div>
+</div>
+
+<div class="slice">
+  <div class="id">1b<small>FILE + CLI</small></div>
+  <div class="body">
+    <h3>A structure file and a command line <span class="pill done">done</span></h3>
+    <p>A hand-written JSON reader and writer, round-trip tested, and a tiny <code>loadpath_cli</code> that loads a file and prints it. The file is how a scene is saved and how a bug is reported. Slice 3 is extending it to carry crack and break stamps.</p>
+  </div>
+</div>
+
+<div class="slice">
+  <div class="id">2a<small>STANDING</small></div>
+  <div class="body">
+    <h3>The elastic standing authority <span class="pill done">done</span></h3>
+    <p>The corner-spring field described above, with a precise contract about what it proves.</p>
+    <dl class="kv">
+      <dt>Major</dt><dd>Four corner springs per joint, six degrees of freedom per body, solved per connected component so a change on one side of a site never alters a reading on the other. Corners open when a dry joint goes into tension and slip when shear passes friction. Readings per joint: a utilisation ratio and the axis that governs it.</dd>
+      <dt>Minor</dt><dd>A pivoted factorisation that can detect a rank defect (the off-the-shelf one could not); rotations scaled by a characteristic length so answers do not change with the size of the structure; a restore rule for corners that re-enter contact.</dd>
+      <dt>Ruling</dt><dd>It certifies Stands and Overstressed. Mechanism is an opinion. When it cannot settle, it says Undecided and hands over to the certificate. This replaced three rounds of heuristics that each fixed one case and broke another.</dd>
+    </dl>
+  </div>
+</div>
+
+<div class="slice">
+  <div class="id">4a<small>CERTIFICATE</small></div>
+  <div class="body">
+    <h3>The collapse certificate <span class="pill done">done</span></h3>
+    <p>Limit analysis as a linear program, with its own interior-point solver written on top of Eigen so the library has no external solver dependency.</p>
+    <dl class="kv">
+      <dt>Major</dt><dd>Friction cones as 16-sided polygons, inscribed and circumscribed; bonded joints with tension and cohesion; crushing bounds. The two solves give the bracket in Figure 2. A collapse comes with the mechanism: which bodies move, how, and which joints hinge.</dd>
+      <dt>Minor</dt><dd>A separate small program chooses the single clearest mechanism when the structure fails at zero load (otherwise the solver returns a blend of every possible failure). A listing threshold so numerical residue never names a bystander as "moving". Agreement with an independent oracle on 300 random structures.</dd>
+      <dt>Reviews</dt><dd>Four. They caught a rank problem in the first factorisation, a friction over-read on bonded joints, and a mechanism selection that released too much.</dd>
+    </dl>
+  </div>
+</div>
+
+<div class="slice">
+  <div class="id">4b<small>COMBINED</small></div>
+  <div class="body">
+    <h3>The combined authority, the shear cap, and the hard benchmarks <span class="pill done">done</span></h3>
+    <p>Closed today after three reviews.</p>
+    <dl class="kv">
+      <dt>Major</dt><dd>The combined authority: per-component verdicts, each component judged by its own elastic solve (an earlier version inferred them from one global answer and the review showed two ways that went wrong). The shear cap, a seventh strength number, now enters the linear program as a polygon around the shear force, with the rule that a cap of zero means "no shear", never "no limit".</dd>
+      <dt>Anchors</dt><dd>The Couplet–Heyman semicircular arch now pins the textbook least thickness exactly (0.107478 of the radius, hinges at the crown, 54.48° and the springings) and its friction switch (slides at 21°, stands at 22°). The Orduña hollow block pile reads a collapse factor of 0.5005 against a published range of 0.427 to 0.553. The 3DEC wedge is pinned at the certificate's own 31.07°, with the gap to the physical 33.36° recorded.</dd>
+      <dt>Minor</dt><dd>A seeded property that judges each component alone and whole and demands identical answers and identical readings; a Slow-in-Debug tier so the arch and pile anchors run only in the optimised build; the three tests that had been parked as "deferred to slice 4" came back green through the combined authority.</dd>
+    </dl>
+  </div>
+</div>
+
+<div class="slice">
+  <div class="id">3<small>CASCADE</small></div>
+  <div class="body">
+    <h3>Crack, sever, release <span class="pill doing">in progress</span></h3>
+    <p>The contract is written and reviewed-by-test: 27 new test cases exist and 26 of them are red on purpose, waiting for the implementation that is being written now.</p>
+    <dl class="kv">
+      <dt>What lands</dt><dd>Joint states that move one way only (intact, cracked, severed, removed) with pass stamps; a cracked joint reads as a dry joint to both authorities; per-axis utilisation in every reading; the file format carrying state; and the cascade loop of Figure 3 with its band rule, cluster grouping and pass budget.</dd>
+      <dt>Pinned by tests</dt><dd>A brick sliding off a slope releases as one cluster with its bed severed on pass 1; a two-brick stack sliding at the ground leaves as a single cluster; a bonded pier cracks its base on pass 1 and tips on pass 2; a top band of 0.5 cracks the joints at ratios 3 and 2 but not 1.2; a crushing overload cracks nothing; a second run continues numbering from where the first stopped.</dd>
+    </dl>
+  </div>
+</div>
+</section>
+
+<section class="col">
+<h2>How we know it is right</h2>
+<p>The project is test-driven without exception: no production code is written until a test for it has been run and seen to fail for the right reason. Three things make the tests worth trusting.</p>
+<ul class="plain">
+  <li><strong>Known answers from the literature, never from the old project.</strong> Every pinned number has a source row recording where it came from and how it was derived: Housner's rocking block, the sliding and tipping incline, the Paterson–Zwick overhang stacks, the harmonic stack, the Itasca slope regimes, the Couplet–Heyman arch, the Orduña pile, the 3DEC wedge. The arch answer, for instance, is Milankovitch's 1907 result, confirmed by three independent papers.</li>
+  <li><strong>Independent oracles.</strong> A small, slow, obviously-correct solver in the test tier checks static admissibility on hundreds of seeded random structures. Seeded properties check that answers do not depend on what sits ten metres away, and that judging a component alone or as part of the whole gives identical readings.</li>
+  <li><strong>Mutation records.</strong> A test that passes the moment it is written proves nothing by itself, so for each such test a deliberate bug is introduced into the production code, the test is shown to catch it, and the bug is reverted. The commit messages carry those records.</li>
+</ul>
+<div class="scroll">
+<table>
+  <tr><th>Suite</th><th class="num">Cases</th><th class="num">Assertions</th><th class="num">Time</th><th>Notes</th></tr>
+  <tr><td>Debug, default run</td><td class="num">176</td><td class="num">12,333</td><td class="num">~10 s</td><td>at slice 4b close; 203 with slice 3's red set</td></tr>
+  <tr><td>Release, default run</td><td class="num">180</td><td class="num">35,376</td><td class="num">~4 s</td><td>includes the arch and pile anchors</td></tr>
+  <tr><td>Deferred tier</td><td class="num">1</td><td class="num"></td><td class="num"></td><td>the physical wedge angle, red by design until the slice 7 referee</td></tr>
+</table>
+</div>
+<p>Two independent reviewers found real defects this month that the authors missed: a design inference in the combined authority that relabelled a healthy component, an arithmetic path for zero shear caps that no test exercised, and a benchmark row stating a criterion that turned out to be false for exact voussoirs. Each was turned into a test before it was fixed.</p>
+</section>
+
+<section class="col">
+<h2>Known limits, written down</h2>
+<ul class="plain">
+  <li><strong>Associative friction.</strong> The certificate can read Stands slightly past where a real joint slides (the wedge's 2.3° band). The plan is a non-associative referee in slice 7.</li>
+  <li><strong>Undecided is a real answer.</strong> Rather than guess, the engine says it cannot tell, and the host keeps the structure standing. The band is narrowed by polygon count and by the certificate refereeing the elastic field, but it exists.</li>
+  <li><strong>Cost.</strong> The combined authority copies the structure once per component and solves twice. Fine for test fixtures, not for a 5,000-piece warehouse. Slice 6 is scale.</li>
+  <li><strong>The pile's bond is reconstructed.</strong> The paper's figure could not be read, so the block layout follows the published dimensions and block count; the assertion is the published bracket only.</li>
+</ul>
+</section>
+
+<section class="col">
+<h2>How the work gets done</h2>
+<p>Three specialised agents, always in the same order: a test writer that produces the failing test, a developer that refuses to write code until it has seen the test fail, and a reviewer with no write access that is expected to reject work. The orchestrator writes contracts, takes rulings, and records them in the design document so no decision lives only in a conversation.</p>
+<p>Today's speed trial moved the test and development agents to low reasoning effort while keeping the reviewer at high. Slice 4b, larger than 4a, went from contract to passed review in about four hours. The low-effort test writer still caught three errors in the brief it was handed, and the reviewer's high effort is what found the defects that mattered.</p>
+</section>
+
+<section class="col">
+<h2>What comes next</h2>
+<div class="grid">
+  <div class="card"><h3>Slice 3 <span class="pill doing">now</span></h3><ul><li>Implementation against the 26 red tests</li><li>Review, then close</li></ul></div>
+  <div class="card"><h3>Slice 5 <span class="pill todo">next</span></h3><ul><li>Material catalogue with citations: brick, mortar, timber, nail, screw, bolt</li><li>Running-bond wall generator and structural fuzz</li></ul></div>
+  <div class="card"><h3>Slice 6 <span class="pill todo">later</span></h3><ul><li>Sparse solves, event regions, panels</li><li>Target: the old 5,612-piece warehouse decided inside 200 ms</li></ul></div>
+  <div class="card"><h3>Slices 7 and 8 <span class="pill todo">later</span></h3><ul><li>HiGHS referee in the test tier, non-associative friction</li><li>The Unreal adapter as its own module</li></ul></div>
+</div>
+</section>
+</div>
