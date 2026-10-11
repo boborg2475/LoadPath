@@ -12,12 +12,14 @@ structure reader/writer, `RunCli`, the `loadpath_cli` binary) and slice 2a (the 
 authority) are committed and reviewed, every green-on-arrival row proven by a recorded mutation
 (commit messages). Slice 2a, through 1025bd9 and four reviews: `IStandingAuthority`, the RBSM
 corner-spring implementation with per-component Schur-pivoted dense LDLT solves and the free
-Default suite 137 cases (7669 assertions in Debug, 15190 in Release, about 6.6 s and 0.9 s; the
+active set, under the narrowed contract of DESIGN §10 (it certifies Stands and Overstressed,
 reports Mechanism as a verdict, and fails closed to Undecided rather than guess); 18 anchor and
 mechanics tests (incline tip and slide, Housner, free and coursed wall, the Itasca slope
 regimes, harmonic stack, Paterson–Zwick triangle and diamond), 20 solver characterisation and
 defect tests, a seeded locality property and a seeded static-admissibility oracle property.
-Default suite 113 cases (6288 assertions in Debug, 10081 in Release, about 1.8 s and 0.3 s);
+Slice 4a, the limit-analysis collapse certificate (`ICollapseCertificate`, 24 cases), is green
+at ac2e1fb and awaiting review. Default suite 137 cases (7669 assertions in Debug, 15190 in
+Release, about 6.6 s and 0.9 s);
 the `Deferred.Slice4` tier holds 3 cases red by design. The design brief
 ([DESIGN.md](DESIGN.md)) has every §9 question decided and §10 carries the slice-2 rulings.
 
