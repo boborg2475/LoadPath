@@ -70,7 +70,7 @@ struct InterfaceReading
 	std::array<CornerReading, 4> Corners;
 };
 
-// One body's share of the null vector, normalised so its largest absolute component over all bodies is 1.
+// One body's share of a mechanism component's null vector, normalised so that component's largest absolute component is 1.
 struct MechanismMotion
 {
 	BodyId Body;
@@ -83,7 +83,7 @@ struct StandingResult
 	StandingState State = StandingState::Undecided;
 	// Every live interface, ascending slot order.
 	std::vector<InterfaceReading> Readings;
-	// Non-empty only when State is Mechanism.
+	// Every mechanism component, whatever the overall State; empty when no component is a mechanism.
 	std::vector<MechanismMotion> Mechanism;
 	std::vector<BodyId> UnconstrainedBodies;
 	int ActiveSetIterations = 0;

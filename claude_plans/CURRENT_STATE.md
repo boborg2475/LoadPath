@@ -10,37 +10,41 @@ Repository scaffolded: CMake + Visual Studio 2022 generator, vendored doctest 2.
 Slice 1 (the model: handles, profiles, bodies, interfaces, validation, removal) and slice 1b
 (JSON structure reader/writer, `RunCli`, the `loadpath_cli` binary) are committed and reviewed:
 every green-on-arrival row proven by a recorded mutation (commit messages). Slice 2a, the
-standing authority, is committed through 3d39b2a (98 cases, 2948 assertions, Debug and Release):
-`IStandingAuthority`, the RBSM corner-spring implementation with a Schur-pivoted dense LDLT and
-the free active set, 18 anchor and mechanics tests (incline tip and slide, Housner, free and
-coursed wall, the Itasca slope regimes, harmonic stack, Paterson–Zwick triangle and diamond) and
-10 solver characterisation tests. **Its first review (2026-10-11) found five blocking items and
-the slice is not done**: see "Next" 1. The design brief ([DESIGN.md](DESIGN.md)) has every §9
+standing authority, is committed through f85bc54 (107 cases, 5453 assertions, Debug and
+Release): `IStandingAuthority`, the RBSM corner-spring implementation with per-component
+Schur-pivoted dense LDLT solves and the free active set, 18 anchor and mechanics tests (incline
+tip and slide, Housner, free and coursed wall, the Itasca slope regimes, harmonic stack,
+Paterson–Zwick triangle and diamond), 19 solver characterisation and defect tests and a seeded
+locality property. **Two reviews so far (2026-10-11); the second left the items in "Next" 1
+open and the slice is not done.** The design brief ([DESIGN.md](DESIGN.md)) has every §9
 question decided and §10 carries the slice-2 rulings.
 
 ## Next
 
 1. Close the slice-2a review (findings and the rulings that answer them are in API.md "Slice 2",
-   DESIGN §10 2026-10-11 and the review-round tests `Statics.Solver.*` T1–T11). The five
-   red review-round cases are green in Debug and Release (restored corners re-close slipping on
-   a dry joint, no status-only cycle detection, per-component solves with rotational scaling,
-   range-space readings on a mechanism component, options and assembled stiffness validated;
-   uncommitted at the time of writing). Still open:
-   - unpinned declared behaviour: re-stick, the open-corner restore, the transverse tangent
-     magnitude, the slip-capacity clamp in tension, `UnconstrainedBodies`' negative side, Axis
-     None on a zero-force interface; weak `!=` assertions and sign-blind shape helpers;
-   - unpinned in the review-round fix: a re-closed slipping corner's held magnitude and
-     direction (mutating its capacity to 0 keeps all 107 cases green), its transverse tangent
-     (`kt · capacity / |trial S|` from the range field, which can exceed `kt` against API.md's
-     "never above kt"; a clamp was tried and nothing bites it, so it was left out), and the
-     mechanism component's range-space readings (only the standing component's are asserted);
-   - the ruling "an assembled load that is not finite is InvalidInput" contradicts
-     `Statics.Solver.LoadsThatOverflowReadInfiniteUtilisationAndNeverStand`, whose two finite
-     -1e308 loads sum to -inf in the assembled load and which asserts `State != InvalidInput`.
-     Only the assembled stiffness is checked (first pass, per component); the orchestrator
-     decides which side moves;
+   DESIGN §10 2026-10-11 and the review-round tests `Statics.Solver.*`). Open after the second
+   review (2026-10-11):
+   - a restored slipping corner takes its held capacity and transverse tangent from the
+     singular range solution, so the tangent reached 1e47 × kt and the capacity 1.2e6 N on a
+     27 N brick; the inflated pivot then throws every real pivot under the tolerance (rank 1 of
+     12 on the 0.08 m stack at μ 0.6, λ = (1.5, 0)); a standing bridge point (μ 5, λ = (2.125,
+     0.625)) reads Undecided. Ruling in API.md: seed from the interface's closed corners' mean
+     N⁺ in the last non-singular solve, zero transverse tangent on the re-entry pass;
+   - the restored corner's held magnitude is unpinned (capacity 0 survives the suite but gives
+     three false Mechanisms on a three-brick bridge at μ 5: λ = (2.5, 0.75), (2.25, 0.5),
+     (2.25, 0.625), which provably stand);
+   - the rotational scaling direction is unpinned (scaling by L_c instead of 1/L_c survives);
+     pin with a geometric-similarity property (lengths × s, masses × s³, s = 2^±4, identical
+     states and corner forces × s³);
+   - the component combination is unpinned: Undecided vs Mechanism and Overstressed vs
+     Mechanism ordering, the `ActiveSetIterations` maximum, and `Mechanism` /
+     `UnconstrainedBodies` populated under an overall Undecided (ruled in API.md and the header);
+   - a mechanism component's range-space readings are unpinned (dropping the range solve
+     survives);
    - a component that is InvalidInput through its assembled stiffness returns InvalidInput for
-     the whole solve with `InvalidInterface` unset (no interface is named).
+     the whole solve with `InvalidInterface` unset; `NonFiniteOptionsAreInvalidInput` accepts
+     Undecided for the overflowing stiffness where the ruling says InvalidInput; the
+     `Tolerance < 1` boundary is unpinned.
    Then re-review.
 2. Slice 2b, the remaining slice-2 anchors (BENCHMARKS groups 2 and 3): B-WAL-03 (wall slides at
    λ = μ), B-STK-04 (constant-step stack), B-WDG-02, B-ROK-02, F-CHC-01, F-LIB-01/02, F-EMI-01,
@@ -83,10 +87,14 @@ question decided and §10 carries the slice-2 rulings.
   search of the admissible cone rather than one projected direction.
 - On the same μ 0.6 grid, 25 biaxial points just past the sliding threshold (for example
   λ = (0.625, 0.5)) read Mechanism with a twist about z and a translation off the load line,
-  before and after the review-round fix. For a block whose corners all slip, the centre of
-  pressure lies on the load line, so the collapse mode is a pure translation; the reported motion
-  is a null vector of an intermediate active set with some corners still stuck. The verdict is
-  right, the shape is not the collapse mode, and no test asserts it.
+  before and after the review-round fix. All four corners are slipping there; the twist
+  (Rz about 7% of the corner displacement) comes from non-parallel held directions inherited
+  from the elastic trial, and the collapse mode is a pure translation. The verdict and the body
+  list are right, the shape is not the collapse mode, and no test asserts it. Slice 4's
+  collapse certificate owns mechanism shapes; API.md's "a sliding block reads a pure
+  translation" holds for uniaxial or symmetric loading. Readings on such a mechanism component
+  can show slipping corners up to about 5% over μN because the held force came from an
+  earlier pass's N; slice 3 reads standing components only.
 - The held-force magnitude loop still converges at roughly μ per pass where friction at one
   joint sets the normal force at another: the brick pushed into a wall takes 22 passes at
   μ = 0.3, 37 to 38 at μ = 0.5 and hits the 50-pass cap at μ = 0.7, λ = 0.8, matching

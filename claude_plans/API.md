@@ -372,7 +372,32 @@ never mutates the structure. The host may call it on any thread.
   characteristic length (the largest corner lever arm `|p − c|` in it) before factoring, so
   every pivot carries N/m and the tolerance compares like with like. The overall `State` is the
   worst over components in the order InvalidInput > Undecided > Mechanism > Overstressed >
-  Stands; `Mechanism` and `UnconstrainedBodies` collect every mechanism component.
+  Stands; `Mechanism` and `UnconstrainedBodies` collect every mechanism component whatever the
+  overall state (a host releases those bodies even while another component is undecided), each
+  component's motion normalised on its own; `ActiveSetIterations` is the maximum over
+  components.
+- **A restored corner is seeded from physical scales, never from the singular solve** (second
+  review ruling 2026-10-11). The range-space solution of a singular active set is not an
+  equilibrium field, so a corner it re-closes must not take its normal force or trial shear from
+  it (the transverse tangent reached 1e47 × kt and the held capacity 1.2e6 N on a 27 N brick).
+  On the pass it re-enters, a restored slipping corner carries held force μ · N̄⁺ opposite the
+  tangential part of the projected motion, where N̄⁺ is the mean positive normal force of its
+  interface's closed corners in the last non-singular solve (if none, the component's weight
+  divided by its corner count), and **zero transverse tangent**; from the next pass the
+  standard slip rules apply with a trial from a solve in which it was closed. The transverse
+  tangent is `min(kt, kt · capacity / |trial S|)` for every corner: the clamp is enforced, not
+  assumed (a tiny trial from a corner whose status just changed inflated it on the standard
+  path too, to 7.7e6 × W on the bridge).
+- **A Mechanism is accepted only from a consistent active set** (second review ruling
+  2026-10-11, third red round). Before a singular, admissible active set is returned as a
+  Mechanism, the standard release rules are applied to its range-space solution: a stuck corner
+  whose trial shear exceeds its capacity slips, and a closed corner on a dry joint whose trial
+  normal is tensile opens; if anything changed, the loop continues. Without this the 0.08 m
+  stack reported only the upper brick moving while its base carried 58.5 N of shear against a
+  32 N capacity. On the pass that returns the Mechanism, every slipping corner's held force is
+  re-derived as `μ · N⁺` from the range-space normals (one re-derivation, no re-solve), so a
+  mechanism component's readings satisfy `|S| = μ N` on every slipping corner and equilibrium
+  in every direction the null space does not span.
 - **Readings on Mechanism and Undecided** (review ruling 2026-10-11): a standing component's
   readings are its converged readings whatever the overall state. A mechanism component's
   readings are the range-space solution of its last active set, with the released corners
