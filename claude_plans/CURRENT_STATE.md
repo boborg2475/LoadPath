@@ -42,20 +42,31 @@ the `Deferred.Slice4` tier holds 3 cases red by design. The design brief
      certificate over-reads shear capacity (fail open for Stands). Needs a test and a formulation:
      facet rows on the corner shear. Bounding `r Σα ≤ cap` turns a shear cap into a compression
      cap, so that one is wrong.
-   - Bonded corners are `F = -ft A/4 n + Σ α_j g_j + Σ κ_j c_j` with `Σ κ_j ≤ c A/4`: the convex
-     hull of DESIGN's truncated envelope, which it over-reads by up to `μ ft A/4` of shear at
-     `N ≥ 0`. Exact when ft = 0. Ratify or replace.
+   - The two 4a-review rulings are implemented and green, not yet reviewed: the inner strength
+     region on the inscribed solve (`T' = min(ft, c/μ)`, cohesion `c − μT'`; the hull stays on
+     the circumscribed one), and mechanism selection at `t_in` under tolerance. The selection is
+     a second HSD Mehrotra on the 6n velocity normal equations: minimise `Σ|y|` subject to
+     `gᵀ v_corner(y) ≤ 0` for every generator of every inscribed group (`w_G = 0`: every
+     dissipation term is non-negative, so zero dissipation forces each to zero, and the
+     `Bound·w` form was ill-posed at Bound ≈ 1e7), `−offsetᵀ y ≤ tol` when any tension offset
+     exists, and `Demandᵀ y = 1`. It falls back to the analytic-centre mechanism when it does
+     not converge. Open: 4 of the ~1,026 selections in the default suite hit the 200-iteration
+     cap (τ → 0, objective 1e6 to 1e7: an almost-empty zero-dissipation face), falling back and
+     costing 800 iterations; an early infeasibility exit would save that. No test covers
+     selection on a bonded component (the opening row). API.md's body text does not yet reflect
+     either ruling.
    - Severity Undecided > Collapses: a structure with one Collapses and one Undecided component
      reads Undecided while `LoadFactorUpper < 1`. The single-component tests pin
      `(State == Collapses) == (Upper < 1)`; decide which way multi-component results go.
    - Unpinned choices: HingingInterfaces is kinematic (an interface whose corner relative
      velocity in the inscribed mechanism exceeds 1e-6 of the component's fastest corner);
      mechanism lists are filled on Collapses only, not on Undecided; non-convergence reports
-     Undecided with `[0, cap]`; a free body with no interface fails the factorisation and reads
-     Undecided.
-   - Debug runtime: the default suite went from 2.0 s to 6.6 s in Debug (0.9 s Release);
-     `Certificate.Oracle` alone is 3.7 s (its 1,122-point closed-form grid; 0.5 s Release).
-     About half is Eigen LLT factor and solve in Debug. Options: a `Slow.` prefix or a
+     Undecided with `[0, cap]`; a free body with no interface reads Collapses at t = 0 through the
+     regularised refactor (pinned by the review-round mechanics test).
+   - Debug runtime: the default suite is 7.3 s in Debug (1.25 s Release), of which the mechanism
+     selection LP adds about 3 s (4.3 s before it); `CoursedFreeWallHingesAtTheBase` is 1.2 s
+     and `Certificate.Oracle.SingleBrickGrid` 1.1 s in Debug. Most of it is Eigen LLT factor
+     and solve in Debug. Options: a `Slow.` prefix or a
      Debug-sized grid for that case, or a hand-written dense Cholesky.
    - HiGHS is not vendored: the contract chose a dense interior point. The DESIGN §8 referee is
      still slice 7's question.
@@ -70,7 +81,9 @@ the `Deferred.Slice4` tier holds 3 cases red by design. The design brief
    only), F-RON-01 panel thickness, B-FTL-01 layout. B-BUR-01 needs a soil-pressure driver;
    F-PYR-01 needs a zero-extent contact; group 9 runs only in the host adapter's suite.
 3. `Scripts/Test.ps1` excludes a `Slow.` prefix from the default run once the first slow test
-   exists; today there is none (the default suite runs in about 1.8 s in Debug, 0.3 s in Release).
+   exists; today there is none, but the Debug default suite is at about 4 s after the oracle grid
+   split (Release under 1 s); the next slow candidate goes behind the prefix and the script gains
+   the exclusion then.
 
 ## Deferred
 
@@ -186,12 +199,7 @@ the `Deferred.Slice4` tier holds 3 cases red by design. The design brief
 - `tests/StaticsOracleTest.cpp` draws bridge half-spans from 0.10 m, below the 0.1075 m that
   keeps the two legs apart, so about a quarter of bridge draws interpenetrate by up to 15 mm;
   both sides see the same model so the property is unaffected, but start the range at 0.1075
-  or record why not. Test spec from the fourth review: move the oracle into a shared test
-  header so the two bridge `Deferred.Slice4` cases CHECK `Oracle == CanStand` as a
+  or record why not. The oracle now lives in tests/StaticAdmissibilityOracle.h; remaining spec from the fourth review:
+  make the two bridge `Deferred.Slice4` cases CHECK `Oracle == CanStand` as a
   precondition (`MakeBridge(5.0, 0.12, 0.0)` at (2.5, 0.875), (2.375, 0.875), (2.25, 0.875)
   reads CanStand with inner residual about 1e-16 at μ 5 and 3.5).
-- Slice 4's contract must settle the theorem question the slice-2 tests presuppose: API.md says
-  which answer is physical under non-associative friction is open, while TS1 and TS2's
-  never-Mechanism direction assert the lower-bound answer and the `Deferred.Slice4` cases are
-  the slice-4 acceptance; say what a future red on TS2's never-Mechanism direction means (a
-  defect, or a known limit that moves under `Deferred.`).

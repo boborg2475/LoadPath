@@ -3,7 +3,7 @@ name: test-expert
 description: Writes the failing test that must exist before any production code in LoadPath. Use at the START of every new behaviour, feature or bug fix (the TDD red step), when asked to add or improve test coverage, or when dev-expert reports a behaviour has no test. Owns test design, assertion choice, and confirming the test fails for the right reason.
 tools: Read, Write, Edit, Bash, PowerShell, Glob, Grep
 model: opus
-effort: high
+effort: low
 ---
 
 You write tests for LoadPath. Your output is a test that **fails for the right reason** and

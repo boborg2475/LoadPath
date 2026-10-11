@@ -8,6 +8,7 @@
 #include <cmath>
 #include <cstddef>
 #include <limits>
+#include <utility>
 #include <vector>
 
 namespace loadpath
@@ -44,6 +45,8 @@ struct JointData
 	double Friction = 0.0;
 	double TensionN = 0.0;
 	double CohesionN = 0.0;
+	double InnerTensionN = 0.0;
+	double InnerCohesionN = 0.0;
 	double CrushingN = 0.0;
 	std::size_t FirstSite = 0;
 };
@@ -55,7 +58,6 @@ struct Component
 	std::vector<JointData> Joints;
 	std::vector<Site> Sites;
 	Eigen::VectorXd Demand;
-	Eigen::VectorXd Offset;
 	double ForceScaleN = 1.0;
 	double LengthM = 1.0;
 };
@@ -72,6 +74,7 @@ struct Program
 {
 	std::vector<Group> Groups;
 	std::vector<Vec3> Directions;
+	Eigen::VectorXd Offset;
 	double Cap = 0.0;
 	Eigen::Index LoadFactor = 0;
 	Eigen::Index FirstSlack = 0;
@@ -201,6 +204,9 @@ std::vector<Component> BuildComponents(const Structure& Model, std::span<const B
 		J.TensionN = Profile.TensileStrengthPa * CornerAreaM2;
 		J.CohesionN = Profile.ShearCohesionPa * CornerAreaM2;
 		J.CrushingN = Profile.CompressiveStrengthPa * CornerAreaM2;
+		const double InnerTensionPa = J.Friction > 0.0 ? std::min(Profile.TensileStrengthPa, Profile.ShearCohesionPa / J.Friction) : Profile.TensileStrengthPa;
+		J.InnerTensionN = InnerTensionPa * CornerAreaM2;
+		J.InnerCohesionN = (Profile.ShearCohesionPa - J.Friction * InnerTensionPa) * CornerAreaM2;
 		Components[static_cast<std::size_t>(K)].Joints.push_back(J);
 		Geometry[static_cast<std::size_t>(K)].push_back(statics::MakeJointGeometry(Model, Id, Partition.OffsetOfSlot));
 	}
@@ -238,7 +244,6 @@ std::vector<Component> BuildComponents(const Structure& Model, std::span<const B
 			C.ForceScaleN = 1.0;
 		}
 		C.Demand = Applied[K] / -C.ForceScaleN;
-		C.Offset = Eigen::VectorXd::Zero(C.Rows);
 		const double InverseLengthPerM = 1.0 / C.LengthM;
 		for (std::size_t I = 0; I < C.Joints.size(); ++I)
 		{
@@ -253,7 +258,6 @@ std::vector<Component> BuildComponents(const Structure& Model, std::span<const B
 				S.ArmA = Scale(InverseLengthPerM, Sub(G.CornerM[Corner], G.CentroidAM));
 				S.ArmB = Scale(InverseLengthPerM, Sub(G.CornerM[Corner], G.CentroidBM));
 				C.Sites.push_back(S);
-				ApplyCornerForce(C.Offset.data(), S, Scale(J.TensionN / C.ForceScaleN, J.Normal));
 			}
 		}
 	}
@@ -270,10 +274,11 @@ void AddGroup(Program& P, std::size_t SiteIndex, double Bound, const std::vector
 	P.Directions.insert(P.Directions.end(), Directions.begin(), Directions.end());
 }
 
-Program BuildProgram(const Component& C, int Generators, double RadiusScale, double Cap)
+Program BuildProgram(const Component& C, int Generators, double RadiusScale, double Cap, bool bInscribed)
 {
 	Program P;
 	P.Cap = Cap;
+	P.Offset = Eigen::VectorXd::Zero(C.Rows);
 	const std::size_t Count = static_cast<std::size_t>(Generators);
 	std::vector<Vec3> Friction(Count);
 	std::vector<Vec3> Cohesion(Count);
@@ -286,11 +291,14 @@ Program BuildProgram(const Component& C, int Generators, double RadiusScale, dou
 			Friction[K] = statics::Add(J.Normal, Scale(RadiusScale * J.Friction, InPlane));
 			Cohesion[K] = Scale(RadiusScale, InPlane);
 		}
+		const double TensionN = bInscribed ? J.InnerTensionN : J.TensionN;
+		const double CohesionN = bInscribed ? J.InnerCohesionN : J.CohesionN;
 		for (std::size_t Corner = 0; Corner < CornerCount; ++Corner)
 		{
 			const std::size_t SiteIndex = J.FirstSite + Corner;
-			AddGroup(P, SiteIndex, (J.CrushingN + J.TensionN) / C.ForceScaleN, Friction);
-			AddGroup(P, SiteIndex, J.CohesionN / C.ForceScaleN, Cohesion);
+			ApplyCornerForce(P.Offset.data(), C.Sites[SiteIndex], Scale(TensionN / C.ForceScaleN, J.Normal));
+			AddGroup(P, SiteIndex, (J.CrushingN + TensionN) / C.ForceScaleN, Friction);
+			AddGroup(P, SiteIndex, CohesionN / C.ForceScaleN, Cohesion);
 		}
 	}
 	const Eigen::Index GroupCount = static_cast<Eigen::Index>(P.Groups.size());
@@ -307,7 +315,7 @@ Program BuildProgram(const Component& C, int Generators, double RadiusScale, dou
 Eigen::VectorXd RowBounds(const Component& C, const Program& P)
 {
 	Eigen::VectorXd B(P.RowCount);
-	B.head(C.Rows) = C.Offset;
+	B.head(C.Rows) = P.Offset;
 	for (std::size_t G = 0; G < P.Groups.size(); ++G)
 	{
 		B(P.FirstGroupRow + static_cast<Eigen::Index>(G)) = P.Groups[G].Bound;
@@ -412,6 +420,29 @@ void AddSiteBlock(double* M, int Rows, int OffsetRow, const Jacobian& RowSide, i
 	}
 }
 
+Eigen::MatrixXd AssembleSites(const Component& C, const std::vector<Matrix3>& SiteMatrix)
+{
+	Eigen::MatrixXd M = Eigen::MatrixXd::Zero(C.Rows, C.Rows);
+	for (std::size_t I = 0; I < C.Sites.size(); ++I)
+	{
+		const Site& S = C.Sites[I];
+		const std::array<int, 2> Offsets{S.OffsetA, S.OffsetB};
+		const std::array<double, 2> Signs{-1.0, 1.0};
+		const std::array<Jacobian, 2> Jac{statics::CornerJacobianRows(S.ArmA), statics::CornerJacobianRows(S.ArmB)};
+		for (std::size_t A = 0; A < 2; ++A)
+		{
+			for (std::size_t B = 0; B < 2; ++B)
+			{
+				if (Offsets[A] >= 0 && Offsets[B] >= 0)
+				{
+					AddSiteBlock(M.data(), C.Rows, Offsets[A], Jac[A], Offsets[B], Jac[B], Signs[A] * Signs[B], SiteMatrix[I]);
+				}
+			}
+		}
+	}
+	return M;
+}
+
 bool FactorNormal(const Component& C, const Program& P, Normal& N)
 {
 	N.Z.resize(P.Groups.size());
@@ -448,24 +479,7 @@ bool FactorNormal(const Component& C, const Program& P, Normal& N)
 		N.H[G] = Sum;
 		N.Z[G] = Vec3{Z[0], Z[1], Z[2]};
 	}
-	Eigen::MatrixXd M = Eigen::MatrixXd::Zero(C.Rows, C.Rows);
-	for (std::size_t I = 0; I < C.Sites.size(); ++I)
-	{
-		const Site& S = C.Sites[I];
-		const std::array<int, 2> Offsets{S.OffsetA, S.OffsetB};
-		const std::array<double, 2> Signs{-1.0, 1.0};
-		const std::array<Jacobian, 2> Jac{statics::CornerJacobianRows(S.ArmA), statics::CornerJacobianRows(S.ArmB)};
-		for (std::size_t A = 0; A < 2; ++A)
-		{
-			for (std::size_t B = 0; B < 2; ++B)
-			{
-				if (Offsets[A] >= 0 && Offsets[B] >= 0)
-				{
-					AddSiteBlock(M.data(), C.Rows, Offsets[A], Jac[A], Offsets[B], Jac[B], Signs[A] * Signs[B], SiteMatrix[I]);
-				}
-			}
-		}
-	}
+	Eigen::MatrixXd M = AssembleSites(C, SiteMatrix);
 	const double Dt = D[P.LoadFactor];
 	const double DeltaT = D[P.CapSlack];
 	N.Ht = Dt + DeltaT;
@@ -756,7 +770,7 @@ bool IsConverged(const Component& C, const Program& P, const Embedding& E, const
 {
 	const double T = E.X.data()[P.LoadFactor] / E.Tau;
 	const double* Primal = R.Primal.data();
-	const double EquilibriumScale = 1.0 + std::max(LargestMagnitude(C.Offset.data(), C.Rows), std::abs(T) * LargestMagnitude(C.Demand.data(), C.Rows));
+	const double EquilibriumScale = 1.0 + std::max(LargestMagnitude(P.Offset.data(), C.Rows), std::abs(T) * LargestMagnitude(C.Demand.data(), C.Rows));
 	double PrimalRelative = std::max(LargestMagnitude(Primal, C.Rows) / EquilibriumScale, std::abs(Primal[P.CapRow]) / (1.0 + P.Cap));
 	for (std::size_t G = 0; G < P.Groups.size(); ++G)
 	{
@@ -916,11 +930,398 @@ void FillMechanism(const Component& C, const Eigen::VectorXd& Y, ComponentVerdic
 	}
 }
 
+struct Selection
+{
+	const Component* C = nullptr;
+	const Program* P = nullptr;
+	Eigen::Index Velocities = 0;
+	Eigen::Index GenRows = 0;
+	Eigen::Index RowCount = 0;
+	bool bOpening = false;
+	double OpeningBound = 0.0;
+};
+
+Selection BuildSelection(const Component& C, const Program& P, double OpeningBound)
+{
+	Selection Sel;
+	Sel.C = &C;
+	Sel.P = &P;
+	Sel.Velocities = C.Rows;
+	Sel.GenRows = static_cast<Eigen::Index>(P.Directions.size());
+	Sel.bOpening = P.Offset.cwiseAbs().maxCoeff() > 0.0;
+	Sel.OpeningBound = OpeningBound;
+	Sel.RowCount = Sel.GenRows + 2 * Sel.Velocities + (Sel.bOpening ? 1 : 0);
+	return Sel;
+}
+
+Eigen::VectorXd Multiply(const Selection& Sel, const Eigen::VectorXd& Z)
+{
+	const Component& C = *Sel.C;
+	const Program& P = *Sel.P;
+	const Eigen::Index N = Sel.Velocities;
+	Eigen::VectorXd Out(Sel.RowCount);
+	double* O = Out.data();
+	const double* Zp = Z.data();
+	for (const Group& Gr : P.Groups)
+	{
+		const Vec3 V = RelativeVelocity(C.Sites[Gr.SiteIndex], Zp);
+		for (std::size_t J = Gr.First; J < Gr.First + Gr.Count; ++J)
+		{
+			O[J] = Dot(P.Directions[J], V);
+		}
+	}
+	for (Eigen::Index I = 0; I < N; ++I)
+	{
+		O[Sel.GenRows + I] = Zp[I] - Zp[N + I];
+		O[Sel.GenRows + N + I] = -Zp[I] - Zp[N + I];
+	}
+	if (Sel.bOpening)
+	{
+		double Sum = 0.0;
+		for (Eigen::Index I = 0; I < N; ++I)
+		{
+			Sum -= P.Offset.data()[I] * Zp[I];
+		}
+		O[Sel.RowCount - 1] = Sum;
+	}
+	return Out;
+}
+
+Eigen::VectorXd MultiplyTranspose(const Selection& Sel, const Eigen::VectorXd& L)
+{
+	const Component& C = *Sel.C;
+	const Program& P = *Sel.P;
+	const Eigen::Index N = Sel.Velocities;
+	Eigen::VectorXd Out = Eigen::VectorXd::Zero(2 * N);
+	double* O = Out.data();
+	const double* Lp = L.data();
+	for (const Group& Gr : P.Groups)
+	{
+		Vec3 Force;
+		for (std::size_t J = Gr.First; J < Gr.First + Gr.Count; ++J)
+		{
+			Force = statics::Add(Force, Scale(Lp[J], P.Directions[J]));
+		}
+		ApplyCornerForce(O, C.Sites[Gr.SiteIndex], Force);
+	}
+	for (Eigen::Index I = 0; I < N; ++I)
+	{
+		const double Plus = Lp[Sel.GenRows + I];
+		const double Minus = Lp[Sel.GenRows + N + I];
+		O[I] += Plus - Minus;
+		O[N + I] -= Plus + Minus;
+	}
+	if (Sel.bOpening)
+	{
+		const double Open = Lp[Sel.RowCount - 1];
+		for (Eigen::Index I = 0; I < N; ++I)
+		{
+			O[I] -= Open * P.Offset.data()[I];
+		}
+	}
+	return Out;
+}
+
+struct SelectionSystem
+{
+	const Selection* Sel = nullptr;
+	Eigen::LLT<Eigen::MatrixXd> Factor;
+	Eigen::VectorXd D;
+	Eigen::VectorXd Coupling;
+	Eigen::VectorXd Diagonal;
+	Eigen::VectorXd MinvWork;
+	double WorkMinvWork = 0.0;
+};
+
+bool FactorSelection(SelectionSystem& Sys)
+{
+	const Selection& Sel = *Sys.Sel;
+	const Component& C = *Sel.C;
+	const Program& P = *Sel.P;
+	const Eigen::Index N = Sel.Velocities;
+	const double* D = Sys.D.data();
+	std::vector<Matrix3> SiteMatrix(C.Sites.size(), Matrix3{});
+	for (const Group& Gr : P.Groups)
+	{
+		Matrix3& K = SiteMatrix[Gr.SiteIndex];
+		for (std::size_t J = Gr.First; J < Gr.First + Gr.Count; ++J)
+		{
+			const std::array<double, 3> Dir{P.Directions[J].X, P.Directions[J].Y, P.Directions[J].Z};
+			for (std::size_t R = 0; R < 3; ++R)
+			{
+				for (std::size_t Col = 0; Col < 3; ++Col)
+				{
+					K[R * 3 + Col] += D[J] * Dir[R] * Dir[Col];
+				}
+			}
+		}
+	}
+	Eigen::MatrixXd M = AssembleSites(C, SiteMatrix);
+	Sys.Coupling = Eigen::VectorXd(N);
+	Sys.Diagonal = Eigen::VectorXd(N);
+	for (Eigen::Index I = 0; I < N; ++I)
+	{
+		const double Plus = D[Sel.GenRows + I];
+		const double Minus = D[Sel.GenRows + N + I];
+		Sys.Coupling(I) = Minus - Plus;
+		Sys.Diagonal(I) = Plus + Minus;
+		M(I, I) += 4.0 * Plus * Minus / (Plus + Minus);
+	}
+	if (Sel.bOpening)
+	{
+		M.noalias() += D[Sel.RowCount - 1] * P.Offset * P.Offset.transpose();
+	}
+	Sys.Factor.compute(M);
+	if (!HasPositivePivots(Sys.Factor))
+	{
+		const double LargestDiagonal = M.diagonal().maxCoeff();
+		if (!(LargestDiagonal > 0.0))
+		{
+			return false;
+		}
+		M.diagonal().array() += RegularisationRelative * LargestDiagonal;
+		Sys.Factor.compute(M);
+		if (!HasPositivePivots(Sys.Factor))
+		{
+			return false;
+		}
+	}
+	return true;
+}
+
+Eigen::VectorXd SolveSelectionNormal(const SelectionSystem& Sys, const Eigen::VectorXd& Q)
+{
+	const Eigen::Index N = Sys.Sel->Velocities;
+	Eigen::VectorXd Out(2 * N);
+	Eigen::VectorXd Velocity(N);
+	for (Eigen::Index I = 0; I < N; ++I)
+	{
+		Velocity(I) = Q(I) - Sys.Coupling(I) * Q(N + I) / Sys.Diagonal(I);
+	}
+	Sys.Factor.solveInPlace(Velocity);
+	for (Eigen::Index I = 0; I < N; ++I)
+	{
+		Out(I) = Velocity(I);
+		Out(N + I) = (Q(N + I) - Sys.Coupling(I) * Velocity(I)) / Sys.Diagonal(I);
+	}
+	return Out;
+}
+
+struct SelectionState
+{
+	Eigen::VectorXd Z;
+	Eigen::VectorXd S;
+	Eigen::VectorXd L;
+	double Nu = 0.0;
+	double Tau = 1.0;
+	double Kappa = 1.0;
+};
+
+struct SelectionResiduals
+{
+	Eigen::VectorXd Dual;
+	Eigen::VectorXd Primal;
+	double Work = 0.0;
+	double Gap = 0.0;
+};
+
+struct SelectionProblem
+{
+	const Selection* Sel = nullptr;
+	Eigen::VectorXd H;
+	Eigen::VectorXd Cost;
+	Eigen::VectorXd Work;
+};
+
+SelectionResiduals SelectionResidualsAt(const SelectionProblem& Pr, const SelectionState& X)
+{
+	SelectionResiduals R;
+	R.Dual = MultiplyTranspose(*Pr.Sel, X.L) - X.Nu * Pr.Work + X.Tau * Pr.Cost;
+	R.Primal = -Multiply(*Pr.Sel, X.Z) + X.Tau * Pr.H - X.S;
+	R.Work = DotProduct(Pr.Work, X.Z) - X.Tau;
+	R.Gap = -DotProduct(Pr.Cost, X.Z) - DotProduct(Pr.H, X.L) + X.Nu - X.Kappa;
+	return R;
+}
+
+struct SaddleSolution
+{
+	Eigen::VectorXd Z;
+	double Nu = 0.0;
+};
+
+SaddleSolution SolveSaddle(const SelectionSystem& Sys, const Eigen::VectorXd& Work, const Eigen::VectorXd& Top, double Bottom)
+{
+	SaddleSolution Out;
+	const Eigen::VectorXd MinvTop = SolveSelectionNormal(Sys, Top);
+	Out.Nu = (Bottom - DotProduct(Work, MinvTop)) / Sys.WorkMinvWork;
+	Out.Z = MinvTop + Out.Nu * Sys.MinvWork;
+	return Out;
+}
+
+SelectionState SolveSelectionLinear(const SelectionSystem& Sys, const SelectionProblem& Pr, const SelectionState& X, const SelectionResiduals& Target, const Eigen::VectorXd& Rc, double Rk, const SaddleSolution& TauColumn, double TauDenominatorBase)
+{
+	const Selection& Sel = *Sys.Sel;
+	const Eigen::VectorXd Shifted = (Rc + X.L.cwiseProduct(Target.Primal)).cwiseQuotient(X.S);
+	const Eigen::VectorXd Top = Target.Dual - MultiplyTranspose(Sel, Shifted);
+	const SaddleSolution Base = SolveSaddle(Sys, Pr.Work, Top, Target.Work);
+	const Eigen::VectorXd DGBase = Sys.D.cwiseProduct(Multiply(Sel, Base.Z));
+	const double Numerator = Target.Gap + DotProduct(Pr.Cost, Base.Z) + DotProduct(Pr.H, Shifted) + DotProduct(Pr.H, DGBase) - Base.Nu + Rk / X.Tau;
+	SelectionState Step;
+	Step.Tau = Numerator / (TauDenominatorBase + X.Kappa / X.Tau);
+	Step.Z = Base.Z + Step.Tau * TauColumn.Z;
+	Step.Nu = Base.Nu + Step.Tau * TauColumn.Nu;
+	Step.L = Shifted + Sys.D.cwiseProduct(Multiply(Sel, Step.Z) - Step.Tau * Pr.H);
+	Step.S = (Rc - X.S.cwiseProduct(Step.L)).cwiseQuotient(X.L);
+	Step.Kappa = (Rk - X.Kappa * Step.Tau) / X.Tau;
+	return Step;
+}
+
+SelectionState SolveSelectionNewton(const SelectionSystem& Sys, const SelectionProblem& Pr, const SelectionState& X, const SelectionResiduals& R, double Reduction, const Eigen::VectorXd& Rc, double Rk, const SaddleSolution& TauColumn, double TauDenominatorBase, int Passes)
+{
+	SelectionResiduals Target;
+	Target.Dual = -Reduction * R.Dual;
+	Target.Primal = -Reduction * R.Primal;
+	Target.Work = -Reduction * R.Work;
+	Target.Gap = -Reduction * R.Gap;
+	SelectionState Step = SolveSelectionLinear(Sys, Pr, X, Target, Rc, Rk, TauColumn, TauDenominatorBase);
+	const Eigen::VectorXd NoComplementarity = Eigen::VectorXd::Zero(Rc.size());
+	for (int Pass = 0; Pass < Passes; ++Pass)
+	{
+		const SelectionResiduals Achieved = SelectionResidualsAt(Pr, Step);
+		SelectionResiduals Error;
+		Error.Dual = Target.Dual - Achieved.Dual;
+		Error.Primal = Target.Primal - Achieved.Primal;
+		Error.Work = Target.Work - Achieved.Work;
+		Error.Gap = Target.Gap - Achieved.Gap;
+		const SelectionState Fix = SolveSelectionLinear(Sys, Pr, X, Error, NoComplementarity, 0.0, TauColumn, TauDenominatorBase);
+		Step.Z += Fix.Z;
+		Step.S += Fix.S;
+		Step.L += Fix.L;
+		Step.Nu += Fix.Nu;
+		Step.Tau += Fix.Tau;
+		Step.Kappa += Fix.Kappa;
+	}
+	return Step;
+}
+
+double BoundaryStep(const Eigen::VectorXd& V, const Eigen::VectorXd& Delta)
+{
+	double Limit = Unbounded;
+	for (Eigen::Index I = 0; I < V.size(); ++I)
+	{
+		if (Delta(I) < 0.0)
+		{
+			Limit = std::min(Limit, -V(I) / Delta(I));
+		}
+	}
+	return Limit;
+}
+
+double SelectionMaxStep(const SelectionState& X, const SelectionState& Step)
+{
+	double Limit = std::min(BoundaryStep(X.S, Step.S), BoundaryStep(X.L, Step.L));
+	if (Step.Tau < 0.0)
+	{
+		Limit = std::min(Limit, -X.Tau / Step.Tau);
+	}
+	if (Step.Kappa < 0.0)
+	{
+		Limit = std::min(Limit, -X.Kappa / Step.Kappa);
+	}
+	return Limit;
+}
+
+double SelectionComplementarity(const SelectionState& X, const SelectionState& Step, double Alpha)
+{
+	return DotProduct(X.S + Alpha * Step.S, X.L + Alpha * Step.L) + (X.Tau + Alpha * Step.Tau) * (X.Kappa + Alpha * Step.Kappa);
+}
+
+bool SolveSelection(const Selection& Sel, const CertificateOptions& Options, Eigen::VectorXd& Velocity)
+{
+	const Eigen::Index N = Sel.Velocities;
+	const Eigen::Index RowCount = Sel.RowCount;
+	SelectionProblem Pr;
+	Pr.Sel = &Sel;
+	Pr.H = Eigen::VectorXd::Zero(RowCount);
+	if (Sel.bOpening)
+	{
+		Pr.H(RowCount - 1) = Sel.OpeningBound;
+	}
+	Pr.Cost = Eigen::VectorXd::Zero(2 * N);
+	Pr.Cost.tail(N).setOnes();
+	Pr.Work = Eigen::VectorXd::Zero(2 * N);
+	Pr.Work.head(N) = Sel.C->Demand;
+	SelectionState X;
+	X.Z = Eigen::VectorXd::Zero(2 * N);
+	X.S = Eigen::VectorXd::Ones(RowCount);
+	X.L = Eigen::VectorXd::Ones(RowCount);
+	const double Tolerance = Options.FeasibilityTolerance;
+	const double BoundScale = 1.0 + Sel.OpeningBound;
+	const double WorkScale = 1.0 + LargestMagnitude(Pr.Work.data(), Pr.Work.size());
+	const double PairCount = static_cast<double>(RowCount + 1);
+	for (int Iteration = 0; Iteration <= Options.MaxIterations; ++Iteration)
+	{
+		const SelectionResiduals R = SelectionResidualsAt(Pr, X);
+		const double PrimalRelative = LargestMagnitude(R.Primal.data(), RowCount) / X.Tau;
+		const double DualRelative = LargestMagnitude(R.Dual.data(), R.Dual.size()) / X.Tau;
+		const double Objective = DotProduct(Pr.Cost, X.Z) / X.Tau;
+		const double GapRelative = DotProduct(X.S, X.L) / (X.Tau * X.Tau);
+		if (!(IsFinite(PrimalRelative) && IsFinite(DualRelative) && IsFinite(Objective) && IsFinite(GapRelative)))
+		{
+			return false;
+		}
+		if (PrimalRelative <= Tolerance * BoundScale && DualRelative <= Tolerance * WorkScale && std::abs(R.Work) / X.Tau <= Tolerance && GapRelative <= Tolerance * (1.0 + std::abs(Objective)))
+		{
+			Velocity = X.Z.head(N) / X.Tau;
+			return true;
+		}
+		if (Iteration == Options.MaxIterations || !(X.Tau > Tolerance * X.Kappa))
+		{
+			return false;
+		}
+		SelectionSystem Sys;
+		Sys.Sel = &Sel;
+		Sys.D = X.L.cwiseQuotient(X.S);
+		if (!FactorSelection(Sys))
+		{
+			return false;
+		}
+		Sys.MinvWork = SolveSelectionNormal(Sys, Pr.Work);
+		Sys.WorkMinvWork = DotProduct(Pr.Work, Sys.MinvWork);
+		if (!(Sys.WorkMinvWork > 0.0))
+		{
+			return false;
+		}
+		const Eigen::VectorXd DH = Sys.D.cwiseProduct(Pr.H);
+		const SaddleSolution TauColumn = SolveSaddle(Sys, Pr.Work, MultiplyTranspose(Sel, DH) - Pr.Cost, 1.0);
+		const double TauDenominatorBase = -DotProduct(Pr.Cost, TauColumn.Z) - DotProduct(DH, Multiply(Sel, TauColumn.Z)) + DotProduct(Pr.H, DH) + TauColumn.Nu;
+		const double Mu = (DotProduct(X.S, X.L) + X.Tau * X.Kappa) / PairCount;
+		const Eigen::VectorXd Product = X.S.cwiseProduct(X.L);
+		const SelectionState Affine = SolveSelectionNewton(Sys, Pr, X, R, 1.0, -Product, -X.Tau * X.Kappa, TauColumn, TauDenominatorBase, 0);
+		const double AffineMu = SelectionComplementarity(X, Affine, std::min(1.0, SelectionMaxStep(X, Affine))) / PairCount;
+		const double Ratio = AffineMu / Mu;
+		const double Centring = Ratio * Ratio * Ratio;
+		Eigen::VectorXd Rc = -Product - Affine.S.cwiseProduct(Affine.L);
+		Rc.array() += Centring * Mu;
+		const double Rk = -X.Tau * X.Kappa - Affine.Tau * Affine.Kappa + Centring * Mu;
+		const SelectionState Dir = SolveSelectionNewton(Sys, Pr, X, R, 1.0 - Centring, Rc, Rk, TauColumn, TauDenominatorBase, RefinementPasses);
+		const double Step = std::min(1.0, StepToBoundary * SelectionMaxStep(X, Dir));
+		X.Z += Step * Dir.Z;
+		X.S += Step * Dir.S;
+		X.L += Step * Dir.L;
+		X.Nu += Step * Dir.Nu;
+		X.Tau += Step * Dir.Tau;
+		X.Kappa += Step * Dir.Kappa;
+	}
+	return false;
+}
+
 ComponentVerdict DecideComponent(const Component& C, const CertificateOptions& Options)
 {
 	ComponentVerdict V;
 	V.Upper = Options.LoadFactorCap;
-	const Outcome Inner = SolveProgram(C, BuildProgram(C, Options.ConeGenerators, 1.0, Options.LoadFactorCap), Options);
+	const Program InnerProgram = BuildProgram(C, Options.ConeGenerators, 1.0, Options.LoadFactorCap, true);
+	const Outcome Inner = SolveProgram(C, InnerProgram, Options);
 	V.Iterations = Inner.Iterations;
 	if (!Inner.bConverged)
 	{
@@ -930,7 +1331,7 @@ ComponentVerdict DecideComponent(const Component& C, const CertificateOptions& O
 	if (Inner.LoadFactor < Options.LoadFactorCap * (1.0 - Options.FeasibilityTolerance))
 	{
 		const double Circumscribed = 1.0 / std::cos(Pi / static_cast<double>(Options.ConeGenerators));
-		const Outcome Outer = SolveProgram(C, BuildProgram(C, Options.ConeGenerators, Circumscribed, Options.LoadFactorCap), Options);
+		const Outcome Outer = SolveProgram(C, BuildProgram(C, Options.ConeGenerators, Circumscribed, Options.LoadFactorCap, false), Options);
 		V.Iterations = std::max(V.Iterations, Outer.Iterations);
 		if (!Outer.bConverged)
 		{
@@ -947,7 +1348,16 @@ ComponentVerdict DecideComponent(const Component& C, const CertificateOptions& O
 	else if (V.Upper < 1.0)
 	{
 		V.State = CertificateState::Collapses;
-		FillMechanism(C, Inner.Y, V);
+		Eigen::VectorXd Velocity = Inner.Y;
+		if (Inner.LoadFactor < Options.FeasibilityTolerance)
+		{
+			Eigen::VectorXd Selected;
+			if (SolveSelection(BuildSelection(C, InnerProgram, Options.FeasibilityTolerance), Options, Selected))
+			{
+				Velocity = Selected;
+			}
+		}
+		FillMechanism(C, Velocity, V);
 	}
 	return V;
 }

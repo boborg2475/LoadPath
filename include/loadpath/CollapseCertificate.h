@@ -44,7 +44,7 @@ struct CertificateResult
 	// The dual ray at collapse, per moving body, normalised per component so its largest component is 1.
 	std::vector<MechanismMotion> Mechanism;
 	std::vector<BodyId> UnconstrainedBodies;
-	// Interfaces with a corner whose cone constraint is active at collapse, opening or slipping.
+	// Interfaces the collapse mechanism moves: a corner's relative velocity above 1e-6 of the component's fastest corner.
 	std::vector<InterfaceId> HingingInterfaces;
 	int Iterations = 0;
 	InterfaceId InvalidInterface{};

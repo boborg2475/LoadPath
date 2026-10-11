@@ -115,7 +115,7 @@ Development goes through three subagents, in this order. Never work the task dir
 | [dev-expert](.claude/agents/dev-expert.md) | Implementation and refactoring | A failing test exists and has been run |
 | [review-expert](.claude/agents/review-expert.md) | Test quality, TDD compliance, design alignment | Tests are green |
 
-All three run on **Opus 5.5 at high effort** unless the owner says otherwise for a task; the
+`dev-expert` and `test-expert` run on **Opus at low effort** (owner, 2026-10-11, a speed trial), `review-expert` on **Opus at high effort**, unless the owner says otherwise for a task; the
 agent definitions carry the setting. They are subagents, not inline instructions: each starts
 cold and reads `CLAUDE.md`, `DESIGN.md` and `CURRENT_STATE.md` itself. `dev-expert` enforces the
 TDD gate by running the test itself; `review-expert` has no write access.

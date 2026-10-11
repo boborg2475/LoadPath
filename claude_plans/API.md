@@ -474,7 +474,7 @@ struct CertificateResult {
 	double LoadFactorUpper = 0.0;          // t_out: the circumscribed-cone multiplier (no static field exists beyond here)
 	std::vector<MechanismMotion> Mechanism;        // the dual ray at collapse, per moving body, largest component 1
 	std::vector<BodyId> UnconstrainedBodies;
-	std::vector<InterfaceId> HingingInterfaces;    // interfaces whose cone constraint is active at collapse (opening or slipping)
+	std::vector<InterfaceId> HingingInterfaces;    // interfaces the mechanism moves (kinematic, see the rulings)
 	int Iterations = 0;
 	InterfaceId InvalidInterface{};
 };
@@ -495,11 +495,11 @@ non-negative coefficient per cone generator; one scalar `t ≥ 0`. The force on 
 corner is `Σ_j α_j (n + r (cos θ_j u + sin θ_j v))`, `θ_j = 2πj / G`, with `r = μ` for the
 inscribed cone and `r = μ / cos(π/G)` for the circumscribed one; a bonded joint adds `ft · A/4`
 of allowed tension (shift of the cone apex) and `c · A/4` of cohesion (shift of the shear
-bound), `MaxShearStrengthPa · A/4` caps the shear, and compression is capped at `fc · A/4`
+bound), `MaxShearStrengthPa · A/4` caps the shear (**not yet in the LP**, see the rulings), and compression is capped at `fc · A/4`
 (a crushing bound, so Overstressed joints read as collapse here rather than as a separate
 state). Constraints: six equilibrium rows per free body, `A α = t · b`, with `b` the gravity
 and `BodyLoad` wrench. Objective: maximise `t`, `t ≤ LoadFactorCap`. `t = 0, α = 0` is always
-feasible, so there is no infeasibility detection; the solver is a dense primal-dual
+feasible, so there is no infeasibility detection; the solver is a dense homogeneous self-dual primal-dual
 interior-point method (Mehrotra predictor-corrector) on the normal equations
 `A D Aᵀ`, which are `6 × free bodies` square, the same size as slice 2's stiffness, so slice 6
 swaps the factorisation behind the same interface. Deterministic: ordered assembly, no
@@ -516,7 +516,7 @@ characteristic length), so verdicts are local and scale-invariant.
 **Mechanism**: the dual variables of the equilibrium rows at the inscribed-cone optimum are
 body velocities and angular velocities (the kinematic theorem's mechanism); reported like
 slice 2's `MechanismMotion`, normalised per component, with `UnconstrainedBodies` the bodies
-with any component above 1e-6 and `HingingInterfaces` the interfaces with a corner whose
+with any component above 1e-6 and `HingingInterfaces` the interfaces the mechanism moves (kinematic; the α-based definition fails at t* = 0); the rest of this sentence is superseded: interfaces with a corner whose
 cone constraint is active. On `Stands` these are empty.
 
 ### The theorem ruling (settles the question slice 2 left open)
@@ -581,3 +581,31 @@ relative corner velocity under the mechanism exceeds 1e-6 of the component's fas
 Collapses only. With several components the state is the worst, so one Collapses beside one
 Undecided reads Undecided although `LoadFactorUpper < 1`; slice 4b's combined authority decides
 per component.
+
+Ratified after the 4a review (2026-10-11, orchestrator), each a change the body text above must
+reflect once implemented:
+- **Inscribed region (fixes a fail-open Stands on bonded joints):** the hull over-reads shear by
+  exactly `μ ft A/4` at every compressive state, not only in tension, so a bonded Stands was not
+  a certificate (brick on a 40° tilt, μ 0.3, c = 0.9 W (sin θ − μ cos θ)/A: true t = 0.9, the
+  hull read Stands at ft = 0.5c and ft = c). The inscribed solve uses the inner region: tension
+  offset `T' = min(ft, c/μ) · A/4` (`ft · A/4` when μ = 0) and cohesion bound `(c − μ T') A/4`,
+  giving `|S| ≤ c + μ N` for `N ≥ −T'`, exact in compression and conservative in tension. The
+  circumscribed solve keeps the hull (an outer bound is what Collapses needs). The band widens
+  on bonded joints; that is the honest answer.
+- **Mechanism selection at `t* = 0`:** the interior point returns the analytic centre of the
+  dual optimal cone, which names every body that can move (a 4 × 4 running-bond wall with one
+  end brick removed listed all 13 bodies and 27 interfaces). On Collapses with `t_in` under the
+  tolerance, a second LP selects the mechanism: minimise the L1 norm of the body velocities
+  (bounding variables per component) subject to the kinematic admissibility rows of the
+  inscribed dual at `t = 0` and unit external work; its solution is the reported mechanism and
+  hinging set. TRAPS: a cluster released as one body must be a certified mechanism.
+- **Lists under a mixed result:** `Mechanism`, `UnconstrainedBodies` and `HingingInterfaces`
+  collect every Collapses component whatever the overall `State` (as slice 2's lists do), and
+  the header says so.
+- **Edge states:** a massless free body with no load is Stands, not Undecided; a free body with
+  no interface is Collapses with `t = 0` and is listed; when `t_in ≥ 1` the result is Stands
+  even if the circumscribed solve fails to converge (report `LoadFactorUpper = LoadFactorCap`).
+- **`t_out` is reported as the circumscribed dual objective `bᵀy/τ`** (an upper bound needs
+  dual feasibility; the primal value is only a lower bound).
+- **Point loads enter the LP** exactly as in slice 2 (force at a point, moment about the
+  centroid), pinned by tests now that the path has coverage.

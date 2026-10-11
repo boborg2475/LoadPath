@@ -8,6 +8,8 @@
 
 #include <cmath>
 #include <cstddef>
+#include <optional>
+#include <utility>
 #include <vector>
 
 using namespace loadpath;
@@ -494,64 +496,317 @@ TEST_CASE("Certificate.Anchor.ThreeBrickBridgeStandsWhereTheOracleFindsAnAdmissi
 	}
 }
 
-TEST_CASE("Certificate.Oracle.VerdictsMatchTheStaticAdmissibilityOracle")
+namespace
 {
-	SUBCASE("the certificate reproduces the rigid single-brick closed form")
+bool GridPointNearClosedFormBoundary(int IX, int IY, double Friction)
+{
+	const bool bHere = oracle::RigidBrickCanStand(oracle::GridStep * IX, oracle::GridStep * IY, Friction);
+	for (int DX = -1; DX <= 1; ++DX)
 	{
-		for (const double Friction : {0.6, 5.0})
+		for (int DY = -1; DY <= 1; ++DY)
 		{
-			const Structure Model = oracle::MakeStack(Friction, {0.0});
-			int Disagreements = 0;
-			int Standing = 0;
-			for (int IX = 0; IX <= oracle::GridStepsX; ++IX)
+			if (oracle::RigidBrickCanStand(oracle::GridStep * (IX + DX), oracle::GridStep * (IY + DY), Friction) != bHere)
 			{
-				for (int IY = 0; IY <= oracle::GridStepsY; ++IY)
+				return true;
+			}
+		}
+	}
+	return false;
+}
+
+constexpr int GridStride = oracle::bOptimisedBuild ? 1 : 4;
+
+struct BrickPlacement
+{
+	BodyId Body;
+	Box Shape;
+};
+
+struct RunningBondWall
+{
+	Structure Model;
+	std::vector<std::vector<BrickPlacement>> Courses;
+	std::vector<InterfaceId> Interfaces;
+	std::vector<std::pair<BodyId, BodyId>> InterfaceBodies;
+	BodyId Unsupported;
+};
+
+RunningBondWall MakeRunningBondWallWithoutLastFirstCourseBrick(double Friction)
+{
+	const int CourseCount = 4;
+	const int BricksPerCourse = 4;
+	RunningBondWall W;
+	const ProfileId P = AddProfileOk(W.Model, DryJoint(Friction));
+	const BodyId Ground = AddGroundPlane(W.Model);
+	W.Courses.resize(CourseCount);
+	for (int Course = 0; Course < CourseCount; ++Course)
+	{
+		const double OffsetM = (Course % 2 == 1) ? BrickLengthM / 2.0 : 0.0;
+		for (int Index = 0; Index < BricksPerCourse; ++Index)
+		{
+			if (Course == 0 && Index == BricksPerCourse - 1)
+			{
+				continue;
+			}
+			const Box Shape = BrickShape(OffsetM + Index * BrickLengthM, Course);
+			W.Courses[static_cast<std::size_t>(Course)].push_back(BrickPlacement{AddBox(W.Model, Shape), Shape});
+		}
+	}
+	for (const BrickPlacement& Brick : W.Courses[0])
+	{
+		W.Interfaces.push_back(AddInterfaceOk(W.Model, OnGroundPlane(Ground, Brick.Body, Brick.Shape, P)));
+		W.InterfaceBodies.push_back({Ground, Brick.Body});
+	}
+	for (std::size_t Course = 1; Course < W.Courses.size(); ++Course)
+	{
+		for (const BrickPlacement& Upper : W.Courses[Course])
+		{
+			for (const BrickPlacement& Lower : W.Courses[Course - 1])
+			{
+				const std::optional<InterfaceDesc> Desc = StackedFaces(Lower.Body, Lower.Shape, Upper.Body, Upper.Shape, P);
+				if (Desc)
 				{
-					const double LambdaX = oracle::GridStep * IX;
-					const double LambdaY = oracle::GridStep * IY;
-					const bool bClosedForm = oracle::RigidBrickCanStand(LambdaX, LambdaY, Friction);
-					const CertificateState State = DecideWith(Model, CertificateLateral(LambdaX, LambdaY)).State;
-					const CertificateState Expected = bClosedForm ? CertificateState::Stands : CertificateState::Collapses;
-					Standing += State == CertificateState::Stands ? 1 : 0;
-					Disagreements += State == Expected ? 0 : 1;
+					W.Interfaces.push_back(AddInterfaceOk(W.Model, *Desc));
+					W.InterfaceBodies.push_back({Lower.Body, Upper.Body});
 				}
 			}
-			INFO("friction " << Friction << ": certificate stands at " << Standing << " grid points, disagreements " << Disagreements);
-			CHECK(Disagreements == 0);
-			CHECK(Standing > 0);
 		}
 	}
-	SUBCASE("seeded stacks and bridges")
+	W.Unsupported = W.Courses[1].back().Body;
+	return W;
+}
+}
+
+TEST_CASE("Certificate.Anchor.TensileStrengthBuysNoFrictionUnderCompression")
+{
+	const double TiltRad = 40.0 * RadPerDegree;
+	const double Friction = 0.3;
+	const double TrueLoadFactor = 0.9;
+	const double S = std::sin(TiltRad);
+	const double C = std::cos(TiltRad);
+	CHECK(std::tan(TiltRad) > Friction * CircumscribedOverInscribed(16));
+	CHECK(C - (BrickHeightM / BrickLengthM) * S > 0.0);
+	const double CohesionPa = TrueLoadFactor * BrickWeightN() * (S - Friction * C) / BedAreaM2();
+	for (const double TensileShare : {0.0, 0.5, 1.0})
 	{
-		int Stands = 0;
-		int Collapses = 0;
-		int Undecided = 0;
-		for (int Draw = 0; Draw < oracle::DrawCount; ++Draw)
+		const double TensileStrengthPa = TensileShare * CohesionPa;
+		INFO("ft " << TensileStrengthPa << " Pa, c " << CohesionPa << " Pa");
+		const BrickOnGround F = MakeBrickOnGround(Bonded(TensileStrengthPa, CohesionPa, Friction));
+		const CertificateResult Result = DecideWith(F.Model, CertificateTilt(TiltRad));
+		INFO("state " << Result.State << ", load factors [" << Result.LoadFactorLower << ", " << Result.LoadFactorUpper << "]");
+		CHECK(Result.State != CertificateState::Stands);
+		CHECK(Result.LoadFactorLower <= TrueLoadFactor * (1.0 + LoadFactorRelative) + LoadFactorAbsolute);
+		if (TensileShare == 0.0)
 		{
-			const oracle::SeededDraw Each = oracle::MakeSeededDraw(Draw);
-			const CertificateResult Result = DecideWith(Each.Model, CertificateLateral(Each.LambdaX, Each.LambdaY));
-			const oracle::OracleVerdict Oracle = oracle::StaticAdmissibility(Each.Model, oracle::BiaxialGravity(Each.LambdaX, Each.LambdaY));
-			INFO("master seed " << oracle::MasterSeed << ", draw " << Draw << " (generator seed " << Each.Seed << "): " << Each.Fixture << ", friction " << Each.Friction << ", lambda (" << Each.LambdaX << ", " << Each.LambdaY << ")");
-			INFO("certificate " << Result.State << " [" << Result.LoadFactorLower << ", " << Result.LoadFactorUpper << "] after " << Result.Iterations << " iterations; oracle " << Oracle.Verdict << ", inner residual / demand " << Oracle.InnerResidualOverDemand << ", outer " << Oracle.OuterResidualOverDemand);
-			CHECK(Oracle.bConverged);
-			if (Oracle.Verdict == oracle::Admissibility::CanStand)
-			{
-				CHECK(Result.State == CertificateState::Stands);
-			}
-			if (Oracle.Verdict == oracle::Admissibility::CannotStand)
-			{
-				CHECK(Result.State == CertificateState::Collapses);
-			}
-			if (Result.State == CertificateState::Undecided)
-			{
-				CHECK(Oracle.Verdict == oracle::Admissibility::Ambiguous);
-			}
-			Stands += Result.State == CertificateState::Stands ? 1 : 0;
-			Collapses += Result.State == CertificateState::Collapses ? 1 : 0;
-			Undecided += Result.State == CertificateState::Undecided ? 1 : 0;
+			CHECK(Result.State == CertificateState::Collapses);
+			CHECK(std::abs(Result.LoadFactorLower - TrueLoadFactor) <= LoadFactorRelative * TrueLoadFactor);
 		}
-		INFO("over " << oracle::DrawCount << " draws: certificate stands " << Stands << ", collapses " << Collapses << ", undecided " << Undecided);
-		CHECK(Stands > 0);
-		CHECK(Collapses > 0);
 	}
+}
+
+TEST_CASE("Certificate.Anchor.OnlyTheSlidingBrickIsNamed")
+{
+	const double JointFriction = 0.3;
+	const double LambdaX = 0.5;
+	CHECK(LambdaX > JointFriction * CircumscribedOverInscribed(16));
+	CHECK(LambdaX * BrickHeightM < BrickLengthM / 2.0);
+	Structure Model;
+	const ProfileId BedProfile = AddProfileOk(Model, DryJoint(5.0));
+	const ProfileId JointProfile = AddProfileOk(Model, DryJoint(JointFriction));
+	const BodyId Ground = AddGroundPlane(Model);
+	const BodyId Lower = AddBox(Model, BrickShape(0.0, 0));
+	const BodyId Upper = AddBox(Model, BrickShape(0.0, 1));
+	AddInterfaceOk(Model, OnGroundPlane(Ground, Lower, BrickShape(0.0, 0), BedProfile));
+	const InterfaceId Joint = AddInterfaceOk(Model, *StackedFaces(Lower, BrickShape(0.0, 0), Upper, BrickShape(0.0, 1), JointProfile));
+	const CertificateResult Result = DecideWith(Model, CertificateLateral(LambdaX));
+	INFO("state " << Result.State);
+	CHECK(Result.State == CertificateState::Collapses);
+	CheckOnlyBodyAndInterface(Result, Upper, Joint);
+}
+
+TEST_CASE("Certificate.Anchor.OnlyTheOverhangingCapTips")
+{
+	const double CapShiftXM = 0.17;
+	CHECK(CapShiftXM > BrickLengthM / 2.0);
+	CHECK(CapShiftXM < BrickLengthM);
+	CHECK(CapShiftXM / 2.0 < BrickLengthM / 2.0);
+	Structure Model;
+	const ProfileId P = AddProfileOk(Model, DryJoint(0.6));
+	const BodyId Ground = AddGroundPlane(Model);
+	const BodyId Pillar = AddBox(Model, BrickShape(0.0, 0));
+	const BodyId Cap = AddBox(Model, BrickShape(CapShiftXM, 1));
+	AddInterfaceOk(Model, OnGroundPlane(Ground, Pillar, BrickShape(0.0, 0), P));
+	const InterfaceId Joint = AddInterfaceOk(Model, *StackedFaces(Pillar, BrickShape(0.0, 0), Cap, BrickShape(CapShiftXM, 1), P));
+	const CertificateResult Result = DecideWith(Model, CertificateOptions{});
+	INFO("state " << Result.State);
+	CHECK(Result.State == CertificateState::Collapses);
+	CheckOnlyBodyAndInterface(Result, Cap, Joint);
+}
+
+TEST_CASE("Certificate.Anchor.OnlyTheUnsupportedEndBrickFalls")
+{
+	const RunningBondWall W = MakeRunningBondWallWithoutLastFirstCourseBrick(0.6);
+	bool bHasSupportBelow = false;
+	for (const std::pair<BodyId, BodyId>& Bodies : W.InterfaceBodies)
+	{
+		bHasSupportBelow = bHasSupportBelow || SameHandle(Bodies.second, W.Unsupported);
+	}
+	CHECK_FALSE(bHasSupportBelow);
+	const CertificateResult Result = DecideWith(W.Model, CertificateOptions{});
+	INFO("state " << Result.State << ", moving " << Describe(Result.UnconstrainedBodies) << ", hinging " << Describe(Result.HingingInterfaces));
+	CHECK(Result.State == CertificateState::Collapses);
+	CHECK(Result.UnconstrainedBodies.size() == 1u);
+	CHECK(HasBody(Result.UnconstrainedBodies, W.Unsupported));
+	CHECK_FALSE(Result.HingingInterfaces.empty());
+	int NotTouching = 0;
+	for (const InterfaceId Hinging : Result.HingingInterfaces)
+	{
+		for (std::size_t I = 0; I < W.Interfaces.size(); ++I)
+		{
+			const bool bTouches = SameHandle(W.InterfaceBodies[I].first, W.Unsupported) || SameHandle(W.InterfaceBodies[I].second, W.Unsupported);
+			NotTouching += SameHandle(W.Interfaces[I], Hinging) && !bTouches ? 1 : 0;
+		}
+	}
+	CHECK(NotTouching == 0);
+}
+
+TEST_CASE("Certificate.Anchor.PointLoadArmSetsTheTippingThreshold")
+{
+	const double Friction = 5.0;
+	const double WeightN = BrickWeightN();
+	const double ArmAboveBedM = BrickHeightM;
+	const double ThresholdN = WeightN * (BrickLengthM / 2.0) / ArmAboveBedM;
+	CHECK(std::abs(ThresholdN * ArmAboveBedM - WeightN * BrickLengthM / 2.0) <= 1.0e-12 * WeightN);
+	CHECK(ThresholdN * 1.01 / WeightN < Friction / CircumscribedOverInscribed(16));
+	const BrickOnGround F = MakeBrickOnGround(DryJoint(Friction));
+	const Vec3 TopCentreM = Plus(F.Model.Body(F.Brick).CentroidM, Vec3{0.0, 0.0, BrickHeightM / 2.0});
+	CHECK(std::abs(TopCentreM.Z - ArmAboveBedM) <= 1.0e-12);
+	for (const double Share : {0.99, 1.01})
+	{
+		INFO("P = " << Share << " of " << ThresholdN << " N");
+		const BodyLoad Loads[] = {BodyLoad{F.Brick, Vec3{Share * ThresholdN, 0.0, 0.0}, TopCentreM}};
+		const CertificateResult Result = DecideWith(F.Model, CertificateOptions{}, Loads);
+		INFO("state " << Result.State);
+		CHECK(Result.State == (Share < 1.0 ? CertificateState::Stands : CertificateState::Collapses));
+	}
+}
+
+TEST_CASE("Certificate.Anchor.EccentricPointLoadCrushesTheLoadedCorners")
+{
+	const double WeightN = BrickWeightN();
+	StrengthProfile Profile = DryJoint(0.6);
+	Profile.CompressiveStrengthPa = 2.0 * WeightN / BedAreaM2();
+	const BrickOnGround F = MakeBrickOnGround(Profile);
+	const Vec3 OffsetM{0.05, 0.02, 0.5};
+	const double PointLoadN = 3.0 * WeightN;
+	const double TotalN = WeightN + PointLoadN;
+	const double EccentricityXM = PointLoadN * OffsetM.X / TotalN;
+	const double EccentricityYM = PointLoadN * OffsetM.Y / TotalN;
+	const double Expected = Profile.CompressiveStrengthPa * BedAreaM2() / (TotalN * (1.0 + EccentricityXM / (BrickLengthM / 2.0)));
+	CHECK(EccentricityYM / (BrickWidthM / 2.0) < EccentricityXM / (BrickLengthM / 2.0));
+	CHECK(std::abs(Expected - 0.370690) <= 1.0e-6 * 0.370690);
+	const BodyLoad Loads[] = {BodyLoad{F.Brick, Vec3{0.0, 0.0, -PointLoadN}, Plus(F.Model.Body(F.Brick).CentroidM, OffsetM)}};
+	const CertificateResult Result = DecideWith(F.Model, CertificateOptions{}, Loads);
+	INFO("state " << Result.State << ", load factors [" << Result.LoadFactorLower << ", " << Result.LoadFactorUpper << "], expected " << Expected);
+	CHECK(Result.State == CertificateState::Collapses);
+	CHECK(std::abs(Result.LoadFactorLower - Expected) <= 1.0e-6 * Expected);
+}
+
+TEST_CASE("Certificate.Anchor.CrushingBoundIncludesTheTensionOffset")
+{
+	const double BondPa = 1.0e5;
+	for (const double Ratio : {0.5, 2.0})
+	{
+		INFO("fc = " << Ratio << " W/A");
+		StrengthProfile Profile = Bonded(BondPa, BondPa, 0.6);
+		Profile.CompressiveStrengthPa = Ratio * BrickWeightN() / BedAreaM2();
+		const BrickOnGround F = MakeBrickOnGround(Profile);
+		const CertificateResult Result = DecideWith(F.Model, CertificateOptions{});
+		INFO("state " << Result.State << ", load factors [" << Result.LoadFactorLower << ", " << Result.LoadFactorUpper << "]");
+		CHECK(std::abs(Result.LoadFactorLower - Ratio) <= LoadFactorRelative * Ratio);
+		CHECK(std::abs(Result.LoadFactorUpper - Ratio) <= LoadFactorRelative * Ratio);
+	}
+}
+
+TEST_CASE("Certificate.Anchor.CohesionIsScaledOnTheCircumscribedCone")
+{
+	const double CohesionPa = 1.0e3;
+	const double Lambda = 0.1;
+	const double AngleRad = Pi / 16.0;
+	const BrickOnGround F = MakeBrickOnGround(Bonded(0.0, CohesionPa, 0.0));
+	const double Inscribed = CohesionPa * BedAreaM2() * std::cos(AngleRad) / (Lambda * BrickWeightN());
+	const double Circumscribed = CohesionPa * BedAreaM2() / (Lambda * BrickWeightN());
+	CHECK(Circumscribed < CertificateOptions{}.LoadFactorCap);
+	CHECK(Lambda * BrickHeightM < BrickWidthM);
+	const CertificateResult Result = DecideWith(F.Model, CertificateLateral(Lambda * std::cos(AngleRad), Lambda * std::sin(AngleRad)));
+	INFO("state " << Result.State << ", load factors [" << Result.LoadFactorLower << ", " << Result.LoadFactorUpper << "], expected [" << Inscribed << ", " << Circumscribed << "]");
+	CHECK(std::abs(Result.LoadFactorLower - Inscribed) <= LoadFactorRelative * Inscribed);
+	CHECK(std::abs(Result.LoadFactorUpper - Circumscribed) <= LoadFactorRelative * Circumscribed);
+}
+
+TEST_CASE("Certificate.Oracle.SingleBrickGridMatchesTheClosedForm")
+{
+	for (const double Friction : {0.6, 5.0})
+	{
+		const Structure Model = oracle::MakeStack(Friction, {0.0});
+		int Disagreements = 0;
+		int Standing = 0;
+		int Visited = 0;
+		for (int IX = 0; IX <= oracle::GridStepsX; ++IX)
+		{
+			for (int IY = 0; IY <= oracle::GridStepsY; ++IY)
+			{
+				const bool bOnStride = IX % GridStride == 0 && IY % GridStride == 0;
+				if (!bOnStride && !GridPointNearClosedFormBoundary(IX, IY, Friction))
+				{
+					continue;
+				}
+				++Visited;
+				const double LambdaX = oracle::GridStep * IX;
+				const double LambdaY = oracle::GridStep * IY;
+				const bool bClosedForm = oracle::RigidBrickCanStand(LambdaX, LambdaY, Friction);
+				const CertificateState State = DecideWith(Model, CertificateLateral(LambdaX, LambdaY)).State;
+				const CertificateState Expected = bClosedForm ? CertificateState::Stands : CertificateState::Collapses;
+				Standing += State == CertificateState::Stands ? 1 : 0;
+				Disagreements += State == Expected ? 0 : 1;
+			}
+		}
+		INFO("friction " << Friction << ", stride " << GridStride << ": visited " << Visited << ", certificate stands at " << Standing << ", disagreements " << Disagreements);
+		CHECK(Disagreements == 0);
+		CHECK(Standing > 0);
+	}
+}
+
+TEST_CASE("Certificate.Oracle.SeededDrawsMatchTheOracle")
+{
+	int Stands = 0;
+	int Collapses = 0;
+	int Undecided = 0;
+	for (int Draw = 0; Draw < oracle::DrawCount; ++Draw)
+	{
+		const oracle::SeededDraw Each = oracle::MakeSeededDraw(Draw);
+		const CertificateResult Result = DecideWith(Each.Model, CertificateLateral(Each.LambdaX, Each.LambdaY));
+		const oracle::OracleVerdict Oracle = oracle::StaticAdmissibility(Each.Model, oracle::BiaxialGravity(Each.LambdaX, Each.LambdaY));
+		INFO("master seed " << oracle::MasterSeed << ", draw " << Draw << " (generator seed " << Each.Seed << "): " << Each.Fixture << ", friction " << Each.Friction << ", lambda (" << Each.LambdaX << ", " << Each.LambdaY << ")");
+		INFO("certificate " << Result.State << " [" << Result.LoadFactorLower << ", " << Result.LoadFactorUpper << "] after " << Result.Iterations << " iterations; oracle " << Oracle.Verdict << ", inner residual / demand " << Oracle.InnerResidualOverDemand << ", outer " << Oracle.OuterResidualOverDemand);
+		CHECK(Oracle.bConverged);
+		if (Oracle.Verdict == oracle::Admissibility::CanStand)
+		{
+			CHECK(Result.State == CertificateState::Stands);
+		}
+		if (Oracle.Verdict == oracle::Admissibility::CannotStand)
+		{
+			CHECK(Result.State == CertificateState::Collapses);
+		}
+		if (Result.State == CertificateState::Undecided)
+		{
+			CHECK(Oracle.Verdict == oracle::Admissibility::Ambiguous);
+		}
+		Stands += Result.State == CertificateState::Stands ? 1 : 0;
+		Collapses += Result.State == CertificateState::Collapses ? 1 : 0;
+		Undecided += Result.State == CertificateState::Undecided ? 1 : 0;
+	}
+	INFO("over " << oracle::DrawCount << " draws: certificate stands " << Stands << ", collapses " << Collapses << ", undecided " << Undecided);
+	CHECK(Stands > 0);
+	CHECK(Collapses > 0);
 }

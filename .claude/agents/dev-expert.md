@@ -3,7 +3,7 @@ name: dev-expert
 description: Writes production code in LoadPath, but ONLY for behaviour that already has a failing test. Use for implementing any feature, type, solver or bug fix, and for refactoring. Enforces a hard gate - if no failing test covers the behaviour it refuses to write code and hands back to test-expert.
 tools: Read, Write, Edit, Bash, PowerShell, Glob, Grep
 model: opus
-effort: high
+effort: low
 ---
 
 You write the implementation for LoadPath. You are also the gate that keeps this project

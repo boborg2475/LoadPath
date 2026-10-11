@@ -341,3 +341,84 @@ TEST_CASE("Certificate.Mechanics.MechanismListsAreEmptyOnStandsAndNamedOnCollaps
 		}
 	}
 }
+
+namespace
+{
+BodyId AddBrickOnGroundAt(Structure& Model, BodyId Ground, double CentreXM, ProfileId Profile, double MassKg)
+{
+	Box Shape = BrickShape(CentreXM, 0);
+	Shape.MassKg = MassKg;
+	const BodyId Brick = AddBox(Model, Shape);
+	AddInterfaceOk(Model, OnGroundPlane(Ground, Brick, Shape, Profile));
+	return Brick;
+}
+}
+
+TEST_CASE("Certificate.Mechanics.ListsCollectEveryCollapsingComponentAndEdgeStatesAreRuled")
+{
+	const double SpacingM = 1.0;
+	SUBCASE("a collapsing component beside one in the polygon band reads Undecided and is still listed")
+	{
+		const double Lambda = 0.905;
+		CHECK(Lambda > 0.6 * CircumscribedOverInscribed(16));
+		CHECK(Lambda > 0.9);
+		CHECK(Lambda < 0.9 * CircumscribedOverInscribed(16));
+		CHECK(Lambda * BrickHeightM < BrickLengthM);
+		Structure Model;
+		const ProfileId Slippery = AddProfileOk(Model, DryJoint(0.6));
+		const ProfileId Grippy = AddProfileOk(Model, DryJoint(0.9));
+		const BodyId Ground = AddGroundPlane(Model);
+		const BodyId Sliding = AddBrickOnGroundAt(Model, Ground, 0.0, Slippery, BrickMassKg);
+		AddBrickOnGroundAt(Model, Ground, SpacingM, Grippy, BrickMassKg);
+		const CertificateResult Result = DecideWith(Model, CertificateLateral(Lambda));
+		INFO("state " << Result.State << ", load factors [" << Result.LoadFactorLower << ", " << Result.LoadFactorUpper << "], moving " << Describe(Result.UnconstrainedBodies));
+		CHECK(Result.State == CertificateState::Undecided);
+		CHECK(Result.LoadFactorUpper < 1.0);
+		CHECK(Result.UnconstrainedBodies.size() == 1u);
+		CHECK(HasBody(Result.UnconstrainedBodies, Sliding));
+	}
+	SUBCASE("a massless free body with no load stands")
+	{
+		Structure Model;
+		const ProfileId P = AddProfileOk(Model, DryJoint(0.6));
+		const BodyId Ground = AddGroundPlane(Model);
+		AddBrickOnGroundAt(Model, Ground, 0.0, P, BrickMassKg);
+		AddBrickOnGroundAt(Model, Ground, SpacingM, P, 0.0);
+		const CertificateResult Result = DecideWith(Model, CertificateOptions{});
+		INFO("state " << Result.State << ", load factors [" << Result.LoadFactorLower << ", " << Result.LoadFactorUpper << "]");
+		CHECK(Result.State == CertificateState::Stands);
+		CHECK(Result.UnconstrainedBodies.empty());
+	}
+	SUBCASE("a free body with no interface collapses at zero and is listed")
+	{
+		Structure Model;
+		const ProfileId P = AddProfileOk(Model, DryJoint(0.6));
+		const BodyId Ground = AddGroundPlane(Model);
+		AddBrickOnGroundAt(Model, Ground, 0.0, P, BrickMassKg);
+		const BodyId Floating = AddBox(Model, BrickShape(SpacingM, 0));
+		const CertificateResult Result = DecideWith(Model, CertificateOptions{});
+		INFO("state " << Result.State << ", load factors [" << Result.LoadFactorLower << ", " << Result.LoadFactorUpper << "], moving " << Describe(Result.UnconstrainedBodies));
+		CHECK(Result.State == CertificateState::Collapses);
+		CHECK(std::abs(Result.LoadFactorLower) <= 1.0e-6);
+		CHECK(std::abs(Result.LoadFactorUpper) <= 1.0e-6);
+		CHECK(Result.UnconstrainedBodies.size() == 1u);
+		CHECK(HasBody(Result.UnconstrainedBodies, Floating));
+	}
+	SUBCASE("a collapsing component beside a standing one reads Collapses")
+	{
+		const double Lambda = 0.7;
+		CHECK(Lambda > 0.6 * CircumscribedOverInscribed(16));
+		CHECK(Lambda < 0.9 / CircumscribedOverInscribed(16));
+		Structure Model;
+		const ProfileId Slippery = AddProfileOk(Model, DryJoint(0.6));
+		const ProfileId Grippy = AddProfileOk(Model, DryJoint(0.9));
+		const BodyId Ground = AddGroundPlane(Model);
+		const BodyId Sliding = AddBrickOnGroundAt(Model, Ground, 0.0, Slippery, BrickMassKg);
+		AddBrickOnGroundAt(Model, Ground, SpacingM, Grippy, BrickMassKg);
+		const CertificateResult Result = DecideWith(Model, CertificateLateral(Lambda));
+		INFO("state " << Result.State << ", moving " << Describe(Result.UnconstrainedBodies));
+		CHECK(Result.State == CertificateState::Collapses);
+		CHECK(Result.UnconstrainedBodies.size() == 1u);
+		CHECK(HasBody(Result.UnconstrainedBodies, Sliding));
+	}
+}
