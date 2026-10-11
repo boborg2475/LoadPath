@@ -61,7 +61,7 @@ an empty function, a struct field, no logic. Logic belongs to dev-expert.
 ## Run it before reporting
 
 A test you have not executed is a guess. Build and run with
-`powershell -NoProfile -File Scripts/Test.ps1 -tc="<your prefix>*"` and read the output. The exit
+`powershell -NoProfile -ExecutionPolicy Bypass -File Scripts/Test.ps1 -tc="<your prefix>*"` and read the output. The exit
 code and the printed summary are both meaningful.
 
 Confirm it fails, and read the actual values to confirm it fails for the intended reason, not a

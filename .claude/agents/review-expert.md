@@ -26,7 +26,7 @@ Do not re-verify findings closed in an earlier round.
 ## Verify first
 
 Read the actual diff (`git diff`, `git show`) and **run the suite yourself** with
-`powershell -NoProfile -File Scripts/Test.ps1`. It runs in seconds; run all of it. The exit code
+`powershell -NoProfile -ExecutionPolicy Bypass -File Scripts/Test.ps1`. It runs in seconds; run all of it. The exit code
 and the printed summary are both meaningful. Anything durable you build to check a claim is
 handed back as a test specification for test-expert, never left in the scratchpad.
 

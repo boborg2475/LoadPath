@@ -79,14 +79,14 @@ in `tests/CMakeLists.txt`. Test case names are dotted paths, `Area.Feature.Behav
 doctest filter can select a feature.
 
 ```bash
-powershell -NoProfile -File Scripts/Test.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File Scripts/Test.ps1
 ```
 
 That configures on first run, builds Debug, and runs the whole suite. Narrow it with doctest's
 own filters, which pass straight through:
 
 ```bash
-powershell -NoProfile -File Scripts/Test.ps1 -tc="Model.*"
+powershell -NoProfile -ExecutionPolicy Bypass -File Scripts/Test.ps1 -tc="Model.*"
 ```
 
 `-Config Release` builds and runs the optimised build. `Scripts/Build.ps1` builds without
