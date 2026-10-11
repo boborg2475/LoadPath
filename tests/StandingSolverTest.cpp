@@ -939,6 +939,25 @@ TEST_CASE("Deferred.Slice4.ThreeBrickBridgeStandsAtEveryProvableBiaxialPoint")
 	}
 }
 
+TEST_CASE("Deferred.Slice4.ThreeBrickBridgeIsNotAMechanismWhereAnAdmissibleFieldExists")
+{
+	struct Case
+	{
+		double LambdaX;
+		double LambdaY;
+	};
+	const Case Cases[] = {{2.5, 0.875}, {2.375, 0.875}, {2.25, 0.875}};
+	const ThreeBrickBridge B = MakeThreeBrickBridge(DryJoint(5.0));
+	for (const Case& Each : Cases)
+	{
+		const StandingResult Result = SolveWith(B.Model, BiaxialLateralLoad(Each.LambdaX, Each.LambdaY));
+		const CornerCounts Counts = CountCorners(Result);
+		INFO("lambda x " << Each.LambdaX << ", lambda y " << Each.LambdaY << ": state " << Result.State << " after " << Result.ActiveSetIterations << " passes, open " << Counts.Open << ", slipping " << Counts.Slipping << ", mechanism bodies " << Result.Mechanism.size());
+		CHECK(Result.State != StandingState::Mechanism);
+		CHECK(Result.Mechanism.empty());
+	}
+}
+
 TEST_CASE("Statics.Solver.RestoredCornerTangentDoesNotInflateThePivots")
 {
 	const double Friction = 0.6;

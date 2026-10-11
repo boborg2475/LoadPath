@@ -252,3 +252,12 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   are kinematic answers anyway. Tests that pin a Stands the elastic field cannot yet certify
   are kept red under the `Deferred.` prefix, excluded from the default run, and listed in
   CURRENT_STATE.
+- *2026-10-11, orchestrator, after the third slice-2a review:* **RBSM's Mechanism is a verdict,
+  not a certificate.** An independent static-admissibility oracle (NNLS over 16-generator
+  friction cones) found the elastic path reporting Mechanism on the dry three-brick bridge at
+  μ 5, λ = (2.5, 0.875), where an admissible field exists; under non-associative friction the
+  lower-bound theorem does not settle which answer is physical. So the slice-4 kinematic
+  certificate referees **both** Undecided and Mechanism components, and a Mechanism remains a
+  release for the host until then. At realistic friction (μ 0.4 to 1.0) the oracle found no
+  violation in 3,000 random stacks and bridges; the cost of the narrowed contract is 619 of
+  those 3,000 reading Undecided where collapse is provable, all fail closed.

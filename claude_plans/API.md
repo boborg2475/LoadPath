@@ -251,8 +251,8 @@ struct MechanismMotion { BodyId Body; Vec3 TranslationM; Vec3 RotationRad; };   
 struct StandingResult {
 	StandingState State = StandingState::Undecided;
 	std::vector<InterfaceReading> Readings;        // every live interface, ascending slot order
-	std::vector<MechanismMotion> Mechanism;        // non-empty only when State == Mechanism
-	std::vector<BodyId> UnconstrainedBodies;       // bodies the mechanism moves
+	std::vector<MechanismMotion> Mechanism;        // every mechanism component, whatever State
+	std::vector<BodyId> UnconstrainedBodies;       // bodies every mechanism component moves
 	int ActiveSetIterations = 0;
 	InterfaceId InvalidInterface;                  // set when State == InvalidInput
 };
@@ -275,12 +275,21 @@ never mutates the structure. The host may call it on any thread.
 - **Overstressed**: converged and non-singular, but some interface reads > 1 on an axis the
   active set does not release (compression on any joint; tension or cohesive shear on a
   bonded joint). Slice 3's crack round acts on it. In slice 2 the readings are the answer.
-- **Mechanism**: the factorisation met a pivot under tolerance, so some set of bodies is free
-  to move within the current active set; `Mechanism` holds the null vector. This is the
-  slice-2 collapse answer: a block pushed past its toe, a frictionless block on a slope, a
-  body resting on a single point. It is fail-closed: a structure that is in fact balanced but
-  whose stiffness is singular still reads Mechanism; slice 4's certificate refines it.
-- **Undecided**: the active set did not converge within the cap. Fail closed; never Stands.
+- **Mechanism**: the factorisation met a pivot under tolerance and the null-space motion the
+  load drives is admissible against the open and slipping corners as they stand, so some set
+  of bodies is free to move; `Mechanism` holds the null vector. This is the slice-2 collapse
+  answer: a block pushed past its toe, a frictionless block on a slope, a body resting on a
+  single point. **It is a verdict, not a certificate** (third review, 2026-10-11): the elastic
+  path can reach a singular admissible set on a structure for which a statically admissible
+  field exists (the three-brick bridge at μ 5, λ = (2.5, 0.875), reads Mechanism after 5
+  passes while an NNLS search finds an admissible field at 0.7 μ and 1.02 × the load). Under
+  non-associative friction the lower-bound theorem is not sufficient, so which answer is
+  physical is open; the slice-4 kinematic certificate referees Mechanism verdicts as well as
+  Undecided ones, and a host treats Mechanism as a release. A neutral singular set (zero load
+  projection) reads Stands, so Stands does not require a non-singular stiffness.
+- **Undecided**: the active set did not converge within the cap, or a restoration needed a
+  value the last full-rank solve does not supply (the fail-closed clause below). Never Stands,
+  never a release.
 - **InvalidInput**: a live interface whose profile has a stiffness that is not finite and `> 0`;
   a load on a dead body; a non-finite load or gravity. `InvalidInterface` names the first.
 
@@ -353,12 +362,12 @@ never mutates the structure. The host may call it on any thread.
   would carry along its held friction re-sticks, and the active-set loop continues; a Mechanism
   is returned only when nothing needs restoring. In a neutral solve an open corner whose gap
   moves along the null space is indeterminate and is not re-closed (otherwise a corner at
-  exactly zero force cycles open/closed until the cap). **Restored corners re-enter as
-  slipping, not stuck, on a joint with `c == 0`** (review ruling 2026-10-11): an open corner the
-  motion would close re-closes with its shear held at capacity along the tangential component
-  of the projected motion, because re-closing it stuck re-opens it on the next pass and the
-  loop cycles (a squat dry block past both its sliding and tipping thresholds read Undecided
-  instead of Mechanism). On a cohesive joint it re-closes stuck.
+  exactly zero force cycles open/closed until the cap). Restored corners re-enter as slipping,
+  not stuck, on a joint with `c == 0` (review ruling 2026-10-11), because re-closing them stuck
+  re-opened them on the next pass and the loop cycled (a squat dry block past both its sliding
+  and tipping thresholds read Undecided instead of Mechanism); the held force's magnitude and
+  direction are ruled in "The elastic authority does not guess" below, which supersedes this
+  sentence where they differ. On a cohesive joint it re-closes stuck.
 - **No status-only cycle detection** (review ruling 2026-10-11). A repeated status set while
   the held forces are still moving is normal convergence, not a cycle; treating it as one turned
   decided answers into Undecided. The iteration cap is the only early exit, and it reads
@@ -385,18 +394,29 @@ never mutates the structure. The host may call it on any thread.
   normal in the last full-rank solve, opposite the motion's tangential part, and zero transverse
   tangent on the re-entry pass. If that corner was open in the last full-rank solve too (no
   physical value exists), the component is `Undecided`. Nothing is ever seeded from a singular
-  solution. Three clauses of this ruling are **specified but not yet in the code**, because no
-  test reaches them and the TDD gate held (dev-expert, 2026-10-11, each verified by mutation to
-  change no test and no probe verdict): a second restoration of the same corner is `Undecided`;
-  the transverse tangent is clamped at `kt` (unreachable now that restored corners re-enter
-  with zero tangent); `SolveInRange` back-substitutes the load minus its null-space projection
-  (today the full load, which is only in equilibrium with the range load when the projection
-  lies wholly in the dropped pivots, as it does for a pure translation; a toppling mechanism's
-  readings would expose it). Points the elastic field cannot certify (several provably standing
-  three-brick-bridge points at μ 5, and a two-brick stack past friction that it cannot call a
-  Mechanism) read Undecided and are owned by the slice-4 kinematic certificate; the default
-  suite pins them as never-Mechanism or never-Stands, and the strong assertions live under the
-  `Deferred.` test prefix, excluded from the default run by `Scripts/Test.ps1`.
+  solution. Three clauses drafted with this ruling are **withdrawn** (third review,
+  2026-10-11), none can produce a false release: a second restoration of the same corner as
+  `Undecided` is reachable at 34 of 4,488 probe points, 32 end Undecided anyway and the other
+  two are correct verdicts it would spoil; a clamp of the transverse tangent at `kt` is moot
+  (a slipping corner persists only while `|trial| ≥ cap (1 − 1e-9)` and a restored one
+  re-enters at zero, so the ratio never exceeds `1 / (1 − 1e-9)`); `SolveInRange` on the load
+  minus its projection would change only readings on a Mechanism, never a verdict (seeding
+  reads the full-rank solve), and stating it correctly needs the scaling (the residual wrench
+  is parallel to `D⁻² · motion`). Points the elastic field cannot certify (several provably
+  standing three-brick-bridge points at μ 5, and a two-brick stack past friction that it cannot
+  call a Mechanism) read Undecided and are owned by the slice-4 kinematic certificate; the
+  default suite pins them as never-Mechanism or never-Stands, and the strong assertions live
+  under the `Deferred.` test prefix, excluded from the default run by `Scripts/Test.ps1`.
+- **Readings on Mechanism and Undecided** (review ruling 2026-10-11, restored after the third
+  review): a standing component's readings are its converged readings whatever the overall
+  state. A mechanism component's readings are the range-space solution of its last active set
+  with the released corners marked; they are informative, not a certificate, and may show a
+  dry slipping corner that re-entered with zero held force in tension, which reads `+inf` on
+  the tension axis. An undecided component's readings come from the last full-rank solve on
+  the fail-closed path (the current pass when there is none, which no fixture reaches) and
+  from the last pass on the cap path; neither is an equilibrium field (slipping corners read
+  the held force while the solve also carried the transverse spring). **Slice 3 consumes
+  readings only from standing components.**
 - **Options are validated** (review ruling 2026-10-11): `PivotToleranceRelative` must be finite
   and in `(0, 1)` and `MaxActiveSetIterations` at least 1, else `InvalidInput`. An assembled
   stiffness that is not finite is `InvalidInput` (it is a profile or geometry fault); a load
