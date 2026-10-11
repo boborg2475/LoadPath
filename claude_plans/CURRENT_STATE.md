@@ -61,21 +61,19 @@ the `Deferred.Slice4` tier holds 3 cases red by design. The design brief
    pier geometry (Portioli 2012), B-DER-01 wall geometry, B-SW-01 exact limit load (graphical
    only), F-RON-01 panel thickness, B-FTL-01 layout. B-BUR-01 needs a soil-pressure driver;
    F-PYR-01 needs a zero-extent contact; group 9 runs only in the host adapter's suite.
-3. `Scripts/Test.ps1` excludes a `Slow.` prefix from the default run once the first slow test
-   exists. No case reaches a second in Debug (the slowest are HingingInterfacesTouchAMovingBody
-   0.87 s and SingleBrickGrid 0.78 s at Debug stride 8); the default suite is about 6.8 s in
-   Debug, 1.2 s in Release. When a genuinely slow test arrives, add the exclusion and fix at the same time the
-   caveat that any caller `-tce` drops the `Deferred.` exclusion.
+3. `Scripts/Test.ps1` excludes `Slow.*` and `Deferred.*` from the default run (2026-10-11; the
+   arch and pile anchors carry `LOADPATH_SLOW_IN_DEBUG`, Slow. in Debug only). Still open: any
+   caller `-tc` or `-tce` is passed straight through and drops both exclusions.
 
 ## Deferred
 
-- B-WDG-01 (the 3DEC tetrahedral wedge, phi_crit 33.36 deg) is written as a skipped test
-  (`Statics.Anchor.ItascaWedgeSlidesAlongTheIntersectionBelowItsCriticalFrictionAngle`,
-  orchestrator 2026-10-11) and its BENCHMARKS row now says slice 4: the published threshold is a
-  kinematic answer (friction along the line of intersection), and the elastic corner-spring field
-  with kn = kt releases every corner near 40 deg or finds a squeezing force set that stands near
-  31 deg. Un-skip it when the collapse certificate (slice 4) exists, or decide a kt << kn fixture
-  is acceptable and record why.
+- B-WDG-01, the 3DEC tetrahedral wedge: the certificate pins its own associative switch at
+  31.07 deg (`Certificate.Anchor.ItascaWedgeSlidesBelowItsAssociativeCriticalFrictionAngle`,
+  G = 64, reads 31.080); the physical value is 33.36 deg, and between 31.1 and 33.4 deg the
+  combined authority reads Stands (elastic Undecided, so no disagreement is counted and the
+  host gets no signal) where the physical wedge slides. `Deferred.Slice7.*` holds the physical
+  pin for the non-associative referee. The elastic test stays `doctest::skip()`: the kn = kt
+  corner-spring field releases every corner near 40 deg or finds a squeezing set near 31 deg.
 - Statics.Authority.InsertionOrderChangesNoReading compares with a 1e-12 relative tolerance, not
   `==` (orchestrator 2026-10-11): unknowns are ordered by body slot, so a different insertion
   order changes the assembly and pivot order and the last bit. Bit-identity is pinned only for
@@ -182,6 +180,6 @@ the `Deferred.Slice4` tier holds 3 cases red by design. The design brief
   keeps the two legs apart, so about a quarter of bridge draws interpenetrate by up to 15 mm;
   both sides see the same model so the property is unaffected, but start the range at 0.1075
   or record why not. The oracle now lives in tests/StaticAdmissibilityOracle.h; remaining spec from the fourth review:
-  make the two bridge `Deferred.Slice4` cases CHECK `Oracle == CanStand` as a
+  make the two bridge `Statics.Combined.ThreeBrickBridge*` cases CHECK `Oracle == CanStand` as a
   precondition (`MakeBridge(5.0, 0.12, 0.0)` at (2.5, 0.875), (2.375, 0.875), (2.25, 0.875)
   reads CanStand with inner residual about 1e-16 at μ 5 and 3.5).
