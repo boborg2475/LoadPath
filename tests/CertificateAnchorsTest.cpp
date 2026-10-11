@@ -520,7 +520,7 @@ bool GridPointNearClosedFormBoundary(int IX, int IY, double Friction)
 	return false;
 }
 
-constexpr int GridStride = oracle::bOptimisedBuild ? 1 : 4;
+constexpr int GridStride = oracle::bOptimisedBuild ? 1 : 8;
 
 struct BrickPlacement
 {

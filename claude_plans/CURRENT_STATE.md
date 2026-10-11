@@ -17,25 +17,17 @@ reports Mechanism as a verdict, and fails closed to Undecided rather than guess)
 mechanics tests (incline tip and slide, Housner, free and coursed wall, the Itasca slope
 regimes, harmonic stack, Paterson–Zwick triangle and diamond), 20 solver characterisation and
 defect tests, a seeded locality property and a seeded static-admissibility oracle property.
-Slice 4a, the limit-analysis collapse certificate (`ICollapseCertificate`, 39 cases), is green
-at 322f69c after three reviews, with the closing round in flight ("Next" 1). Default suite 152
-cases (7935 assertions in Debug, 15456 in Release, about 5.5 s and 1.1 s);
+Slice 4a, the limit-analysis collapse certificate (`ICollapseCertificate`, 43 cases), is green
+after three reviews and the fourth round's fixes, closing review pending ("Next" 1). Default
+suite 155 cases (8431 assertions in Debug, 19787 in Release, about 6.8 s and 1.2 s);
 the `Deferred.Slice4` tier holds 3 cases red by design. The design brief
 ([DESIGN.md](DESIGN.md)) has every §9 question decided and §10 carries the slice-2 rulings.
 
 ## Next
 
-1. Slice 4a, the limit-analysis collapse certificate (API.md "Slice 4", DESIGN §10): green at
-   322f69c after three reviews, 39 `Certificate.*` cases. Open before 4b starts (fourth test
-   round in flight):
-   - the failed-selection path (Undecided with empty lists) has no killing test; spec: the
-     end-brick wall with `MaxIterations` set to the full run's count (inner 10, selection 17);
-   - the listing threshold admits solver residue: at a simultaneous knife edge the tied levels
-     show at about 1e-5 relative and a stable bystander lifting at 1.6e-6 relative is listed
-     (a weakly bonded bystander's joint reads hinging). Ruling (orchestrator 2026-10-11): the
-     threshold is 1e-3 relative for bodies and corners, and an interface hinges only if one of
-     its bodies is listed, which also makes the two lists consistent (harmonic n = 6 and 8
-     named the table joint with the bottom block not moving);
+1. Slice 4a, the limit-analysis collapse certificate (API.md "Slice 4", DESIGN §10): green
+   after three reviews and the fourth round's fixes, 43 `Certificate.*` cases; closing review
+   pending. Deferred to 4b or later, none host-unsafe:
    - the selection gate is `FeasibilityTolerance` (1e-9); the largest dry `t_in` seen is 5.5e-10,
      so the margin is thin; `t_in` scales with the tolerance across 1e-6..1e-13 in probes;
    - `t_out` is the circumscribed converged primal, not the dual objective `bᵀy/τ`; the two
@@ -43,9 +35,6 @@ the `Deferred.Slice4` tier holds 3 cases red by design. The design brief
      acceptable to defer;
    - `Iterations` excludes the selection solve's count, so a host cannot see an Undecided came
      from the selection cap;
-   - `Certificate.Oracle.SingleBrickGridMatchesTheClosedForm` takes 1.1 s in Debug; raise the
-     Debug stride from 4 to 8 keeping the boundary points (not a `Slow.` move: it is a
-     correctness oracle).
    Then slice 4b: the combined authority (referee every component the elastic authority leaves
    Undecided and every Mechanism it reports, count disagreements, report per component, move
    the three `Deferred.Slice4.*` cases under `Statics.*`); the arch (B-ARC-01/06), Orduña pile

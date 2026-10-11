@@ -24,7 +24,7 @@ constexpr double Pi = 3.14159265358979323846;
 constexpr double StepToBoundary = 0.995;
 constexpr int RefinementPasses = 1;
 constexpr double RegularisationRelative = 1.0e-12;
-constexpr double UnconstrainedComponent = 1.0e-6;
+constexpr double UnconstrainedComponent = 1.0e-3;
 constexpr double ObjectiveNorm = 1.0;
 constexpr double Unbounded = std::numeric_limits<double>::infinity();
 
@@ -896,6 +896,7 @@ void FillMechanism(const Component& C, const Eigen::VectorXd& Y, ComponentVerdic
 		return;
 	}
 	const Eigen::VectorXd Unit = Motion / Largest;
+	std::vector<bool> Listed(C.FreeBodies.size(), false);
 	for (std::size_t K = 0; K < C.FreeBodies.size(); ++K)
 	{
 		const int O = static_cast<int>(K) * DofPerBody;
@@ -903,6 +904,7 @@ void FillMechanism(const Component& C, const Eigen::VectorXd& Y, ComponentVerdic
 		{
 			continue;
 		}
+		Listed[K] = true;
 		V.Moving.push_back(C.FreeBodies[K]);
 		V.Mechanism.push_back(MechanismMotion{C.FreeBodies[K], Vec3{Unit(O + 0), Unit(O + 1), Unit(O + 2)}, Vec3{Unit(O + 3), Unit(O + 4), Unit(O + 5)}});
 	}
@@ -917,8 +919,14 @@ void FillMechanism(const Component& C, const Eigen::VectorXd& Y, ComponentVerdic
 	{
 		Fastest = std::max(Fastest, Speed);
 	}
+	const auto IsListed = [&](int Offset) { return Offset >= 0 && Listed[static_cast<std::size_t>(Offset / DofPerBody)]; };
 	for (const JointData& J : C.Joints)
 	{
+		const Site& First = C.Sites[J.FirstSite];
+		if (!IsListed(First.OffsetA) && !IsListed(First.OffsetB))
+		{
+			continue;
+		}
 		for (std::size_t Corner = 0; Corner < CornerCount; ++Corner)
 		{
 			if (Speeds[J.FirstSite + Corner] > UnconstrainedComponent * Fastest)
