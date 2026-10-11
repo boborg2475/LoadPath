@@ -48,6 +48,7 @@ struct JointData
 	double InnerTensionN = 0.0;
 	double InnerCohesionN = 0.0;
 	double CrushingN = 0.0;
+	double ShearCapN = Unbounded;
 	std::size_t FirstSite = 0;
 };
 
@@ -68,11 +69,23 @@ struct Group
 	std::size_t First = 0;
 	std::size_t Count = 0;
 	double Bound = 0.0;
+	int CapIndex = -1;
+};
+
+struct CapSite
+{
+	std::size_t SiteIndex = 0;
+	std::vector<std::size_t> Groups;
+	std::vector<Vec3> Facets;
+	double Bound = 0.0;
+	Eigen::Index FirstRow = 0;
+	Eigen::Index FirstSlack = 0;
 };
 
 struct Program
 {
 	std::vector<Group> Groups;
+	std::vector<CapSite> CapSites;
 	std::vector<Vec3> Directions;
 	Eigen::VectorXd Offset;
 	double Cap = 0.0;
@@ -82,6 +95,8 @@ struct Program
 	Eigen::Index Variables = 0;
 	Eigen::Index FirstGroupRow = 0;
 	Eigen::Index CapRow = 0;
+	Eigen::Index FirstCapRow = 0;
+	Eigen::Index FirstCapSlack = 0;
 	Eigen::Index RowCount = 0;
 };
 
@@ -91,6 +106,8 @@ struct Normal
 	std::vector<Vec3> Z;
 	std::vector<double> H;
 	double Ht = 0.0;
+	std::vector<Eigen::MatrixXd> CapF;
+	std::vector<Eigen::LLT<Eigen::MatrixXd>> CapFactor;
 	Eigen::LLT<Eigen::MatrixXd> Factor;
 };
 
@@ -204,6 +221,7 @@ std::vector<Component> BuildComponents(const Structure& Model, std::span<const B
 		J.TensionN = Profile.TensileStrengthPa * CornerAreaM2;
 		J.CohesionN = Profile.ShearCohesionPa * CornerAreaM2;
 		J.CrushingN = Profile.CompressiveStrengthPa * CornerAreaM2;
+		J.ShearCapN = Profile.MaxShearStrengthPa * CornerAreaM2;
 		const double InnerTensionPa = J.Friction > 0.0 ? std::min(Profile.TensileStrengthPa, Profile.ShearCohesionPa / J.Friction) : Profile.TensileStrengthPa;
 		J.InnerTensionN = InnerTensionPa * CornerAreaM2;
 		J.InnerCohesionN = (Profile.ShearCohesionPa - J.Friction * InnerTensionPa) * CornerAreaM2;
@@ -297,18 +315,45 @@ Program BuildProgram(const Component& C, int Generators, double RadiusScale, dou
 		{
 			const std::size_t SiteIndex = J.FirstSite + Corner;
 			ApplyCornerForce(P.Offset.data(), C.Sites[SiteIndex], Scale(TensionN / C.ForceScaleN, J.Normal));
+			const std::size_t GroupsBefore = P.Groups.size();
 			AddGroup(P, SiteIndex, (J.CrushingN + TensionN) / C.ForceScaleN, Friction);
 			AddGroup(P, SiteIndex, CohesionN / C.ForceScaleN, Cohesion);
+			if (IsPositiveFinite(J.ShearCapN) && P.Groups.size() > GroupsBefore)
+			{
+				CapSite Shear;
+				Shear.SiteIndex = SiteIndex;
+				Shear.Bound = (bInscribed ? std::cos(Pi / static_cast<double>(Generators)) : 1.0) * J.ShearCapN / C.ForceScaleN;
+				for (std::size_t G = GroupsBefore; G < P.Groups.size(); ++G)
+				{
+					P.Groups[G].CapIndex = static_cast<int>(P.CapSites.size());
+					Shear.Groups.push_back(G);
+				}
+				for (std::size_t K = 0; K < Count; ++K)
+				{
+					const double AngleRad = 2.0 * Pi * static_cast<double>(K) / static_cast<double>(Generators);
+					Shear.Facets.push_back(statics::Add(Scale(std::cos(AngleRad), J.AxisU), Scale(std::sin(AngleRad), J.AxisV)));
+				}
+				P.CapSites.push_back(std::move(Shear));
+			}
 		}
 	}
 	const Eigen::Index GroupCount = static_cast<Eigen::Index>(P.Groups.size());
 	P.LoadFactor = static_cast<Eigen::Index>(P.Directions.size());
 	P.FirstSlack = P.LoadFactor + 1;
 	P.CapSlack = P.FirstSlack + GroupCount;
-	P.Variables = P.CapSlack + 1;
+	P.FirstCapSlack = P.CapSlack + 1;
 	P.FirstGroupRow = C.Rows;
 	P.CapRow = P.FirstGroupRow + GroupCount;
-	P.RowCount = P.CapRow + 1;
+	P.FirstCapRow = P.CapRow + 1;
+	Eigen::Index FacetCount = 0;
+	for (CapSite& Shear : P.CapSites)
+	{
+		Shear.FirstRow = P.FirstCapRow + FacetCount;
+		Shear.FirstSlack = P.FirstCapSlack + FacetCount;
+		FacetCount += static_cast<Eigen::Index>(Shear.Facets.size());
+	}
+	P.Variables = P.FirstCapSlack + FacetCount;
+	P.RowCount = P.FirstCapRow + FacetCount;
 	return P;
 }
 
@@ -321,6 +366,13 @@ Eigen::VectorXd RowBounds(const Component& C, const Program& P)
 		B(P.FirstGroupRow + static_cast<Eigen::Index>(G)) = P.Groups[G].Bound;
 	}
 	B(P.CapRow) = P.Cap;
+	for (const CapSite& Cap : P.CapSites)
+	{
+		for (std::size_t K = 0; K < Cap.Facets.size(); ++K)
+		{
+			B(Cap.FirstRow + static_cast<Eigen::Index>(K)) = Cap.Bound;
+		}
+	}
 	return B;
 }
 
@@ -352,6 +404,23 @@ Eigen::VectorXd Apply(const Component& C, const Program& P, const Eigen::VectorX
 		O[P.FirstGroupRow + static_cast<Eigen::Index>(G)] = Sum + Values[P.FirstSlack + static_cast<Eigen::Index>(G)];
 	}
 	O[P.CapRow] = T + Values[P.CapSlack];
+	for (const CapSite& Cap : P.CapSites)
+	{
+		Vec3 Shear;
+		for (const std::size_t G : Cap.Groups)
+		{
+			const Group& Gr = P.Groups[G];
+			for (std::size_t J = Gr.First; J < Gr.First + Gr.Count; ++J)
+			{
+				Shear = statics::Add(Shear, Scale(Values[J], P.Directions[J]));
+			}
+		}
+		for (std::size_t K = 0; K < Cap.Facets.size(); ++K)
+		{
+			const Eigen::Index Offset = static_cast<Eigen::Index>(K);
+			O[Cap.FirstRow + Offset] = Dot(Cap.Facets[K], Shear) + Values[Cap.FirstSlack + Offset];
+		}
+	}
 	return Out;
 }
 
@@ -384,6 +453,24 @@ Eigen::VectorXd ApplyTranspose(const Component& C, const Program& P, const Eigen
 	}
 	O[P.LoadFactor] = -DemandDot(C, Duals) + Duals[P.CapRow];
 	O[P.CapSlack] = Duals[P.CapRow];
+	for (const CapSite& Cap : P.CapSites)
+	{
+		Vec3 Facet;
+		for (std::size_t K = 0; K < Cap.Facets.size(); ++K)
+		{
+			const Eigen::Index Offset = static_cast<Eigen::Index>(K);
+			Facet = statics::Add(Facet, Scale(Duals[Cap.FirstRow + Offset], Cap.Facets[K]));
+			O[Cap.FirstSlack + Offset] = Duals[Cap.FirstRow + Offset];
+		}
+		for (const std::size_t G : Cap.Groups)
+		{
+			const Group& Gr = P.Groups[G];
+			for (std::size_t J = Gr.First; J < Gr.First + Gr.Count; ++J)
+			{
+				O[J] += Dot(P.Directions[J], Facet);
+			}
+		}
+	}
 	return Out;
 }
 
@@ -449,9 +536,64 @@ bool FactorNormal(const Component& C, const Program& P, Normal& N)
 	N.H.resize(P.Groups.size());
 	const double* D = N.D.data();
 	std::vector<Matrix3> SiteMatrix(C.Sites.size(), Matrix3{});
+	N.CapF.resize(P.CapSites.size());
+	N.CapFactor.resize(P.CapSites.size());
+	for (std::size_t Index = 0; Index < P.CapSites.size(); ++Index)
+	{
+		const CapSite& Cap = P.CapSites[Index];
+		const Eigen::Index GroupRows = static_cast<Eigen::Index>(Cap.Groups.size());
+		const Eigen::Index Width = GroupRows + static_cast<Eigen::Index>(Cap.Facets.size());
+		Eigen::Matrix3d K3 = Eigen::Matrix3d::Zero();
+		Eigen::MatrixXd F = Eigen::MatrixXd::Zero(3, Width);
+		Eigen::MatrixXd Mww = Eigen::MatrixXd::Zero(Width, Width);
+		Eigen::VectorXd A(Width);
+		for (Eigen::Index W = 0; W < GroupRows; ++W)
+		{
+			const std::size_t G = Cap.Groups[static_cast<std::size_t>(W)];
+			const Group& Gr = P.Groups[G];
+			Mww(W, W) += D[P.FirstSlack + static_cast<Eigen::Index>(G)];
+			for (std::size_t J = Gr.First; J < Gr.First + Gr.Count; ++J)
+			{
+				const Eigen::Vector3d Dir(P.Directions[J].X, P.Directions[J].Y, P.Directions[J].Z);
+				A.setZero();
+				A(W) = 1.0;
+				for (std::size_t K = 0; K < Cap.Facets.size(); ++K)
+				{
+					A(GroupRows + static_cast<Eigen::Index>(K)) = Dot(Cap.Facets[K], P.Directions[J]);
+				}
+				K3.noalias() += D[J] * Dir * Dir.transpose();
+				F.noalias() += D[J] * Dir * A.transpose();
+				Mww.noalias() += D[J] * A * A.transpose();
+			}
+		}
+		for (std::size_t K = 0; K < Cap.Facets.size(); ++K)
+		{
+			const Eigen::Index Offset = static_cast<Eigen::Index>(K);
+			Mww(GroupRows + Offset, GroupRows + Offset) += D[Cap.FirstSlack + Offset];
+		}
+		N.CapFactor[Index].compute(Mww);
+		if (!HasPositivePivots(N.CapFactor[Index]))
+		{
+			return false;
+		}
+		K3.noalias() -= F * N.CapFactor[Index].solve(F.transpose());
+		Matrix3& K = SiteMatrix[Cap.SiteIndex];
+		for (std::size_t R = 0; R < 3; ++R)
+		{
+			for (std::size_t Col = 0; Col < 3; ++Col)
+			{
+				K[R * 3 + Col] += K3(static_cast<Eigen::Index>(R), static_cast<Eigen::Index>(Col));
+			}
+		}
+		N.CapF[Index] = std::move(F);
+	}
 	for (std::size_t G = 0; G < P.Groups.size(); ++G)
 	{
 		const Group& Gr = P.Groups[G];
+		if (Gr.CapIndex >= 0)
+		{
+			continue;
+		}
 		double Sum = D[P.FirstSlack + static_cast<Eigen::Index>(G)];
 		std::array<double, 3> Z{};
 		Matrix3& K = SiteMatrix[Gr.SiteIndex];
@@ -522,13 +664,54 @@ Eigen::VectorXd SolveNormal(const Component& C, const Program& P, const Normal& 
 	}
 	for (std::size_t G = 0; G < P.Groups.size(); ++G)
 	{
+		if (P.Groups[G].CapIndex >= 0)
+		{
+			continue;
+		}
 		const double Share = Rp[P.FirstGroupRow + static_cast<Eigen::Index>(G)] / N.H[G];
 		ApplyCornerForce(Yp, C.Sites[P.Groups[G].SiteIndex], Scale(-Share, N.Z[G]));
 	}
+	std::vector<Eigen::VectorXd> CapRhs(P.CapSites.size());
+	for (std::size_t Index = 0; Index < P.CapSites.size(); ++Index)
+	{
+		const CapSite& Cap = P.CapSites[Index];
+		const Eigen::Index GroupRows = static_cast<Eigen::Index>(Cap.Groups.size());
+		Eigen::VectorXd& Rw = CapRhs[Index];
+		Rw.resize(GroupRows + static_cast<Eigen::Index>(Cap.Facets.size()));
+		for (Eigen::Index W = 0; W < GroupRows; ++W)
+		{
+			Rw(W) = Rp[P.FirstGroupRow + static_cast<Eigen::Index>(Cap.Groups[static_cast<std::size_t>(W)])];
+		}
+		for (std::size_t K = 0; K < Cap.Facets.size(); ++K)
+		{
+			Rw(GroupRows + static_cast<Eigen::Index>(K)) = Rp[Cap.FirstRow + static_cast<Eigen::Index>(K)];
+		}
+		const Eigen::Vector3d Force = N.CapF[Index] * N.CapFactor[Index].solve(Rw);
+		ApplyCornerForce(Yp, C.Sites[Cap.SiteIndex], Vec3{-Force(0), -Force(1), -Force(2)});
+	}
 	auto Equilibrium = Y.head(C.Rows);
 	N.Factor.solveInPlace(Equilibrium);
+	for (std::size_t Index = 0; Index < P.CapSites.size(); ++Index)
+	{
+		const CapSite& Cap = P.CapSites[Index];
+		const Eigen::Index GroupRows = static_cast<Eigen::Index>(Cap.Groups.size());
+		const Vec3 V = RelativeVelocity(C.Sites[Cap.SiteIndex], Yp);
+		const Eigen::VectorXd Yw = N.CapFactor[Index].solve(CapRhs[Index] - N.CapF[Index].transpose() * Eigen::Vector3d(V.X, V.Y, V.Z));
+		for (Eigen::Index W = 0; W < GroupRows; ++W)
+		{
+			Yp[P.FirstGroupRow + static_cast<Eigen::Index>(Cap.Groups[static_cast<std::size_t>(W)])] = Yw(W);
+		}
+		for (std::size_t K = 0; K < Cap.Facets.size(); ++K)
+		{
+			Yp[Cap.FirstRow + static_cast<Eigen::Index>(K)] = Yw(GroupRows + static_cast<Eigen::Index>(K));
+		}
+	}
 	for (std::size_t G = 0; G < P.Groups.size(); ++G)
 	{
+		if (P.Groups[G].CapIndex >= 0)
+		{
+			continue;
+		}
 		const Eigen::Index Row = P.FirstGroupRow + static_cast<Eigen::Index>(G);
 		Yp[Row] = (Rp[Row] - Dot(N.Z[G], RelativeVelocity(C.Sites[P.Groups[G].SiteIndex], Yp))) / N.H[G];
 	}
@@ -553,6 +736,22 @@ Embedding StartingPoint(const Program& P)
 	}
 	X[P.LoadFactor] = std::min(1.0, 0.5 * P.Cap);
 	X[P.CapSlack] = P.Cap - X[P.LoadFactor];
+	for (const CapSite& Cap : P.CapSites)
+	{
+		Vec3 Shear;
+		for (const std::size_t G : Cap.Groups)
+		{
+			const Group& Gr = P.Groups[G];
+			for (std::size_t J = Gr.First; J < Gr.First + Gr.Count; ++J)
+			{
+				Shear = statics::Add(Shear, Scale(X[J], P.Directions[J]));
+			}
+		}
+		for (std::size_t K = 0; K < Cap.Facets.size(); ++K)
+		{
+			X[Cap.FirstSlack + static_cast<Eigen::Index>(K)] = Cap.Bound - Dot(Cap.Facets[K], Shear);
+		}
+	}
 	E.S = Eigen::VectorXd(P.Variables);
 	for (Eigen::Index I = 0; I < P.Variables; ++I)
 	{
@@ -775,6 +974,13 @@ bool IsConverged(const Component& C, const Program& P, const Embedding& E, const
 	for (std::size_t G = 0; G < P.Groups.size(); ++G)
 	{
 		PrimalRelative = std::max(PrimalRelative, std::abs(Primal[P.FirstGroupRow + static_cast<Eigen::Index>(G)]) / (1.0 + P.Groups[G].Bound));
+	}
+	for (const CapSite& Cap : P.CapSites)
+	{
+		for (std::size_t K = 0; K < Cap.Facets.size(); ++K)
+		{
+			PrimalRelative = std::max(PrimalRelative, std::abs(Primal[Cap.FirstRow + static_cast<Eigen::Index>(K)]) / (1.0 + Cap.Bound));
+		}
 	}
 	PrimalRelative /= E.Tau;
 	const double DualScale = 1.0 + std::max({ObjectiveNorm, LargestMagnitude(E.S.data(), P.Variables) / E.Tau, LargestMagnitude(R.Reaction.data(), P.Variables) / E.Tau});
