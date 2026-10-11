@@ -27,7 +27,10 @@ add_executable(loadpath_tests
 	CrackedJointTest.cpp
 	CascadeTest.cpp
 	CatalogueTest.cpp
-	CatalogueAnchorsTest.cpp)
+	CatalogueAnchorsTest.cpp
+	GeometryContactTest.cpp
+	GeometryWallTest.cpp
+	GeometryAnchorsTest.cpp)
 target_link_libraries(loadpath_tests PRIVATE loadpath doctest)
 target_compile_definitions(loadpath_tests PRIVATE LOADPATH_CATALOGUE_PATH="${CMAKE_SOURCE_DIR}/data/catalogue.json")
 
