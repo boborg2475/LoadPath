@@ -19,7 +19,10 @@ add_executable(loadpath_tests
 	StandingLocalityTest.cpp
 	StaticsOracleTest.cpp
 	CollapseCertificateTest.cpp
-	CertificateAnchorsTest.cpp)
+	CertificateAnchorsTest.cpp
+	CertificateShearCapTest.cpp
+	StructuralAuthorityTest.cpp
+	ArchAnchorsTest.cpp)
 target_link_libraries(loadpath_tests PRIVATE loadpath doctest)
 
 add_test(NAME loadpath_tests COMMAND loadpath_tests)

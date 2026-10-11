@@ -32,6 +32,7 @@ endif()
 # The engine.
 add_library(loadpath STATIC
 	src/Cli.cpp
+	src/CombinedAuthority.cpp
 	src/Handles.cpp
 	src/LimitAnalysisCertificate.cpp
 	src/RbsmStandingAuthority.cpp

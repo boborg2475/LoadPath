@@ -480,5 +480,8 @@ TEST_CASE("Certificate.Mechanics.SimultaneousKnifeEdgeNamesTheTopBlockAndNeverTh
 		CHECK(Each.UnconstrainedBodies.size() == 1u);
 		CHECK(HasBody(Each.UnconstrainedBodies, Wider.Blocks.front()));
 		CHECK(Each.HingingInterfaces.size() == 1u);
+		const std::vector<InterfaceId> UnderTop = Wider.Model.InterfacesOf(Wider.Blocks.front());
+		CHECK(UnderTop.size() == 1u);
+		CHECK((!UnderTop.empty() && HasInterface(Each.HingingInterfaces, UnderTop.front())));
 	}
 }

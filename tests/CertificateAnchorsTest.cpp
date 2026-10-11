@@ -3,6 +3,7 @@
 #include "CertificateTestSupport.h"
 #include "StaticAdmissibilityOracle.h"
 #include "StaticsTestSupport.h"
+#include "WedgeFixture.h"
 
 #include "doctest.h"
 
@@ -1013,6 +1014,31 @@ TEST_CASE("Certificate.Property.HingingInterfacesTouchAMovingBody")
 			CHECK(bTouches);
 			Orphans += bTouches ? 0 : 1;
 		}
+		for (const BodyId Start : Result.UnconstrainedBodies)
+		{
+			std::vector<BodyId> Cluster{Start};
+			bool bTouchesHinge = false;
+			for (std::size_t Next = 0; Next < Cluster.size(); ++Next)
+			{
+				for (const InterfaceId Each : Model.InterfacesOf(Cluster[Next]))
+				{
+					if (HasInterface(Result.HingingInterfaces, Each))
+					{
+						bTouchesHinge = true;
+						continue;
+					}
+					const InterfaceRecord& Record = Model.Interface(Each);
+					const BodyId Other = SameHandle(Record.BodyA, Cluster[Next]) ? Record.BodyB : Record.BodyA;
+					if (HasBody(Result.UnconstrainedBodies, Other) && !HasBody(Cluster, Other))
+					{
+						Cluster.push_back(Other);
+					}
+				}
+			}
+			INFO("listed body " << Describe(std::vector<BodyId>{Start}) << ", rigid cluster " << Describe(Cluster) << " touches a hinging interface: " << bTouchesHinge);
+			CHECK(bTouchesHinge);
+			Orphans += bTouchesHinge ? 0 : 1;
+		}
 		return Orphans;
 	};
 	int Collapses = 0;
@@ -1034,4 +1060,47 @@ TEST_CASE("Certificate.Property.HingingInterfacesTouchAMovingBody")
 	}
 	INFO("collapsing cases " << Collapses);
 	CHECK(Collapses > 0);
+}
+
+TEST_CASE("Certificate.Anchor.ItascaWedgeSlidesBelowItsAssociativeCriticalFrictionAngle")
+{
+	const WedgeGeometry G = ItascaWedgeGeometry();
+	const double ClassicalRad = ClassicalWedgeFrictionAngleRad(G);
+	const double CriticalRad = AssociativeWedgeFrictionAngleRad(G);
+	INFO("classical (non-associative) " << ClassicalRad / RadPerDegree << " deg, associative " << CriticalRad / RadPerDegree << " deg");
+	CHECK(std::abs(ClassicalRad - 33.36 * RadPerDegree) <= 0.005 * RadPerDegree);
+	CHECK(CriticalRad < ClassicalRad);
+	CertificateOptions Options;
+	Options.ConeGenerators = 64;
+	const ThresholdBracket Bracket = Threshold(
+		[&](double FrictionAngleRad) {
+			const Wedge W = MakeItascaWedge(FrictionAngleRad);
+			return CertificateStands(W.Model, Options);
+		},
+		60.0 * RadPerDegree, 20.0 * RadPerDegree, 1.0e-4 * RadPerDegree);
+	INFO("bracket [" << Bracket.FirstFailing / RadPerDegree << ", " << Bracket.LastStanding / RadPerDegree << "] deg");
+	CheckBracketsWithin(Bracket, CriticalRad, 0.05 * RadPerDegree);
+
+	const double SlidingRad = CriticalRad - 0.2 * RadPerDegree;
+	const Wedge Sliding = MakeItascaWedge(SlidingRad);
+	const CertificateResult Result = DecideWith(Sliding.Model, Options);
+	INFO("at " << SlidingRad / RadPerDegree << " deg: state " << Result.State << ", moving " << Describe(Result.UnconstrainedBodies) << ", hinging " << Describe(Result.HingingInterfaces));
+	CHECK(Result.State == CertificateState::Collapses);
+	CHECK(Result.UnconstrainedBodies.size() == 1u);
+	CHECK(HasBody(Result.UnconstrainedBodies, Sliding.Body));
+	CHECK(Result.HingingInterfaces.size() == 2u);
+	const MechanismMotion* Motion = FindMotion(Result, Sliding.Body);
+	CHECK(Motion != nullptr);
+	if (Motion == nullptr)
+	{
+		return;
+	}
+	const double TranslationM = Length(Motion->TranslationM);
+	INFO("translation " << Motion->TranslationM << ", rotation " << Motion->RotationRad << ", line down " << G.LineDown);
+	CHECK(TranslationM > 0.0);
+	CHECK(Length(Motion->RotationRad) <= 1.0e-6 * TranslationM);
+	CHECK(Motion->TranslationM.Z < 0.0);
+	CHECK(Dot(Motion->TranslationM, G.LineDown) > 0.0);
+	CHECK(Dot(Motion->TranslationM, G.NormalA) >= -1.0e-9);
+	CHECK(Dot(Motion->TranslationM, G.NormalB) >= -1.0e-9);
 }
