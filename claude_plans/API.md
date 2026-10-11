@@ -561,8 +561,8 @@ which component collapsed; the combined authority (slice 4b) reports per compone
 inscribed optimum are the body velocities (sign `−y`, rotations unscaled by the characteristic
 length, normalised per component so the largest physical component is 1). At `t* = 0` the dual
 optimal set is a cone and the interior point returns its analytic centre, which names every
-body that can move; so on a Collapses with `t_in` under the selection gate (`FeasibilityTolerance`, 1e-9; the largest dry `t_in` seen is 5.5e-10 and `t_in` scales with the tolerance, so the margin is thin but real; the tests'
-absolute tolerance, not the solver tolerance) a **selection LP** runs per component: over body
+body that can move; so on a Collapses with `t_in` under the selection gate (`FeasibilityTolerance`, 1e-9; the largest dry `t_in` seen is 5.5e-10 and `t_in` scales with the tolerance, so the margin is thin but real)
+a **selection LP** runs per component: over body
 velocities `y` and bounding variables `u`, with `±y ≤ u`, the kinematic admissibility rows
 `gᵀ (v_B − v_A) ≤ 0` for every inscribed friction and cohesion generator, the opening row
 `−Tᵀ y ≤ tol` where the inner tension offset is non-zero, and a motion normalisation, choose the
@@ -572,17 +572,19 @@ but fails 1e-6 past a threshold, where unit work needs velocities near 1e6 and `
 bound-group dual variables are omitted: per corner the minimum dissipation is the support
 function of a strength region containing the origin, hence non-negative, and zero exactly for
 dilatant opening on a dry corner or zero relative motion where `T > 0`, which the rows above
-express. The selected mechanism is reported; `UnconstrainedBodies` are the bodies with any
-component above 1e-6 and `HingingInterfaces` the interfaces with a corner whose relative
-velocity exceeds 1e-6 of the component's fastest corner. "Minimal" means highest work per unit
+express. The selected mechanism is reported; `UnconstrainedBodies` and `HingingInterfaces`
+follow the listing threshold below. "Minimal" means highest work per unit
 motion, not fewest bodies: a cap on an exactly critical end brick is reported with that brick
 (TRAPS: a cluster released as one body must be a certified mechanism; two bricks whose joint
 centroid is past a pillar's edge are named together with one rigid rotation). **If the selection
 LP does not converge the component reads Undecided with empty lists**: the analytic centre is
-never handed to a host as a release set. On `Stands` every list is empty. Where several
-mechanisms tie (a harmonic stack with every offset scaled by `1 + ε` has every level at its
-knife edge at once, the optima differing by order ε), the selection may name every tied level:
-the mechanism is not unique there and the tests pin only that the top block is named. **Listing
+never handed to a host as a release set. On `Stands` every list is empty. The selection has a
+**resolution limit**: a harmonic stack with every offset scaled by `1 + ε` has every level past
+its threshold and the optimum scales with ε, so once it falls under the solver's absolute
+termination gap (ε about 1e-7 for n ≥ 5, 1e-8 for n ≥ 3) the solve returns near the centre of
+the near-optimal set and names every level, or reads Undecided; every body it names there is
+past its own threshold, so this is not host-unsafe, and slice 4b's referee records it:
+the tests pin only that the top block is named. **Listing
 threshold (ruled 2026-10-11 after the third review):** a body is unconstrained when the largest
 of its six scaled components exceeds 1e-3 of the component's largest, and an interface hinges
 when a corner's relative speed exceeds 1e-3 of the fastest corner and one of its bodies is

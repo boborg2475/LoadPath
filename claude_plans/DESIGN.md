@@ -270,3 +270,13 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   selection reading Undecided rather than handing the host the analytic centre; lists collect
   every collapsing component; static admissibility is the host's standing criterion and slice 4b
   referees slice 2's Mechanism verdicts against it.
+- *2026-10-11, orchestrator, slice 4a closing:* **listing threshold 1e-3.** A body is part of a
+  reported mechanism when the largest of its six scaled components exceeds 1e-3 of the
+  component's largest, and an interface hinges only when a corner exceeds the same ratio and
+  one of its bodies is listed. The earlier 1e-6 listed interior-point residue (a stable
+  bystander lifting at 1.6e-6 relative, a weakly bonded bystander's joint read hinging) and let
+  the two lists disagree. A genuinely slow participant hidden by 1e-3 would be a translating
+  piece within a thousandth of the main body's length of its pivot; the cost is one step of
+  delay, which is conservative. The elastic authority still lists at 1e-6 from a direct null
+  space (roundoff-level residue); slice 4b agrees one listing definition for both authorities
+  before counting disagreements.

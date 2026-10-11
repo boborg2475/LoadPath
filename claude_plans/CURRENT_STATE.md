@@ -17,17 +17,17 @@ reports Mechanism as a verdict, and fails closed to Undecided rather than guess)
 mechanics tests (incline tip and slide, Housner, free and coursed wall, the Itasca slope
 regimes, harmonic stack, Paterson–Zwick triangle and diamond), 20 solver characterisation and
 defect tests, a seeded locality property and a seeded static-admissibility oracle property.
-Slice 4a, the limit-analysis collapse certificate (`ICollapseCertificate`, 43 cases), is green
-after three reviews and the fourth round's fixes, closing review pending ("Next" 1). Default
+Slice 4a, the limit-analysis collapse certificate (`ICollapseCertificate`, 42 cases), is done
+after four reviews. Default
 suite 155 cases (8431 assertions in Debug, 19787 in Release, about 6.8 s and 1.2 s);
 the `Deferred.Slice4` tier holds 3 cases red by design. The design brief
 ([DESIGN.md](DESIGN.md)) has every §9 question decided and §10 carries the slice-2 rulings.
 
 ## Next
 
-1. Slice 4a, the limit-analysis collapse certificate (API.md "Slice 4", DESIGN §10): green
-   after three reviews and the fourth round's fixes, 43 `Certificate.*` cases; closing review
-   pending. Deferred to 4b or later, none host-unsafe:
+1. Slice 4a, the limit-analysis collapse certificate (API.md "Slice 4", DESIGN §10): **done**
+   after four reviews (2026-10-11), 42 `Certificate.*` cases. Deferred to 4b or later, none
+   host-unsafe:
    - the selection gate is `FeasibilityTolerance` (1e-9); the largest dry `t_in` seen is 5.5e-10,
      so the margin is thin; `t_in` scales with the tolerance across 1e-6..1e-13 in probes;
    - `t_out` is the circumscribed converged primal, not the dual objective `bᵀy/τ`; the two
@@ -35,7 +35,15 @@ the `Deferred.Slice4` tier holds 3 cases red by design. The design brief
      acceptable to defer;
    - `Iterations` excludes the selection solve's count, so a host cannot see an Undecided came
      from the selection cap;
-   Then slice 4b: the combined authority (referee every component the elastic authority leaves
+   Then slice 4b: first agree one shared listing definition for both authorities (the
+   certificate lists at 1e-3 with rotations scaled by the characteristic length, the elastic
+   authority at 1e-6 unscaled) so the disagreement count compares like with like; record the
+   selection's resolution limit (harmonic stacks read Undecided at ε 1e-7 for n ≥ 5 and name
+   every level at 1e-8 for n ≥ 3) for the referee; add the reverse hinge property (every listed
+   body's cluster of listed neighbours joined by non-hinging interfaces touches a hinging
+   interface, BFS over `InterfacesOf`; 0 violations in 1550 probe collapses) and the
+   top/lower-joint `HasInterface` check in the knife-edge ε 1e-4 loop. Then the combined
+   authority (referee every component the elastic authority leaves
    Undecided and every Mechanism it reports, count disagreements, report per component, move
    the three `Deferred.Slice4.*` cases under `Statics.*`); the arch (B-ARC-01/06), Orduña pile
    (B-ORD-01) and 3DEC wedge (B-WDG-01) anchors; `MaxShearStrengthPa` in the LP as facet rows
@@ -54,9 +62,9 @@ the `Deferred.Slice4` tier holds 3 cases red by design. The design brief
    only), F-RON-01 panel thickness, B-FTL-01 layout. B-BUR-01 needs a soil-pressure driver;
    F-PYR-01 needs a zero-extent contact; group 9 runs only in the host adapter's suite.
 3. `Scripts/Test.ps1` excludes a `Slow.` prefix from the default run once the first slow test
-   exists. One case is over a second in Debug, `Certificate.Oracle.SingleBrickGridMatchesTheClosedForm`
-   at 1.1 s, and it stays in the default run as a correctness oracle with a coarser Debug stride
-   ("Next" 1). When a genuinely slow test arrives, add the exclusion and fix at the same time the
+   exists. No case reaches a second in Debug (the slowest are HingingInterfacesTouchAMovingBody
+   0.87 s and SingleBrickGrid 0.78 s at Debug stride 8); the default suite is about 6.8 s in
+   Debug, 1.2 s in Release. When a genuinely slow test arrives, add the exclusion and fix at the same time the
    caveat that any caller `-tce` drops the `Deferred.` exclusion.
 
 ## Deferred
