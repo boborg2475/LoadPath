@@ -33,6 +33,7 @@ endif()
 add_library(loadpath STATIC
 	src/Cli.cpp
 	src/Handles.cpp
+	src/LimitAnalysisCertificate.cpp
 	src/RbsmStandingAuthority.cpp
 	src/Structure.cpp
 	src/StructureFile.cpp

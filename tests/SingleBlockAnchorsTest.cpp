@@ -1,3 +1,4 @@
+#include "AnchorFixtures.h"
 #include "StaticsTestSupport.h"
 
 #include "doctest.h"
@@ -12,39 +13,9 @@ using namespace loadpath::test;
 
 namespace
 {
-constexpr double RockDensityKgPerM3 = 2000.0;
 constexpr double ShapeTolerance = 1.0e-6;
 const Vec3 SlopeDirection{1.0, 0.0, 0.0};
 const Vec3 EdgeAxis{0.0, 1.0, 0.0};
-
-double BrickDensityKgPerM3()
-{
-	return BrickMassKg / (BrickLengthM * BrickWidthM * BrickHeightM);
-}
-
-struct BlockOnGround
-{
-	Structure Model;
-	BodyId Block;
-	InterfaceId Bed;
-	Box Shape;
-};
-
-BlockOnGround MakeBlockOnGround(double WidthXM, double DepthYM, double HeightZM, double Friction, double DensityKgPerM3 = RockDensityKgPerM3)
-{
-	BlockOnGround F;
-	const ProfileId P = AddProfileOk(F.Model, DryJoint(Friction));
-	const BodyId Ground = AddGroundPlane(F.Model);
-	F.Shape = BoxOfDensity(Vec3{0.0, 0.0, HeightZM / 2.0}, Vec3{WidthXM / 2.0, DepthYM / 2.0, HeightZM / 2.0}, DensityKgPerM3);
-	F.Block = AddBox(F.Model, F.Shape);
-	F.Bed = AddInterfaceOk(F.Model, OnGroundPlane(Ground, F.Block, F.Shape, P));
-	return F;
-}
-
-Vec3 DownhillEdgePointM(const Box& Shape)
-{
-	return Vec3{Shape.CentreM.X + Shape.HalfExtentsM.X, Shape.CentreM.Y, Shape.CentreM.Z - Shape.HalfExtentsM.Z};
-}
 
 void CheckTipsAboutTheDownhillEdge(const StandingResult& Result, BodyId Block, const Box& Shape)
 {
@@ -87,38 +58,6 @@ void CheckTiltMatchesLateralLoad(const Structure& Model, double TiltRad)
 {
 	INFO("tilt " << TiltRad);
 	CHECK(SolveWith(Model, TiltedPlane(TiltRad)).State == SolveWith(Model, LateralLoad(std::tan(TiltRad))).State);
-}
-
-struct Course
-{
-	BodyId Body;
-	Box Shape;
-};
-
-struct CoursedWall
-{
-	Structure Model;
-	std::vector<Course> Courses;
-	std::vector<InterfaceId> JointsBottomUp;
-};
-
-CoursedWall MakeCoursedWall(int CourseCount, double ThicknessXM, double LengthYM, double HeightZM, double Friction)
-{
-	CoursedWall W;
-	const ProfileId P = AddProfileOk(W.Model, DryJoint(Friction));
-	const BodyId Ground = AddGroundPlane(W.Model);
-	const double CourseHeightM = HeightZM / CourseCount;
-	for (int K = 0; K < CourseCount; ++K)
-	{
-		const Box Shape = BoxOfDensity(Vec3{0.0, 0.0, (K + 0.5) * CourseHeightM}, Vec3{ThicknessXM / 2.0, LengthYM / 2.0, CourseHeightM / 2.0}, BrickDensityKgPerM3());
-		W.Courses.push_back(Course{AddBox(W.Model, Shape), Shape});
-	}
-	W.JointsBottomUp.push_back(AddInterfaceOk(W.Model, OnGroundPlane(Ground, W.Courses[0].Body, W.Courses[0].Shape, P)));
-	for (std::size_t K = 1; K < W.Courses.size(); ++K)
-	{
-		W.JointsBottomUp.push_back(AddInterfaceOk(W.Model, *StackedFaces(W.Courses[K - 1].Body, W.Courses[K - 1].Shape, W.Courses[K].Body, W.Courses[K].Shape, P)));
-	}
-	return W;
 }
 
 enum class SlopeRegime
@@ -363,7 +302,7 @@ TEST_CASE("Statics.Anchor.CoursedFreeWallHingesOnlyAtTheBase")
 	CHECK(Failing.State == StandingState::Mechanism);
 	INFO("unconstrained " << DescribeAscending(Failing.UnconstrainedBodies));
 	CHECK(Failing.UnconstrainedBodies.size() == W.Courses.size());
-	for (const Course& Each : W.Courses)
+	for (const WallCourse& Each : W.Courses)
 	{
 		CHECK(HasBody(Failing.UnconstrainedBodies, Each.Body));
 	}

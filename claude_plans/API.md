@@ -547,3 +547,16 @@ guidance), its friction switch (B-ARC-06, stands at φ = 22°, slides at 21°), 
 (B-WDG-01, φ_crit 33.36° within 0.05°), the Orduña pile bracket (B-ORD-01), and agreement with
 the test-tier NNLS oracle on its 300 seeded draws (same `CanStand` / `CannotStand` verdicts
 outside the ambiguity band).
+
+Ratified after the 4a red set (2026-10-11): loading is **proportional**, `A α = t · b` with `b`
+the whole wrench including gravity, as written above; the dead-plus-live form (gravity fixed,
+only the live load scaled) is not offered. Consequences the tests pin: on dry joints the cones
+are homogeneous so `t` is exactly 0 or the cap; finite load factors arise only from bonded,
+cohesive or crushing bounds (`ft · A · L / (W (λh − L))` for tension tipping,
+`c · A / (W (sin θ − μ cos θ))` for cohesive sliding, `fc · A / W` for crushing). At `t* = 0` the
+dual optimal set is unbounded, so the mechanism shape is pinned only where `t*` is finite and the
+dual unique; on dry collapses the tests pin `UnconstrainedBodies` and `HingingInterfaces` only.
+The polygon band is real: along a cone-vertex direction the slide flips Stands → Undecided at
+`μ` and Undecided → Collapses at `μ / cos(π/G)`; along a mid-edge direction it flips at
+`μ cos(π/G)` and `μ`. Load factors compare at 1e-7 relative plus 1e-6 absolute (an
+interior-point method lands near, not on, zero).
