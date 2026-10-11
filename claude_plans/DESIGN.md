@@ -328,3 +328,11 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   move into `InterfaceReading` so the crack rule reads the elastic authority's own ratios
   rather than a second copy of the strength rule. The run mutates the structure it is given,
   which is the host's snapshot (DESIGN §2.4), and the verdict lists every change.
+- *2026-10-11, orchestrator, after the first slice-3 review:* **the pass counter is the
+  structure's, not the stamps'.** A counted pass that writes no stamp (a free body released, a
+  body whose last joints a neighbour severed) still advances `HighestPass` through `MarkPass`,
+  and the file carries `highest_pass`, because the writer never sees a sever whose other side
+  was removed and a reloaded structure was restarting at pass 1. `Sever` refuses a pass below
+  the crack stamp so the file reader and the structure agree. On `PassCapReached` the cascade
+  judges once more so the readings describe the structure that remains. A crack ratio with a
+  NaN on either axis is NaN and cracks (the order-dependent max was the slice-2 trap again).

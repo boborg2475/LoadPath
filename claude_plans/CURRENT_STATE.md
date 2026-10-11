@@ -197,3 +197,21 @@ question decided and §10 carries the slice-2, 4a and 4b rulings.
   make the two bridge `Statics.Combined.ThreeBrickBridge*` cases CHECK `Oracle == CanStand` as a
   precondition (`MakeBridge(5.0, 0.12, 0.0)` at (2.5, 0.875), (2.375, 0.875), (2.25, 0.875)
   reads CanStand with inner residual about 1e-16 at μ 5 and 3.5).
+- Slice 3 items left open by its first review (2026-10-11), none host-unsafe:
+  - a severed joint's `FailedInterface` axis and ratio come from the elastic reading, which on
+    a mechanism means little (the arch crown hinge reads `Compression 2.4e-5`); derive the axis
+    from the certificate's hinge motion (opening = Tension, slip = Shear) or pin the current
+    behaviour; a mutant that always writes `None` survives the suite today;
+  - the arch's two 0.484° slivers are released as single-voussoir clusters (bodies 14 and 51 of
+    the 62-voussoir fixture); the open question whether a hinge needs a minimum rotation now
+    has this measurement against it;
+  - cascade scans are quadratic (`IndexOf`/`Contains` linear, union-find without path
+    compression, the release scanning every interface per cluster, `FindReading` O(I) per
+    sever, the crack band O(K·I·|component|), about 84M comparisons per pass at warehouse
+    scale): slice 6;
+  - the file writer's interface loop stops on a dead-record sentinel (`BodyA.Generation == 0`,
+    generation `1u` hard-coded); a slot-count or `IsKnown` accessor on `Structure` would make
+    it explicit;
+  - interface names are not checked for duplicates on load, unlike body and profile names;
+  - a file may carry a stamp near `UINT32_MAX`; `Run` then reads InvalidInput (ruled), the
+    reader itself does not cap.
