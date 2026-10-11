@@ -9,7 +9,9 @@ add_executable(loadpath_tests
 	ProfileTest.cpp
 	BodyTest.cpp
 	InterfaceTest.cpp
-	StructureTest.cpp)
+	StructureTest.cpp
+	StructureFileTest.cpp
+	CliTest.cpp)
 target_link_libraries(loadpath_tests PRIVATE loadpath doctest)
 
 add_test(NAME loadpath_tests COMMAND loadpath_tests)

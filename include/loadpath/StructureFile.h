@@ -1,0 +1,39 @@
+#pragma once
+
+#include "loadpath/Structure.h"
+
+#include <string>
+#include <string_view>
+#include <vector>
+
+namespace loadpath
+{
+// Line is 1-based; 0 = not a syntax error.
+struct FileError
+{
+	int Line = 0;
+	std::string Message;
+};
+
+// Names are indexed by slot: BodyNames[Id.Index] names body Id, and likewise for interfaces and profiles.
+struct LoadedStructure
+{
+	Structure Model;
+	std::vector<std::string> BodyNames;
+	std::vector<std::string> InterfaceNames;
+	std::vector<std::string> ProfileNames;
+};
+
+struct LoadResult
+{
+	LoadedStructure Value;
+	FileError Error;
+
+	bool Ok() const { return Error.Message.empty(); }
+};
+
+LoadResult LoadStructure(std::string_view Json);
+
+// Removed bodies and their interfaces are not written.
+std::string WriteStructure(const LoadedStructure& Loaded);
+}
