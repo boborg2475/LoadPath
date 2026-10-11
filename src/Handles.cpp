@@ -2,18 +2,18 @@
 
 namespace loadpath
 {
-bool BodyId::operator==(const BodyId&) const
+bool BodyId::operator==(const BodyId& Other) const
 {
-	return false;
+	return Index == Other.Index && Generation == Other.Generation;
 }
 
-bool InterfaceId::operator==(const InterfaceId&) const
+bool InterfaceId::operator==(const InterfaceId& Other) const
 {
-	return false;
+	return Index == Other.Index && Generation == Other.Generation;
 }
 
-bool ProfileId::operator==(const ProfileId&) const
+bool ProfileId::operator==(const ProfileId& Other) const
 {
-	return false;
+	return Index == Other.Index && Generation == Other.Generation;
 }
 }

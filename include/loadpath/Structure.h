@@ -7,11 +7,12 @@
 #include "loadpath/StrengthProfile.h"
 
 #include <cstddef>
+#include <cstdint>
 #include <vector>
 
 namespace loadpath
 {
-// Handles stay valid across removal: removal tombstones the slot and bumps its generation, nothing renumbers.
+// Handles stay valid across removal: removal tombstones the slot, slots are never reused and nothing renumbers.
 class Structure
 {
 public:
@@ -26,10 +27,12 @@ public:
 	bool IsLive(InterfaceId Id) const;
 	bool IsValid(ProfileId Id) const;
 
-	// Precondition IsLive; a dead id reads a zero desc.
+	// A dead or unknown id reads a NaN mass, never zero, so it fails closed.
 	const BodyDesc& Body(BodyId Id) const;
 	// A removed body's interfaces stay readable here, in state Removed with no pass stamp.
+	// An unknown id reads state Removed with zero area.
 	const InterfaceRecord& Interface(InterfaceId Id) const;
+	// An unknown id reads NaN strengths.
 	const StrengthProfile& Profile(ProfileId Id) const;
 
 	std::size_t LiveBodyCount() const;
@@ -41,8 +44,24 @@ public:
 	std::vector<InterfaceId> InterfacesOf(BodyId Id) const;
 
 private:
-	BodyDesc DeadBody;
-	InterfaceRecord DeadInterface;
-	StrengthProfile DeadProfile;
+	struct BodySlot
+	{
+		BodyDesc Desc;
+		bool bLive = false;
+	};
+
+	struct InterfaceSlot
+	{
+		InterfaceRecord Record;
+	};
+
+	// Known means the handle was issued at some point, whether or not it is still live.
+	bool IsKnown(BodyId Id) const;
+	bool IsKnown(InterfaceId Id) const;
+	ModelError ValidateInterface(const InterfaceDesc& Desc, Vec3& UnitNormal) const;
+
+	std::vector<StrengthProfile> Profiles;
+	std::vector<BodySlot> Bodies;
+	std::vector<InterfaceSlot> Interfaces;
 };
 }

@@ -2,6 +2,7 @@
 
 #include "doctest.h"
 
+#include <cmath>
 #include <iterator>
 
 using namespace loadpath;
@@ -40,6 +41,43 @@ void CheckSameVec3(const Vec3& Got, const Vec3& Want, const char* What)
 	CHECK(Got.Z == Want.Z);
 }
 
+constexpr double InsideAxisTolerance = 5.0e-10;
+constexpr double OutsideAxisTolerance = 2.0e-9;
+
+double CosineOf(double Sine)
+{
+	return std::sqrt(1.0 - Sine * Sine);
+}
+
+void TiltVTowardU(BrickStack& S, double Sine)
+{
+	S.Desc.AxisV = Vec3{Sine, CosineOf(Sine), 0.0};
+}
+
+void TiltUTowardN(BrickStack& S, double Sine)
+{
+	S.Desc.AxisU = Vec3{CosineOf(Sine), 0.0, Sine};
+}
+
+void TiltVTowardN(BrickStack& S, double Sine)
+{
+	S.Desc.AxisV = Vec3{0.0, CosineOf(Sine), Sine};
+}
+
+struct AcceptCase
+{
+	const char* Name;
+	void (*Mutate)(BrickStack&);
+};
+
+const AcceptCase AcceptedAxes[] = {
+	{"U length 1 + 1e-12", [](BrickStack& S) { S.Desc.AxisU = Vec3{1.0 + 1.0e-12, 0.0, 0.0}; }},
+	{"U length 1 + 5e-10", [](BrickStack& S) { S.Desc.AxisU = Vec3{1.0 + InsideAxisTolerance, 0.0, 0.0}; }},
+	{"U.V = 5e-10", [](BrickStack& S) { TiltVTowardU(S, InsideAxisTolerance); }},
+	{"U.N = 5e-10", [](BrickStack& S) { TiltUTowardN(S, InsideAxisTolerance); }},
+	{"V.N = 5e-10", [](BrickStack& S) { TiltVTowardN(S, InsideAxisTolerance); }},
+};
+
 struct RefusalCase
 {
 	const char* Name;
@@ -53,6 +91,7 @@ const RefusalCase Refusals[] = {
 	{"BodyB index never allocated", [](BrickStack& S) { S.Desc.BodyB = BodyId{1000u, 1u}; }, ModelError::UnknownBody},
 	{"BodyB removed", [](BrickStack& S) { S.Model.RemoveBody(S.Top); }, ModelError::BodyRemoved},
 	{"BodyA removed", [](BrickStack& S) { S.Desc.BodyA = S.Top; S.Desc.BodyB = S.Middle; S.Model.RemoveBody(S.Top); }, ModelError::BodyRemoved},
+	{"BodyA never-issued generation of a removed slot", [](BrickStack& S) { S.Desc.BodyA = BodyId{S.Top.Index, 2u}; S.Desc.BodyB = S.Middle; S.Model.RemoveBody(S.Top); }, ModelError::UnknownBody},
 	{"BodyA equals BodyB", [](BrickStack& S) { S.Desc.BodyB = S.Desc.BodyA; }, ModelError::SameBody},
 	{"profile value-initialised", [](BrickStack& S) { S.Desc.Profile = ProfileId{}; }, ModelError::UnknownProfile},
 	{"profile index never allocated", [](BrickStack& S) { S.Desc.Profile = ProfileId{1000u, 1u}; }, ModelError::UnknownProfile},
@@ -75,6 +114,10 @@ const RefusalCase Refusals[] = {
 	{"zero normal", [](BrickStack& S) { S.Desc.NormalAToB = Vec3{}; }, ModelError::DegenerateNormal},
 	{"U not unit length", [](BrickStack& S) { S.Desc.AxisU = Vec3{2.0, 0.0, 0.0}; }, ModelError::AxesNotOrthonormal},
 	{"U length off by 1e-6", [](BrickStack& S) { S.Desc.AxisU = Vec3{1.0 + 1.0e-6, 0.0, 0.0}; }, ModelError::AxesNotOrthonormal},
+	{"U length 1 + 2e-9", [](BrickStack& S) { S.Desc.AxisU = Vec3{1.0 + OutsideAxisTolerance, 0.0, 0.0}; }, ModelError::AxesNotOrthonormal},
+	{"U.V = 2e-9", [](BrickStack& S) { TiltVTowardU(S, OutsideAxisTolerance); }, ModelError::AxesNotOrthonormal},
+	{"U.N = 2e-9", [](BrickStack& S) { TiltUTowardN(S, OutsideAxisTolerance); }, ModelError::AxesNotOrthonormal},
+	{"V.N = 2e-9", [](BrickStack& S) { TiltVTowardN(S, OutsideAxisTolerance); }, ModelError::AxesNotOrthonormal},
 	{"V not unit length", [](BrickStack& S) { S.Desc.AxisV = Vec3{0.0, 0.5, 0.0}; }, ModelError::AxesNotOrthonormal},
 	{"U not orthogonal to N", [](BrickStack& S) { S.Desc.AxisU = Vec3{0.6, 0.0, 0.8}; }, ModelError::AxesNotOrthonormal},
 	{"V not orthogonal to N", [](BrickStack& S) { S.Desc.AxisV = Vec3{0.0, 0.6, 0.8}; }, ModelError::AxesNotOrthonormal},
@@ -84,10 +127,13 @@ const RefusalCase Refusals[] = {
 	{"zero half-extent V", [](BrickStack& S) { S.Desc.HalfExtentVM = 0.0; }, ModelError::NonPositiveExtent},
 	{"negative half-extent U", [](BrickStack& S) { S.Desc.HalfExtentUM = -S.Desc.HalfExtentUM; }, ModelError::NonPositiveExtent},
 	{"negative half-extent V", [](BrickStack& S) { S.Desc.HalfExtentVM = -S.Desc.HalfExtentVM; }, ModelError::NonPositiveExtent},
+	{"half-extents 1e-170 underflow the area", [](BrickStack& S) { S.Desc.HalfExtentUM = 1.0e-170; S.Desc.HalfExtentVM = 1.0e-170; }, ModelError::NonPositiveExtent},
+	{"half-extents 1e160 overflow the area", [](BrickStack& S) { S.Desc.HalfExtentUM = 1.0e160; S.Desc.HalfExtentVM = 1.0e160; }, ModelError::NonPositiveExtent},
 };
 
 const RefusalCase OrderCases[] = {
 	{"unknown BodyA with removed BodyB", [](BrickStack& S) { S.Desc.BodyA = BodyId{}; S.Model.RemoveBody(S.Top); }, ModelError::UnknownBody},
+	{"removed BodyA with unknown BodyB", [](BrickStack& S) { S.Desc.BodyA = S.Top; S.Desc.BodyB = BodyId{}; S.Model.RemoveBody(S.Top); }, ModelError::UnknownBody},
 	{"removed body on both sides", [](BrickStack& S) { S.Desc.BodyA = S.Top; S.Desc.BodyB = S.Top; S.Model.RemoveBody(S.Top); }, ModelError::BodyRemoved},
 	{"same body with unknown profile", [](BrickStack& S) { S.Desc.BodyB = S.Desc.BodyA; S.Desc.Profile = ProfileId{}; }, ModelError::SameBody},
 	{"unknown profile with NaN half-extent", [](BrickStack& S) { S.Desc.Profile = ProfileId{}; S.Desc.HalfExtentUM = NaN; }, ModelError::UnknownProfile},
@@ -152,14 +198,58 @@ TEST_CASE("Model.Interface.NonUnitNormalIsNormalisedOnAdd")
 	CheckSameVec3(Stack.Model.Interface(Added.Value).NormalAToB, Vec3{0.0, 0.0, 1.0}, "normal");
 }
 
+TEST_CASE("Model.Interface.NormalNormalisationIsRobustToScale")
+{
+	SUBCASE("tiny normal (0, 3e-161, 4e-161)")
+	{
+		BrickStack Stack = MakeBrickStack();
+		Stack.Desc.NormalAToB = Vec3{0.0, 3.0e-161, 4.0e-161};
+		Stack.Desc.AxisU = Vec3{1.0, 0.0, 0.0};
+		Stack.Desc.AxisV = Vec3{0.0, 4.0 / 5.0, -3.0 / 5.0};
+		const Result<InterfaceId> Added = Stack.Model.AddInterface(Stack.Desc);
+
+		CHECK(Added.Error == ModelError::None);
+		REQUIRE(Stack.Model.IsLive(Added.Value));
+		CheckSameVec3(Stack.Model.Interface(Added.Value).NormalAToB, Vec3{0.0, 3.0 / 5.0, 4.0 / 5.0}, "normal");
+	}
+	SUBCASE("huge normal (1e155, 0, 0)")
+	{
+		BrickStack Stack = MakeBrickStack();
+		Stack.Desc.NormalAToB = Vec3{1.0e155, 0.0, 0.0};
+		Stack.Desc.AxisU = Vec3{0.0, 1.0, 0.0};
+		Stack.Desc.AxisV = Vec3{0.0, 0.0, 1.0};
+		const Result<InterfaceId> Added = Stack.Model.AddInterface(Stack.Desc);
+
+		CHECK(Added.Error == ModelError::None);
+		REQUIRE(Stack.Model.IsLive(Added.Value));
+		CheckSameVec3(Stack.Model.Interface(Added.Value).NormalAToB, Vec3{1.0, 0.0, 0.0}, "normal");
+	}
+}
+
+TEST_CASE("Model.Interface.UnknownHandleReadsRemovedWithZeroArea")
+{
+	const BrickStack Stack = MakeBrickStack();
+	REQUIRE(Stack.Model.IsLive(Stack.BottomMiddle));
+	const InterfaceId Unknown[] = {InterfaceId{}, InterfaceId{1000u, 1u}, InterfaceId{Stack.BottomMiddle.Index, 2u}};
+	for (const InterfaceId& Id : Unknown)
+	{
+		INFO(Id);
+		CHECK(Stack.Model.Interface(Id).State == InterfaceState::Removed);
+		CHECK(Stack.Model.Interface(Id).AreaM2 == 0.0);
+	}
+}
+
 TEST_CASE("Model.Interface.AxesWithinToleranceAreAccepted")
 {
-	BrickStack Stack = MakeBrickStack();
-	Stack.Desc.AxisU = Vec3{1.0 + 1.0e-12, 0.0, 0.0};
-	const Result<InterfaceId> Added = Stack.Model.AddInterface(Stack.Desc);
-
-	CHECK_MESSAGE(Added.Error == ModelError::None, "a unit-length error of 1e-12 is inside the 1e-9 tolerance");
-	CHECK(Stack.Model.IsLive(Added.Value));
+	for (const AcceptCase& Case : AcceptedAxes)
+	{
+		INFO(doctest::String(Case.Name));
+		BrickStack Stack = MakeBrickStack();
+		Case.Mutate(Stack);
+		const Result<InterfaceId> Added = Stack.Model.AddInterface(Stack.Desc);
+		CHECK_MESSAGE(Added.Error == ModelError::None, "an axis error inside the 1e-9 tolerance must be accepted");
+		CHECK(Stack.Model.IsLive(Added.Value));
+	}
 }
 
 TEST_CASE("Model.Interface.InvalidInputIsRefusedWithItsReason")
@@ -185,5 +275,8 @@ TEST_CASE("Model.Interface.RefusedAddLeavesTheLiveInterfacesUnchanged")
 		CHECK(Stack.Model.LiveInterfaceCount() == 1u);
 		CHECK(Describe(Stack.Model.LiveInterfaces()) == Describe(std::vector<InterfaceId>{Stack.BottomMiddle}));
 		CHECK(Stack.Model.InterfacesOf(Stack.Top).empty());
+		const Result<InterfaceId> Next = Stack.Model.AddInterface(BedJoint(Stack.Bottom, Stack.Middle, 1, Stack.Profile));
+		CHECK(Next.Ok());
+		CHECK_MESSAGE(SameHandle(Next.Value, InterfaceId{1u, 1u}), "a refused add must not consume a slot, got " << Next.Value);
 	}
 }

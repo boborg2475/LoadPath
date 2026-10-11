@@ -2,6 +2,8 @@
 
 #include "doctest.h"
 
+#include <cmath>
+
 using namespace loadpath;
 using namespace loadpath::test;
 
@@ -29,6 +31,7 @@ BodyDesc WithCentroid(double XM, double YM, double ZM)
 const BodyCase RefusedBodies[] = {
 	{"NaN mass", WithMass(NaN), ModelError::NonFiniteInput},
 	{"infinite mass", WithMass(Infinity), ModelError::NonFiniteInput},
+	{"-infinity mass", WithMass(-Infinity), ModelError::NonFiniteInput},
 	{"NaN centroid X", WithCentroid(NaN, 0.0, BrickHeightM), ModelError::NonFiniteInput},
 	{"NaN centroid Y", WithCentroid(0.0, NaN, BrickHeightM), ModelError::NonFiniteInput},
 	{"NaN centroid Z", WithCentroid(0.0, 0.0, NaN), ModelError::NonFiniteInput},
@@ -98,6 +101,7 @@ TEST_CASE("Model.Body.RefusedAddLeavesTheLiveBodiesUnchanged")
 {
 	Structure Model;
 	const Result<BodyId> Kept = Model.AddBody(BrickAt(StackedBrickCentroidM(0), true));
+	REQUIRE(SameHandle(Kept.Value, BodyId{0u, 1u}));
 	REQUIRE(Model.LiveBodyCount() == 1u);
 	const std::string LiveBefore = Describe(Model.LiveBodies());
 
@@ -110,4 +114,21 @@ TEST_CASE("Model.Body.RefusedAddLeavesTheLiveBodiesUnchanged")
 		CHECK(Describe(Model.LiveBodies()) == LiveBefore);
 	}
 	CHECK(Model.IsLive(Kept.Value));
+	const Result<BodyId> Next = Model.AddBody(BrickAt(StackedBrickCentroidM(1)));
+	CHECK(Next.Ok());
+	CHECK_MESSAGE(SameHandle(Next.Value, BodyId{1u, 1u}), "refused adds must not consume a slot, got " << Next.Value);
+}
+
+TEST_CASE("Model.Body.DeadReadsFailClosedWithNaNMass")
+{
+	Structure Model;
+	const Result<BodyId> Removed = Model.AddBody(BrickAt(StackedBrickCentroidM(0), true));
+	REQUIRE(Model.AddBody(BrickAt(StackedBrickCentroidM(1))).Ok());
+	REQUIRE(Model.RemoveBody(Removed.Value));
+	const BodyId Dead[] = {Removed.Value, BodyId{}, BodyId{1000u, 1u}};
+	for (const BodyId& Id : Dead)
+	{
+		INFO(Id);
+		CHECK_MESSAGE(std::isnan(Model.Body(Id).MassKg), "a dead read must not yield a usable mass, got " << Model.Body(Id).MassKg);
+	}
 }

@@ -9,8 +9,9 @@ global state. A decision recorded here is the orchestrator's unless marked owner
 
 ### Scalars and vectors (`Vec3.h`, `Units.h`)
 
-- `struct Vec3 { double X = 0, Y = 0, Z = 0; }` with `+ - *` by scalar, `Dot`, `Cross`,
-  `Length`, `IsFinite`. The engine's own type; Eigen stays behind the solver interface.
+- `struct Vec3 { double X = 0, Y = 0, Z = 0; }` with `Dot`, `Cross`, `Length`, `IsFinite`.
+  Arithmetic operators are added when a test needs them. The engine's own type; Eigen stays
+  behind the solver interface.
 - `constexpr double GravityMPerS2 = 9.80665;`
 - `bool IsFinite(double)` helper; every guard is written `!(x > 0.0)` style so NaN fails closed.
 
@@ -18,8 +19,9 @@ global state. A decision recorded here is the orchestrator's unless marked owner
 
 Generational handles: `struct BodyId { uint32_t Index; uint32_t Generation; }`, the same for
 `InterfaceId` and `ProfileId`. `Generation == 0` is the invalid handle (`BodyId::Invalid()`),
-so a value-initialised handle is invalid. Equality operators. A removed slot's generation bumps,
-so a stale handle never aliases a later occupant.
+so a value-initialised handle is invalid. Equality operators. Slots are never reused, so a
+live slot's generation is always 1 today; the generation field exists so slot reuse can be
+introduced later without changing the handle type (see "Structure" below for the ruling).
 
 ### Results and errors (`Result.h`)
 
@@ -86,7 +88,15 @@ A then B), then both live (`BodyRemoved`, A then B); distinct (`SameBody`); prof
 scalar finite (`NonFiniteInput`); the normal's length `> 0` after which it is normalised
 (`DegenerateNormal`; a NaN length fails this test because `!(len > 0)` is true for NaN); `U` and
 `V` unit length within 1e-9, mutually orthogonal and orthogonal to the normal within 1e-9, and
-`U x V . N > 0` (`AxesNotOrthonormal`); both half-extents `> 0` (`NonPositiveExtent`).
+`U x V . N > 0` (`AxesNotOrthonormal`); both half-extents `> 0` and the derived area
+`4 * HalfExtentUM * HalfExtentVM` finite and `> 0` (`NonPositiveExtent`; half-extents of 1e-170
+underflow the area to 0, which would be the 0/0 fail-open trap in slice 2).
+
+Normalisation is robust to scale (review 2026-10-11): the normal is scaled by its largest
+absolute component before its length is taken, so (0, 3e-161, 4e-161) stores exactly
+(0, 0.6, 0.8) and (1e155, 0, 0) stores (1, 0, 0); the stored normal's length is within 1e-9 of
+one or the add is refused as `DegenerateNormal`. A naive `sqrt(x²+y²+z²)` underflows and
+accepted a normal of length 1.006.
 
 Stored per interface, readable through accessors: the two body ids, the unit normal, the centre,
 the axes, the half-extents, `AreaM2 = 4 * HalfExtentUM * HalfExtentVM`, the profile id, the
@@ -104,7 +114,7 @@ public:
 	Result<InterfaceId> AddInterface(const InterfaceDesc&);
 	bool RemoveBody(BodyId);                 // false for an unknown or already removed id
 	bool IsLive(BodyId) const;  bool IsLive(InterfaceId) const;  bool IsValid(ProfileId) const;
-	const BodyDesc& Body(BodyId) const;      // precondition IsLive; a dead id reads a zero desc
+	const BodyDesc& Body(BodyId) const;      // a dead or unknown id reads MassKg = NaN (fail closed)
 	const InterfaceRecord& Interface(InterfaceId) const;
 	const StrengthProfile& Profile(ProfileId) const;
 	size_t LiveBodyCount() const;  size_t LiveInterfaceCount() const;
@@ -113,8 +123,27 @@ public:
 };
 ```
 
-Handles are stable across removal: removal tombstones the slot and bumps its generation; nothing
-renumbers. Iteration order is ascending slot index, which makes it deterministic and independent
+Handles are stable across removal: removing a body tombstones its slot; nothing renumbers and
+**slots are never reused**, so the slot's generation stays at the value it was issued with (1)
+and a stale handle is told apart by the tombstone, not by a generation bump (review 2026-10-11:
+a bump was unobservable and made a never-issued `{i, 2}` read as known). A handle is *known*
+when its index is in range and its generation equals the slot's; *live* when known and not
+tombstoned. A never-issued generation is `UnknownBody`; a tombstoned slot is `BodyRemoved`. If
+slot reuse is ever introduced, the bump returns with it and a test.
+
+Interfaces are never removed from storage: a removed body's interfaces go to state `Removed`
+and their handles keep reading the record, so `IsLive(InterfaceId)` means "state is not Removed"
+(slice 3 decides whether `Cracked` and `Severed` count as live; the current reading is that they
+do).
+
+Dead reads fail closed (review 2026-10-11): `Body()` on an unknown or removed handle returns a
+descriptor with `MassKg = NaN` (TRAPS: fail-closed for a mass is NaN, never zero); `Interface()`
+on an unknown handle returns a record in state `Removed` with zero area; `Profile()` on an
+unknown handle returns a profile whose strengths are all NaN. The sentinels differ on purpose:
+a dead interface's zero area is safe because its `Removed` state governs and any demand over
+zero area lands on the breaking side of `!(ratio <= 1)`; do not "fix" it to NaN or the body's
+NaN to zero. The references the accessors return point into vectors and are invalidated by any
+later `Add*`; copy before adding. Iteration order is ascending slot index, which makes it deterministic and independent
 of removal history.
 
 ### Structure file (`StructureFile.h`), slice 1b

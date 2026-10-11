@@ -32,7 +32,9 @@ endif()
 # The engine.
 add_library(loadpath STATIC
 	src/Handles.cpp
-	src/Structure.cpp)
+	src/Structure.cpp
+	src/Units.cpp
+	src/Vec3.cpp)
 target_include_directories(loadpath PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_link_libraries(loadpath PUBLIC loadpath_contract)
 

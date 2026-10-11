@@ -11,10 +11,6 @@ struct Vec3
 	double Z = 0;
 };
 
-Vec3 operator+(const Vec3& A, const Vec3& B);
-Vec3 operator-(const Vec3& A, const Vec3& B);
-Vec3 operator*(const Vec3& V, double S);
-Vec3 operator*(double S, const Vec3& V);
 double Dot(const Vec3& A, const Vec3& B);
 Vec3 Cross(const Vec3& A, const Vec3& B);
 double Length(const Vec3& V);

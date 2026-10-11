@@ -2,6 +2,8 @@
 
 #include "doctest.h"
 
+#include <cmath>
+
 using namespace loadpath;
 using namespace loadpath::test;
 
@@ -32,6 +34,13 @@ constexpr ProfileField FieldsThatMustBeFinite[] = {
 	{"TangentialStiffnessPaPerM", &StrengthProfile::TangentialStiffnessPaPerM},
 };
 
+constexpr ProfileField StrengthFields[] = {
+	{"CompressiveStrengthPa", &StrengthProfile::CompressiveStrengthPa},
+	{"ShearCohesionPa", &StrengthProfile::ShearCohesionPa},
+	{"TensileStrengthPa", &StrengthProfile::TensileStrengthPa},
+	{"MaxShearStrengthPa", &StrengthProfile::MaxShearStrengthPa},
+};
+
 constexpr ProfileField StrengthAndFrictionFields[] = {
 	{"CompressiveStrengthPa", &StrengthProfile::CompressiveStrengthPa},
 	{"ShearCohesionPa", &StrengthProfile::ShearCohesionPa},
@@ -39,6 +48,39 @@ constexpr ProfileField StrengthAndFrictionFields[] = {
 	{"FrictionCoefficient", &StrengthProfile::FrictionCoefficient},
 	{"MaxShearStrengthPa", &StrengthProfile::MaxShearStrengthPa},
 };
+
+struct NamedProfile
+{
+	std::string Name;
+	StrengthProfile Desc;
+};
+
+std::vector<NamedProfile> RefusedProfiles()
+{
+	std::vector<NamedProfile> Profiles;
+	for (const ProfileField& Field : AllFields)
+	{
+		StrengthProfile Desc = DistinctFieldProfile();
+		Desc.*Field.Member = NaN;
+		Profiles.push_back({std::string("NaN ") + Field.Name, Desc});
+	}
+	for (const ProfileField& Field : FieldsThatMustBeFinite)
+	{
+		StrengthProfile Desc = DistinctFieldProfile();
+		Desc.*Field.Member = Infinity;
+		Profiles.push_back({std::string("infinite ") + Field.Name, Desc});
+	}
+	for (const ProfileField& Field : StrengthAndFrictionFields)
+	{
+		StrengthProfile Desc = DistinctFieldProfile();
+		Desc.*Field.Member = -(Desc.*Field.Member);
+		Profiles.push_back({std::string("negative ") + Field.Name, Desc});
+	}
+	StrengthProfile NegativeInfiniteCap = DistinctFieldProfile();
+	NegativeInfiniteCap.MaxShearStrengthPa = -Infinity;
+	Profiles.push_back({"-infinity MaxShearStrengthPa", NegativeInfiniteCap});
+	return Profiles;
+}
 
 void CheckRefused(const Structure& Model, const Result<ProfileId>& Added, ModelError Expected)
 {
@@ -155,5 +197,43 @@ TEST_CASE("Model.Profile.NonFiniteOutranksNegativeWhenBothArePresent")
 		Desc.CompressiveStrengthPa = NaN;
 		Desc.FrictionCoefficient = -Desc.FrictionCoefficient;
 		CheckRefused(Model, Model.AddProfile(Desc), ModelError::NonFiniteInput);
+	}
+}
+
+TEST_CASE("Model.Profile.NegativeInfinityShearCapIsRefusedAsNonFiniteInput")
+{
+	Structure Model;
+	StrengthProfile Desc = DistinctFieldProfile();
+	Desc.MaxShearStrengthPa = -Infinity;
+	CheckRefused(Model, Model.AddProfile(Desc), ModelError::NonFiniteInput);
+}
+
+TEST_CASE("Model.Profile.RefusedAddChangesNothing")
+{
+	for (const NamedProfile& Refused : RefusedProfiles())
+	{
+		INFO(doctest::String(Refused.Name.c_str()));
+		Structure Model;
+		REQUIRE_FALSE(Model.AddProfile(Refused.Desc).Ok());
+		CHECK_MESSAGE(!Model.IsValid(ProfileId{0u, 1u}), "a refused add must not occupy slot 0");
+		const Result<ProfileId> Next = Model.AddProfile(DistinctFieldProfile());
+		CHECK(Next.Ok());
+		CHECK_MESSAGE(SameHandle(Next.Value, ProfileId{0u, 1u}), "the next accepted profile must take slot 0, got " << Next.Value);
+	}
+}
+
+TEST_CASE("Model.Profile.UnknownHandleReadsNaNStrengths")
+{
+	Structure Model;
+	REQUIRE(Model.AddProfile(DistinctFieldProfile()).Ok());
+	const ProfileId Unknown[] = {ProfileId{}, ProfileId{1000u, 1u}, ProfileId{0u, 2u}};
+	for (const ProfileId& Id : Unknown)
+	{
+		INFO(Id);
+		for (const ProfileField& Field : StrengthFields)
+		{
+			INFO(doctest::String(Field.Name));
+			CHECK_MESSAGE(std::isnan(Model.Profile(Id).*Field.Member), "a dead read must not yield a usable strength, got " << Model.Profile(Id).*Field.Member);
+		}
 	}
 }
