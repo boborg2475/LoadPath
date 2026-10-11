@@ -280,3 +280,20 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   delay, which is conservative. The elastic authority still lists at 1e-6 from a direct null
   space (roundoff-level residue); slice 4b agrees one listing definition for both authorities
   before counting disagreements.
+- *2026-10-11, orchestrator, slice 4b opening:* **one release set, the certificate's.** The
+  combined authority (API.md "Slice 4b") releases only what the certificate lists at 1e-3 on
+  a Collapses component; the elastic authority's Mechanism lists stay informational and are
+  never compared body by body, so "disagreement" means verdicts, not lists: an elastic
+  Mechanism the certificate answers with Stands. That is the shared listing definition 4a
+  asked for, by making one list authoritative rather than reconciling two thresholds.
+  **Tension-only profiles get no cohesion floor:** a joint with `ft > 0`, `c = 0`, `μ > 0` has
+  `T = 0` on the inscribed side and reads Undecided at best; the combined authority then
+  reports that component Undecided, which fails closed, and a host that wants such a joint to
+  certify gives it the cohesion the physical bond has. **Severity across components** is
+  answered by per-component reporting: `Worst` orders InvalidInput > Undecided > Collapses >
+  Overstressed > Stands, and the host reads the component list, never `Worst` alone, to decide
+  what to release. **The shear cap enters the LP as facet rows** on the corner shear (apothem
+  `cap · A/4 · cos(π/G)` inscribed, `cap · A/4` circumscribed), never as a bound on `Σα`.
+  **The Orduña pile is pinned on a reconstructed bond** (five 0.2 × 0.4 blocks per course in
+  two mirrored tilings, six courses, bed joints only): the paper's figure was not retrievable,
+  so the anchor asserts only the published bracket and is marked reconstructed in ANCHORS.
