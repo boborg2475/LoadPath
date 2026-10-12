@@ -221,6 +221,7 @@ constexpr double PileLambda = 0.5005;
 constexpr double PileLambdaTolerance = 1.0e-3;
 constexpr double WedgeToleranceDeg = 0.05;
 constexpr double ShedSecondsCeiling = 8.0;
+constexpr double ShedCapSiteSecondsCeiling = 6.5;
 constexpr double BoundaryWallLateral = 0.8;
 }
 
@@ -307,6 +308,17 @@ TEST_CASE("Slow.Certificate.Sparse.TheShedCertificateInsideItsBudget")
 	MESSAGE("shed certificate " << Result.State << " [" << Result.LoadFactorLower << ", " << Result.LoadFactorUpper << "] in " << Result.Iterations << " iterations, " << Seconds << " s");
 	CHECK(Result.State == CertificateState::Stands);
 	CHECK(Seconds <= ShedSecondsCeiling);
+}
+
+TEST_CASE("Slow.Certificate.CapSite.TheShedCertificateIsFasterThanTheDenseBlock")
+{
+	const Structure Model = Shed();
+	const Clock::time_point Start = Clock::now();
+	const CertificateResult Result = DecideWith(Model, CertificateOptions{});
+	const double Seconds = SecondsSince(Start);
+	MESSAGE("shed certificate " << Result.State << " [" << Result.LoadFactorLower << ", " << Result.LoadFactorUpper << "] in " << Result.Iterations << " iterations, " << Seconds << " s against " << ShedCapSiteSecondsCeiling << " s");
+	CHECK(Result.State == CertificateState::Stands);
+	CHECK(Seconds <= ShedCapSiteSecondsCeiling);
 }
 #endif
 
