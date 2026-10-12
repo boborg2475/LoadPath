@@ -190,7 +190,7 @@ TEST_CASE("Certificate.Mechanics.InvalidInputIsReportedWithNoInterfaceNamed")
 		std::vector<BodyLoad> Loads;
 		CertificateOptions Options;
 		Case.Arrange(S, Loads, Options);
-		const CertificateResult Result = MakeLimitAnalysisCertificate()->Decide(S.Model, Loads, Options);
+		const CertificateResult Result = MakeLimitAnalysisCertificate()->Decide(S.Model, Loads, Options, {});
 		INFO("state " << Result.State << ", named " << Result.InvalidInterface);
 		CHECK(Result.State == CertificateState::InvalidInput);
 		CHECK(SameHandle(Result.InvalidInterface, InterfaceId::Invalid()));
@@ -250,9 +250,9 @@ TEST_CASE("Certificate.Mechanics.RepeatedDecisionsAreBitIdentical")
 	{
 		INFO("case: " << doctest::String(Each.Name));
 		const std::unique_ptr<ICollapseCertificate> Certificate = MakeLimitAnalysisCertificate();
-		const CertificateResult First = Certificate->Decide(Each.Model, {}, Each.Options);
-		const CertificateResult Second = Certificate->Decide(Each.Model, {}, Each.Options);
-		const CertificateResult Fresh = MakeLimitAnalysisCertificate()->Decide(Each.Model, {}, Each.Options);
+		const CertificateResult First = Certificate->Decide(Each.Model, {}, Each.Options, {});
+		const CertificateResult Second = Certificate->Decide(Each.Model, {}, Each.Options, {});
+		const CertificateResult Fresh = MakeLimitAnalysisCertificate()->Decide(Each.Model, {}, Each.Options, {});
 		INFO("state " << First.State << ", load factors [" << First.LoadFactorLower << ", " << First.LoadFactorUpper << "]");
 		CHECK(First.State == Each.Expected);
 		CheckIdenticalResults(First, Second);

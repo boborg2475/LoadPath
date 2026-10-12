@@ -1248,12 +1248,21 @@ warehouse's elastic solve 59 s to 5.9 s, the 32 × 40 wall finishing in 24 s).
   within 1e-6 on Mechanism pairs, readings only on certified states), and
   `Statics.Sparse.AMechanismAboveTheLimitReadsTheSameAsBelowIt` pins a 630-DoF dry wall's
   Mechanism (105 moving bodies) across the limit.
-- `StandingResult` gains `Components` (bodies, state, iterations, the readings' indices), the
-  per-component answer the solver already computes, so `CombinedAuthority` stops copying the
-  structure per component for the elastic verdict. `ICollapseCertificate::Decide` gains a
-  component filter (`std::span<const BodyId>`; empty = whole structure) so the referee call
-  copies nothing either. `Structure` gains a cached component partition invalidated by every
-  mutating call, with `Components()` O(1) after the first query.
+- Done (stage 1b-ii, 2026-10-12): `StandingResult::Components` (`StandingComponent`: bodies in
+  partition order, the component's state and iterations, its reading slots; empty on
+  InvalidInput), the per-component answer the solver already computes, so `CombinedAuthority`
+  solves once and copies nothing. `ICollapseCertificate::Decide` takes a fourth argument, the
+  bodies whose components it decides (empty: all; loads outside them have no effect but are
+  still validated; any entry that is not a live free body reads InvalidInput, DESIGN §10).
+  `Structure::Components()` returns the cached `ComponentPartition`
+  (include/loadpath/ComponentPartition.h), reset by every successful AddBody, AddInterface,
+  RemoveBody, Crack and Sever; it is mutable state behind a const method, so one `Structure`
+  shared across threads is not safe to query concurrently (nothing in the library promised
+  that before either). Pinned by `Authority.Judge.SolvesTheElasticFieldOnceAndConsultsOnlyTheUndecided`,
+  `Statics.StandingResult.ReportsEveryComponent`, `Certificate.Decide.AComponentFilterReadsAsTheComponentAlone`,
+  `Structure.Components.IsCachedUntilAMutation` and the equivalence guard
+  `Authority.Judge.MatchesSolvingEachComponentAlone` (40 seeded multi-part structures, 161
+  components, Release).
 - `LimitAnalysisCertificate`: the IPM's normal-equation factor becomes `SimplicialLLT` on the
   sparse `A D Aᵀ` (the equilibrium matrix is 6 rows per body, a handful of columns per corner),
   dense below the same DoF limit. The arch, pile and wedge anchors must not move (0.107478,

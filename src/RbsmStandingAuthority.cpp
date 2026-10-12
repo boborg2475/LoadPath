@@ -182,7 +182,7 @@ Eigen::VectorXd RotationalScaling(const Problem& P)
 
 std::vector<Problem> BuildProblems(const Structure& Model, std::span<const BodyLoad> Loads, const StandingOptions& Options)
 {
-	const statics::ComponentPartition Partition = statics::PartitionFreeBodies(Model);
+	const ComponentPartition& Partition = Model.Components();
 	const std::vector<int>& OffsetOfSlot = Partition.OffsetOfSlot;
 	std::vector<Problem> Problems(Partition.FreeBodies.size() + 1);
 	for (std::size_t K = 0; K < Partition.FreeBodies.size(); ++K)
@@ -1003,6 +1003,10 @@ StandingResult SolveComponents(const std::vector<Problem>& Problems, std::size_t
 		Result.Mechanism.insert(Result.Mechanism.end(), Component.Mechanism.begin(), Component.Mechanism.end());
 		Result.UnconstrainedBodies.insert(Result.UnconstrainedBodies.end(), Component.UnconstrainedBodies.begin(), Component.UnconstrainedBodies.end());
 		Result.ActiveSetIterations = std::max(Result.ActiveSetIterations, Component.ActiveSetIterations);
+		if (!P.FreeBodies.empty())
+		{
+			Result.Components.push_back(StandingComponent{P.FreeBodies, Component.State, Component.ActiveSetIterations, P.ReadingSlots});
+		}
 	}
 	return Result;
 }

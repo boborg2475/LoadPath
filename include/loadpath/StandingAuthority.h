@@ -6,6 +6,7 @@
 #include "loadpath/Vec3.h"
 
 #include <array>
+#include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <span>
@@ -89,6 +90,16 @@ struct MechanismMotion
 	Vec3 RotationRad;
 };
 
+struct StandingComponent
+{
+	// Ascending slot order, as ComponentPartition::FreeBodies lists them.
+	std::vector<BodyId> Bodies;
+	StandingState State = StandingState::Undecided;
+	int ActiveSetIterations = 0;
+	// Indices into StandingResult::Readings of this component's interfaces.
+	std::vector<std::size_t> ReadingSlots;
+};
+
 struct StandingResult
 {
 	StandingState State = StandingState::Undecided;
@@ -97,6 +108,8 @@ struct StandingResult
 	// Every mechanism component, whatever the overall State; empty when no component is a mechanism.
 	std::vector<MechanismMotion> Mechanism;
 	std::vector<BodyId> UnconstrainedBodies;
+	// Ascending by lowest body slot; empty when State is InvalidInput.
+	std::vector<StandingComponent> Components;
 	int ActiveSetIterations = 0;
 	// Set when State is InvalidInput and an interface is the cause.
 	InterfaceId InvalidInterface;

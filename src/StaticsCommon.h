@@ -51,13 +51,7 @@ struct JointGeometry
 
 JointGeometry MakeJointGeometry(const Structure& Model, InterfaceId Id, const std::vector<int>& OffsetOfSlot);
 
-// Free bodies joined by a live interface share a component; grounded bodies join none and read -1 by slot.
-struct ComponentPartition
-{
-	std::vector<int> ComponentOfSlot;
-	std::vector<int> OffsetOfSlot;
-	std::vector<std::vector<BodyId>> FreeBodies;
-};
+using loadpath::ComponentPartition;
 
 ComponentPartition PartitionFreeBodies(const Structure& Model);
 

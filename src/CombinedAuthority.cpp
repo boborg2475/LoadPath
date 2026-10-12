@@ -28,12 +28,6 @@ bool SameGravity(const Vec3& A, const Vec3& B)
 	return A.X == B.X && A.Y == B.Y && A.Z == B.Z;
 }
 
-int ComponentOfBody(const statics::ComponentPartition& Partition, BodyId Body)
-{
-	const std::size_t Slot = static_cast<std::size_t>(Body.Index);
-	return Slot < Partition.ComponentOfSlot.size() ? Partition.ComponentOfSlot[Slot] : -1;
-}
-
 AuthorityResult Invalid(InterfaceId Interface)
 {
 	AuthorityResult Result;
@@ -65,37 +59,11 @@ public:
 		AuthorityResult Result;
 		Result.Readings = std::move(Whole.Readings);
 		Result.Worst = ComponentVerdict::Stands;
-		const statics::ComponentPartition Partition = statics::PartitionFreeBodies(Model);
-		for (std::size_t C = 0; C < Partition.FreeBodies.size(); ++C)
+		for (StandingComponent& Part : Whole.Components)
 		{
-			Structure Sub = Model;
-			for (std::size_t Other = 0; Other < Partition.FreeBodies.size(); ++Other)
-			{
-				if (Other == C)
-				{
-					continue;
-				}
-				for (const BodyId Body : Partition.FreeBodies[Other])
-				{
-					Sub.RemoveBody(Body);
-				}
-			}
-			std::vector<BodyLoad> SubLoads;
-			for (const BodyLoad& Load : Loads)
-			{
-				if (ComponentOfBody(Partition, Load.Body) == static_cast<int>(C))
-				{
-					SubLoads.push_back(Load);
-				}
-			}
-			const StandingResult Elastic = Standing->Solve(Sub, SubLoads, Options.Standing);
-			if (Elastic.State == StandingState::InvalidInput)
-			{
-				return Invalid(Elastic.InvalidInterface);
-			}
 			ComponentReport Report;
-			Report.Bodies = Partition.FreeBodies[C];
-			Report.Elastic = Elastic.State;
+			Report.Bodies = std::move(Part.Bodies);
+			Report.Elastic = Part.State;
 			Report.LoadFactorLower = std::numeric_limits<double>::quiet_NaN();
 			Report.LoadFactorUpper = std::numeric_limits<double>::quiet_NaN();
 			if (Report.Elastic == StandingState::Stands)
@@ -108,7 +76,7 @@ public:
 			}
 			else
 			{
-				Consult(Sub, SubLoads, Options.Certificate, Report);
+				Consult(Model, Loads, Options.Certificate, Report);
 				if (Report.bDisagreed)
 				{
 					++Result.Disagreements;
@@ -124,9 +92,9 @@ public:
 	}
 
 private:
-	void Consult(const Structure& Sub, std::span<const BodyLoad> SubLoads, const CertificateOptions& Options, ComponentReport& Report) const
+	void Consult(const Structure& Model, std::span<const BodyLoad> Loads, const CertificateOptions& Options, ComponentReport& Report) const
 	{
-		CertificateResult Kinematic = Certificate->Decide(Sub, SubLoads, Options);
+		CertificateResult Kinematic = Certificate->Decide(Model, Loads, Options, Report.Bodies);
 		Report.bConsultedCertificate = true;
 		Report.Kinematic = Kinematic.State;
 		Report.LoadFactorLower = Kinematic.LoadFactorLower;

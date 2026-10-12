@@ -54,10 +54,10 @@ public:
 	{
 	}
 
-	CertificateResult Decide(const Structure& Model, std::span<const BodyLoad> Loads, const CertificateOptions& Options) const override
+	CertificateResult Decide(const Structure& Model, std::span<const BodyLoad> Loads, const CertificateOptions& Options, std::span<const BodyId> Only) const override
 	{
 		++Calls;
-		return Inner->Decide(Model, Loads, Options);
+		return Inner->Decide(Model, Loads, Options, Only);
 	}
 
 private:

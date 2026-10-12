@@ -1,6 +1,7 @@
 #pragma once
 
 #include "loadpath/Body.h"
+#include "loadpath/ComponentPartition.h"
 #include "loadpath/Handles.h"
 #include "loadpath/Interface.h"
 #include "loadpath/Result.h"
@@ -8,6 +9,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <vector>
 
 namespace loadpath
@@ -54,6 +56,9 @@ public:
 	std::vector<InterfaceId> LiveInterfaces() const;
 	std::vector<InterfaceId> InterfacesOf(BodyId Id) const;
 
+	// Cached until the next AddBody, AddInterface, RemoveBody, Crack or Sever; repeated calls in between return the same object.
+	const ComponentPartition& Components() const;
+
 private:
 	struct BodySlot
 	{
@@ -76,5 +81,6 @@ private:
 	std::vector<InterfaceSlot> Interfaces;
 	// Tracked, never recomputed from records that removal may have rewritten.
 	std::uint32_t HighestStamp = 0;
+	mutable std::optional<ComponentPartition> CachedComponents;
 };
 }

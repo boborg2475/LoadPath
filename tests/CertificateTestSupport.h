@@ -51,7 +51,7 @@ inline CertificateOptions CertificateLateral(double LambdaX, double LambdaY = 0.
 
 inline CertificateResult DecideWith(const Structure& Model, const CertificateOptions& Options, std::span<const BodyLoad> Loads = {})
 {
-	return MakeLimitAnalysisCertificate()->Decide(Model, Loads, Options);
+	return MakeLimitAnalysisCertificate()->Decide(Model, Loads, Options, {});
 }
 
 inline bool CertificateStands(const Structure& Model, const CertificateOptions& Options)

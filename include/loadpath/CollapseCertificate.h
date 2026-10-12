@@ -56,7 +56,8 @@ class ICollapseCertificate
 {
 public:
 	virtual ~ICollapseCertificate() = default;
-	virtual CertificateResult Decide(const Structure& Model, std::span<const BodyLoad> Loads, const CertificateOptions& Options) const = 0;
+	// Only names bodies whose components are decided, as if no other component existed (empty: all); an entry that is not a live free body reads InvalidInput.
+	virtual CertificateResult Decide(const Structure& Model, std::span<const BodyLoad> Loads, const CertificateOptions& Options, std::span<const BodyId> Only) const = 0;
 };
 
 std::unique_ptr<ICollapseCertificate> MakeLimitAnalysisCertificate();

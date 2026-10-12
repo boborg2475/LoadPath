@@ -577,3 +577,18 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   not options, because no caller has a reason to move them. A zero or non-finite norm during
   the iteration rejects the factor. Skipping the estimate is caught only by the bridges (5
   trades against 1), a thin margin to note for the review.
+- *2026-10-12, orchestrator, stage 1b-ii opening:* **the judge solves the elastic field once;
+  the certificate takes a component filter; a bad filter is InvalidInput.** `StandingResult`
+  carries the per-component answer the solver already computes (bodies, state, iterations,
+  reading slots), so `CombinedAuthority::Judge` builds every report from one `Solve` and
+  copies the structure zero times; `ICollapseCertificate::Decide` gains a fourth argument,
+  the bodies whose components it decides (empty: all), consulted only for Mechanism and
+  Undecided components; `Structure::Components()` is the cached partition, invalidated by
+  every mutating call. A filter naming anything but a live free body (the ground, an unknown
+  or invalid id, a free body listed with the ground) reads InvalidInput: reading it as the
+  whole structure or dropping the entry would widen the question asked without the caller
+  knowing (the test-expert's choice, ratified). The equivalence guard
+  `Authority.Judge.MatchesSolvingEachComponentAlone` (40 seeded multi-part structures, 161
+  components) is green on arrival by construction and pins that the no-copy judge reads what
+  the copying judge read; its mutation record is a judge that reports the whole structure's
+  state for every component.

@@ -1,5 +1,7 @@
 #include "loadpath/Structure.h"
 
+#include "StaticsCommon.h"
+
 #include <algorithm>
 #include <cmath>
 #include <limits>
@@ -82,6 +84,7 @@ Result<BodyId> Structure::AddBody(const BodyDesc& Desc)
 		return {BodyId::Invalid(), ModelError::NegativeMass};
 	}
 	const BodyId Id{static_cast<std::uint32_t>(Bodies.size()), FirstGeneration};
+	CachedComponents.reset();
 	Bodies.push_back(BodySlot{Desc, true});
 	return {Id, ModelError::None};
 }
@@ -161,6 +164,7 @@ Result<InterfaceId> Structure::AddInterface(const InterfaceDesc& Desc)
 	Record.AreaM2 = 4.0 * Desc.HalfExtentUM * Desc.HalfExtentVM;
 	Record.Profile = Desc.Profile;
 	const InterfaceId Id{static_cast<std::uint32_t>(Interfaces.size()), FirstGeneration};
+	CachedComponents.reset();
 	Interfaces.push_back(InterfaceSlot{Record});
 	return {Id, ModelError::None};
 }
@@ -171,6 +175,7 @@ bool Structure::RemoveBody(BodyId Id)
 	{
 		return false;
 	}
+	CachedComponents.reset();
 	Bodies[Id.Index].bLive = false;
 	for (InterfaceSlot& Each : Interfaces)
 	{
@@ -189,6 +194,7 @@ bool Structure::Crack(InterfaceId Id, std::uint32_t Pass)
 		return false;
 	}
 	InterfaceRecord& Record = Interfaces[Id.Index].Record;
+	CachedComponents.reset();
 	Record.State = InterfaceState::Cracked;
 	Record.CrackPass = Pass;
 	HighestStamp = std::max(HighestStamp, Pass);
@@ -202,6 +208,7 @@ bool Structure::Sever(InterfaceId Id, std::uint32_t Pass)
 		return false;
 	}
 	InterfaceRecord& Record = Interfaces[Id.Index].Record;
+	CachedComponents.reset();
 	Record.State = InterfaceState::Severed;
 	Record.SeverPass = Pass;
 	HighestStamp = std::max(HighestStamp, Pass);
@@ -323,5 +330,14 @@ std::vector<InterfaceId> Structure::InterfacesOf(BodyId Id) const
 		}
 	}
 	return Ids;
+}
+
+const ComponentPartition& Structure::Components() const
+{
+	if (!CachedComponents)
+	{
+		CachedComponents = statics::PartitionFreeBodies(*this);
+	}
+	return *CachedComponents;
 }
 }

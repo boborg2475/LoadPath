@@ -192,9 +192,10 @@ Vec3 RelativeVelocity(const Site& S, const double* Y)
 	return Sub(PointVelocity(Y, S.OffsetB, S.ArmB), PointVelocity(Y, S.OffsetA, S.ArmA));
 }
 
-std::vector<Component> BuildComponents(const Structure& Model, std::span<const BodyLoad> Loads, const Vec3& Gravity)
+std::vector<Component> BuildComponents(const Structure& Model, std::span<const BodyLoad> Loads, const Vec3& Gravity, const std::vector<bool>& Chosen)
 {
-	const statics::ComponentPartition Partition = statics::PartitionFreeBodies(Model);
+	const ComponentPartition& Partition = Model.Components();
+	const auto IsChosen = [&](int K) { return Chosen.empty() || Chosen[static_cast<std::size_t>(K)]; };
 	std::vector<Component> Components(Partition.FreeBodies.size());
 	std::vector<std::vector<statics::JointGeometry>> Geometry(Components.size());
 	for (std::size_t K = 0; K < Components.size(); ++K)
@@ -206,7 +207,7 @@ std::vector<Component> BuildComponents(const Structure& Model, std::span<const B
 	{
 		const InterfaceRecord& Record = Model.Interface(Id);
 		const int K = statics::ComponentOf(Partition, Record);
-		if (K < 0)
+		if (K < 0 || !IsChosen(K))
 		{
 			continue;
 		}
@@ -231,6 +232,10 @@ std::vector<Component> BuildComponents(const Structure& Model, std::span<const B
 	std::vector<Eigen::VectorXd> Applied(Components.size());
 	for (std::size_t K = 0; K < Components.size(); ++K)
 	{
+		if (!IsChosen(static_cast<int>(K)))
+		{
+			continue;
+		}
 		Component& C = Components[K];
 		C.LengthM = statics::CharacteristicLengthM(Geometry[K]);
 		Applied[K] = Eigen::VectorXd::Zero(C.Rows);
@@ -245,7 +250,7 @@ std::vector<Component> BuildComponents(const Structure& Model, std::span<const B
 	for (const BodyLoad& Load : Loads)
 	{
 		const int K = Partition.ComponentOfSlot[Load.Body.Index];
-		if (K < 0)
+		if (K < 0 || !IsChosen(K))
 		{
 			continue;
 		}
@@ -257,6 +262,10 @@ std::vector<Component> BuildComponents(const Structure& Model, std::span<const B
 	}
 	for (std::size_t K = 0; K < Components.size(); ++K)
 	{
+		if (!IsChosen(static_cast<int>(K)))
+		{
+			continue;
+		}
 		Component& C = Components[K];
 		if (!(C.ForceScaleN > 0.0))
 		{
@@ -1631,13 +1640,33 @@ int Severity(CertificateState State)
 	return 3;
 }
 
+bool ChooseComponents(const Structure& Model, std::span<const BodyId> Only, std::vector<bool>& Chosen)
+{
+	if (Only.empty())
+	{
+		return true;
+	}
+	const ComponentPartition& Partition = Model.Components();
+	Chosen.assign(Partition.FreeBodies.size(), false);
+	for (const BodyId Id : Only)
+	{
+		if (!Model.IsLive(Id) || Model.Body(Id).bGrounded)
+		{
+			return false;
+		}
+		Chosen[static_cast<std::size_t>(Partition.ComponentOfSlot[Id.Index])] = true;
+	}
+	return true;
+}
+
 class LimitAnalysisCertificate final : public ICollapseCertificate
 {
 public:
-	CertificateResult Decide(const Structure& Model, std::span<const BodyLoad> Loads, const CertificateOptions& Options) const override
+	CertificateResult Decide(const Structure& Model, std::span<const BodyLoad> Loads, const CertificateOptions& Options, std::span<const BodyId> Only) const override
 	{
 		CertificateResult Result;
-		if (!IsInputValid(Model, Loads, Options))
+		std::vector<bool> Chosen;
+		if (!IsInputValid(Model, Loads, Options) || !ChooseComponents(Model, Only, Chosen))
 		{
 			Result.State = CertificateState::InvalidInput;
 			return Result;
@@ -1645,8 +1674,14 @@ public:
 		Result.State = CertificateState::Stands;
 		Result.LoadFactorLower = Options.LoadFactorCap;
 		Result.LoadFactorUpper = Options.LoadFactorCap;
-		for (const Component& C : BuildComponents(Model, Loads, Options.Gravity))
+		const std::vector<Component> Components = BuildComponents(Model, Loads, Options.Gravity, Chosen);
+		for (std::size_t K = 0; K < Components.size(); ++K)
 		{
+			if (!Chosen.empty() && !Chosen[K])
+			{
+				continue;
+			}
+			const Component& C = Components[K];
 			const ComponentVerdict V = DecideComponent(C, Options);
 			if (Severity(V.State) > Severity(Result.State))
 			{

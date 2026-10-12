@@ -136,9 +136,26 @@ cheap `Measure.Scale.*` rows after them); the `Deferred.*` tier holds the physic
    is deterministic across Release runs (Eigen single-threaded here); a Mechanism draw's
    readings differ by up to 0.79 relative between the two factors (printed, not asserted);
    the budget bound of 1.0 s on the 16 × 20 wall is a timing assertion on this machine.
-   **Next: stage 1b** sparse above a DoF limit plus no per-component copies, then stage 2
-   the event region, panels contingent; the `Measure.Scale.*` rows re-run after each stage
-   into SCALE.md.
+   **Stage 1b-i, the sparse path: green, in review (2026-10-12, HEAD 0d13a29).**
+   `StandingOptions::DenseDofLimit` (600; the largest default-suite component is 510 DoF);
+   above it a sparse `SimplicialLDLT` under AMD, accepted only when the factor succeeds, every
+   pivot is finite and above tolerance, and five inverse iterations put the Rayleigh quotient
+   above `PivotToleranceRelative × max |D|`; anything else is redone through the blocked dense
+   factor (DESIGN §10: the unpivoted pivot test alone missed five rank-17 bridges in 1,000).
+   The 32 × 40 wall solves in 0.19 s (was 24.8 s dense). Open from the round: the
+   eigenvalue-estimate mutation is caught only by the bridges at 5 trades against a budget of
+   1 (thin); the agreement property's 24 walls yield only 4 certified draws (most dry and
+   lime walls under λ up to 0.5 read Mechanism or Undecided), so the wall half does little
+   work on readings; one bridge (draw 443) still trades Mechanism/Undecided between the paths
+   by rounding drift on a 30-iteration path, inside budget; the five iterations and margin 1
+   are the smallest pair measured, nothing separated the nine pairs swept.
+   **Stage 1b-ii, per-component results and no copies: green (2026-10-12), awaiting the
+   stage 1b review.** One `Solve` per judge, the certificate consulted through a component
+   filter on the original structure, `Structure::Components()` cached. Open: the cache is
+   mutable state behind a const method (one `Structure` queried from two threads races; no
+   thread-safety promise exists anywhere in the library, log it when one is made).
+   **Next: 1b-iii the certificate's sparse normal equations, then stage 2 the event region,
+   panels contingent; the `Measure.Scale.*` rows re-run after each stage into SCALE.md.
  **Slice 8,
    the Unreal adapter, is on hold by owner directive (2026-10-11): do not start it.** The
    remaining slice-2 anchors (item 2) can run alongside slice 6.
