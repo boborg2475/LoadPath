@@ -424,3 +424,17 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   tension over a zero tensile capacity read +inf, so every wall on the lime-mortar row
   (cohesion, no tension) read Overstressed at rest, the very class the slice was opened to
   remove, and one that would feed the cascade's crack band.
+- *2026-10-11, orchestrator, slice 6 opening:* **measure before designing.** Every cost item
+  logged so far (the combined authority's per-component copies, the cascade's quadratic scans,
+  the dense per-component LDLT, the certificate's interior point) is a guess until timed on
+  structures ten and a hundred times the fixtures, so slice 6 opens with 6a (API.md): a
+  warehouse generator built only from the slice-5 pieces (four separate running-bond walls, a
+  post-and-beam frame on the C24 bearing row, planks on fastener rows, one ground), and
+  `Slow.Scale.*` rows that time the elastic authority, the certificate, the combined judge and
+  one cascade pass at five sizes from the 85-brick wall to a 3,700-piece warehouse, asserting
+  only what is already promised (Stands at rest, determinism, a hang ceiling). The table goes
+  to `claude_plans/SCALE.md` with the machine named; 6b (sparse factorisation behind the same
+  `IStandingAuthority`, an event region that re-solves only what a change touched, panels that
+  keep an uncracked bonded run as one body) is contracted against those numbers, not before
+  them. The generator is a producer above the engine like the wall (DESIGN §2.1): no solver
+  code includes it. Slice 8, the Unreal adapter, is on hold by owner directive (2026-10-11).
