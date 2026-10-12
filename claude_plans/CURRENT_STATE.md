@@ -32,9 +32,10 @@ stacks, Paterson–Zwick, Couplet–Heyman at Milankovitch's 0.107478 with hinge
 the certificate's associative 31.07°, the cascade on the arch below least thickness, the dry
 wall at t / H within 1 % (10 × 8 and 4 × 5), the bonded 4 × 5 wall at its monolith factor
 `(t/H)(1 + f_t A_base / W) = 2.971` to 1 %, two screws at twice their published shear and
-withdrawal whatever the joint area. Default suite 306 cases in Debug and 322 in Release (the
-arch, pile, arch-cascade, fuzz, small-wall and multi-panel factor anchors run only in Release
-under `LOADPATH_SLOW_IN_DEBUG`; six `Slow.*` cases run in Release at every slice close, and the
+withdrawal whatever the joint area. Default suite 319 cases in Debug and 338 in Release at
+722c41b, plus the stage-3c red tests (the arch, pile, arch-cascade, fuzz, small-wall and
+multi-panel factor anchors run only in Release under `LOADPATH_SLOW_IN_DEBUG`; ten `Slow.*`
+cases run in Release at every slice close, and the
 cheap `Measure.Scale.*` rows after them); the `Deferred.*` tier holds the physical wedge pin
 (slice 7) and the two hanging-component cases (slice 6), red by design. The design brief
 ([DESIGN.md](DESIGN.md)) has every §9 question decided and §10 carries the slice-2, 3, 4a, 4b,
@@ -212,14 +213,23 @@ cheap `Measure.Scale.*` rows after them); the `Deferred.*` tier holds the physic
    nothing in the library. The three asked-for tests landed in f872105 (the sparse timing
    subject is now a 310-body wall, ratio 0.42–0.47 against a 0.67 threshold).
    **Stage 3, the certificate at scale (DESIGN §10 "stage 3 opening", API.md "6b, stage 3",
-   SCALE.md profile).** 3a, the structured cap-site factor: green and merged (2623138), in
-   cold review; shed 6.65 s to 4.4 s, the 32 × 40 wall 107 s to 92 s; the Slow ratio test
-   sits at 0.85 against a measured 0.66–0.75 and may still flake under heavy load. 3b, the
-   stall rule: red tests committed, dev in progress. Then 3c the coupling out of the factor
-   (bordered system), 3d a verdict-only option last; panels contingent; the `Measure.Scale.*`
-   rows re-run after each stage into SCALE.md. The stage-2 fix round (lineage token, option
-   validation in Judge) is merged and in its follow-up review. Then the 6b close: remove
-   `FactorKind::Reference`, the overview artifact, the Slow tier and cheap Measure rows.
+   SCALE.md profile).** 3a, the structured cap-site factor: green and merged (2623138); the
+   cold review (DESIGN §10 "stage 3a rulings from the cold review") found the algebra exact
+   and the code sound, and sent it back on tests and docs; the fix round runs on branch
+   `stage-3a-fix` (four new kinds, corrected mutation records, the shed ratio test in the
+   order D, S, S, D). Deferred from that review: the structured `SolveNormal` cap loop
+   allocates a temporary per site per solve and is slower than the dense loop (1.70 s against
+   1.05 s on the shed; `SolveInto` into a per-site scratch should recover about 1 s); `ShedSpec`
+   exists three times in the tests (CertificateSparseTest, ScaleMeasurementTest,
+   GeometryWarehouseTest) and wants a shared fixture header; an out-of-range `CapSiteKind`
+   selects Dense without validation; there is no regularised retry at the cap-site level, so
+   one site's rounding failure reads the component Undecided (pre-existing, rarer now).
+   3b, the stall rule: green (722c41b), in cold review. 3c, the coupling out of the factor
+   (bordered system): red tests committed (83b05bb), dev in progress. Then 3d a verdict-only
+   option last; panels contingent; the `Measure.Scale.*` rows re-run after each stage into
+   SCALE.md. Then the 6b close: remove the three referees `FactorKind::Reference`,
+   `CapSiteKind::Dense` and `CouplingKind::InFactor`, the overview artifact, the Slow tier
+   and cheap Measure rows.
  **Slice 8,
    the Unreal adapter, is on hold by owner directive (2026-10-11): do not start it.** The
    remaining slice-2 anchors (item 2) can run alongside slice 6.

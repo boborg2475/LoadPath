@@ -677,12 +677,16 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   `diag(D_facet) + Facets · K′ · Facetsᵀ` with K′ 3 × 3, and factors that by a stable
   rank-3 update (a Cholesky rank update, or a 3 × 3 core formed without inverting the
   diagonal); the tolerances stand (backward 1e-12, forward max(1e-10, 1e-14 κ), Schur 1e-10
-  of ‖K3‖). Positivity: the structured factor reports exactly the dense verdict on every
-  finite input, including a zero facet slack whose facet still sees a direction (positive),
-  and fails closed on a NaN slack, which Eigen's `info()` lets through. The dense block stays
+  of ‖K3‖). Positivity: the structured factor reports the dense verdict on every finite input
+  up to a condition number of about 1e13, including a zero facet slack whose facet still sees
+  a direction (positive), and fails closed on a NaN slack, which Eigen's `info()` lets
+  through. (Narrowed by the cold review, 2026-10-12: past κ ≈ 1e16 both factors are
+  rounding-limited on exactly positive definite matrices and disagree in 4–30 % of cases,
+  the structured one failing less often; both fail closed to Undecided, never a false
+  Stands.) The dense block stays
   behind `CertificateOptions::CapSiteKind { Dense, Structured }` (default Structured) for one
   slice as the referee, so the Slow timing test is a same-process ratio (structured at most
-  0.8 of dense on the shed) rather than the 6.5 s ceiling the brief asked for, which the
+  0.85 of dense on the shed; the bar moved from 0.8 at the merge, measured 0.68–0.80) rather than the 6.5 s ceiling the brief asked for, which the
   timing-test ruling forbids; both referees (`FactorKind::Reference`, `CapSiteKind::Dense`)
   go at the 6b close.
 - *2026-10-12, orchestrator, stage 2 second amendment (from the cold review):* **a verdict
@@ -721,8 +725,8 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   Measured on the shed: 7.09 s dense against 5.34 s structured (0.69–0.75 over four runs),
   far short of the profile's 5–10× on the cap-site share, because the structured factor
   still spends half its time copying constant geometry per iteration and allocating small
-  dynamic matrices; the follow-up caches the geometry per component. The 32 × 40 wall read
-  119 s with no dense comparison yet.
+  dynamic matrices; the follow-up (dcb9086) cached the geometry per component. The 32 × 40
+  wall read 106.8 s dense against 92.4 s structured.
 - *2026-10-12, orchestrator, stage 2 fix round (merged):* ratified from the dev
   round: the standing option conditions live in one shared `statics::AreStandingOptionsValid`
   used by both `FindInvalidInput` and `Judge`'s first guard; a non-finite standing gravity
@@ -769,3 +773,16 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   option-field comparisons and a force-only load change unpinned (each a surviving mutant),
   and the certificate-option checks pinned only without a Previous; all in the second fix
   round.
+- *2026-10-12, orchestrator, stage 3a rulings from the cold review (2623138):* the algebra
+  is exact (Schur complement, structured `F`, group pivots bit-identical to dense; 40,000
+  harness cases, 3,111 suite calls under each kind with no state or count difference, nothing
+  past 1e-9 relative) and the dense path is bit-identical to 77e2be7 on 113 of 113 comparable
+  tests. The code needs no change. Sent back on tests: the group-pivot guard and the
+  mean's `Total > 0` guard survive removal, the ruling's zero-slack case is not enumerated,
+  the 12-fixture guard's mutation records describe the dense path, and the shed ratio test's
+  fixed order D, S lands any load change on one side (fix round `stage-3a-fix`: kinds TS1–TS4,
+  records TS5, order D, S, S, D with the minimum per kind). Deferred to CURRENT_STATE: the
+  structured `SolveNormal` cap loop allocates a temporary per site per solve and is slower
+  than dense (1.70 s against 1.05 s on the shed, about 1 s recoverable with `SolveInto` into a
+  scratch); three copies of `ShedSpec` in the tests; an out-of-range `CapSiteKind` selects
+  Dense unvalidated; no regularised retry at the cap-site level (pre-existing).
