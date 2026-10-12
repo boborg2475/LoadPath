@@ -705,3 +705,29 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   a ground contact added to a loose brick), pinned in the fix round. Measured by the review
   on the warehouse: a judge with Previous after one post removed is 317 ms against 558 ms
   fresh (4 of 5 reused), of which the frame's own certificate is about 225 ms.
+- *2026-10-12, orchestrator, stage 3a rulings from the dev round (branch, pending merge):*
+  **the 3 × 3 core is formed as a sum of PSD terms, the facet block is factored dense, and
+  the structured path caches `Mww⁻¹Fᵀ` per site.** The core
+  `K′ = Σ_J D_J (d_J − m_W)(d_J − m_W)ᵀ + Σ_W (T_W · gs_W / P_W) m_W m_Wᵀ` (m_W the D-weighted
+  mean direction of group W, T_W its weight sum, P_W its pivot) is the ruling's subtraction
+  form rewritten so nothing cancels; measured backward error 1.45e-16 over 200 cases at κ up
+  to 4e12. Eigen's `LLT::rankUpdate` divides by the running diagonal, which is exactly zero
+  for a zero facet slack, so the 16 × 16 facet block `diag(D_facet) + Facets K′ Facetsᵀ` takes
+  a plain dense LLT instead: the ruling's concern was never inverting a tiny diagonal, and
+  this route does not. `Mww⁻¹Fᵀ` is cached per site so `SolveNormal` does one cap solve per
+  site instead of two; without the cache the structured path was slower than the dense one
+  (solve time 1.9 s to 3.0 s on the shed). The guard's 12 fixtures keep their iteration
+  counts; load factors move by at most 3e-13 relative (ec6 4 × 4) from the changed rounding.
+  Measured on the shed: 7.09 s dense against 5.34 s structured (0.69–0.75 over four runs),
+  far short of the profile's 5–10× on the cap-site share, because the structured factor
+  still spends half its time copying constant geometry per iteration and allocating small
+  dynamic matrices; the follow-up caches the geometry per component. The 32 × 40 wall read
+  119 s with no dense comparison yet.
+- *2026-10-12, orchestrator, stage 2 fix round (branch, pending merge):* ratified from the dev
+  round: the standing option conditions live in one shared `statics::AreStandingOptionsValid`
+  used by both `FindInvalidInput` and `Judge`'s first guard; a non-finite standing gravity
+  needs no separate check in `Judge` because the gravities must match and the certificate's
+  must be finite; interface stiffness and load checks stay with `Solve`, since a bad
+  stiffness is reached only through a touched body; the lineage counter is a process-wide
+  atomic starting at 1, copy assignment guarded against self-assignment, and an InvalidInput
+  result carries the judged structure's lineage like any other.
