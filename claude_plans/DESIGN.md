@@ -982,3 +982,33 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   swept over 1e300 to DBL_MAX on the big pair and a ×40 wall remainder at `DenseDofLimit` 600
   and 0) now pins in place of the two absolute stiffness pins. The Slow remainder bar drops
   from 2.0 s to 30 ms, red at 70 ms today and 3× above the expected cost.
+- *2026-10-12, orchestrator, carried from 6b, item 3 red step note:* the agreement sweep on
+  685a5be agrees at all 100 points for both fixtures, three modes and both limits; the big
+  pair crosses to InvalidInput between 3.18e304 and 3.85e304 Pa/m in the (k, k) and (1e9, k)
+  modes and between 6.86e304 and 8.31e304 in (k, 1e9); the ×40 wall remainder between
+  1.22e305 and 1.48e305, and 2.17e305 and 2.63e305. The band the second fix round named
+  (3.6e304 to 1.45e305) was the disagreement band of the old scale-then-sum check on the
+  big pair, not a fixture's crossing. The test runs in 0.5 s and stays in the default tier.
+- *2026-10-12, orchestrator, carried from 6b, item 2 amendment (the judge is quadratic in the
+  component count):* with the cascade's own scans indexed (9af35b7: `Release` and `CrackBand`
+  10 ms at 8,000 floating pairs), the ratio test stayed red at 15 to 17× because
+  `CombinedAuthority::Judge` costs 483 ms at 2,000 components and 6.2 s at 8,000. The opening
+  said the judge was linear in K; it is not. The elastic side is (one `Solve` per judge since
+  stage 2), but the combined authority consults the certificate **once per component** whose
+  elastic state is neither Stands nor Overstressed, and every `Decide` call validates the
+  whole input, sizes its tables to every component and walks every live interface before
+  deciding the one component asked for: O(K · (I + K)) over a judge. **Ruling: one `Decide`
+  per judge, with per-component results, as the elastic authority already does.**
+  `CertificateResult` gains `Components`: for each decided component in partition order, its
+  bodies, state, load-factor bounds, iterations, mechanism, unconstrained bodies and hinging
+  interfaces; the aggregate fields keep their meaning (worst state, smallest bounds, largest
+  iteration count, concatenations) so `DecideWith` and every certificate anchor read as
+  before. The combined authority collects the dirty components that need the certificate,
+  calls `Decide` once with their bodies as `Only`, and fills each report from its entry; a
+  global InvalidInput (invalid input or an unusable `Only`) reads InvalidInput on every
+  consulted report, as the per-component calls read it. The existing event-region pins (one
+  `Decide` with the dirty component's bodies) hold, since they have one dirty component.
+  `FindClean` compares every component against every previous report (quadratic on warm
+  judges); it is indexed by front body in the same change only if the dev measures it on the
+  pair field, otherwise logged. The ratio test is the measurement; a counting certificate pins
+  the call count on a many-component structure.
