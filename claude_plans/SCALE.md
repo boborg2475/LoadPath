@@ -310,7 +310,7 @@ a fold.
 | Structure | Judge, cold | Cascade: base course | Cascade: post removed, cold |
 |---|---|---|---|
 | Wall 40 × 32 | 197 ms | **16 ms** (was 110) | |
-| Half warehouse | 158 ms | **125 ms** (was 163) | 216 ms |
+| Half warehouse | 158 ms | **125 ms** (was 163) | 216 ms, one run; the reviewer read 266 to 274 ms at HEAD against 237 to 269 ms before, so this cell is noise, not a change |
 | Warehouse | 553 ms | **314 ms** (was 512) | 632 ms |
 | 2,000 floating pairs | | **15 ms** (was 575) | |
 | 8,000 floating pairs | | **67 ms** (was 8,833) | |

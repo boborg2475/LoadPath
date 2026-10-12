@@ -156,11 +156,8 @@ cheap `Measure.Scale.*` rows after them); the `Deferred.*` tier holds the physic
      `Statics.Ungrounded.ATinyGravityStillFallsAlongIt` then wants its judge pinned to
      Collapses); the shortcut assembles and scales a sparse stiffness only to test finiteness
      (about 65 ms on the 1,256-brick remainder; a fold over `ForEachStiffnessBlock` that sums
-     then scales per entry would avoid it, and the overflow test's two absolute stiffness
-     pins at 5e304 and 1e305 sit 1.4× above the dense overflow onset, so that change should
-     replace them with the agreement property: the unloaded solve reads InvalidInput exactly
-     when the same structure with a 1 N push does, swept over 1e300 to DBL_MAX on the big pair
-     and a ×40 wall remainder at `DenseDofLimit` 600 and 0, the reviewer's lp_revL probe);
+     then scales per entry avoids it: done as item 3, in review 2026-10-12, with the
+     agreement sweep in place of the absolute pins);
    - sparse elastic path: the pivot test is pinned by no mutant once the estimate exists; the
      estimate's constructed adversary (a soft mode orthogonal to the ±1 start with a second
      mode within 10³) accepts at λ_min 1e-3 of the bar (worst consequence a 1e-3 equilibrium
@@ -211,11 +208,14 @@ cheap `Measure.Scale.*` rows after them); the `Deferred.*` tier holds the physic
      needs a minimum rotation is still open, and this is the measurement against it;
    - the mechanism selection ignores finite positive shear caps (harmless at `t* = 0`; for
      `0 < t* < 1e-9` it reads Undecided, which fails closed);
-   - the cascade's scans
-     are quadratic (`IndexOf`/`Contains`, union-find without path compression, the release
-     scanning every interface per cluster, `FindReading` O(I) per sever, the crack band
-     O(K·I·|component|)): the RBSM's per-component states are exposed since 1b-ii; the
-     cascade's own scans are still to be indexed;
+   - in its fix round 2026-10-12 (97a2ff9 plus the cold-review rulings in DESIGN §10 "carried
+     from 6b, items 2 and 3 cold-review rulings": capped entry bounds, per-component release
+     marks, the crack band bucketed, the no-entries certificate): the cascade's release scans
+     and `RemoveBody` are indexed (the crack band is in the fix round), the
+     combined authority consults the certificate once per judge through
+     `CertificateResult::Components`, and the ungrounded shortcut's finiteness check is a
+     fold; 8,000 floating pairs cascade in 67 ms (was 8.8 s), the warehouse base course in
+     314 ms (was 512), the 40 × 32 wall's in 16 ms (was 110) (SCALE.md);
    - the per-component certificate InvalidInput branch in CombinedAuthority.cpp is
      unreachable today: fail closed, untested;
    - a cap-0 corner on the inscribed side still uses the inner tension offset min(ft, c/μ):

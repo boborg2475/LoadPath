@@ -981,7 +981,9 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   `Probe.SweepSmall`: the unloaded route reads InvalidInput exactly when the pushed route does,
   swept over 1e300 to DBL_MAX on the big pair and a ×40 wall remainder at `DenseDofLimit` 600
   and 0) now pins in place of the two absolute stiffness pins. The Slow remainder bar drops
-  from 2.0 s to 30 ms, red at 70 ms today and 3× above the expected cost.
+  from 2.0 s to 30 ms, red at 70 ms today and 3× above the expected cost. (Green step: the
+  fold measured 14 to 17 ms on a loaded machine and 11 ms quiet, so the bar was set at 50 ms,
+  3× the loaded reading; recorded in ANCHORS.)
 - *2026-10-12, orchestrator, carried from 6b, item 3 red step note:* the agreement sweep on
   685a5be agrees at all 100 points for both fixtures, three modes and both limits; the big
   pair crosses to InvalidInput between 3.18e304 and 3.85e304 Pa/m in the (k, k) and (1e9, k)
@@ -1012,3 +1014,32 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   judges); it is indexed by front body in the same change only if the dev measures it on the
   pair field, otherwise logged. The ratio test is the measurement; a counting certificate pins
   the call count on a many-component structure.
+- *2026-10-12, orchestrator, carried from 6b, items 2 and 3 cold-review rulings (of 97a2ff9):*
+  the review's differential over 964 judges found every cluster, sever, failure, stamp,
+  reading, verdict and `InterfacesOf` list identical to 685a5be, the fold's decision
+  bit-identical to the dense check over 72 fixture combinations, and four defects. **(1) A
+  `CertificateComponent` carries capped bounds**, `min(LoadFactorCap, ·)` on both, as the
+  aggregate always did; the entries were carrying the raw solve values, a hair above the cap
+  on ten of the differential's reports (the 1e-9 comparisons hid it). The judge-against-alone
+  property compares bounds exactly and asserts every entry at or below the cap, with a cap of
+  1.2 as well as the default. **(2) `Release` marks positions and hinges per component**, not
+  across the pass: with the marks shared, an interface from one component's released body to
+  another component's released body (impossible from the shipped authority, reachable through
+  the public seam) indexed the wrong union-find array and merged bodies across components. The
+  answer is the old one: such an interface is skipped and each body stays its own cluster. The
+  tables are built once and cleared per component, so the cost stays linear. **(3)
+  `CrackBand` buckets the readings by component in one sweep** through a component-of-body
+  table (a reading belongs to the component of its free body; an interface cannot span two free
+  components; order within a component is the reading order), replacing the per-component
+  scan of every reading: a field of K Overstressed single bricks read 14.9× from K to 4K. A
+  Slow ratio test pins it at the 8× bar. **(4) A certificate that returns no `Components`
+  entries is non-conforming and reads InvalidInput on every consulted report**, the judge's
+  worst InvalidInput and the cascade InvalidInput with no clusters; a component that did not
+  consult it keeps its verdict. Pinned through a wrapper certificate that clears the entries.
+  Logged, not fixed: the pass-loop load filter and `MotionOf` are linear searches (O(loads ×
+  released) and O(clusters × mechanism) per pass); `FindClean` and the report index call
+  `front()` on a previous report's bodies, undefined for a forged empty list; an
+  association-order mutant in the fold, `d_i·(K·d_j)`, survives the sweep and the review's
+  exact bisection (the two orders agree to the last bit on every fixture tried, so there is
+  nothing to pin); the fold test could adopt the review's exact-edge bisection with a
+  twin-joint pair and a six-brick slab.

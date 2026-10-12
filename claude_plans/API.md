@@ -496,6 +496,17 @@ struct CertificateResult {
 	std::vector<InterfaceId> HingingInterfaces;    // interfaces the selected mechanism moves (kinematic)
 	int Iterations = 0;                            // maximum over components
 	InterfaceId InvalidInterface{};
+	std::vector<CertificateComponent> Components;  // one per decided component in partition order, its Bodies as the partition lists them; empty on InvalidInput (carried from 6b, item 2 amendment)
+};
+
+struct CertificateComponent {                  // one decided component's verdict: the fields mean what CertificateResult's aggregate fields mean, restricted to its bodies; bounds capped at LoadFactorCap
+	std::vector<BodyId> Bodies;
+	CertificateState State;
+	double LoadFactorLower, LoadFactorUpper;
+	int Iterations;
+	std::vector<MechanismMotion> Mechanism;
+	std::vector<BodyId> UnconstrainedBodies;
+	std::vector<InterfaceId> HingingInterfaces;
 };
 
 class ICollapseCertificate {
