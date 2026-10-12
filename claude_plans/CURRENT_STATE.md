@@ -212,3 +212,12 @@ carries the slice-2, 3, 4a and 4b rulings.
   says so); the nail row's withdrawal 0.42 kN is the 3.1 mm nail's datum on a 4.0 mm nail row
   (noted); the timber bearing friction 0.3 is the Wood Handbook range's low end matched through
   a search snippet, the PDF host unreachable from here: open it and confirm the sentence.
+- **The elastic authority never settles on the dry 10 × 8 running-bond wall** (85 bricks, 227
+  joints, μ 0.7, gravity only; measured 2026-10-11 on the slice-5b generator): Undecided after
+  50, 200 and 1000 active-set passes alike, so the cap is not the cause; the free active set
+  cycles or creeps. The combined authority reads Stands through the certificate, and the host
+  is safe (fail-closed), but a realistic wall should certify elastically: a readout per joint
+  is what slice 3's crack round needs, and an Undecided wall gets no crack round at all. Owed:
+  find the smallest wall that fails to settle (a `Deferred.Slice6.*` case pins it), characterise
+  the pass trajectory (which corners flip), and rule between a damped active set, a settled-only
+  acceptance, or the RBSM reference's R26 amendments from the old project.
