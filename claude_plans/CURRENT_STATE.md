@@ -32,7 +32,7 @@ stacks, Paterson–Zwick, Couplet–Heyman at Milankovitch's 0.107478 with hinge
 the certificate's associative 31.07°, the cascade on the arch below least thickness, the dry
 wall at t / H within 1 % (10 × 8 and 4 × 5), the bonded 4 × 5 wall at its monolith factor
 `(t/H)(1 + f_t A_base / W) = 2.971` to 1 %, two screws at twice their published shear and
-withdrawal whatever the joint area. Default suite 347 cases in Debug and 370 in Release after
+withdrawal whatever the joint area. Default suite 349 cases in Debug and 375 in Release after
 slice 2d (325 and 347 at the 6b close) (the arch, pile, arch-cascade, fuzz, small-wall and multi-panel factor anchors
 run only in Release under `LOADPATH_SLOW_IN_DEBUG`; fourteen `Slow.*` cases run in Release at
 every slice close, and the
@@ -50,19 +50,24 @@ the non-associative answer) and the two hanging-component cases (slice 6), red b
    2 × floor, a closed tensionless corner inside the band reports N 0, a non-finite force scale
    reads Undecided. Every dry wall at rest, 1 × 3 to 10 × 8, settles in two iterations; the
    lime-mortar (cohesion, no tension) walls Stand at rest. Open items, none host-unsafe:
-   - **slice 2d, in cold review 2026-10-12 (c4a372a; DESIGN §10 "slice 2d opening")**: the
-     laterally loaded dry walls read Undecided because a re-closing corner carried its
+   - **slice 2d, done 2026-10-12 (c4a372a, closed at 1b1e655 after a cold review; DESIGN §10
+     "slice 2d opening", "dev notes", "cold-review rulings")**: the laterally loaded dry walls
+     read Undecided because a re-closing corner carried its
      built-up slip as elastic shear and was reopened; a slip-releasing corner that re-closes
      above μN now enters Slipping at the cap, and the 160-point grid all Stands (mean 8.1
      iterations, worst 30) with zero oracle refutations; the pins were regenerated under the
      pins ruling. Left from the round: the grid test runs the oracle on all 160 Stands and
-     takes 6.5 min (`Slow.`, the oracle, not the solves; the review's split is in the fix
-     round); the mutant "apply the rule to cohesive corners too" is caught by the lime-wall
+     is split: the convergence half with the own-field check runs in the default tier
+     (2.2 s Release, `LOADPATH_SLOW_IN_DEBUG`), the NNLS on a 24-point subset in `Slow.` (61 s);
+     the own-field property re-derives every pinned Stands from its readings in 1 s; the mutant "apply the rule to cohesive corners too" is caught by the lime-wall
      scope test (e4366ec); the regeneration's oracle audit's one CannotStand among 1,420 old
      Stands is the 8 × 10 ec6 wall under λ (0, 0.5), a bonded wall the compression-only NNLS
      oracle cannot model (the field is sound; the oracle gains a scope guard in the fix round);
      the 50-iteration cap is close near the stability limit, not at size (random dry walls at
-     μ 0.99 and λ (0.38, 0.28) took 46; over the cap fails closed to Undecided); the restore-step Undecideds below are now more
+     μ 0.99 and λ (0.38, 0.28) took 46; over the cap fails closed to Undecided); under the scope mutant the lime fuzz also
+     reddened on a bonded ec6 stack of 5 (seed 300281570), which means a corner of a joint with
+     effective cohesion re-closed with trial shear above μN: check whether that joint was
+     Cracked (effective tension zero, cohesion zero, so legitimately slip-releasing) or intact; the restore-step Undecideds below are now more
      visible (145 of the 196 Mechanism-to-Undecided pin trades); **the same cycle hits
      cohesive tensionless (lime-mortar) perpends**: the 4 × 5 lime wall at λx 0.8, the 5 × 5 at
      0.8 and the 10 × 8 at (0.2, 0.1), (0.5, 0.1), (0.8, 0) and (0.8, 0.1) read Undecided at
