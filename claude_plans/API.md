@@ -1272,15 +1272,29 @@ warehouse's elastic solve 59 s to 5.9 s, the 32 × 40 wall finishing in 24 s).
   `Structure.Components.IsCachedUntilAMutation` and the equivalence guard
   `Authority.Judge.MatchesSolvingEachComponentAlone` (40 seeded multi-part structures, 161
   components, Release).
-- `LimitAnalysisCertificate`: the IPM's normal-equation factor becomes `SimplicialLLT` on the
-  sparse `A D Aᵀ` (the equilibrium matrix is 6 rows per body, a handful of columns per corner),
-  dense below the same DoF limit. The arch, pile and wedge anchors must not move (0.107478,
-  0.5005, 31.07° at their recorded tolerances).
+- Done (stage 1b-iii, 2026-10-12): `CertificateOptions::DenseRowLimit` (600 rows); above it
+  `FactorNormal` assembles `A D Aᵀ` as triplets (the site blocks plus the load-factor coupling
+  on the demand's support, DESIGN §10) and factors with `SimplicialLLT` under AMD, the
+  symbolic analysis once per component, a regularised retry on failure as on the dense path;
+  at or below the limit the dense path is bit for bit. Pinned by `Certificate.Sparse.*`: the
+  agreement property (64 cases, state exact, load factors 1e-7, motions 1e-6, hinging equal,
+  iterations within 2), the arch, pile and wedge anchors either side of tolerance on the
+  sparse path, the pile bit-identical below the limit, the inclusive 600-row boundary, a
+  frictionless wall that needs the regularised retry, and the shed's certificate under 8.0 s
+  (Slow). Measured in SCALE.md: 589 s to 152 s, 754 s to 114 s; the profile that follows says
+  where the rest goes.
 - Targets, asserted as `Slow.Scale.*` ceilings only after the first measurement and recorded in
   SCALE.md: the half warehouse judges at rest in under 2 s (from 91 s); the 40 × 32 wall
   judges; the warehouse (3,695 pieces) judges in under 10 s.
 
-**Stage 2, the event region.** A judge after a change re-solves only the components that
+**Stage 2, the event region.** Done 2026-10-12 (0fc14a5, DESIGN §10 "stage 2 opening" and
+amendment), in review: cleanliness is derived from `Structure::Revision()` and per-body
+`LastTouched` stamps, not a dirty set; `IStandingAuthority::Solve` takes the component
+filter; `AuthorityResult` records its revision and `ComponentReport` its loads and `bReused`;
+`Judge(..., Previous)` copies clean components and their readings forward and solves the
+dirty ones through one filtered `Solve`; `Run(..., Previous)` passes each pass's verdict to
+the next. Owed: options as part of cleanliness (ruled, test in progress). The contract as
+first written follows. A judge after a change re-solves only the components that
 contain a changed body or joint. `Structure` carries a version counter and a dirty set (bodies
 whose joints were added, removed, cracked or severed since the last judge); `IStructuralAuthority::Judge`
 takes the last verdict and returns the clean components' entries unchanged (same verdict, same

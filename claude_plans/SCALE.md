@@ -138,3 +138,29 @@ path's data structures, and the iteration count itself. The next step is a profi
 guess. The base-course cascade on the large wall halves (50.7 s to 23.6 s) because the 1b-ii
 judge no longer solves the rank-deficient floating remainder twice; the one dense solve it
 still spends is the item logged in CURRENT_STATE.
+
+## Profile of the certificate at rest (2026-10-12, commit 0c52f6f, Release, measured alone)
+
+Wall-clock accumulators per phase in a throwaway build (not committed):
+
+| | Shed | Half warehouse | Wall 32 × 40 |
+|---|---|---|---|
+| Total | 7.13 s | 157.9 s | 108.2 s |
+| Largest component: rows / joints / cap sites | 714 / 315 / 1,260 | 3,570 / 1,699 / 6,796 | 7,776 / 3,784 / 15,136 |
+| Inscribed / circumscribed iterations per component | 13/13, 22/18, 34/35, 13/13, 9/9 | 41/43, 14/15, **66/200 (stalled)**, 14/15, 9/9 | 28/27 |
+| Assembly (triplets, coupling, `setFromTriplets`, `analyzePattern`) | 0.30 s (4 %) | 11.0 s (7 %) | 6.7 s (6 %) |
+| Factor (`factorize` with retries; dense below 600 rows) | 0.50 s (7 %) | 46.0 s (29 %) | **66.6 s (62 %)** |
+| Cap sites (18 × 18 `Mww` build and LLT per site, plus the `SolveNormal` cap loops) | **4.71 s (66 %)** | **73.6 s (47 %)** | 24.5 s (23 %) |
+| Triangular solves | 0.06 s | 2.3 s | 1.8 s |
+| `SelectionSystem` | 0 (never runs at rest) | 0 | 0 |
+| Everything else (`Apply`/`ApplyTranspose`, vectors, residuals) | 1.56 s (21 %) | 25.0 s (16 %) | 8.6 s (8 %) |
+
+What it says: the factor's remaining cost on the wall is the coupling block on the demand's
+support, dense at 1,296 × 1,296 (1.68M of the 1.99M non-zeros; the site part alone factors in
+5.0 s against 81.6 s); every corner is a cap site at about 18 µs per site per factorisation,
+arithmetic not allocation; one half-warehouse circumscribed solve converged to 1.05e-9 against
+1e-9 at iteration 62, diverged to 6.75e-6 and ran to the 200 cap with 139 regularisation
+retries (59 s for nothing, the verdict Stands anyway on the inscribed factor); iteration
+counts do not grow with size. Stage 3 (DESIGN §10) takes these in order: the structured
+cap-site factor (exact), the stall rule, the coupling out of the factor with refinement, and
+only then a verdict-only option that skips the circumscribed solve.

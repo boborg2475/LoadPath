@@ -625,3 +625,38 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   measurement that matters and are being re-run. What remains per iteration after the factor
   (the per-component dense LLT in `SelectionSystem`, the cap-site loops, assembly) is to be
   profiled before anything else is changed.
+- *2026-10-12, orchestrator, stage 2 amendment:* **options are part of cleanliness.** A
+  previous verdict carries the `AuthorityOptions` it was judged under, and a previous judged
+  under any other options (gravity, tolerances, limits, certificate options, every field) is
+  unmatched as a whole: nothing is reused. The dev round flagged that a different gravity
+  would otherwise be reused as if nothing had changed; a wrong reuse is a wrong verdict with
+  `bReused` set, which no caller can be expected to check. Also ratified from the round: a
+  removed body stamps only the neighbours it still shared a live interface with (a severed
+  joint already split the partition); copying a ground-contact reading needs only the free
+  end untouched (every Sever stamps the ground, which would otherwise block every ground
+  reading on the structure); an unknown id's stamp reads as always dirty; load matching is
+  exact tuple equality in order; a reading that can be neither solved nor copied, or a load on
+  a dead body, throws the reuse away and judges everything.
+- *2026-10-12, orchestrator, stage 3 opening (the certificate at scale), from the profile:*
+  **exact algebra first, the stall rule second, a verdict-only option last.** The profile of
+  commit 0c52f6f at rest: the shed's certificate (7.1 s) is 66 % cap-site work (an 18 × 18
+  build and LLT per corner per iteration); the half warehouse's (158 s) is 47 % cap sites,
+  29 % factor and one circumscribed solve that converged to 1.05e-9 against 1e-9 at iteration
+  62, then diverged to 6.75e-6 and ran to the 200 cap with 139 regularisation retries (59 s
+  for nothing); the 32 × 40 wall's (108 s) is 62 % factor, because the coupling block on the
+  demand's support is a dense 1,296 × 1,296 block (1.68M of 1.99M non-zeros). Iteration
+  counts do not grow with size (28 on 7,776 rows). So stage 3, in order: (3a) a structured
+  cap-site factor: `Mww` is a diagonal plus rank ≤ 4 (the facet rows see only the in-plane
+  part of each direction), so Woodbury replaces the 18 × 18 work with 18 × 4, exact, no answer
+  changes, about 85 s of the 273 s; (3b) a stall rule: when the residuals stop improving the
+  solve keeps its best iterate and stops, with the verdict rules unchanged (the component read
+  Stands anyway because the inscribed factor was at least 1), about 59 s; (3c) the coupling
+  out of the factor: factor the site part with a tiny regularisation and apply the rank-one
+  term by Sherman–Morrison with two or three steps of iterative refinement against the true
+  matrix (the plain Sherman–Morrison blow-up from 35 to 115 iterations is what the
+  refinement must prevent, measured before it is kept), about 68 s on the wall; (3d) only if
+  still needed, a verdict-only option that skips the circumscribed solve when the inscribed
+  factor is at least 1, which changes `LoadFactorUpper`'s meaning on Stands and so stays an
+  option the judge sets, never the default. Eight cone generators are rejected: 5× on cap
+  sites for a 2 % to 8 % inscribed/circumscribed gap. Panels stay contingent on the stage-3
+  rows.
