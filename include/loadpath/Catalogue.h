@@ -60,6 +60,7 @@ struct CatalogueResult
 
 CatalogueResult LoadCatalogue(std::string_view Json);
 
-// mu = 0 (independent axes, DESIGN §4): cohesion = cap = Count · ShearPerPlaneN / AreaM2, tension = Count · WithdrawalN / AreaM2, compression = BearingStrengthPa.
+// mu = 0 (independent axes, DESIGN §4): cohesion = cap = Count · ShearPerPlaneN / AreaM2, tension = Count · WithdrawalN / AreaM2, compression = BearingStrengthPa, kt = Count · SlipModulusNPerM / AreaM2, kn = BearingNormalStiffnessPaPerM.
+// Count is the number of fasteners crossing THIS interface, which is one shear plane: a double-shear fastener crossing two interfaces is Count 1 on each, and its withdrawal is then counted on both (an over-count only when a multi-plane fastener has withdrawal).
 StrengthProfile FastenerProfile(const FastenerRow& Row, int Count, double AreaM2);
 }

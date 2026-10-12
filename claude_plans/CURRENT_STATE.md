@@ -261,6 +261,12 @@ and 5 rulings.
     with `bComplete` false and no phantom interface ids, but `Courses` still lists a refused
     brick's id and `Ground` a refused ground's; the old `SmallBondedWallCollapseLambda = 8.5`
     anchor is slack now that λ_c is 2.97 (the tight anchor beside it is the bound).
+  - from the follow-up review: `FastenerProfile`'s `Count` is per interface (one shear plane),
+    so a multi-plane fastener with withdrawal is over-counted on withdrawal (documented in the
+    header; no row today has both); the screw's A1:2008 withdrawal uses l_ef 44 mm, below the
+    6 d = 48 mm minimum penetration the clause is recalled to require (noted in the row; verify
+    against the standard); the zero-`bearing_mpa` refusal has no test case of its own (only a
+    negative bearing is in the error table): add the case in the next test round.
 - **The elastic authority never settles on a dry wall with perpends between full bricks** (slice-5
   sweep, 2026-10-11): the next solver slice, Next item 1 (slice 2c), which carries the
   mechanism, the ruling to write and the tests. Pinned red by design meanwhile:

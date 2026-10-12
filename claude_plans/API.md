@@ -312,9 +312,13 @@ never mutates the structure. The host may call it on any thread.
   (positive opening, `n` from A to B). Corner normal force on B, compression positive,
   `N = −(kn A/4) g`; shear force on B `S = −(kt A/4) (δ − g n)`.
 - **Free releases in the active set** (slice 2): a corner on an interface whose profile has
-  `TensileStrengthPa == 0` opens when its trial `N < 0` and then carries nothing; a corner on an
+  `TensileStrengthPa == 0` opens when its trial `N < 0` and then carries nothing, and (slice 2c,
+  DESIGN §10) a corner on an interface with zero tension and zero cohesion whose trial `|N|` lies
+  within the force-noise floor (one named constant relative to the component's force scale, of
+  the order of the held-force tolerance) is open as well, reading `N = 0`, `S = 0` and zero
+  utilisation, so a dry perpend carrying nothing cannot flip the active set; a corner on an
   interface whose profile has `ShearCohesionPa == 0` slips when its trial `|S|` exceeds
-  `μ N` (and the cap `MaxShearStrengthPa · A/4`), after which its shear is held at capacity
+  `μ N` (and the cap `MaxShearStrengthPa · A/4`) by more than the same absolute slack, after which its shear is held at capacity
   opposite the trial slip direction with no stiffness along that direction and **no dilation**
   (non-associative, DESIGN §9 row 8). Transverse to the held direction, in the joint plane, a
   slipping corner carries the tangent of its held friction, `kt · capacity / |trial S|` (at most
@@ -966,6 +970,7 @@ CatalogueResult LoadCatalogue(std::string_view Json);
 
 // μ = 0 (independent axes, DESIGN §4): cohesion = cap = Count · ShearPerPlaneN / AreaM2, tension = Count · WithdrawalN / AreaM2, compression = BearingStrengthPa,
 // tangential stiffness = Count · SlipModulusNPerM / AreaM2, normal stiffness = BearingNormalStiffnessPaPerM (the area cancels in stiffness as in capacity).
+// Count is the number of fasteners crossing THIS interface, which is one shear plane: a double-shear fastener crossing two interfaces is Count 1 on each; its withdrawal is then counted on both.
 StrengthProfile FastenerProfile(const FastenerRow& Row, int Count, double AreaM2);
 ```
 
