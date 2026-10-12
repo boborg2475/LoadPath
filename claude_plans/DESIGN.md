@@ -926,3 +926,24 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   (Mechanism after at least one iteration), not the shortcut. **A `BodyLoad` with zero force
   is no load**: the shortcut still applies, matching the cascade's existing
   `AZeroForceLoadDoesNotStopTheRigidFall`.
+- *2026-10-12, orchestrator, carried from 6b, item 1, second fix round (from the follow-up
+  review of 3027071):* two defects in the amendment's implementation, neither in the rule.
+  **The finiteness check before the shortcut makes the same decision as the full path's
+  first-iteration check:** the full path sums the unscaled stiffness blocks and scales the
+  dense sum (`D*AssembleStiffness*D`), the shortcut scaled each block and then summed, and
+  the two overflow at different stiffnesses, so in a band of about 3.6e304 to 1.45e305 Pa/m an
+  unloaded floating pair read Mechanism (judge Collapses, cascade Stands with a cluster) where
+  the same pair with a 1 N push, and master, read InvalidInput. The shortcut now assembles
+  unscaled, scales afterwards, then checks. **The fall direction divides each gravity
+  component by the largest magnitude** instead of multiplying by its reciprocal, which
+  overflowed for a gravity of 1e-310 and read a NaN motion. Under such a gravity the elastic
+  state is Mechanism by the ruling (any non-zero gravity takes the shortcut) where master's
+  full solve read Stands; the judge reads Stands with one disagreement, and the review showed
+  that to be a certificate defect, not the answer: the certificate's own rigid-fall rule takes
+  the length of the net load by summing squares, which underflows below about 1.5e-162 N, so
+  it never fires and the LP reads [1000, 1000] (master read Stands because both of its
+  authorities lost the load). The test pins the judge to neither InvalidInput nor Undecided
+  and the certificate underflow is logged in CURRENT_STATE. Logged
+  as pre-existing, not from the item: a 1e308 kg mass whose weight overflows is never
+  validated; the sparse and dense finiteness checks above `DenseDofLimit` sum in different
+  orders and can disagree in the same band; a gravity of 1e-300 counts as non-zero.

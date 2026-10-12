@@ -279,7 +279,7 @@ item 1 opening"). From a copy of the Release exe, one run each, same day before 
 
 | Structure | Cascade: base course, before | after | Floating remainder solve |
 |---|---|---|---|
-| Wall 40 × 32 | 22.1 s | **38 ms** | 1,256 bricks: 20.5 s → 4.5 ms |
+| Wall 40 × 32 | 22.1 s | **38 ms** before the finiteness gate; **114 ms** at the close (the gate assembles and scales the sparse stiffness once, about 65 ms on the 1,256-brick remainder) | 1,256 bricks: 20.5 s → 4.5 ms before the gate, 70 ms at the close |
 | Half warehouse | 2.2 s | **129 ms** | |
 
 Everything else in those rows is unchanged (wall judge 168 ms, certificate 27 s; half

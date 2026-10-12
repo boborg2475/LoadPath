@@ -32,8 +32,8 @@ stacks, Paterson–Zwick, Couplet–Heyman at Milankovitch's 0.107478 with hinge
 the certificate's associative 31.07°, the cascade on the arch below least thickness, the dry
 wall at t / H within 1 % (10 × 8 and 4 × 5), the bonded 4 × 5 wall at its monolith factor
 `(t/H)(1 + f_t A_base / W) = 2.971` to 1 %, two screws at twice their published shear and
-withdrawal whatever the joint area. Default suite 325 cases in Debug and 347 in Release at
-the 6b close (the arch, pile, arch-cascade, fuzz, small-wall and multi-panel factor anchors
+withdrawal whatever the joint area. Default suite 334 cases in Debug and 356 in Release after
+the first carried 6b item (325 and 347 at the 6b close) (the arch, pile, arch-cascade, fuzz, small-wall and multi-panel factor anchors
 run only in Release under `LOADPATH_SLOW_IN_DEBUG`; nine `Slow.*` cases run in Release at
 every slice close, and the
 cheap `Measure.Scale.*` rows after them); the `Deferred.*` tier holds the physical wedge pin
@@ -143,6 +143,24 @@ cheap `Measure.Scale.*` rows after them); the `Deferred.*` tier holds the physic
      only a production seam could expose (the public corner flags allow a weaker necessary
      check; flipping the motion sign reddens 9 Release tests meanwhile); the 1.0 s budget on
      the 16 × 20 wall is a timing assertion on this machine;
+   - from the ungrounded-shortcut reviews (pre-existing, not from the item): the sparse and
+     dense first-iteration finiteness checks sum in different orders, so for components above
+     `DenseDofLimit` they disagree in a stiffness band of 3.6e304 to 1.45e305 Pa/m; a body
+     weight that overflows to infinity (a 1e308 kg mass) is never validated and read Mechanism
+     with a NaN normal; a gravity of 1e-300 counts as non-zero and takes the shortcut; the
+     certificate's own `FallRigid` (src/LimitAnalysisCertificate.cpp) takes `Length(Net)` by
+     summing squares, which underflows to 0 below a summed weight of about 1.5e-162 N, so a
+     floating component under a gravity below about 1e-162 reads Stands at [1000, 1000] with
+     one disagreement against the elastic Mechanism (the verdict flips between 1e-162 and
+     1e-163; the fix is the same division by the largest component before the length, and
+     `Statics.Ungrounded.ATinyGravityStillFallsAlongIt` then wants its judge pinned to
+     Collapses); the shortcut assembles and scales a sparse stiffness only to test finiteness
+     (about 65 ms on the 1,256-brick remainder; a fold over `ForEachStiffnessBlock` that sums
+     then scales per entry would avoid it, and the overflow test's two absolute stiffness
+     pins at 5e304 and 1e305 sit 1.4× above the dense overflow onset, so that change should
+     replace them with the agreement property: the unloaded solve reads InvalidInput exactly
+     when the same structure with a 1 N push does, swept over 1e300 to DBL_MAX on the big pair
+     and a ×40 wall remainder at `DenseDofLimit` 600 and 0, the reviewer's lp_revL probe);
    - sparse elastic path: the pivot test is pinned by no mutant once the estimate exists; the
      estimate's constructed adversary (a soft mode orthogonal to the ±1 start with a second
      mode within 10³) accepts at λ_min 1e-3 of the bar (worst consequence a 1e-3 equilibrium
@@ -152,10 +170,6 @@ cheap `Measure.Scale.*` rows after them); the `Deferred.*` tier holds the physic
    - `Structure::Components()` is mutable state behind a const method (no thread-safety
      promise exists anywhere; log it when one is made); `StandingComponent::ReadingSlots` is
      read by nothing in the library;
-   - in its fix round 2026-10-12 (branch `carried-6b`; the cold review found a held floating
-     body reading Undecided, ruled: the shortcut needs no host load and a non-zero gravity,
-     DESIGN §10 amendment): an ungrounded component reads Mechanism before any assembly; the 32 × 40
-     base-course cascade 22.1 s to 38 ms, the half warehouse's 2.2 s to 129 ms (SCALE.md);
    - certificate: uncaught mutants recorded in ANCHORS: the retry's `LargestDiagonal` without
      the coupling term (dense and bordered), the bordered regularisation's size (× 100 green),
      the NaN-only part of the positivity scan, either bordered pivot guard alone (they back
