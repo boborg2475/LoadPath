@@ -7,6 +7,19 @@
 
 namespace loadpath::geometry
 {
+namespace
+{
+Box Place(const WallSpec& Spec, double S, double HalfS, double Z, double HalfZ)
+{
+	const double HalfT = 0.5 * Spec.BrickM.Y;
+	if (Spec.bAlongY)
+	{
+		return Box{Vec3{Spec.OriginM.X, Spec.OriginM.Y + S, Spec.OriginM.Z + Z}, Vec3{HalfT, HalfS, HalfZ}};
+	}
+	return Box{Vec3{Spec.OriginM.X + S, Spec.OriginM.Y, Spec.OriginM.Z + Z}, Vec3{HalfS, HalfT, HalfZ}};
+}
+}
+
 Wall BuildRunningBondWall(Structure& Model, const WallSpec& Spec)
 {
 	Wall Out;
@@ -15,7 +28,6 @@ Wall BuildRunningBondWall(Structure& Model, const WallSpec& Spec)
 	Out.HeightM = Spec.Courses * Brick.Z;
 	const double FullKg = Spec.DensityKgPerM3 * Brick.X * Brick.Y * Brick.Z;
 
-	const Box GroundBox{Vec3{0.5 * Out.LengthM, 0.0, Spec.GroundZM - 0.5 * Brick.Z}, Vec3{0.5 * Out.LengthM, 0.5 * Brick.Y, 0.5 * Brick.Z}};
 	const auto Keep = [&Out](const auto& Added, auto& Into) {
 		if (Added.Ok())
 		{
@@ -26,9 +38,18 @@ Wall BuildRunningBondWall(Structure& Model, const WallSpec& Spec)
 			Out.bComplete = false;
 		}
 	};
-	const Result<BodyId> GroundAdded = Model.AddBody(BodyDesc{0.0, GroundBox.CentreM, true});
-	Out.bComplete = GroundAdded.Ok();
-	Out.Ground = GroundAdded.Value;
+	if (Spec.Ground == BodyId::Invalid())
+	{
+		const Box GroundBox = Place(Spec, 0.5 * Out.LengthM, 0.5 * Out.LengthM, Spec.GroundZM - 0.5 * Brick.Z, 0.5 * Brick.Z);
+		const Result<BodyId> GroundAdded = Model.AddBody(BodyDesc{0.0, GroundBox.CentreM, true});
+		Out.bComplete = GroundAdded.Ok();
+		Out.Ground = GroundAdded.Value;
+	}
+	else
+	{
+		Out.bComplete = Model.IsLive(Spec.Ground);
+		Out.Ground = Spec.Ground;
+	}
 
 	std::vector<std::vector<Box>> Boxes;
 	for (int C = 0; C < Spec.Courses; ++C)
@@ -53,14 +74,14 @@ Wall BuildRunningBondWall(Structure& Model, const WallSpec& Spec)
 		double X = 0.0;
 		for (const double L : Lengths)
 		{
-			const Box B{Vec3{X + 0.5 * L, 0.0, Z}, Vec3{0.5 * L, 0.5 * Brick.Y, 0.5 * Brick.Z}};
+			const Box B = Place(Spec, X + 0.5 * L, 0.5 * L, Z, 0.5 * Brick.Z);
 			X += L;
 			const Result<BodyId> Added = Model.AddBody(BodyDesc{FullKg * L / Brick.X, B.CentreM, false});
 			Out.bComplete = Out.bComplete && Added.Ok();
 			const BodyId Id = Added.Value;
 			if (C == 0)
 			{
-				const Box Under{Vec3{B.CentreM.X, 0.0, Spec.GroundZM - 0.5 * Brick.Z}, B.HalfExtentsM};
+				const Box Under{Vec3{B.CentreM.X, B.CentreM.Y, B.CentreM.Z - Brick.Z}, B.HalfExtentsM};
 				if (const std::optional<InterfaceDesc> Bed = FaceContact(Out.Ground, Under, Id, B, Spec.Bed))
 				{
 					Keep(Model.AddInterface(*Bed), Out.Beds);

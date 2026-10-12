@@ -51,9 +51,10 @@ struct Warehouse
 	std::vector<InterfaceId> Bearings, PlankJoints;
 	BodyId Ground;
 	bool bComplete = false;
-	// Live bodies, the ground included.
+	// Live bodies, the ground included, as counted when the build finished.
 	std::size_t BodyCount() const;
 	std::size_t InterfaceCount() const;
+	std::size_t LiveBodies = 0, LiveInterfaces = 0;
 };
 
 Warehouse BuildWarehouse(Structure& Model, const WarehouseSpec& Spec);
