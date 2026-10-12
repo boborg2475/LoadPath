@@ -82,3 +82,36 @@ The 32 × 40 wall at 24 s and the half warehouse's elastic solve at 5.9 s are th
 brought down, not the n³ removed: stage 1b's sparse factor is what makes a 1,215-brick
 warehouse wall cheap, and the judge still solving the whole structure and then every
 component again is why the judge is twice the elastic solve.
+
+## Stage 1b-i of 6b: the sparse path (2026-10-12, HEAD 0d13a29)
+
+Components above `DenseDofLimit` (600 DoF) take `SimplicialLDLT` under AMD, accepted on an
+inverse-iteration estimate of the smallest eigenvalue (DESIGN §10). Rows re-run from a copy of
+the Release exe built at 0d13a29, one process each, with the stage-1b-i review and the
+stage-1b-ii round building on the same machine (so the small numbers carry noise):
+
+| Structure | Pieces | Joints | Components | Elastic | Certificate | Judge | Cascade: one post removed | Cascade: base course of wall 0 removed |
+|---|---|---|---|---|---|---|---|---|
+| Wall 10 × 8 | 86 | 227 | 1 | 10 ms, Stands | 918 ms, Stands | 23 ms, Stands | n/a | 15 ms, 1 pass, Stands |
+| Shed | 420 | 1,090 | 5 | 39 ms, Stands | 7.7 s, Stands | 87 ms, Stands | 140 ms, 0 passes, Stands | 177 ms, 1 pass, Stands |
+| Wall 40 × 32 (1,296 bricks, 7,776 DoF) | 1,297 | 3,784 | 1 | **161 ms, Stands** (killed at 25 min in 6a, 24.1 s dense at 1a) | **754 s, Stands** | 377 ms, Stands | n/a | 50.7 s, 1 pass, Stands |
+| Half warehouse | 1,822 | 5,138 | 5 | **170 ms, Stands** (59 s in 6a, 5.9 s at 1a) | 589 s, Stands | **457 ms, Stands** (91 s, 11.8 s) | 568 ms, 0 passes, Stands | 5.1 s, 1 pass, Stands |
+| Warehouse (40 × 20 plan, 30 courses, 4 bays; first run) | 3,695 | 10,678 | 5 | **531 ms, Stands** | 1,566 s, Stands | **1.56 s, Stands** | 1.70 s, 0 passes, Stands | 40.6 s, 1 pass, Stands |
+
+What the rows say: the elastic solve of the largest wall is now 0.16 s and its judge 0.38 s;
+the warehouse (3,695 pieces, its first run ever) solves elastically in 0.53 s and judges in
+1.56 s, the half warehouse in 0.17 s and 0.46 s, so the elastic side is inside the design
+budget of a fifth of a second for the half warehouse and within a factor of three of it for
+the whole; the certificate is the whole of the remaining cost (1,566 s on the warehouse,
+589 s on the half warehouse, both at rest, where the row calls it only for the record) (754 s on the wall at rest, called by the row for the record, and
+by the cascade for every Mechanism or Undecided component). The base-course cascade on this
+wall is 50.7 s for one pass, and that is not the certificate (the floating remainder carries
+no host load, so the rigid-fall rule decides it without an interior point): the floating
+1,215-brick remainder is rank-deficient, the sparse factor hands it to the dense blocked
+factor at about 24 s, and the 1b-i judge still solved it twice (whole structure, then the
+component); the warehouse's base-course cascade is the same 40.6 s for the same reason, and
+the half warehouse's 5.1 s is its 600-brick wall going dense once or twice. 1b-ii removes the second solve; the first is a dense factorisation spent to
+discover that an ungrounded component is a mechanism, which its connectivity already says. Stage 1b-ii (one solve
+per judge, no copies) measured on the shed from a second copy: judge 40 ms against an elastic
+solve of 39–54 ms, since no component is consulted. Stage 1b-iii puts the certificate's
+normal equations on a sparse factor above the same limit.

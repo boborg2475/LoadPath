@@ -149,11 +149,36 @@ cheap `Measure.Scale.*` rows after them); the `Deferred.*` tier holds the physic
    work on readings; one bridge (draw 443) still trades Mechanism/Undecided between the paths
    by rounding drift on a 30-iteration path, inside budget; the five iterations and margin 1
    are the smallest pair measured, nothing separated the nine pairs swept.
+   The cold review (2026-10-12) found four blocking items, all fixed the same day: the two
+   stage-1a factor timing tests ran the sparse path unknowingly (now forced dense: blocked
+   0.56 s, reference 3.3 s on the 16 × 20 wall); the agreement property cost 12.7 s with its
+   wall half idle (now 12 ec6 walls under λ and 12 dry walls at rest, 24 of 24 certified, about
+   2.5 s with the 1,000 stacks); the limit boundary and the estimate were unpinned
+   (`Statics.Sparse.TheLimitBoundaryIsInclusive`, an 8 × 12 wall of exactly 600 DoF, and
+   `HiddenPivotsAreCaughtByTheEstimate`, bridges 423, 556, 708, 715 with no trade allowed;
+   all three estimate mutants now redden it); docs behind the amendment. Still open: the pivot test is pinned by no mutant once the estimate exists (the
+   estimate alone passes the suite; a start vector orthogonal to a soft mode with visible
+   pivots is the case only the pivot test catches); the estimate's constructed adversary (a
+   soft mode orthogonal to the ±1 start with a second mode within 10³ of it accepts at λ_min
+   1e-3 of the bar; worst consequence an equilibrium residual of 1e-3 of the load, never a
+   false Stands since the unpivoted LDLᵀ is backward stable; two start vectors or an
+   eigen-residual check would close it for five extra solves); the symbolic analysis is redone
+   every active-set iteration though the pattern never changes (`analyzePattern` once per
+   `SolveProblem`); the zero-norm guard in the estimate is unreachable once the pivots pass;
+   `K * V` in the estimate relies on both triangles being stored (a lower-only assembly would
+   need `selfadjointView`). Mutant builds under %TEMP% are not recompiled by MSBuild (MSB8029):
+   build mutants outside it.
    **Stage 1b-ii, per-component results and no copies: green (2026-10-12), awaiting the
    stage 1b review.** One `Solve` per judge, the certificate consulted through a component
    filter on the original structure, `Structure::Components()` cached. Open: the cache is
    mutable state behind a const method (one `Structure` queried from two threads races; no
    thread-safety promise exists anywhere in the library, log it when one is made).
+   Found by the 1b-i rows: the base-course cascade on the 32 × 40 wall costs 50.7 s because
+   the floating 1,215-brick remainder is rank-deficient, so the sparse factor hands it to the
+   dense blocked factor (about 24 s per solve). An ungrounded component is a mechanism by
+   connectivity before any factorisation; the elastic authority could read it (and its
+   rigid-body null space) without factorising, as the certificate's rigid-fall rule already
+   does. Not in 1b; log for stage 2 or the certificate's next item.
    **Next: 1b-iii the certificate's sparse normal equations, then stage 2 the event region,
    panels contingent; the `Measure.Scale.*` rows re-run after each stage into SCALE.md.
  **Slice 8,

@@ -24,39 +24,10 @@ using namespace loadpath::test::oracle;
 
 namespace
 {
-template <class O>
-constexpr bool HasDenseDofLimit = requires(O X) { X.DenseDofLimit; };
-
-template <class O>
-O WithDenseDofLimit(O Options, int Limit)
+StandingOptions WithDenseDofLimit(StandingOptions Options, int Limit)
 {
-	if constexpr (HasDenseDofLimit<O>)
-	{
-		Options.DenseDofLimit = Limit;
-	}
-	else
-	{
-		(void)Limit;
-	}
+	Options.DenseDofLimit = Limit;
 	return Options;
-}
-
-template <class O>
-int DefaultDenseDofLimit()
-{
-	if constexpr (HasDenseDofLimit<O>)
-	{
-		return O{}.DenseDofLimit;
-	}
-	else
-	{
-		return -1;
-	}
-}
-
-void RequireTheLimitExists()
-{
-	CHECK_MESSAGE(HasDenseDofLimit<StandingOptions>, "StandingOptions has no DenseDofLimit, so both solves took the dense path");
 }
 
 Comparison CompareSparseWithDense(const FactorCase& C, bool bAllowTrade)
@@ -103,71 +74,58 @@ struct Tally
 	}
 };
 
-enum class WallMaterial
-{
-	Dry,
-	Ec6,
-	Lime
-};
-
-const char* MaterialName(WallMaterial M)
-{
-	switch (M)
-	{
-	case WallMaterial::Dry: return "dry";
-	case WallMaterial::Ec6: return "ec6";
-	case WallMaterial::Lime: return "lime";
-	}
-	return "?";
-}
-
 int FreeBodies(int Courses, int Bricks) { return Courses * Bricks + Courses / 2; }
 
-constexpr int WallDrawCount = bOptimisedBuild ? 24 : 0;
+constexpr int WallDrawCount = bOptimisedBuild ? 12 : 0;
 constexpr int StackDrawCount = bOptimisedBuild ? 1000 : 40;
-constexpr std::uint32_t SparseWallSeedOffset = 2000000u;
+constexpr std::uint32_t Ec6WallSeedOffset = 2000000u;
+constexpr std::uint32_t DryWallSeedOffset = 2100000u;
 constexpr int DofPerFreeBody = 6;
 
-FactorCase SeededWall(const Catalogue& Rows, int Draw)
+void DrawWallSize(std::mt19937& Rng, int& Courses, int& Bricks)
 {
-	const std::uint32_t Seed = MasterSeed + SparseWallSeedOffset + static_cast<std::uint32_t>(Draw);
-	std::mt19937 Rng(Seed);
-	int Courses = 0;
-	int Bricks = 0;
 	do
 	{
 		Courses = 5 + static_cast<int>(Rng() % 8u);
 		Bricks = 8 + static_cast<int>(Rng() % 9u);
 	} while (FreeBodies(Courses, Bricks) < 60 || FreeBodies(Courses, Bricks) > 200);
-	const WallMaterial Material = static_cast<WallMaterial>(Rng() % 3u);
-	const double Friction = Uniform(Rng, 0.4, 1.0);
+}
+
+FactorCase SeededEc6Wall(const Catalogue& Rows, int Draw)
+{
+	const std::uint32_t Seed = MasterSeed + Ec6WallSeedOffset + static_cast<std::uint32_t>(Draw);
+	std::mt19937 Rng(Seed);
+	int Courses = 0;
+	int Bricks = 0;
+	DrawWallSize(Rng, Courses, Bricks);
 	const double LambdaX = Uniform(Rng, 0.0, 0.5);
 	const double LambdaY = Uniform(Rng, 0.0, 0.5);
-	Structure Model;
-	switch (Material)
-	{
-	case WallMaterial::Dry: Model = RunningBondWall(DryJoint(Friction), DryJoint(Friction), Courses, Bricks); break;
-	case WallMaterial::Ec6: Model = RunningBondWall(JointOrFail(Rows, "clay_gp_mortar_bed_ec6").Profile, JointOrFail(Rows, "clay_gp_mortar_perpend_ec6").Profile, Courses, Bricks); break;
-	case WallMaterial::Lime: Model = RunningBondWall(JointOrFail(Rows, "lime_mortar_handmade_brick_upc_mean").Profile, JointOrFail(Rows, "lime_mortar_handmade_brick_upc_mean").Profile, Courses, Bricks); break;
-	}
-	const std::string Name = "master seed " + std::to_string(MasterSeed) + ", sparse wall draw " + std::to_string(Draw) + " (seed " + std::to_string(Seed) + "): " + std::to_string(Courses) + " x " + std::to_string(Bricks) + " " + MaterialName(Material) + " wall" + (Material == WallMaterial::Dry ? ", mu " + std::to_string(Friction) : std::string()) + ", lambda (" + std::to_string(LambdaX) + ", " + std::to_string(LambdaY) + ")";
+	const Structure Model = RunningBondWall(JointOrFail(Rows, "clay_gp_mortar_bed_ec6").Profile, JointOrFail(Rows, "clay_gp_mortar_perpend_ec6").Profile, Courses, Bricks);
+	const std::string Name = "master seed " + std::to_string(MasterSeed) + ", ec6 wall draw " + std::to_string(Draw) + " (seed " + std::to_string(Seed) + "): " + std::to_string(Courses) + " x " + std::to_string(Bricks) + ", lambda (" + std::to_string(LambdaX) + ", " + std::to_string(LambdaY) + ")";
 	return FactorCase{Name, Model, Biaxial(LambdaX, LambdaY), {}};
+}
+
+FactorCase SeededDryWallAtRest(int Draw)
+{
+	const std::uint32_t Seed = MasterSeed + DryWallSeedOffset + static_cast<std::uint32_t>(Draw);
+	std::mt19937 Rng(Seed);
+	int Courses = 0;
+	int Bricks = 0;
+	DrawWallSize(Rng, Courses, Bricks);
+	const double Friction = Uniform(Rng, 0.4, 1.0);
+	const std::string Name = "master seed " + std::to_string(MasterSeed) + ", dry wall draw " + std::to_string(Draw) + " (seed " + std::to_string(Seed) + "): " + std::to_string(Courses) + " x " + std::to_string(Bricks) + ", mu " + std::to_string(Friction) + ", at rest";
+	return FactorCase{Name, RunningBondWall(DryJoint(Friction), DryJoint(Friction), Courses, Bricks), StandingOptions{}, {}};
 }
 
 bool SameVec(const Vec3& A, const Vec3& B) { return A.X == B.X && A.Y == B.Y && A.Z == B.Z; }
 
-void CheckBitIdentical(const StandingResult& A, const StandingResult& B)
+int CountDifferences(const StandingResult& A, const StandingResult& B)
 {
-	CHECK(A.State == B.State);
-	CHECK(A.ActiveSetIterations == B.ActiveSetIterations);
-	CHECK(SameIdList(A.UnconstrainedBodies, B.UnconstrainedBodies));
-	REQUIRE(A.Readings.size() == B.Readings.size());
-	REQUIRE(A.Mechanism.size() == B.Mechanism.size());
 	if (A.Readings.size() != B.Readings.size() || A.Mechanism.size() != B.Mechanism.size())
 	{
-		return;
+		return INT_MAX;
 	}
-	int Differing = 0;
+	int Differing = A.State == B.State && A.ActiveSetIterations == B.ActiveSetIterations && SameIdList(A.UnconstrainedBodies, B.UnconstrainedBodies) ? 0 : 1;
 	for (std::size_t I = 0; I < A.Readings.size(); ++I)
 	{
 		const InterfaceReading& X = A.Readings[I];
@@ -187,7 +145,17 @@ void CheckBitIdentical(const StandingResult& A, const StandingResult& B)
 		const MechanismMotion& Q = B.Mechanism[I];
 		Differing += SameHandle(P.Body, Q.Body) && SameVec(P.TranslationM, Q.TranslationM) && SameVec(P.RotationRad, Q.RotationRad) ? 0 : 1;
 	}
-	CHECK(Differing == 0);
+	return Differing;
+}
+
+void CheckBitIdentical(const StandingResult& A, const StandingResult& B)
+{
+	CHECK(A.State == B.State);
+	CHECK(A.ActiveSetIterations == B.ActiveSetIterations);
+	CHECK(SameIdList(A.UnconstrainedBodies, B.UnconstrainedBodies));
+	REQUIRE(A.Readings.size() == B.Readings.size());
+	REQUIRE(A.Mechanism.size() == B.Mechanism.size());
+	CHECK(CountDifferences(A, B) == 0);
 }
 
 double Sign(double X, double Floor) { return X > Floor ? 1.0 : (X < -Floor ? -1.0 : 0.0); }
@@ -201,12 +169,19 @@ double SignFloor(const std::vector<MechanismMotion>& Motion)
 	}
 	return 1e-9 * Largest;
 }
+
+struct HiddenPivotDraw
+{
+	int Draw;
+	const char* Fixture;
+	StandingState DenseState;
+	int DenseIterations;
+};
 }
 
 TEST_CASE("Statics.Sparse.AgreesWithTheDensePath")
 {
-	RequireTheLimitExists();
-	SUBCASE("seeded running-bond walls of 60 to 200 bodies")
+	SUBCASE("seeded ec6 walls under lateral load and dry walls at rest, 60 to 200 bodies")
 	{
 		const CatalogueResult Loaded = LoadCatalogue(ReadCatalogueFile());
 		REQUIRE(Loaded.Ok());
@@ -218,8 +193,8 @@ TEST_CASE("Statics.Sparse.AgreesWithTheDensePath")
 		const Clock::time_point Start = Clock::now();
 		for (int Draw = 0; Draw < WallDrawCount; ++Draw)
 		{
-			const FactorCase C = SeededWall(Loaded.Value, Draw);
-			T.Add(CompareSparseWithDense(C, true));
+			T.Add(CompareSparseWithDense(SeededEc6Wall(Loaded.Value, Draw), true));
+			T.Add(CompareSparseWithDense(SeededDryWallAtRest(Draw), true));
 		}
 		T.Report("wall draws");
 		MESSAGE("walls took " << SecondsSince(Start) << " s");
@@ -239,9 +214,63 @@ TEST_CASE("Statics.Sparse.AgreesWithTheDensePath")
 	}
 }
 
+TEST_CASE("Statics.Sparse.HiddenPivotsAreCaughtByTheEstimate")
+{
+	const HiddenPivotDraw Draws[] = {
+		{423, "bridge half span 0.128871, top offset -0.00122245", StandingState::Mechanism, 5},
+		{556, "bridge half span 0.100377, top offset 0.000650907", StandingState::Undecided, 21},
+		{708, "bridge half span 0.107515, top offset 0.0131901", StandingState::Undecided, 50},
+		{715, "bridge half span 0.124973, top offset -0.0118885", StandingState::Undecided, 5},
+	};
+	for (const HiddenPivotDraw& D : Draws)
+	{
+		const SeededDraw Each = MakeSeededDraw(D.Draw);
+		const std::string Name = "draw " + std::to_string(D.Draw) + ": " + Each.Fixture + ", lambda (" + std::to_string(Each.LambdaX) + ", " + std::to_string(Each.LambdaY) + ")";
+		CHECK_MESSAGE(Each.Fixture == std::string(D.Fixture), Name);
+		const FactorCase C{Name, Each.Model, Biaxial(Each.LambdaX, Each.LambdaY), {}};
+		const StandingResult Dense = SolveWith(C.Model, WithDenseDofLimit(C.Options, INT_MAX));
+		CHECK_MESSAGE(Dense.State == D.DenseState, Name);
+		CHECK_MESSAGE(Dense.ActiveSetIterations == D.DenseIterations, Name);
+		const Comparison R = CompareSparseWithDense(C, false);
+		CHECK_MESSAGE(R.Mismatches == 0, Name << ": dense " << R.StateA << ", sparse " << R.StateB);
+	}
+}
+
+TEST_CASE("Statics.Sparse.TheLimitBoundaryIsInclusive")
+{
+	const CatalogueResult Loaded = LoadCatalogue(ReadCatalogueFile());
+	REQUIRE(Loaded.Ok());
+	if (!Loaded.Ok())
+	{
+		return;
+	}
+	struct BoundaryCase
+	{
+		std::string Name;
+		Structure Model;
+		StandingOptions Options;
+	};
+	const BoundaryCase Cases[] = {
+		{"8 x 12 ec6 wall under lambda (0.2, 0.1)", RunningBondWall(JointOrFail(Loaded.Value, "clay_gp_mortar_bed_ec6").Profile, JointOrFail(Loaded.Value, "clay_gp_mortar_perpend_ec6").Profile, 8, 12), Biaxial(0.2, 0.1)},
+		{"8 x 12 dry wall at rest", RunningBondWall(DryJoint(0.7), DryJoint(0.7), 8, 12), StandingOptions{}},
+	};
+	for (const BoundaryCase& C : Cases)
+	{
+		INFO(C.Name);
+		REQUIRE(DofPerFreeBody * static_cast<int>(C.Model.LiveBodyCount() - 1) == 600);
+		const StandingResult Default = SolveWith(C.Model, C.Options);
+		const StandingResult Dense = SolveWith(C.Model, WithDenseDofLimit(C.Options, INT_MAX));
+		const StandingResult Sparse = SolveWith(C.Model, WithDenseDofLimit(C.Options, 599));
+		const int DefaultDiffers = CountDifferences(Default, Dense);
+		const int SparseDiffers = CountDifferences(Sparse, Dense);
+		MESSAGE(C.Name << ": " << Dense.Readings.size() << " readings; default against INT_MAX differs in " << DefaultDiffers << ", limit 599 against INT_MAX in " << SparseDiffers);
+		CHECK(SparseDiffers > 0);
+		CheckBitIdentical(Default, Dense);
+	}
+}
+
 TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Statics.Sparse.AMechanismAboveTheLimitReadsTheSameAsBelowIt")
 {
-	RequireTheLimitExists();
 	const Structure Model = RunningBondWall(DryJoint(0.7), DryJoint(0.7), 10, 10);
 	const int Dof = DofPerFreeBody * static_cast<int>(Model.LiveBodyCount() - 1);
 	REQUIRE(Dof > 600);
@@ -283,8 +312,7 @@ TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Statics.Sparse.AMechanismAboveTheLimitReadsThe
 
 TEST_CASE("Statics.Sparse.ADenseFixtureKeepsItsPath")
 {
-	RequireTheLimitExists();
-	CHECK(DefaultDenseDofLimit<StandingOptions>() == 600);
+	CHECK(StandingOptions{}.DenseDofLimit == 600);
 	SUBCASE("the coursed free wall just below t / H")
 	{
 		const CoursedWall W = MakeCoursedWall(10, 0.1025, 1.0, 0.65, 0.7);
@@ -302,7 +330,6 @@ TEST_CASE("Statics.Sparse.ADenseFixtureKeepsItsPath")
 #if defined(NDEBUG)
 TEST_CASE("Slow.Statics.Sparse.TheLargeWallSolvesInsideItsBudget")
 {
-	RequireTheLimitExists();
 	const Structure Model = Ec6Wall(32, 40);
 	REQUIRE(Model.LiveBodyCount() == 32u * 40u + 16u + 1u);
 	const Clock::time_point Start = Clock::now();

@@ -29,7 +29,7 @@ struct StandingOptions
 	int MaxActiveSetIterations = 50;
 	// A pivot below this times the largest pivot is a mechanism.
 	double PivotToleranceRelative = 1e-10;
-	// Reference is the rank-1 factor kept as the test tier's referee; it goes away after slice 6b.
+	// Reference is the rank-1 factor kept as the test tier's referee; it goes away after slice 6b. The kind applies at or below DenseDofLimit and to the sparse path's fallback.
 	enum class FactorKind : std::uint8_t
 	{
 		Reference,

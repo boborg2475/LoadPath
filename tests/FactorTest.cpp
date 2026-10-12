@@ -14,6 +14,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <climits>
 #include <cmath>
 #include <cstdint>
 #include <random>
@@ -31,6 +32,12 @@ using FactorKind = StandingOptions::FactorKind;
 StandingOptions WithFactor(StandingOptions Options, FactorKind Kind)
 {
 	Options.Factor = Kind;
+	return Options;
+}
+
+StandingOptions AllDense(StandingOptions Options)
+{
+	Options.DenseDofLimit = INT_MAX;
 	return Options;
 }
 
@@ -162,10 +169,10 @@ TEST_CASE("Slow.Statics.Factor.AMidSizeWallSolvesInsideItsBudget")
 	const Structure Model = Ec6Wall(16, 20);
 	REQUIRE(Model.LiveBodyCount() == 16u * 20u + 8u + 1u);
 	Clock::time_point Start = Clock::now();
-	const StandingResult Blocked = SolveWith(Model, StandingOptions{});
+	const StandingResult Blocked = SolveWith(Model, AllDense(StandingOptions{}));
 	const double BlockedS = SecondsSince(Start);
 	Start = Clock::now();
-	const StandingResult Reference = SolveWith(Model, WithFactor(StandingOptions{}, FactorKind::Reference));
+	const StandingResult Reference = SolveWith(Model, AllDense(WithFactor(StandingOptions{}, FactorKind::Reference)));
 	const double ReferenceS = SecondsSince(Start);
 	MESSAGE("ec6 wall 20 x 16 (" << Model.LiveBodyCount() - 1 << " bricks): blocked " << BlockedS << " s (" << Blocked.State << " after " << Blocked.ActiveSetIterations << "), reference " << ReferenceS << " s (" << Reference.State << " after " << Reference.ActiveSetIterations << ")");
 	CHECK(Blocked.State == StandingState::Stands);
@@ -177,7 +184,7 @@ TEST_CASE("Measure.Factor.FortyByThirtyTwoWallElastic")
 {
 	const Structure Model = Ec6Wall(32, 40);
 	const Clock::time_point Start = Clock::now();
-	const StandingResult Blocked = SolveWith(Model, StandingOptions{});
+	const StandingResult Blocked = SolveWith(Model, AllDense(StandingOptions{}));
 	MESSAGE("ec6 wall 40 x 32 (" << Model.LiveBodyCount() - 1 << " bricks): blocked elastic " << SecondsSince(Start) << " s (" << Blocked.State << " after " << Blocked.ActiveSetIterations << ")");
 }
 #endif

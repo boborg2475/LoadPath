@@ -1231,17 +1231,26 @@ utilisations at 1e-7 relative plus 1e-9 absolute) are compared only when both ki
 warehouse's elastic solve 59 s to 5.9 s, the 32 × 40 wall finishing in 24 s).
 
 **Stage 1b, the sparse solve and no copies.**
-- `RbsmStandingAuthority`: `AssembleStiffness` builds an `Eigen::SparseMatrix<double>` from
-  triplets (6 DoF per body, one 12 × 12 block per joint corner); the factorisation is
-  `Eigen::SimplicialLDLT` with AMD ordering for a component above `DenseDofLimit` (default 600
-  DoF, 100 bodies; the largest default-suite component is 510 DoF) and the stage-1a dense
-  LDLT at or below it, so every anchor in the suite keeps its exact path and reading
+- `RbsmStandingAuthority` (stage 1b-i, 2026-10-12): for a component above `DenseDofLimit`
+  (default 600 DoF, 100 bodies; the largest default-suite component is 510 DoF)
+  `AssembleScaledSparseStiffness` builds the scaled stiffness `D K D` as an
+  `Eigen::SparseMatrix<double>` from triplets (the same 6 × 6 blocks the dense
+  `AssembleStiffness` sums, both triangles stored) and the factorisation is
+  `Eigen::SimplicialLDLT` under AMD ordering; at or below the limit the path is the dense one
+  with `Options.Factor`'s kind, so every anchor in the suite keeps its exact path and reading
   (`Statics.Sparse.ADenseFixtureKeepsItsPath` pins two anchors bit-for-bit against a forced
-  dense limit). Rank on the sparse path (DESIGN §10, stage 1b-i ruling): the sparse factor is
-  the full-rank fast path; if it does not report success, or any pivot of `D` is non-finite
-  or at or below `PivotToleranceRelative × max |D|`, the iteration is redone through the
-  dense blocked factor, whose rank test and null basis stage 1a verified, so mechanisms above
-  the limit are decided by the same code as below it. The property
+  dense limit; the limit boundary itself is pinned by an 8 × 12 wall of exactly 600 DoF).
+  `Factor` therefore applies at or below the limit and to the fallback only. Acceptance of the
+  sparse factor (DESIGN §10, stage 1b-i ruling, amendment and constants): the factor reports
+  success, every pivot of `D` is finite and above `PivotToleranceRelative × max |D|`, and five
+  inverse iterations with the factor from a fixed ±1 pattern put the Rayleigh quotient above
+  the same bar; otherwise the iteration is redone through `Options.Factor`'s dense factor,
+  whose rank test and null basis stage 1a verified, so mechanisms above the limit are decided
+  by the same code as below it. The unpivoted pivot test alone is not a rank test (182 of
+  214 hidden-pivot factorisations in a forced-sparse run of the suite were rank-deficient to
+  the dense factor); the estimate has a known adversary (a soft mode orthogonal to the start
+  vector with a second mode within 10³ of it) whose worst consequence is an equilibrium
+  residual of 1e-3 of the load, not a false Stands, logged in CURRENT_STATE. The property
   `Statics.Sparse.AgreesWithTheDensePath` runs seeded walls of 60 to 200 bodies and the
   oracle's stacks and bridges through both paths (the limit forced to 0 and to `INT_MAX`)
   under the stage-1a comparison rulings (certified states exact, trades budgeted, motions
