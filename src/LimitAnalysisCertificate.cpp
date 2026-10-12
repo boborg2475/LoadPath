@@ -82,6 +82,10 @@ struct CapSite
 	double Bound = 0.0;
 	Eigen::Index FirstRow = 0;
 	Eigen::Index FirstSlack = 0;
+	Eigen::MatrixXd FacetMatrix;
+	Eigen::MatrixXd DirectionMatrix;
+	std::vector<Eigen::Index> DirectionGroup;
+	std::vector<std::size_t> DirectionVariable;
 };
 
 struct Program
@@ -110,6 +114,14 @@ struct SparseNormal
 	bool bAnalysed = false;
 };
 
+struct CapScratch
+{
+	Eigen::VectorXd GroupSlackD;
+	Eigen::VectorXd FacetSlackD;
+	Eigen::VectorXd DirectionD;
+	Eigen::MatrixXd FT;
+};
+
 struct Normal
 {
 	SparseNormal* Sparse = nullptr;
@@ -122,6 +134,7 @@ struct Normal
 	bool bStructuredCaps = true;
 	std::vector<CapSiteFactor> CapStructured;
 	std::vector<Eigen::MatrixXd> CapSolvedF;
+	std::vector<CapScratch> CapScratchD;
 	Eigen::LLT<Eigen::MatrixXd> Factor;
 };
 
@@ -361,6 +374,26 @@ Program BuildProgram(const Component& C, int Generators, double RadiusScale, dou
 				{
 					const double AngleRad = 2.0 * Pi * static_cast<double>(K) / static_cast<double>(Generators);
 					Shear.Facets.push_back(statics::Add(Scale(std::cos(AngleRad), J.AxisU), Scale(std::sin(AngleRad), J.AxisV)));
+				}
+				Shear.FacetMatrix.resize(static_cast<Eigen::Index>(Shear.Facets.size()), 3);
+				for (std::size_t K = 0; K < Shear.Facets.size(); ++K)
+				{
+					Shear.FacetMatrix.row(static_cast<Eigen::Index>(K)) = Eigen::RowVector3d(Shear.Facets[K].X, Shear.Facets[K].Y, Shear.Facets[K].Z);
+				}
+				for (std::size_t W = 0; W < Shear.Groups.size(); ++W)
+				{
+					const Group& Gr = P.Groups[Shear.Groups[W]];
+					for (std::size_t Jd = Gr.First; Jd < Gr.First + Gr.Count; ++Jd)
+					{
+						Shear.DirectionGroup.push_back(static_cast<Eigen::Index>(W));
+						Shear.DirectionVariable.push_back(Jd);
+					}
+				}
+				Shear.DirectionMatrix.resize(static_cast<Eigen::Index>(Shear.DirectionVariable.size()), 3);
+				for (std::size_t Row = 0; Row < Shear.DirectionVariable.size(); ++Row)
+				{
+					const Vec3& Dir = P.Directions[Shear.DirectionVariable[Row]];
+					Shear.DirectionMatrix.row(static_cast<Eigen::Index>(Row)) = Eigen::RowVector3d(Dir.X, Dir.Y, Dir.Z);
 				}
 				P.CapSites.push_back(std::move(Shear));
 			}
@@ -659,51 +692,37 @@ bool FactorSparse(const Component& C, double Dt, double DeltaT, const std::vecto
 	return HasPositiveSparsePivots(S);
 }
 
-bool FactorCapStructured(const Program& P, const CapSite& Cap, const double* D, CapSiteFactor& Factor, Eigen::MatrixXd& F, Eigen::MatrixXd& SolvedF, Matrix3& K)
+bool FactorCapStructured(const Program& P, const CapSite& Cap, const double* D, CapScratch& S, CapSiteFactor& Factor, Eigen::MatrixXd& F, Eigen::MatrixXd& SolvedF, Matrix3& K)
 {
 	const Eigen::Index GroupRows = static_cast<Eigen::Index>(Cap.Groups.size());
 	const Eigen::Index FacetCount = static_cast<Eigen::Index>(Cap.Facets.size());
-	std::size_t DirectionCount = 0;
-	for (const std::size_t G : Cap.Groups)
-	{
-		DirectionCount += P.Groups[G].Count;
-	}
-	Eigen::VectorXd GroupSlackD(GroupRows);
-	Eigen::VectorXd FacetSlackD(FacetCount);
-	Eigen::MatrixXd Facets(FacetCount, 3);
-	Eigen::MatrixXd Directions(static_cast<Eigen::Index>(DirectionCount), 3);
-	Eigen::VectorXd DirectionD(static_cast<Eigen::Index>(DirectionCount));
-	std::vector<Eigen::Index> DirectionGroup(DirectionCount);
-	Eigen::Index Row = 0;
+	const Eigen::Index DirectionCount = static_cast<Eigen::Index>(Cap.DirectionVariable.size());
+	S.GroupSlackD.resize(GroupRows);
+	S.FacetSlackD.resize(FacetCount);
+	S.DirectionD.resize(DirectionCount);
 	for (Eigen::Index W = 0; W < GroupRows; ++W)
 	{
-		const std::size_t G = Cap.Groups[static_cast<std::size_t>(W)];
-		const Group& Gr = P.Groups[G];
-		GroupSlackD(W) = D[P.FirstSlack + static_cast<Eigen::Index>(G)];
-		for (std::size_t J = Gr.First; J < Gr.First + Gr.Count; ++J)
-		{
-			Directions.row(Row) = Eigen::RowVector3d(P.Directions[J].X, P.Directions[J].Y, P.Directions[J].Z);
-			DirectionD(Row) = D[J];
-			DirectionGroup[static_cast<std::size_t>(Row)] = W;
-			++Row;
-		}
+		S.GroupSlackD(W) = D[P.FirstSlack + static_cast<Eigen::Index>(Cap.Groups[static_cast<std::size_t>(W)])];
 	}
 	for (Eigen::Index Facet = 0; Facet < FacetCount; ++Facet)
 	{
-		const Vec3& Normal = Cap.Facets[static_cast<std::size_t>(Facet)];
-		Facets.row(Facet) = Eigen::RowVector3d(Normal.X, Normal.Y, Normal.Z);
-		FacetSlackD(Facet) = D[Cap.FirstSlack + Facet];
+		S.FacetSlackD(Facet) = D[Cap.FirstSlack + Facet];
 	}
-	Factor.Build(GroupSlackD, FacetSlackD, Facets, Directions, DirectionGroup, DirectionD);
+	for (Eigen::Index Row = 0; Row < DirectionCount; ++Row)
+	{
+		S.DirectionD(Row) = D[Cap.DirectionVariable[static_cast<std::size_t>(Row)]];
+	}
+	Factor.Build(S.GroupSlackD, S.FacetSlackD, Cap.FacetMatrix, Cap.DirectionMatrix, Cap.DirectionGroup, S.DirectionD);
 	if (!Factor.bPositive)
 	{
 		return false;
 	}
-	const Eigen::Matrix3d Full = Directions.transpose() * DirectionD.asDiagonal() * Directions;
+	const Eigen::Matrix3d Full = Cap.DirectionMatrix.transpose() * S.DirectionD.asDiagonal() * Cap.DirectionMatrix;
 	F.resize(3, GroupRows + FacetCount);
 	F.leftCols(GroupRows) = Factor.GroupSum;
-	F.rightCols(FacetCount) = Full.lazyProduct(Facets.transpose());
-	SolvedF = Factor.Solve(F.transpose());
+	F.rightCols(FacetCount).noalias() = Full.lazyProduct(Cap.FacetMatrix.transpose());
+	S.FT = F.transpose();
+	Factor.SolveInto(S.FT, SolvedF);
 	const Eigen::Matrix3d K3 = Full - F * SolvedF;
 	for (std::size_t R = 0; R < 3; ++R)
 	{
@@ -725,12 +744,13 @@ bool FactorNormal(const Component& C, const Program& P, Normal& N)
 	N.CapFactor.resize(N.bStructuredCaps ? 0 : P.CapSites.size());
 	N.CapStructured.resize(N.bStructuredCaps ? P.CapSites.size() : 0);
 	N.CapSolvedF.resize(N.bStructuredCaps ? P.CapSites.size() : 0);
+	N.CapScratchD.resize(N.bStructuredCaps ? P.CapSites.size() : 0);
 	for (std::size_t Index = 0; Index < P.CapSites.size(); ++Index)
 	{
 		const CapSite& Cap = P.CapSites[Index];
 		if (N.bStructuredCaps)
 		{
-			if (!FactorCapStructured(P, Cap, D, N.CapStructured[Index], N.CapF[Index], N.CapSolvedF[Index], SiteMatrix[Cap.SiteIndex]))
+			if (!FactorCapStructured(P, Cap, D, N.CapScratchD[Index], N.CapStructured[Index], N.CapF[Index], N.CapSolvedF[Index], SiteMatrix[Cap.SiteIndex]))
 			{
 				return false;
 			}
@@ -1244,6 +1264,7 @@ Outcome SolveProgram(const Component& C, const Program& P, const CertificateOpti
 	const double PairCount = static_cast<double>(P.Variables + 1);
 	SparseNormal Sparse;
 	const bool bSparse = C.Rows > Options.DenseRowLimit;
+	Normal N;
 	for (int Iteration = 0;; ++Iteration)
 	{
 		const Residuals R = ComputeResiduals(C, P, E, Bounds);
@@ -1265,7 +1286,6 @@ Outcome SolveProgram(const Component& C, const Program& P, const CertificateOpti
 		{
 			return Out;
 		}
-		Normal N;
 		N.Sparse = bSparse ? &Sparse : nullptr;
 		N.bStructuredCaps = Options.CapSite == CertificateOptions::CapSiteKind::Structured;
 		N.D = Eigen::VectorXd(P.Variables);
