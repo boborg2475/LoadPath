@@ -442,6 +442,78 @@ TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Authority.Judge.MatchesSolvingEachComponentAlo
 
 namespace
 {
+std::string Hex(double X)
+{
+	std::ostringstream Out;
+	Out << std::hexfloat << X;
+	return Out.str();
+}
+
+struct CapCase
+{
+	std::string Name;
+	double Cap;
+	int MaxIterations;
+};
+
+void CheckConsultedBoundsAreTheCappedAggregate(std::uint64_t Seed, const CapCase& Case, int& Consulted, int& Mismatches)
+{
+	MultiDraw D = MakeMultiDraw(Seed);
+	if (Case.Cap > 0.0)
+	{
+		D.Options.Certificate.LoadFactorCap = Case.Cap;
+	}
+	if (Case.MaxIterations > 0)
+	{
+		D.Options.Certificate.MaxIterations = Case.MaxIterations;
+	}
+	const double Cap = D.Options.Certificate.LoadFactorCap;
+	INFO("seed " << Seed << " (" << Case.Name << ", cap " << Cap << "): " << D.Description);
+	const AuthorityResult Whole = Judge(D.Model, D.Options, D.Loads);
+	const std::unique_ptr<ICollapseCertificate> Certificate = MakeLimitAnalysisCertificate();
+	for (std::size_t K = 0; K < Whole.Components.size(); ++K)
+	{
+		const ComponentReport& Got = Whole.Components[K];
+		if (!Got.bConsultedCertificate)
+		{
+			continue;
+		}
+		++Consulted;
+		const CertificateResult Want = Certificate->Decide(D.Model, D.Loads, D.Options.Certificate, Got.Bodies);
+		INFO("component " << K << " bodies " << Describe(Got.Bodies) << ": report t [" << Hex(Got.LoadFactorLower) << ", " << Hex(Got.LoadFactorUpper) << "], filtered aggregate t [" << Hex(Want.LoadFactorLower) << ", " << Hex(Want.LoadFactorUpper) << "], cap " << Hex(Cap));
+		const bool bSame = Got.LoadFactorLower == Want.LoadFactorLower && Got.LoadFactorUpper == Want.LoadFactorUpper;
+		Mismatches += bSame ? 0 : 1;
+		CHECK(Got.LoadFactorLower == Want.LoadFactorLower);
+		CHECK(Got.LoadFactorUpper == Want.LoadFactorUpper);
+		CHECK(Got.LoadFactorLower <= Cap);
+		CHECK(Got.LoadFactorUpper <= Cap);
+		for (const auto& Entry : Want.Components)
+		{
+			INFO("entry " << Describe(Entry.Bodies) << " t [" << Hex(Entry.LoadFactorLower) << ", " << Hex(Entry.LoadFactorUpper) << "]");
+			CHECK(Entry.LoadFactorLower <= Cap);
+			CHECK(Entry.LoadFactorUpper <= Cap);
+		}
+	}
+}
+}
+
+TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Authority.Judge.ConsultedBoundsAreTheCappedFilteredAggregate")
+{
+	const CapCase Cases[] = {{"default cap", 0.0, 0}, {"cap 1.2", 1.2, 0}, {"cap 3.0, 12 iterations", 3.0, 12}};
+	for (const CapCase& Case : Cases)
+	{
+		int Consulted = 0;
+		int Mismatches = 0;
+		for (int Draw = 0; Draw < JudgeDraws; ++Draw)
+		{
+			CheckConsultedBoundsAreTheCappedAggregate(JudgeSeedBase + static_cast<std::uint64_t>(Draw), Case, Consulted, Mismatches);
+		}
+		MESSAGE(Case.Name << ": " << JudgeDraws << " draws, " << Consulted << " consulted reports, " << Mismatches << " differ from the filtered aggregate");
+		CHECK(Consulted >= 1);
+	}
+}
+namespace
+{
 CertificateResult EntryAsResult(const CertificateResult& Whole, std::size_t K)
 {
 	CertificateResult R;
@@ -669,4 +741,47 @@ TEST_CASE("Authority.Combined.ConsultsTheCertificateOncePerJudge")
 			CHECK(SameIdList(Decides[0].Only, F.Pairs[1]));
 		}
 	}
+}
+
+namespace
+{
+class EntrylessCertificate final : public ICollapseCertificate
+{
+public:
+	CertificateResult Decide(const Structure& Model, std::span<const BodyLoad> Loads, const CertificateOptions& Options, std::span<const BodyId> Only) const override
+	{
+		CertificateResult Result = Inner->Decide(Model, Loads, Options, Only);
+		Result.Components.clear();
+		return Result;
+	}
+
+private:
+	std::unique_ptr<ICollapseCertificate> Inner = MakeLimitAnalysisCertificate();
+};
+}
+
+TEST_CASE("Authority.Combined.ACertificateWithNoEntriesReadsInvalidInput")
+{
+	PairsAndBrick F = MakePairsAndBrick();
+	const std::unique_ptr<IStructuralAuthority> Authority = MakeCombinedAuthority(MakeRbsmStandingAuthority(), std::make_unique<EntrylessCertificate>());
+	const AuthorityResult Result = Authority->Judge(F.Model, F.Loads, AuthorityOptions{}, nullptr);
+	INFO(DescribeAuthority(Result));
+	REQUIRE(Result.Components.size() == 4u);
+	CHECK(Result.Worst == ComponentVerdict::InvalidInput);
+	for (const std::vector<BodyId>& Pair : F.Pairs)
+	{
+		INFO("pair " << Describe(Pair));
+		const ComponentReport* Got = ReportFor(Result, Pair);
+		REQUIRE(Got != nullptr);
+		CHECK(Got->bConsultedCertificate);
+		CHECK(Got->Verdict == ComponentVerdict::InvalidInput);
+	}
+	const ComponentReport* Brick = ReportFor(Result, F.Brick);
+	REQUIRE(Brick != nullptr);
+	CHECK(Brick->Verdict == ComponentVerdict::Stands);
+	CHECK_FALSE(Brick->bConsultedCertificate);
+	const CascadeVerdict V = MakeCascade(MakeCombinedAuthority(MakeRbsmStandingAuthority(), std::make_unique<EntrylessCertificate>()))->Run(F.Model, F.Loads, CascadeOptions{}, nullptr);
+	INFO(DescribeVerdict(V));
+	CHECK(V.State == CascadeState::InvalidInput);
+	CHECK(V.Clusters.empty());
 }
