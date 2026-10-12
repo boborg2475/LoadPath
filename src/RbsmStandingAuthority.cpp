@@ -89,6 +89,7 @@ struct UpdateOutcome
 {
 	bool bStatusChanged = false;
 	bool bHeldSettled = true;
+	bool bUndecided = false;
 };
 
 struct TrialForces
@@ -464,6 +465,7 @@ UpdateOutcome UpdateActiveSet(const Problem& P, const Eigen::VectorXd& X, const 
 	const double HeldToleranceN = HeldForceToleranceRelative * P.ForceScaleN;
 	if (!std::isfinite(P.ForceScaleN))
 	{
+		Outcome.bUndecided = true;
 		return Outcome;
 	}
 	const double NoiseFloorN = DryNoiseFloorRelative * P.ForceScaleN;
@@ -630,7 +632,7 @@ void Govern(double Candidate, GoverningAxis Axis, InterfaceReading& Reading)
 	}
 }
 
-InterfaceReading ReadJoint(const Joint& J, const JointState& State, const Eigen::VectorXd& X, bool& bOverstressed)
+InterfaceReading ReadJoint(const Joint& J, const JointState& State, const Eigen::VectorXd& X, double NoiseFloorN, bool& bOverstressed)
 {
 	InterfaceReading Reading;
 	Reading.Id = J.Id;
@@ -643,7 +645,8 @@ InterfaceReading ReadJoint(const Joint& J, const JointState& State, const Eigen:
 		if (!Corner.bOpen)
 		{
 			const TrialForces T = Trial(J, C, X);
-			Corner.NormalForceN = T.NormalN;
+			const bool bNoiseTension = J.bReleasesOpening && T.NormalN < 0.0 && T.NormalN >= -NoiseFloorN;
+			Corner.NormalForceN = bNoiseTension ? 0.0 : T.NormalN;
 			Corner.ShearForceN = Corner.bSlipping ? State.HeldN[C] : T.ShearN;
 		}
 		const Vec3 ForceN = Add(Scale(Corner.NormalForceN, J.Normal), Corner.ShearForceN);
@@ -667,7 +670,7 @@ std::vector<InterfaceReading> ReadAll(const Problem& P, const std::vector<JointS
 	std::vector<InterfaceReading> Readings;
 	for (std::size_t I = 0; I < P.Joints.size(); ++I)
 	{
-		Readings.push_back(ReadJoint(P.Joints[I], States[I], X, bOverstressed));
+		Readings.push_back(ReadJoint(P.Joints[I], States[I], X, DryNoiseFloorRelative * P.ForceScaleN, bOverstressed));
 	}
 	return Readings;
 }
@@ -772,6 +775,12 @@ StandingResult SolveProblem(const Problem& P, const StandingOptions& Options)
 		}
 		std::vector<JointState> Next = States;
 		const UpdateOutcome Outcome = UpdateActiveSet(P, X, NeutralMotions, Next);
+		if (Outcome.bUndecided)
+		{
+			Result.Readings = ReadAll(P, States, X, bOverstressed);
+			Result.State = StandingState::Undecided;
+			return Result;
+		}
 		if (!Outcome.bStatusChanged && Outcome.bHeldSettled)
 		{
 			Result.Readings = ReadAll(P, States, X, bOverstressed);
