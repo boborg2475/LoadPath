@@ -321,6 +321,59 @@ Factorisation Factorise(const Eigen::MatrixXd& K, double PivotToleranceRelative)
 	return F;
 }
 
+Factorisation FactoriseBlocked(const Eigen::MatrixXd& K, double PivotToleranceRelative)
+{
+	constexpr Eigen::Index PanelWidth = 64;
+	const Eigen::Index N = K.rows();
+	Factorisation F;
+	F.Lower = K;
+	F.Order = IndexVector::LinSpaced(N, 0, N - 1);
+	Eigen::VectorXd Diagonal = K.diagonal();
+	Eigen::VectorXd Scaled(PanelWidth);
+	double LargestPivot = 0.0;
+	for (Eigen::Index Start = 0; Start < N; Start += PanelWidth)
+	{
+		const Eigen::Index Width = std::min(PanelWidth, N - Start);
+		for (Eigen::Index Step = Start; Step < Start + Width; ++Step)
+		{
+			Eigen::Index Pick = 0;
+			Diagonal.tail(N - Step).maxCoeff(&Pick);
+			Pick += Step;
+			const double Pivot = Diagonal(Pick);
+			if (!(Pivot > PivotToleranceRelative * LargestPivot))
+			{
+				return F;
+			}
+			LargestPivot = std::max(LargestPivot, Pivot);
+			F.Lower.row(Step).swap(F.Lower.row(Pick));
+			F.Lower.col(Step).swap(F.Lower.col(Pick));
+			std::swap(Diagonal(Step), Diagonal(Pick));
+			std::swap(F.Order(Step), F.Order(Pick));
+			const Eigen::Index Done = Step - Start;
+			const Eigen::Index Rest = N - Step - 1;
+			if (Done > 0)
+			{
+				Scaled.head(Done) = F.Lower.diagonal().segment(Start, Done).cwiseProduct(F.Lower.row(Step).segment(Start, Done).transpose());
+				F.Lower.col(Step).tail(Rest).noalias() -= F.Lower.block(Step + 1, Start, Rest, Done) * Scaled.head(Done);
+			}
+			F.Lower(Step, Step) = Pivot;
+			F.Lower.col(Step).tail(Rest) /= Pivot;
+			Diagonal.tail(Rest) -= Pivot * F.Lower.col(Step).tail(Rest).cwiseAbs2();
+			F.Rank = Step + 1;
+		}
+		const Eigen::Index Next = Start + Width;
+		const Eigen::Index Rest = N - Next;
+		if (Rest > 0)
+		{
+			const auto Panel = F.Lower.block(Next, Start, Rest, Width);
+			const Eigen::MatrixXd PanelD = Panel * F.Lower.diagonal().segment(Start, Width).asDiagonal();
+			F.Lower.bottomRightCorner(Rest, Rest).noalias() -= PanelD * Panel.transpose();
+			Diagonal.tail(Rest) = F.Lower.diagonal().tail(Rest);
+		}
+	}
+	return F;
+}
+
 Eigen::VectorXd Scatter(const Factorisation& F, const Eigen::VectorXd& Permuted)
 {
 	Eigen::VectorXd Original = Eigen::VectorXd::Zero(F.Order.size());
@@ -735,7 +788,9 @@ StandingResult SolveProblem(const Problem& P, const StandingOptions& Options)
 			Result.State = StandingState::InvalidInput;
 			return Result;
 		}
-		const Factorisation F = Factorise(K, Options.PivotToleranceRelative);
+		const Factorisation F = Options.Factor == StandingOptions::FactorKind::Reference
+			? Factorise(K, Options.PivotToleranceRelative)
+			: FactoriseBlocked(K, Options.PivotToleranceRelative);
 		std::vector<Eigen::VectorXd> NeutralMotions;
 		if (F.Rank < P.DofCount)
 		{

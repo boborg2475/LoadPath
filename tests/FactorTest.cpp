@@ -54,7 +54,14 @@ StandingOptions WithFactor(StandingOptions Options, FactorKind Kind)
 	return Options;
 }
 
-bool Near(double Got, double Want, double AbsoluteN)
+struct Gaps
+{
+	double WorstRelative = 0.0;
+	double WorstForceAbsoluteOverW = 0.0;
+	double WorstUtilisationAbsolute = 0.0;
+};
+
+bool Near(double Got, double Want, double AbsoluteFloor, Gaps& G, bool bForce, double WeightScale)
 {
 	if (std::isnan(Got) || std::isnan(Want))
 	{
@@ -64,10 +71,25 @@ bool Near(double Got, double Want, double AbsoluteN)
 	{
 		return true;
 	}
-	return std::abs(Got - Want) <= 1e-9 * std::max(std::abs(Got), std::abs(Want)) + AbsoluteN;
+	const double Gap = std::abs(Got - Want);
+	const double Scale = std::max(std::abs(Got), std::abs(Want));
+	if (std::isfinite(Gap))
+	{
+		if (Gap > AbsoluteFloor)
+		{
+			G.WorstRelative = std::max(G.WorstRelative, Gap / Scale);
+		}
+		if (bForce)
+		{
+			G.WorstForceAbsoluteOverW = std::max(G.WorstForceAbsoluteOverW, Gap / WeightScale);
+		}
+		else
+		{
+			G.WorstUtilisationAbsolute = std::max(G.WorstUtilisationAbsolute, Gap);
+		}
+	}
+	return Gap <= 1e-7 * Scale + AbsoluteFloor;
 }
-
-bool NearVec(const Vec3& Got, const Vec3& Want, double AbsoluteN) { return Near(Got.X, Want.X, AbsoluteN) && Near(Got.Y, Want.Y, AbsoluteN) && Near(Got.Z, Want.Z, AbsoluteN); }
 
 std::vector<BodyId> MechanismBodies(const StandingResult& R)
 {
@@ -79,43 +101,82 @@ std::vector<BodyId> MechanismBodies(const StandingResult& R)
 	return Out;
 }
 
-int CompareKinds(const FactorCase& C)
+bool Certified(StandingState S) { return S == StandingState::Stands || S == StandingState::Overstressed || S == StandingState::InvalidInput; }
+
+struct Comparison
+{
+	int Mismatches = 0;
+	bool bStateClassTraded = false;
+	bool bIterationsDiffer = false;
+	bool bCertified = false;
+	Gaps G;
+};
+
+Comparison CompareKinds(const FactorCase& C, bool bAllowTrade)
 {
 	const StandingResult Ref = SolveWith(C.Model, WithFactor(C.Options, FactorKind::Reference), C.Loads);
 	const StandingResult Blk = SolveWith(C.Model, WithFactor(C.Options, FactorKind::Blocked), C.Loads);
-	const double AbsN = 1e-12 * WeightN(C.Model);
+	const double W = WeightN(C.Model);
+	const double ForceFloorN = 1e-9 * W;
+	const double WeightScale = W > 0.0 ? W : 1.0;
 	INFO(C.Name << ": reference " << Ref.State << " after " << Ref.ActiveSetIterations << ", blocked " << Blk.State << " after " << Blk.ActiveSetIterations);
-	int Mismatches = 0;
+	Comparison Out;
 	auto Expect = [&](bool bOk, const std::string& What) {
 		if (!bOk)
 		{
-			++Mismatches;
+			++Out.Mismatches;
 			FAIL_CHECK(C.Name << ": " << What);
 		}
 	};
-	Expect(Ref.State == Blk.State, "state");
-	Expect(Ref.ActiveSetIterations == Blk.ActiveSetIterations, "active-set iterations");
+	const bool bSameState = Ref.State == Blk.State;
+	Out.bCertified = bSameState && (Ref.State == StandingState::Stands || Ref.State == StandingState::Overstressed);
+	if (!bSameState && !Certified(Ref.State) && !Certified(Blk.State))
+	{
+		Out.bStateClassTraded = true;
+		Expect(bAllowTrade, "mechanism and undecided traded on a fixture that allows no trade");
+	}
+	else
+	{
+		Expect(bSameState, "state");
+	}
+	Out.bIterationsDiffer = Ref.ActiveSetIterations != Blk.ActiveSetIterations;
+	Expect(!Out.bCertified || std::abs(Ref.ActiveSetIterations - Blk.ActiveSetIterations) <= 2, "active-set iterations differ by more than 2");
+	if (!bSameState || Ref.State == StandingState::Undecided)
+	{
+		return Out;
+	}
 	Expect(SameIdList(Ref.UnconstrainedBodies, Blk.UnconstrainedBodies), "unconstrained bodies");
 	Expect(SameIdList(MechanismBodies(Ref), MechanismBodies(Blk)), "mechanism bodies");
 	Expect(Ref.Readings.size() == Blk.Readings.size(), "reading count");
+	auto Force = [&](double X, double Y) { return Near(X, Y, ForceFloorN, Out.G, true, WeightScale); };
+	auto Util = [&](double X, double Y) { return Near(X, Y, 1e-9, Out.G, false, WeightScale); };
 	for (std::size_t I = 0; I < Ref.Readings.size() && I < Blk.Readings.size(); ++I)
 	{
 		const InterfaceReading& A = Ref.Readings[I];
 		const InterfaceReading& B = Blk.Readings[I];
 		const std::string At = "reading " + std::to_string(I) + " ";
 		Expect(SameHandle(A.Id, B.Id), At + "id");
-		Expect(Near(A.NormalForceN, B.NormalForceN, AbsN), At + "normal force " + std::to_string(A.NormalForceN) + " vs " + std::to_string(B.NormalForceN));
-		Expect(NearVec(A.ShearForceN, B.ShearForceN, AbsN), At + "shear force");
-		Expect(Near(A.Utilisation, B.Utilisation, 0.0), At + "utilisation");
-		Expect(Near(A.CompressionUtilisation, B.CompressionUtilisation, 0.0), At + "compression utilisation");
-		Expect(Near(A.TensionUtilisation, B.TensionUtilisation, 0.0), At + "tension utilisation");
-		Expect(Near(A.ShearUtilisation, B.ShearUtilisation, 0.0), At + "shear utilisation");
 		for (std::size_t K = 0; K < 4; ++K)
 		{
-			Expect(A.Corners[K].bOpen == B.Corners[K].bOpen, At + "corner " + std::to_string(K) + " open flag");
+			Expect(!Out.bCertified || A.Corners[K].bOpen == B.Corners[K].bOpen, At + "corner " + std::to_string(K) + " open flag");
 		}
+		if (!Out.bCertified)
+		{
+			Force(A.NormalForceN, B.NormalForceN);
+			Util(A.Utilisation, B.Utilisation);
+			continue;
+		}
+		Expect(Force(A.NormalForceN, B.NormalForceN), At + "normal force " + std::to_string(A.NormalForceN) + " vs " + std::to_string(B.NormalForceN));
+		const bool bShearX = Force(A.ShearForceN.X, B.ShearForceN.X);
+		const bool bShearY = Force(A.ShearForceN.Y, B.ShearForceN.Y);
+		const bool bShearZ = Force(A.ShearForceN.Z, B.ShearForceN.Z);
+		Expect(bShearX && bShearY && bShearZ, At + "shear force");
+		Expect(Util(A.Utilisation, B.Utilisation), At + "utilisation");
+		Expect(Util(A.CompressionUtilisation, B.CompressionUtilisation), At + "compression utilisation");
+		Expect(Util(A.TensionUtilisation, B.TensionUtilisation), At + "tension utilisation");
+		Expect(Util(A.ShearUtilisation, B.ShearUtilisation), At + "shear utilisation");
 	}
-	return Mismatches;
+	return Out;
 }
 
 StandingOptions Biaxial(double LambdaX, double LambdaY)
@@ -178,20 +239,35 @@ TEST_CASE("Statics.Factor.BlockedAgreesWithTheReference")
 	{
 		for (const FactorCase& C : NamedCases())
 		{
-			CompareKinds(C);
+			CompareKinds(C, false);
 		}
 	}
 	SUBCASE("seeded stacks and bridges")
 	{
 		int Disagreeing = 0;
+		int Traded = 0;
+		int IterationsDiffer = 0;
+		Gaps Worst;
+		Gaps WorstCertified;
+		int CertifiedDisagreeing = 0;
 		for (int Draw = 0; Draw < FactorDrawCount; ++Draw)
 		{
 			const SeededDraw Each = MakeSeededDraw(Draw);
 			const std::string Name = "master seed " + std::to_string(MasterSeed) + ", draw " + std::to_string(Draw) + " (generator seed " + std::to_string(Each.Seed) + "): " + Each.Fixture + ", lambda (" + std::to_string(Each.LambdaX) + ", " + std::to_string(Each.LambdaY) + ")";
-			Disagreeing += CompareKinds(FactorCase{Name, Each.Model, Biaxial(Each.LambdaX, Each.LambdaY), {}}) > 0 ? 1 : 0;
+			const Comparison R = CompareKinds(FactorCase{Name, Each.Model, Biaxial(Each.LambdaX, Each.LambdaY), {}}, true);
+			Disagreeing += R.Mismatches > 0 ? 1 : 0;
+			Gaps& Into = R.bCertified ? WorstCertified : Worst;
+			CertifiedDisagreeing += R.bCertified && R.Mismatches > 0 ? 1 : 0;
+			Traded += R.bStateClassTraded ? 1 : 0;
+			IterationsDiffer += R.bIterationsDiffer ? 1 : 0;
+			Into.WorstRelative = std::max(Into.WorstRelative, R.G.WorstRelative);
+			Into.WorstForceAbsoluteOverW = std::max(Into.WorstForceAbsoluteOverW, R.G.WorstForceAbsoluteOverW);
+			Into.WorstUtilisationAbsolute = std::max(Into.WorstUtilisationAbsolute, R.G.WorstUtilisationAbsolute);
 		}
-		INFO("over " << FactorDrawCount << " draws");
+		const int TradeBudget = std::max(1, FactorDrawCount / 1000);
+		MESSAGE("over " << FactorDrawCount << " draws: " << Traded << " traded mechanism and undecided (budget " << TradeBudget << "), " << IterationsDiffer << " differ in iterations, worst relative reading gap above the absolute floor " << Worst.WorstRelative << ", worst absolute force gap " << Worst.WorstForceAbsoluteOverW << " W, worst absolute utilisation gap " << Worst.WorstUtilisationAbsolute << " on mechanism draws (not asserted); " << Disagreeing << " draws disagree, " << CertifiedDisagreeing << " of them stands or overstressed, whose worst gaps are " << WorstCertified.WorstRelative << " relative, " << WorstCertified.WorstForceAbsoluteOverW << " W, " << WorstCertified.WorstUtilisationAbsolute << " utilisation");
 		CHECK(Disagreeing == 0);
+		CHECK(Traded <= TradeBudget);
 	}
 }
 

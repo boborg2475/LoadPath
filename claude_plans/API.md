@@ -1211,14 +1211,18 @@ bookkeeping behind the same interfaces and measures after each stage. Panels (an
 bonded run solved as one body) are contingent: built only if stages 1 and 2 leave the
 warehouse outside its budget.
 
-**Stage 1a, the factorisation itself.** `Factorise` becomes Eigen's blocked dense `LDLT`
-(symmetric pivoting, so the rank test that detects a mechanism stays a pivot test on `D`
-against `PivotToleranceRelative × max |D|`, and the null vectors come from the same factor),
-with the Schur-elimination of the slipping corners' transverse terms kept as it is. Every
-anchor must read the same state, the same active set and the same readings to 1e-9 relative:
-the property `Statics.Factor.BlockedAgreesWithTheReference` runs the seeded structures of the
-oracle test through both (the old factor kept in the test tier as the referee for one slice),
-and the `Measure.Scale.*` rows are re-run. Expected from the review's bench: the half
+**Stage 1a, the factorisation itself.** `Factorise` becomes a blocked right-looking pivoted
+LDLᵀ in the style of LAPACK `dpstrf` (`StandingOptions::FactorKind::Blocked`, the default;
+`Reference` is the rank-1 factor kept for one slice as the referee): 64-column panels, the
+largest signed updated diagonal as the pivot, the same `Pivot > PivotToleranceRelative × largest`
+cutoff, the same `Factorisation` shape, so the rank test, the null vectors and the Schur
+handling of slipping corners are untouched. (Eigen's own dense `LDLT` was tried and rejected:
+left-looking, it picks pivots before the Schur update and never stops, so it does not reveal
+rank; DESIGN §10.) The property `Statics.Factor.BlockedAgreesWithTheReference` runs the
+seeded structures of the oracle test and named fixtures through both kinds: `Stands` and
+`Overstressed` agree exactly, `Mechanism` and `Undecided` may trade places on at most 0.1 % of
+draws (borderline pivots), iterations within 2, forces at 1e-7 relative plus 1e-9 W absolute,
+utilisations at 1e-7 relative plus 1e-9 absolute; and the `Measure.Scale.*` rows are re-run. Expected from the review's bench: the half
 warehouse's elastic solve from 59 s to about 5 s, the 40 × 32 wall finishing.
 
 **Stage 1b, the sparse solve and no copies.**

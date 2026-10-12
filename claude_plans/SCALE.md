@@ -53,3 +53,24 @@ Mechanism and Undecided refereed by the certificate.
   82 s in the review's instrumented run), and consults the certificate only on Mechanism or
   Undecided components: 0 of 5 on the shed and the half warehouse. The certificate-alone column
   (594 s on the half warehouse) is what a release pass costs when the field cannot decide.
+
+## Stage 1a of 6b: the blocked factor (2026-10-12)
+
+`StandingOptions::FactorKind::Blocked` is a blocked right-looking pivoted LDLᵀ in the style
+of LAPACK `dpstrf` behind the same rank test (DESIGN §10; Eigen's own `LDLT` was tried and
+does not reveal rank). Elastic authority alone, at rest, Release:
+
+| Structure | DoF | Reference (rank-1) | Blocked |
+|---|---|---|---|
+| ec6 wall 16 × 20 (328 bricks) | 1,968 | 3.0–3.4 s, Stands after 1 | 0.44–0.50 s, Stands after 1 |
+| ec6 wall 32 × 40 (1,296 bricks) | 7,776 | not finished in 25 min (6a) | 24.1 s, Stands after 1 |
+
+The cheap rows with the blocked factor (same machine, same day): the 10 × 8 wall judges in
+19 ms (was 72), elastic 11 ms (was 50), the base-course cascade 15 ms; the shed judges in
+136 ms (was 614), elastic 78 ms (was 282), its cascades 199 and 216 ms (were 579 and 1,927).
+The certificate column is unchanged (851 ms and 7.3 s): its interior point has its own dense
+factor.
+
+The `Measure.Scale.*` rows are re-run below once the round is committed. The 32 × 40 wall at
+24 s is the n³ constant brought down, not the n³ removed: stage 1b's sparse factor is what
+makes a 1,215-brick warehouse wall cheap.

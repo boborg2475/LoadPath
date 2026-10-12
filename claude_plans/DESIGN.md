@@ -487,3 +487,35 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   that a reused verdict equals a fresh one. Each stage ends with the `Measure.Scale.*` rows
   appended to SCALE.md. The least-joint-movement selection owed to the hanging cases
   (`Deferred.Slice6.*`) is not in 6b; it is the certificate's next item.
+- *2026-10-12, orchestrator, slice 6b stage 1a, two rulings:* **the blocked factor is our own,
+  not Eigen's.** Eigen's dense `LDLT` is left-looking and picks each pivot before the Schur
+  update with no cutoff, so it does not reveal rank (3,078 of 34,493 factorisations disagreed
+  with the reference on rank, positive-definite cases among them); the stage-1a factor is a
+  blocked right-looking pivoted LDLᵀ in the style of LAPACK `dpstrf` (64-column panels, GEMV
+  within a panel, one GEMM per trailing update, the largest signed updated diagonal as the
+  pivot, the same `Pivot > tol × largest` cutoff, the same `Factorisation` shape), 7× faster at
+  1,968 DoF (0.45 s against 3.1 s) and 24 s at 7,776 DoF where the reference did not finish in
+  25 minutes. **What "agrees with the reference" means for a factor that rounds differently.**
+  The same eliminations summed in another order move readings by 1e-9 to 7e-7 relative through
+  a badly conditioned K, and 2 of 6,000 seeded draws sit so close to the pivot cutoff that
+  Mechanism and Undecided trade places. Ruled: `Stands` and `Overstressed`, the host-facing
+  certified answers, must agree exactly; `Mechanism` and `Undecided` may trade places on at
+  most 0.1 % of draws (both say "the field cannot stand this" and both are refereed by the
+  certificate); active-set iterations may differ by at most 2; forces compare at 1e-7 relative
+  plus 1e-9 of the structure's weight absolute, utilisations at 1e-7 relative plus 1e-9
+  absolute, so a 1e-16 utilisation is zero to the test. The 10×-looser-tolerance mutation must
+  still redden the property under these bounds.
+- *2026-10-12, orchestrator, stage 1a, amendment:* **the reading and iteration bounds apply
+  only to certified states.** A Mechanism or Undecided field never settled, so its readings
+  are arbitrary (a 6,557 W force gap between two factors on one Undecided draw) and its
+  iteration count is a path through a flipping active set; the API already calls those
+  readings informative only. So the property compares readings (1e-7 relative plus the
+  absolute floors) and iterations (within 2) only when both kinds read Stands or
+  Overstressed, where the measured worst gaps are 1.7e-14 W and 3.2e-11; on Mechanism and
+  Undecided draws it requires the state class and the body lists when the states match, and
+  the trade budget of 0.1 %. Second amendment, same day: an Undecided pair compares nothing
+  beyond its class (its open flags are the snapshot of a flipping active set: draw 5279 reads
+  Undecided after 17 on one factor and after the 50 cap on the other, with 7 flags apart);
+  body lists are compared when both read Mechanism, a verdict, or a certified state; open
+  flags only on certified states. The 10×-looser-tolerance mutation is caught by the trade
+  budget (32 trades against 6), not by the certified states, which it leaves untouched.
