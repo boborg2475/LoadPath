@@ -533,3 +533,47 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   judge still costing twice the elastic solve on the half warehouse (11.8 s against 5.9 s).
   Round (iii) against the certificate column, unchanged by 1a at 572 s, which is what every
   release pass pays per Undecided or Mechanism component.
+- *2026-10-12, orchestrator, stage 1b-i ruling:* **the sparse factor is the full-rank fast
+  path; any sign of rank deficiency hands that iteration to the dense blocked factor.**
+  `Eigen::SimplicialLDLT` does no pivoting, so once a pivot of D is tiny the rows below it are
+  divided by it and the factor past that point is noise; verifying null candidates taken from
+  such a factor (the API "6b" text) is verifying noise. So above `DenseDofLimit` the component
+  is assembled sparse and factorised with AMD ordering; if the factor reports success and
+  every pivot of D is finite and above `PivotToleranceRelative × max |D|`, the solve proceeds
+  from it and the readings are the dense path's to rounding; otherwise the iteration is redone
+  with `FactoriseBlocked`, whose rank test and null basis stage 1a verified. A mechanism
+  component above the limit therefore pays the dense factor once per rank-deficient
+  iteration, which the certificate it is then handed to dwarfs; the common case, a standing
+  wall, never does. The "unverifiable candidate reads Undecided" test of the brief has no
+  path to reach and is dropped; the detection rule itself is pinned by the mechanism wall
+  above the limit (`Statics.Sparse.AMechanismAboveTheLimitReadsTheSameAsBelowIt`) and by a
+  mutation that disables the fallback.
+- *2026-10-12, orchestrator, stage 1b-i amendment:* **an unpivoted pivot test is not a rank
+  test; the sparse path is accepted on an estimate of the smallest eigenvalue, not on its
+  pivots.** The dev round measured it: on 1,000 forced-sparse stacks and bridges, five
+  18-DoF bridges whose pivoted dense factor reads rank 17 passed every unpivoted pivot of
+  `SimplicialLDLT` at 1e-10 relative (the last pivot is bounded by λ_min / v_n², so a null
+  vector with little weight on the last-eliminated DoF hides behind a moderate pivot), and
+  the two paths then traded Mechanism and Undecided five times in 1,000 where the two dense
+  factors trade zero. So the acceptance rule is: factor succeeds, every pivot finite, and the
+  Rayleigh quotient after a fixed number of inverse iterations with the sparse factor from a
+  deterministic start vector exceeds a margin times `PivotToleranceRelative × max |D|`; any
+  failure hands the iteration to the dense blocked factor. Inverse iteration converges fastest
+  exactly when the matrix is near singular, which is the case that must be caught, and a
+  sound wall's estimate is far above the margin. The iteration count and the margin are set
+  by measurement in the round (trades on the forced-sparse draws against the cost on the
+  32 × 40 wall), not guessed, and recorded here. Also ratified from the round: a non-finite
+  sparse stiffness on the first iteration reads InvalidInput without allocating the dense
+  matrix to confirm it.
+- *2026-10-12, orchestrator, stage 1b-i, the measured constants:* **five inverse iterations,
+  margin 1.** The dev round swept 5, 10 and 20 iterations against margins 1, 10 and 100 on
+  the forced-sparse draws: every pair gave 0 trades on the 24 walls and 1 on the 1,000 stacks
+  and bridges (draw 443, a bridge reading Mechanism after 30 dense against Undecided after 22
+  sparse; a probe running the dense factor on every sparse acceptance found zero rank misses
+  after the change, six before, so the survivor is rounding drift on a long active-set path,
+  inside the budget of 1 per 1,000), and the 32 × 40 wall stayed sparse at 0.17–0.20 s with
+  an estimated λ_min / max |D| of 3.0e-6 against a bar of 1e-10. Nothing in the data
+  separates the pairs, so the smallest is taken; the constants are file-scope in the solver,
+  not options, because no caller has a reason to move them. A zero or non-finite norm during
+  the iteration rejects the factor. Skipping the estimate is caught only by the bridges (5
+  trades against 1), a thin margin to note for the review.

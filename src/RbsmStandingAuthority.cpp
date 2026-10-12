@@ -9,6 +9,9 @@
 #include <cstddef>
 #include <cstdint>
 #include <limits>
+#include <optional>
+#include <random>
+#include <utility>
 #include <vector>
 
 namespace loadpath
@@ -245,9 +248,9 @@ Eigen::Matrix3d CornerStiffness(const Joint& J, const JointState& State, std::si
 	return J.NormalStiffnessNPerM * NormalPart + J.TangentialStiffnessNPerM * (Eigen::Matrix3d::Identity() - NormalPart);
 }
 
-Eigen::MatrixXd AssembleStiffness(const Problem& P, const std::vector<JointState>& States)
+template <class AddBlock>
+void ForEachStiffnessBlock(const Problem& P, const std::vector<JointState>& States, AddBlock&& Add)
 {
-	Eigen::MatrixXd K = Eigen::MatrixXd::Zero(P.DofCount, P.DofCount);
 	for (std::size_t I = 0; I < P.Joints.size(); ++I)
 	{
 		const Joint& J = P.Joints[I];
@@ -265,11 +268,37 @@ Eigen::MatrixXd AssembleStiffness(const Problem& P, const std::vector<JointState
 					{
 						continue;
 					}
-					K.block<6, 6>(Offsets[R], Offsets[S]) += (Signs[R] * Signs[S]) * (G[R].transpose() * Kc * G[S]);
+					const Eigen::Matrix<double, 6, 6> Block = (Signs[R] * Signs[S]) * (G[R].transpose() * Kc * G[S]);
+					Add(Offsets[R], Offsets[S], Block);
 				}
 			}
 		}
 	}
+}
+
+Eigen::MatrixXd AssembleStiffness(const Problem& P, const std::vector<JointState>& States)
+{
+	Eigen::MatrixXd K = Eigen::MatrixXd::Zero(P.DofCount, P.DofCount);
+	ForEachStiffnessBlock(P, States, [&](int Row, int Col, const Eigen::Matrix<double, 6, 6>& Block) { K.block<6, 6>(Row, Col) += Block; });
+	return K;
+}
+
+using SparseMatrix = Eigen::SparseMatrix<double>;
+
+SparseMatrix AssembleScaledSparseStiffness(const Problem& P, const std::vector<JointState>& States)
+{
+	std::vector<Eigen::Triplet<double>> Triplets;
+	ForEachStiffnessBlock(P, States, [&](int Row, int Col, const Eigen::Matrix<double, 6, 6>& Block) {
+		for (int R = 0; R < 6; ++R)
+		{
+			for (int S = 0; S < 6; ++S)
+			{
+				Triplets.emplace_back(Row + R, Col + S, P.Scaling[Row + R] * Block(R, S) * P.Scaling[Col + S]);
+			}
+		}
+	});
+	SparseMatrix K(P.DofCount, P.DofCount);
+	K.setFromTriplets(Triplets.begin(), Triplets.end());
 	return K;
 }
 
@@ -749,6 +778,70 @@ bool IsAllFinite(const Eigen::MatrixXd& M)
 	return std::all_of(M.data(), M.data() + M.size(), [](double Value) { return std::isfinite(Value); });
 }
 
+bool IsAllFinite(const SparseMatrix& M)
+{
+	return std::all_of(M.valuePtr(), M.valuePtr() + M.nonZeros(), [](double Value) { return std::isfinite(Value); });
+}
+
+constexpr int InverseIterationCount = 5;
+constexpr double SparseAcceptanceMargin = 1.0;
+
+using SparseFactor = Eigen::SimplicialLDLT<SparseMatrix, Eigen::Lower, Eigen::AMDOrdering<int>>;
+
+double SmallestEigenvalueEstimate(const SparseMatrix& K, const SparseFactor& Factor)
+{
+	std::minstd_rand Generator(1);
+	Eigen::VectorXd V(K.rows());
+	for (Eigen::Index I = 0; I < V.size(); ++I)
+	{
+		V[I] = (Generator() & 1u) != 0 ? 1.0 : -1.0;
+	}
+	V.normalize();
+	for (int Step = 0; Step < InverseIterationCount; ++Step)
+	{
+		V = Factor.solve(V);
+		const double Norm = V.norm();
+		if (!(Norm > 0.0) || !std::isfinite(Norm))
+		{
+			return 0.0;
+		}
+		V /= Norm;
+	}
+	return V.dot(K * V);
+}
+
+struct SparseAttempt
+{
+	bool bNonFinite = false;
+	std::optional<Eigen::VectorXd> ScaledX;
+};
+
+SparseAttempt SolveSparseFullRank(const Problem& P, const std::vector<JointState>& States, const Eigen::VectorXd& Load, double PivotToleranceRelative)
+{
+	SparseAttempt Attempt;
+	const SparseMatrix K = AssembleScaledSparseStiffness(P, States);
+	if (!IsAllFinite(K))
+	{
+		Attempt.bNonFinite = true;
+		return Attempt;
+	}
+	const SparseFactor Factor(K);
+	if (Factor.info() != Eigen::Success)
+	{
+		return Attempt;
+	}
+	const Eigen::VectorXd Pivots = Factor.vectorD();
+	const double LargestPivot = Pivots.cwiseAbs().maxCoeff();
+	const bool bFullRank = std::all_of(Pivots.data(), Pivots.data() + Pivots.size(), [&](double Pivot) {
+		return std::isfinite(Pivot) && Pivot > PivotToleranceRelative * LargestPivot;
+	});
+	if (bFullRank && SmallestEigenvalueEstimate(K, Factor) > SparseAcceptanceMargin * PivotToleranceRelative * LargestPivot)
+	{
+		Attempt.ScaledX = Factor.solve(Load);
+	}
+	return Attempt;
+}
+
 int Severity(StandingState State)
 {
 	switch (State)
@@ -760,6 +853,32 @@ int Severity(StandingState State)
 	case StandingState::InvalidInput: return 4;
 	}
 	return 4;
+}
+
+enum class StepOutcome : std::uint8_t
+{
+	Continue,
+	Finished
+};
+
+StepOutcome AdvanceActiveSet(const Problem& P, const Eigen::VectorXd& X, const std::vector<Eigen::VectorXd>& NeutralMotions, bool& bOverstressed, std::vector<JointState>& States, StandingResult& Result)
+{
+	std::vector<JointState> Next = States;
+	const UpdateOutcome Outcome = UpdateActiveSet(P, X, NeutralMotions, Next);
+	if (Outcome.bUndecided)
+	{
+		Result.Readings = ReadAll(P, States, X, bOverstressed);
+		Result.State = StandingState::Undecided;
+		return StepOutcome::Finished;
+	}
+	if (!Outcome.bStatusChanged && Outcome.bHeldSettled)
+	{
+		Result.Readings = ReadAll(P, States, X, bOverstressed);
+		Result.State = bOverstressed ? StandingState::Overstressed : StandingState::Stands;
+		return StepOutcome::Finished;
+	}
+	States = std::move(Next);
+	return StepOutcome::Continue;
 }
 
 StandingResult SolveProblem(const Problem& P, const StandingOptions& Options)
@@ -782,6 +901,28 @@ StandingResult SolveProblem(const Problem& P, const StandingOptions& Options)
 	{
 		Result.ActiveSetIterations = Iteration;
 		const Eigen::VectorXd Load = D * AssembleLoad(P, States);
+		std::vector<Eigen::VectorXd> NeutralMotions;
+		if (P.DofCount > Options.DenseDofLimit)
+		{
+			const SparseAttempt Attempt = SolveSparseFullRank(P, States, Load, Options.PivotToleranceRelative);
+			if (Iteration == 1 && Attempt.bNonFinite)
+			{
+				Result.State = StandingState::InvalidInput;
+				return Result;
+			}
+			if (Attempt.ScaledX)
+			{
+				X = D * *Attempt.ScaledX;
+				FullRankStates = States;
+				FullRankX = X;
+				bHaveFullRank = true;
+				if (AdvanceActiveSet(P, X, NeutralMotions, bOverstressed, States, Result) == StepOutcome::Finished)
+				{
+					return Result;
+				}
+				continue;
+			}
+		}
 		const Eigen::MatrixXd K = D * AssembleStiffness(P, States) * D;
 		if (Iteration == 1 && !IsAllFinite(K))
 		{
@@ -791,7 +932,6 @@ StandingResult SolveProblem(const Problem& P, const StandingOptions& Options)
 		const Factorisation F = Options.Factor == StandingOptions::FactorKind::Reference
 			? Factorise(K, Options.PivotToleranceRelative)
 			: FactoriseBlocked(K, Options.PivotToleranceRelative);
-		std::vector<Eigen::VectorXd> NeutralMotions;
 		if (F.Rank < P.DofCount)
 		{
 			const std::vector<Eigen::VectorXd> Basis = NullBasis(F);
@@ -828,21 +968,10 @@ StandingResult SolveProblem(const Problem& P, const StandingOptions& Options)
 			FullRankX = X;
 			bHaveFullRank = true;
 		}
-		std::vector<JointState> Next = States;
-		const UpdateOutcome Outcome = UpdateActiveSet(P, X, NeutralMotions, Next);
-		if (Outcome.bUndecided)
+		if (AdvanceActiveSet(P, X, NeutralMotions, bOverstressed, States, Result) == StepOutcome::Finished)
 		{
-			Result.Readings = ReadAll(P, States, X, bOverstressed);
-			Result.State = StandingState::Undecided;
 			return Result;
 		}
-		if (!Outcome.bStatusChanged && Outcome.bHeldSettled)
-		{
-			Result.Readings = ReadAll(P, States, X, bOverstressed);
-			Result.State = bOverstressed ? StandingState::Overstressed : StandingState::Stands;
-			return Result;
-		}
-		States = Next;
 	}
 	Result.Readings = ReadAll(P, States, X, bOverstressed);
 	Result.State = StandingState::Undecided;

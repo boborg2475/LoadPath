@@ -1234,14 +1234,20 @@ warehouse's elastic solve 59 s to 5.9 s, the 32 × 40 wall finishing in 24 s).
 - `RbsmStandingAuthority`: `AssembleStiffness` builds an `Eigen::SparseMatrix<double>` from
   triplets (6 DoF per body, one 12 × 12 block per joint corner); the factorisation is
   `Eigen::SimplicialLDLT` with AMD ordering for a component above `DenseDofLimit` (default 600
-  DoF, 100 bodies) and the stage-1a dense LDLT at or below it, so every anchor in the suite
-  keeps its exact path and reading. Mechanism detection on the sparse path: a pivot of `D` at
-  or below `PivotToleranceRelative × max |D|` flags a candidate null direction; the candidate
-  null vectors are verified by `‖K v‖ ≤ tol ‖K‖ ‖v‖`; a flagged factor whose candidates do not
-  verify reads Undecided (fail closed, refereed by the certificate). The property
-  `Statics.Sparse.AgreesWithTheDensePath` runs seeded structures of 60 to 200 bodies through
-  both paths (the limit forced to 0 and to ∞) and requires identical states, identical active
-  sets and readings within 1e-9 relative.
+  DoF, 100 bodies; the largest default-suite component is 510 DoF) and the stage-1a dense
+  LDLT at or below it, so every anchor in the suite keeps its exact path and reading
+  (`Statics.Sparse.ADenseFixtureKeepsItsPath` pins two anchors bit-for-bit against a forced
+  dense limit). Rank on the sparse path (DESIGN §10, stage 1b-i ruling): the sparse factor is
+  the full-rank fast path; if it does not report success, or any pivot of `D` is non-finite
+  or at or below `PivotToleranceRelative × max |D|`, the iteration is redone through the
+  dense blocked factor, whose rank test and null basis stage 1a verified, so mechanisms above
+  the limit are decided by the same code as below it. The property
+  `Statics.Sparse.AgreesWithTheDensePath` runs seeded walls of 60 to 200 bodies and the
+  oracle's stacks and bridges through both paths (the limit forced to 0 and to `INT_MAX`)
+  under the stage-1a comparison rulings (certified states exact, trades budgeted, motions
+  within 1e-6 on Mechanism pairs, readings only on certified states), and
+  `Statics.Sparse.AMechanismAboveTheLimitReadsTheSameAsBelowIt` pins a 630-DoF dry wall's
+  Mechanism (105 moving bodies) across the limit.
 - `StandingResult` gains `Components` (bodies, state, iterations, the readings' indices), the
   per-component answer the solver already computes, so `CombinedAuthority` stops copying the
   structure per component for the elastic verdict. `ICollapseCertificate::Decide` gains a

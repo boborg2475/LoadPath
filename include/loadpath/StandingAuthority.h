@@ -35,6 +35,8 @@ struct StandingOptions
 		Blocked
 	};
 	FactorKind Factor = FactorKind::Blocked;
+	// A component with more DoF than this is factorised sparse, falling back to the dense factor on any sign of rank deficiency.
+	int DenseDofLimit = 600;
 };
 
 enum class StandingState : std::uint8_t

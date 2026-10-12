@@ -7,6 +7,9 @@
 #endif
 #include <Eigen/Cholesky>
 #include <Eigen/Core>
+#include <Eigen/OrderingMethods>
+#include <Eigen/SparseCholesky>
+#include <Eigen/SparseCore>
 #if defined(_MSC_VER)
 #pragma warning(pop)
 #endif
