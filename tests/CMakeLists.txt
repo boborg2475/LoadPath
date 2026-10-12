@@ -35,6 +35,7 @@ add_executable(loadpath_tests
 	DryCornerNoiseFloorTest.cpp
 	StandingFieldPropertyTest.cpp
 	StandingLateralDryWallTest.cpp
+	StandingLateralLimeWallTest.cpp
 	CascadeFuzzTest.cpp
 	CascadeFloatingWallTest.cpp
 	GeometryWarehouseTest.cpp

@@ -20,10 +20,12 @@ struct OwnFieldCheck
 	double WorstResidualOverW = 0.0;
 	double WorstTensionOverW = 0.0;
 	double WorstConeExcessOverW = 0.0;
+	int CohesiveSlipping = 0;
 };
 
 // Sums gravity, host loads and every reading corner's force on each free body of a Stands result, recomputed here from the readings alone.
-inline OwnFieldCheck CheckOwnField(const Structure& Model, const StandingResult& Result, const Vec3& GravityVectorMPerS2, std::span<const BodyLoad> Loads = {})
+// With bCohesiveCone, tensionless cohesive joints are checked too: |S| <= cA/4 + muN per corner and no corner Slipping.
+inline OwnFieldCheck CheckOwnField(const Structure& Model, const StandingResult& Result, const Vec3& GravityVectorMPerS2, std::span<const BodyLoad> Loads = {}, bool bCohesiveCone = false)
 {
 	OwnFieldCheck Out;
 	std::size_t Slots = 0;
@@ -70,18 +72,22 @@ inline OwnFieldCheck CheckOwnField(const Structure& Model, const StandingResult&
 		const InterfaceRecord& Record = Model.Interface(Reading.Id);
 		const StrengthProfile Profile = Model.EffectiveProfile(Reading.Id);
 		const bool bDry = !(Profile.TensileStrengthPa > 0.0) && !(Profile.ShearCohesionPa > 0.0);
+		const bool bCohesive = bCohesiveCone && !(Profile.TensileStrengthPa > 0.0) && Profile.ShearCohesionPa > 0.0;
+		const double CohesionN = bCohesive ? Profile.ShearCohesionPa * Record.AreaM2 / 4.0 : 0.0;
 		const double WeightN = std::max(Model.Body(Record.BodyA).bGrounded ? 0.0 : WeightOfSlot[Record.BodyA.Index], Model.Body(Record.BodyB).bGrounded ? 0.0 : WeightOfSlot[Record.BodyB.Index]);
 		for (const CornerReading& Corner : Reading.Corners)
 		{
 			const Vec3 ForceN = Plus(Times(Corner.NormalForceN, Record.NormalAToB), Corner.ShearForceN);
 			Add(Record.BodyB, Corner.PointM, ForceN);
 			Add(Record.BodyA, Corner.PointM, Times(-1.0, ForceN));
-			if (!bDry || !(WeightN > 0.0))
+			if (!(bDry || bCohesive) || !(WeightN > 0.0))
 			{
 				continue;
 			}
+			Out.CohesiveSlipping += bCohesive && Corner.bSlipping ? 1 : 0;
+			Out.Violations += bCohesive && Corner.bSlipping ? 1 : 0;
 			const double TensionOverW = -Corner.NormalForceN / WeightN;
-			const double ConeExcessOverW = (Length(Corner.ShearForceN) - Profile.FrictionCoefficient * Corner.NormalForceN) / WeightN;
+			const double ConeExcessOverW = (Length(Corner.ShearForceN) - CohesionN - Profile.FrictionCoefficient * Corner.NormalForceN) / WeightN;
 			Out.WorstTensionOverW = std::max(Out.WorstTensionOverW, std::isnan(TensionOverW) ? HUGE_VAL : TensionOverW);
 			Out.WorstConeExcessOverW = std::max(Out.WorstConeExcessOverW, std::isnan(ConeExcessOverW) ? HUGE_VAL : ConeExcessOverW);
 			Out.Violations += (TensionOverW <= OwnFieldRelative && ConeExcessOverW <= OwnFieldRelative) ? 0 : 1;
