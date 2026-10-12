@@ -28,6 +28,13 @@ struct StandingOptions
 	int MaxActiveSetIterations = 50;
 	// A pivot below this times the largest pivot is a mechanism.
 	double PivotToleranceRelative = 1e-10;
+	// Reference is the rank-1 factor kept as the test tier's referee; it goes away after slice 6b.
+	enum class FactorKind : std::uint8_t
+	{
+		Reference,
+		Blocked
+	};
+	FactorKind Factor = FactorKind::Blocked;
 };
 
 enum class StandingState : std::uint8_t

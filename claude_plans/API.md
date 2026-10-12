@@ -1216,7 +1216,7 @@ warehouse outside its budget.
 against `PivotToleranceRelative × max |D|`, and the null vectors come from the same factor),
 with the Schur-elimination of the slipping corners' transverse terms kept as it is. Every
 anchor must read the same state, the same active set and the same readings to 1e-9 relative:
-the property `Statics.Factor.EigenAgreesWithTheRankOneFactor` runs the seeded structures of the
+the property `Statics.Factor.BlockedAgreesWithTheReference` runs the seeded structures of the
 oracle test through both (the old factor kept in the test tier as the referee for one slice),
 and the `Measure.Scale.*` rows are re-run. Expected from the review's bench: the half
 warehouse's elastic solve from 59 s to about 5 s, the 40 × 32 wall finishing.
