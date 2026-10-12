@@ -128,15 +128,11 @@ struct BorderLastOrdering
 
 struct SparseNormal
 {
-	Eigen::SimplicialLLT<Eigen::SparseMatrix<double>, Eigen::Lower, Eigen::AMDOrdering<int>> Factor;
-	Eigen::SparseMatrix<double> M;
 	std::vector<Eigen::Triplet<double>> Triplets;
-	bool bAnalysed = false;
-	bool bBordered = false;
 	Eigen::SimplicialLDLT<Eigen::SparseMatrix<double>, Eigen::Lower, BorderLastOrdering> BorderedFactor;
 	Eigen::SparseMatrix<double> Bordered;
 	std::vector<Eigen::Triplet<double>> BorderedTriplets;
-	bool bBorderedAnalysed = false;
+	bool bAnalysed = false;
 };
 
 struct CapScratch
@@ -155,8 +151,6 @@ struct Normal
 	std::vector<double> H;
 	double Ht = 0.0;
 	std::vector<Eigen::MatrixXd> CapF;
-	std::vector<Eigen::LLT<Eigen::MatrixXd>> CapFactor;
-	bool bStructuredCaps = true;
 	std::vector<CapSiteFactor> CapStructured;
 	std::vector<Eigen::MatrixXd> CapSolvedF;
 	std::vector<CapScratch> CapScratchD;
@@ -617,16 +611,6 @@ Eigen::MatrixXd AssembleSites(const Component& C, const std::vector<Matrix3>& Si
 	return M;
 }
 
-bool HasPositiveSparsePivots(const SparseNormal& S)
-{
-	if (S.Factor.info() != Eigen::Success)
-	{
-		return false;
-	}
-	const Eigen::VectorXd Pivots = S.Factor.matrixL().nestedExpression().diagonal();
-	return std::all_of(Pivots.data(), Pivots.data() + Pivots.size(), [](double Pivot) { return Pivot > 0.0 && IsFinite(Pivot); });
-}
-
 void AddSparseSiteBlock(std::vector<Eigen::Triplet<double>>& Triplets, int OffsetRow, const Jacobian& RowSide, int OffsetColumn, const Jacobian& ColumnSide, double Sign, const Matrix3& K)
 {
 	std::array<double, 18> KG{};
@@ -680,10 +664,10 @@ bool FactorBordered(const Component& C, double Coupling, SparseNormal& S)
 	}
 	S.Bordered.resize(C.Rows + 1, C.Rows + 1);
 	S.Bordered.setFromTriplets(S.BorderedTriplets.begin(), S.BorderedTriplets.end());
-	if (!S.bBorderedAnalysed)
+	if (!S.bAnalysed)
 	{
 		S.BorderedFactor.analyzePattern(S.Bordered);
-		S.bBorderedAnalysed = true;
+		S.bAnalysed = true;
 	}
 	S.BorderedFactor.factorize(S.Bordered);
 	if (HasBorderedPivots(S))
@@ -734,52 +718,7 @@ bool FactorSparse(const Component& C, double Dt, double DeltaT, const std::vecto
 	}
 	N.Ht = Dt + DeltaT;
 	const double Coupling = Dt * DeltaT / N.Ht;
-	if (S.bBordered)
-	{
-		return FactorBordered(C, Coupling, S);
-	}
-	const double* Demand = C.Demand.data();
-	for (int Col = 0; Col < C.Rows; ++Col)
-	{
-		if (Demand[Col] == 0.0)
-		{
-			continue;
-		}
-		for (int Row = 0; Row < C.Rows; ++Row)
-		{
-			if (Demand[Row] != 0.0)
-			{
-				S.Triplets.emplace_back(Row, Col, Coupling * Demand[Row] * Demand[Col]);
-			}
-		}
-	}
-	S.M.resize(C.Rows, C.Rows);
-	S.M.setFromTriplets(S.Triplets.begin(), S.Triplets.end());
-	if (!S.bAnalysed)
-	{
-		S.Factor.analyzePattern(S.M);
-		S.bAnalysed = true;
-	}
-	S.Factor.factorize(S.M);
-	if (HasPositiveSparsePivots(S))
-	{
-		return true;
-	}
-	double LargestDiagonal = -std::numeric_limits<double>::infinity();
-	for (int Row = 0; Row < C.Rows; ++Row)
-	{
-		LargestDiagonal = std::max(LargestDiagonal, S.M.coeff(Row, Row));
-	}
-	if (!(LargestDiagonal > 0.0))
-	{
-		return false;
-	}
-	for (int Row = 0; Row < C.Rows; ++Row)
-	{
-		S.M.coeffRef(Row, Row) += RegularisationRelative * LargestDiagonal;
-	}
-	S.Factor.factorize(S.M);
-	return HasPositiveSparsePivots(S);
+	return FactorBordered(C, Coupling, S);
 }
 
 bool FactorCapStructured(const Program& P, const CapSite& Cap, const double* D, CapScratch& S, CapSiteFactor& Factor, Eigen::MatrixXd& F, Eigen::MatrixXd& SolvedF, Matrix3& K)
@@ -831,66 +770,16 @@ bool FactorNormal(const Component& C, const Program& P, Normal& N)
 	const double* D = N.D.data();
 	std::vector<Matrix3> SiteMatrix(C.Sites.size(), Matrix3{});
 	N.CapF.resize(P.CapSites.size());
-	N.CapFactor.resize(N.bStructuredCaps ? 0 : P.CapSites.size());
-	N.CapStructured.resize(N.bStructuredCaps ? P.CapSites.size() : 0);
-	N.CapSolvedF.resize(N.bStructuredCaps ? P.CapSites.size() : 0);
-	N.CapScratchD.resize(N.bStructuredCaps ? P.CapSites.size() : 0);
+	N.CapStructured.resize(P.CapSites.size());
+	N.CapSolvedF.resize(P.CapSites.size());
+	N.CapScratchD.resize(P.CapSites.size());
 	for (std::size_t Index = 0; Index < P.CapSites.size(); ++Index)
 	{
 		const CapSite& Cap = P.CapSites[Index];
-		if (N.bStructuredCaps)
-		{
-			if (!FactorCapStructured(P, Cap, D, N.CapScratchD[Index], N.CapStructured[Index], N.CapF[Index], N.CapSolvedF[Index], SiteMatrix[Cap.SiteIndex]))
-			{
-				return false;
-			}
-			continue;
-		}
-		const Eigen::Index GroupRows = static_cast<Eigen::Index>(Cap.Groups.size());
-		const Eigen::Index Width = GroupRows + static_cast<Eigen::Index>(Cap.Facets.size());
-		Eigen::Matrix3d K3 = Eigen::Matrix3d::Zero();
-		Eigen::MatrixXd F = Eigen::MatrixXd::Zero(3, Width);
-		Eigen::MatrixXd Mww = Eigen::MatrixXd::Zero(Width, Width);
-		Eigen::VectorXd A(Width);
-		for (Eigen::Index W = 0; W < GroupRows; ++W)
-		{
-			const std::size_t G = Cap.Groups[static_cast<std::size_t>(W)];
-			const Group& Gr = P.Groups[G];
-			Mww(W, W) += D[P.FirstSlack + static_cast<Eigen::Index>(G)];
-			for (std::size_t J = Gr.First; J < Gr.First + Gr.Count; ++J)
-			{
-				const Eigen::Vector3d Dir(P.Directions[J].X, P.Directions[J].Y, P.Directions[J].Z);
-				A.setZero();
-				A(W) = 1.0;
-				for (std::size_t K = 0; K < Cap.Facets.size(); ++K)
-				{
-					A(GroupRows + static_cast<Eigen::Index>(K)) = Dot(Cap.Facets[K], P.Directions[J]);
-				}
-				K3.noalias() += D[J] * Dir * Dir.transpose();
-				F.noalias() += D[J] * Dir * A.transpose();
-				Mww.noalias() += D[J] * A * A.transpose();
-			}
-		}
-		for (std::size_t K = 0; K < Cap.Facets.size(); ++K)
-		{
-			const Eigen::Index Offset = static_cast<Eigen::Index>(K);
-			Mww(GroupRows + Offset, GroupRows + Offset) += D[Cap.FirstSlack + Offset];
-		}
-		N.CapFactor[Index].compute(Mww);
-		if (!HasPositivePivots(N.CapFactor[Index]))
+		if (!FactorCapStructured(P, Cap, D, N.CapScratchD[Index], N.CapStructured[Index], N.CapF[Index], N.CapSolvedF[Index], SiteMatrix[Cap.SiteIndex]))
 		{
 			return false;
 		}
-		K3.noalias() -= F * N.CapFactor[Index].solve(F.transpose());
-		Matrix3& K = SiteMatrix[Cap.SiteIndex];
-		for (std::size_t R = 0; R < 3; ++R)
-		{
-			for (std::size_t Col = 0; Col < 3; ++Col)
-			{
-				K[R * 3 + Col] += K3(static_cast<Eigen::Index>(R), static_cast<Eigen::Index>(Col));
-			}
-		}
-		N.CapF[Index] = std::move(F);
 	}
 	for (std::size_t G = 0; G < P.Groups.size(); ++G)
 	{
@@ -995,26 +884,16 @@ Eigen::VectorXd SolveNormal(const Component& C, const Program& P, const Normal& 
 		{
 			Rw(GroupRows + static_cast<Eigen::Index>(K)) = Rp[Cap.FirstRow + static_cast<Eigen::Index>(K)];
 		}
-		if (N.bStructuredCaps)
-		{
-			Rw = N.CapStructured[Index].Solve(Rw);
-		}
-		const Eigen::Vector3d Force = N.bStructuredCaps ? Eigen::Vector3d(N.CapF[Index] * Rw) : Eigen::Vector3d(N.CapF[Index] * N.CapFactor[Index].solve(Rw));
+		Rw = N.CapStructured[Index].Solve(Rw);
+		const Eigen::Vector3d Force = N.CapF[Index] * Rw;
 		ApplyCornerForce(Yp, C.Sites[Cap.SiteIndex], Vec3{-Force(0), -Force(1), -Force(2)});
 	}
 	auto Equilibrium = Y.head(C.Rows);
 	if (N.Sparse != nullptr)
 	{
-		if (N.Sparse->bBordered)
-		{
-			Eigen::VectorXd Extended = Eigen::VectorXd::Zero(C.Rows + 1);
-			Extended.head(C.Rows) = Equilibrium;
-			Equilibrium = N.Sparse->BorderedFactor.solve(Extended).head(C.Rows);
-		}
-		else
-		{
-			Equilibrium = N.Sparse->Factor.solve(Eigen::VectorXd(Equilibrium));
-		}
+		Eigen::VectorXd Extended = Eigen::VectorXd::Zero(C.Rows + 1);
+		Extended.head(C.Rows) = Equilibrium;
+		Equilibrium = N.Sparse->BorderedFactor.solve(Extended).head(C.Rows);
 	}
 	else
 	{
@@ -1026,7 +905,7 @@ Eigen::VectorXd SolveNormal(const Component& C, const Program& P, const Normal& 
 		const Eigen::Index GroupRows = static_cast<Eigen::Index>(Cap.Groups.size());
 		const Vec3 V = RelativeVelocity(C.Sites[Cap.SiteIndex], Yp);
 		const Eigen::Vector3d Velocity(V.X, V.Y, V.Z);
-		const Eigen::VectorXd Yw = N.bStructuredCaps ? Eigen::VectorXd(CapRhs[Index] - N.CapSolvedF[Index] * Velocity) : Eigen::VectorXd(N.CapFactor[Index].solve(CapRhs[Index] - N.CapF[Index].transpose() * Velocity));
+		const Eigen::VectorXd Yw = CapRhs[Index] - N.CapSolvedF[Index] * Velocity;
 		for (Eigen::Index W = 0; W < GroupRows; ++W)
 		{
 			Yp[P.FirstGroupRow + static_cast<Eigen::Index>(Cap.Groups[static_cast<std::size_t>(W)])] = Yw(W);
@@ -1399,8 +1278,6 @@ Outcome SolveProgram(const Component& C, const Program& P, const CertificateOpti
 			return Out;
 		}
 		N.Sparse = bSparse ? &Sparse : nullptr;
-		Sparse.bBordered = Options.Coupling == CertificateOptions::CouplingKind::Bordered;
-		N.bStructuredCaps = Options.CapSite == CertificateOptions::CapSiteKind::Structured;
 		N.D = Eigen::VectorXd(P.Variables);
 		for (Eigen::Index I = 0; I < P.Variables; ++I)
 		{

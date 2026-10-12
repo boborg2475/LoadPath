@@ -315,35 +315,6 @@ Eigen::VectorXd AssembleLoad(const Problem& P, const std::vector<JointState>& St
 	return Load;
 }
 
-Factorisation Factorise(const Eigen::MatrixXd& K, double PivotToleranceRelative)
-{
-	const Eigen::Index N = K.rows();
-	Factorisation F;
-	F.Lower = K;
-	F.Order = IndexVector::LinSpaced(N, 0, N - 1);
-	double LargestPivot = 0.0;
-	for (Eigen::Index Step = 0; Step < N; ++Step)
-	{
-		Eigen::Index Pick = 0;
-		F.Lower.diagonal().tail(N - Step).maxCoeff(&Pick);
-		Pick += Step;
-		const double Pivot = F.Lower(Pick, Pick);
-		if (!(Pivot > PivotToleranceRelative * LargestPivot))
-		{
-			break;
-		}
-		LargestPivot = std::max(LargestPivot, Pivot);
-		F.Lower.row(Step).swap(F.Lower.row(Pick));
-		F.Lower.col(Step).swap(F.Lower.col(Pick));
-		std::swap(F.Order(Step), F.Order(Pick));
-		const Eigen::Index Rest = N - Step - 1;
-		F.Lower.col(Step).tail(Rest) /= Pivot;
-		F.Lower.bottomRightCorner(Rest, Rest).noalias() -= Pivot * F.Lower.col(Step).tail(Rest) * F.Lower.col(Step).tail(Rest).transpose();
-		F.Rank = Step + 1;
-	}
-	return F;
-}
-
 Factorisation FactoriseBlocked(const Eigen::MatrixXd& K, double PivotToleranceRelative)
 {
 	constexpr Eigen::Index PanelWidth = 64;
@@ -923,9 +894,7 @@ StandingResult SolveProblem(const Problem& P, const StandingOptions& Options)
 			Result.State = StandingState::InvalidInput;
 			return Result;
 		}
-		const Factorisation F = Options.Factor == StandingOptions::FactorKind::Reference
-			? Factorise(K, Options.PivotToleranceRelative)
-			: FactoriseBlocked(K, Options.PivotToleranceRelative);
+		const Factorisation F = FactoriseBlocked(K, Options.PivotToleranceRelative);
 		if (F.Rank < P.DofCount)
 		{
 			const std::vector<Eigen::VectorXd> Basis = NullBasis(F);

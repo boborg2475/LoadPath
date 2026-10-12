@@ -34,16 +34,16 @@ bool SameVector(const Vec3& A, const Vec3& B)
 
 bool SameStanding(const StandingOptions& A, const StandingOptions& B)
 {
-	const auto& [AGravity, AIterations, APivot, AFactor, ADense] = A;
-	const auto& [BGravity, BIterations, BPivot, BFactor, BDense] = B;
-	return SameVector(AGravity, BGravity) && AIterations == BIterations && APivot == BPivot && AFactor == BFactor && ADense == BDense;
+	const auto& [AGravity, AIterations, APivot, ADense] = A;
+	const auto& [BGravity, BIterations, BPivot, BDense] = B;
+	return SameVector(AGravity, BGravity) && AIterations == BIterations && APivot == BPivot && ADense == BDense;
 }
 
 bool SameCertificate(const CertificateOptions& A, const CertificateOptions& B)
 {
-	const auto& [AGravity, AGenerators, ACap, ATolerance, AIterations, AStallWindow, AStallImprovement, ARows, ACapSite, ACoupling] = A;
-	const auto& [BGravity, BGenerators, BCap, BTolerance, BIterations, BStallWindow, BStallImprovement, BRows, BCapSite, BCoupling] = B;
-	return SameVector(AGravity, BGravity) && AGenerators == BGenerators && ACap == BCap && ATolerance == BTolerance && AIterations == BIterations && AStallWindow == BStallWindow && AStallImprovement == BStallImprovement && ARows == BRows && ACapSite == BCapSite && ACoupling == BCoupling;
+	const auto& [AGravity, AGenerators, ACap, ATolerance, AIterations, AStallWindow, AStallImprovement, ARows] = A;
+	const auto& [BGravity, BGenerators, BCap, BTolerance, BIterations, BStallWindow, BStallImprovement, BRows] = B;
+	return SameVector(AGravity, BGravity) && AGenerators == BGenerators && ACap == BCap && ATolerance == BTolerance && AIterations == BIterations && AStallWindow == BStallWindow && AStallImprovement == BStallImprovement && ARows == BRows;
 }
 
 bool SameOptions(const AuthorityOptions& A, const AuthorityOptions& B)

@@ -36,22 +36,8 @@ struct CertificateOptions
 	int StallWindow = 20;
 	// In (0, 1): the factor the largest relative residual must improve by within StallWindow iterations.
 	double StallImprovement = 0.5;
-	// Components with more equilibrium rows than this factor the normal matrix sparsely; at or below it, dense.
+	// Components with more equilibrium rows than this factor the normal matrix sparsely, with structured cap sites and the load-factor coupling as a border; at or below it, dense.
 	int DenseRowLimit = 600;
-	// How a cap site's group-and-facet block is factored; Dense keeps the full LLT as the referee for the structured form.
-	enum class CapSiteKind : std::uint8_t
-	{
-		Dense,
-		Structured
-	};
-	CapSiteKind CapSite = CapSiteKind::Structured;
-	// How the sparse path carries the load-factor coupling; InFactor adds it to the normal matrix and is the referee, removed at the 6b close.
-	enum class CouplingKind : std::uint8_t
-	{
-		InFactor,
-		Bordered
-	};
-	CouplingKind Coupling = CouplingKind::Bordered;
 };
 
 struct CertificateResult
