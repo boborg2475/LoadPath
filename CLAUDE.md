@@ -99,7 +99,9 @@ its real prefix, so the Release default run is part of validating any such case.
 runs in Release at every slice close, by the orchestrator, before the review**: that is the
 milestone that keeps an opt-in tier from rotting (TRAPS). `Measure.*` are timing rows
 (SCALE.md) run one per process from a copy of the exe, never as a tier; the script excludes them
-with the other two prefixes.
+with the other two prefixes. The two cheap rows, `Measure.Scale.WallTenByEight` and
+`Measure.Scale.Shed` (about 2 s together in Release), run at every slice close with the Slow
+tier so the harness cannot rot.
 
 **Deliberately red tests live under the `Deferred.` prefix.** A test that pins an answer the
 current implementation cannot yet give (owed to a later slice, named in the test's second

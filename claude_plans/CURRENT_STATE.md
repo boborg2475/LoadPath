@@ -81,7 +81,7 @@ and 5 rulings.
    [SCALE.md](SCALE.md): the shed (420 pieces) judges in 0.5 s, the half warehouse (1,822) in
    91 s, the 1,296-brick wall never finishes its first dense solve (killed at 25 min, 1.07 GB).
    First finding fixed in the round: an ungrounded component with a net force falls rigid, so
-   a floating wall releases as one cluster (it was cut into bricks, or Undecided in Release).
+   a floating wall releases as one cluster (it was cut into bricks, or Undecided on the bonded wall).
    Left from the round: a grounded mechanism that severs a dry joint can still record
    `Tension inf` as the reason (the cascade copies the reading); an ungrounded component with
    zero net force (a pure couple) still goes through the general selection and can list
@@ -96,9 +96,11 @@ and 5 rulings.
    and the corners are not bonded (five components by construction). From the review:
    the rigid fall is now gravity-only (a loaded floating pair read one cluster where the upper
    brick lifts or slides off alone; fixed red-first), a rounding residue in the net force
-   flipped a squeezed floating pair to Collapses (fixed by the gravity-only rule; the relative
-   floor `FeasibilityTolerance` on the net force in the gravity-only branch is unreached by any
-   test, a `> 0` mutant survives: pin it or remove it), the fall motion and the origin's base
+   flipped a squeezed floating pair to Collapses (fixed by the gravity-only rule; the relative floor the dev added in that branch was dead
+   by construction, the net magnitude there being exactly 0 or 1, and was removed), and a
+   floating component carrying any non-zero `BodyLoad` takes the general selection and can be
+   cut (0.01 N on the bonded 4 × 4: 2 clusters, 8 failures) until the least-joint-movement
+   selection exists, the fall motion and the origin's base
    beds had no tests (added), the `ExpectedLayout` oracle copies the post/beam/plank formulas
    from the generator (brick positions and the areas are independent), `Beds`/`Perpends` keep
    removed ids after openings (the header says so now), the spec is not validated (`Bays ≤ 0`

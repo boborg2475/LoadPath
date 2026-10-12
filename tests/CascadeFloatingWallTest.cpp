@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <span>
 #include <vector>
 
 using namespace loadpath;
@@ -42,11 +43,11 @@ void ReportLayers(const Structure& Model)
 	MESSAGE("combined: " << DescribeAuthority(Combined) << ", disagreements " << Combined.Disagreements);
 }
 
-void CheckReleasedAsOneCluster(Structure& Model, const std::vector<BodyId>& Floating)
+void CheckReleasedAsOneCluster(Structure& Model, const std::vector<BodyId>& Floating, std::span<const BodyLoad> Loads = {})
 {
 	ReportLayers(Model);
 	const std::chrono::steady_clock::time_point Start = std::chrono::steady_clock::now();
-	const CascadeVerdict V = MakeCascade(MakeAuthority())->Run(Model, {}, CascadeOptions{});
+	const CascadeVerdict V = MakeCascade(MakeAuthority())->Run(Model, Loads, CascadeOptions{});
 	const double Ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - Start).count();
 	MESSAGE("cascade " << Ms << " ms: " << DescribeVerdict(V));
 	INFO(DescribeVerdict(V));
@@ -135,6 +136,25 @@ TEST_CASE("Cascade.FloatingWall.BondedWallWithoutItsBaseCourseReleasesAsOneClust
 		BuildWithoutBase(W, JointOrFail(Loaded.Value, "clay_gp_mortar_bed_ec6").Profile, JointOrFail(Loaded.Value, "clay_gp_mortar_perpend_ec6").Profile, S.Courses, S.BricksPerCourse);
 		CheckReleasedAsOneCluster(W.Model, LiveFreeBodies(W.Model, W.Value.Courses));
 	}
+}
+
+// A load with zero force adds nothing, so the floating wall falls exactly as it does unloaded.
+TEST_CASE("Cascade.FloatingWall.AZeroForceLoadDoesNotStopTheRigidFall")
+{
+	const CatalogueResult Loaded = LoadCatalogue(ReadCatalogueFile());
+	REQUIRE(Loaded.Ok());
+	FloatingWall W;
+	SUBCASE("bonded ec6 4 x 4")
+	{
+		BuildWithoutBase(W, JointOrFail(Loaded.Value, "clay_gp_mortar_bed_ec6").Profile, JointOrFail(Loaded.Value, "clay_gp_mortar_perpend_ec6").Profile, 4, 4);
+	}
+	SUBCASE("dry 4 x 4")
+	{
+		BuildWithoutBase(W, DryJoint(0.7), DryJoint(0.7), 4, 4);
+	}
+	const BodyId Top = W.Value.Courses.back().front();
+	const BodyLoad Loads[] = {BodyLoad{Top, Vec3{0.0, 0.0, 0.0}, W.Model.Body(Top).CentroidM}};
+	CheckReleasedAsOneCluster(W.Model, LiveFreeBodies(W.Model, W.Value.Courses), Loads);
 }
 
 TEST_CASE("Slow.Cascade.FloatingWall.DryTenByEightWithoutItsBaseCourseReleasesAsOneCluster")
