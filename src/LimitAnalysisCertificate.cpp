@@ -1535,10 +1535,43 @@ bool SolveSelection(const Selection& Sel, const CertificateOptions& Options, Eig
 	return false;
 }
 
+bool IsGrounded(const Component& C)
+{
+	return std::any_of(C.Sites.begin(), C.Sites.end(), [](const Site& S) { return S.OffsetA < 0 || S.OffsetB < 0; });
+}
+
+bool FallRigid(const Component& C, ComponentVerdict& V)
+{
+	Vec3 Net;
+	for (int Offset = 0; Offset < C.Rows; Offset += DofPerBody)
+	{
+		Net = statics::Add(Net, Vec3{-C.Demand(Offset + 0), -C.Demand(Offset + 1), -C.Demand(Offset + 2)});
+	}
+	const double Magnitude = Length(Net);
+	if (!(Magnitude > 0.0) || !IsFinite(Magnitude))
+	{
+		return false;
+	}
+	const Vec3 Direction = Scale(1.0 / Magnitude, Net);
+	V.State = CertificateState::Collapses;
+	V.Lower = 0.0;
+	V.Upper = 0.0;
+	for (const BodyId Id : C.FreeBodies)
+	{
+		V.Moving.push_back(Id);
+		V.Mechanism.push_back(MechanismMotion{Id, Direction, Vec3{}});
+	}
+	return true;
+}
+
 ComponentVerdict DecideComponent(const Component& C, const CertificateOptions& Options)
 {
 	ComponentVerdict V;
 	V.Upper = Options.LoadFactorCap;
+	if (!IsGrounded(C) && FallRigid(C, V))
+	{
+		return V;
+	}
 	const Program InnerProgram = BuildProgram(C, Options.ConeGenerators, 1.0, Options.LoadFactorCap, true);
 	const Outcome Inner = SolveProgram(C, InnerProgram, Options);
 	V.Iterations = Inner.Iterations;
