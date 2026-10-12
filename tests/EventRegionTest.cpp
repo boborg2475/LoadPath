@@ -416,32 +416,27 @@ TEST_CASE("Structure.Lineage.IsFreshOnEveryCopy")
 {
 	Structure First;
 	Structure Second;
-	CHECK_MESSAGE(HasLineage<Structure>, "Structure has no Lineage() returning std::uint64_t");
-	if (!HasLineage<Structure>)
-	{
-		return;
-	}
-	CHECK(LineageOf(First) != LineageOf(Second));
-	const std::optional<std::uint64_t> Original = LineageOf(First);
+	CHECK(First.Lineage() != Second.Lineage());
+	const std::uint64_t Original = First.Lineage();
 	AddGroundPlane(First);
 	AddBox(First, BrickShape(0.0, 0));
-	CHECK(LineageOf(First) == Original);
+	CHECK(First.Lineage() == Original);
 	const Structure Copied = First;
-	CHECK(LineageOf(Copied) != LineageOf(First));
-	CHECK(LineageOf(Copied) != LineageOf(Second));
-	CHECK(LineageOf(First) == Original);
+	CHECK(Copied.Lineage() != First.Lineage());
+	CHECK(Copied.Lineage() != Second.Lineage());
+	CHECK(First.Lineage() == Original);
 	Structure Assigned;
-	const std::optional<std::uint64_t> BeforeAssignment = LineageOf(Assigned);
+	const std::uint64_t BeforeAssignment = Assigned.Lineage();
 	Assigned = First;
-	CHECK(LineageOf(Assigned) != LineageOf(First));
-	CHECK(LineageOf(Assigned) != BeforeAssignment);
-	CHECK(LineageOf(Assigned) != LineageOf(Copied));
+	CHECK(Assigned.Lineage() != First.Lineage());
+	CHECK(Assigned.Lineage() != BeforeAssignment);
+	CHECK(Assigned.Lineage() != Copied.Lineage());
 	CHECK(Assigned.Revision() == First.Revision());
 	Structure Moved = std::move(First);
-	CHECK(LineageOf(Moved) == Original);
+	CHECK(Moved.Lineage() == Original);
 	Structure MoveAssigned;
 	MoveAssigned = std::move(Moved);
-	CHECK(LineageOf(MoveAssigned) == Original);
+	CHECK(MoveAssigned.Lineage() == Original);
 }
 
 TEST_CASE("Authority.Judge.AVerdictOnADivergedCopyReusesNothing")
@@ -475,14 +470,8 @@ TEST_CASE("Authority.Judge.AVerdictOnADivergedCopyReusesNothing")
 	CHECK(FreshA->Verdict == ComponentVerdict::Stands);
 	const AuthorityResult Got = Authority->Judge(Model, Loads, AuthorityOptions{}, &VC);
 	INFO("judged against the copy's verdict: " << DescribeAuthority(Got));
-	CHECK_MESSAGE(HasResultLineage<AuthorityResult>, "AuthorityResult has no Lineage");
-	const std::optional<std::uint64_t> CopyLineage = LineageOf(Copy);
-	const std::optional<std::uint64_t> ModelLineage = LineageOf(Model);
-	if (CopyLineage && ModelLineage && HasResultLineage<AuthorityResult>)
-	{
-		CHECK(ResultLineageOf(VC) == CopyLineage);
-		CHECK(ResultLineageOf(Got) == ModelLineage);
-	}
+	CHECK(VC.Lineage == Copy.Lineage());
+	CHECK(Got.Lineage == Model.Lineage());
 	CHECK(Got.Components.size() == 2u);
 	CheckFresh(Got, {A});
 	CheckFresh(Got, {B});
@@ -502,12 +491,25 @@ TEST_CASE("Authority.Judge.InvalidOptionsAreInvalidWhateverIsClean")
 		Edit(Options.Standing);
 		Variants.emplace_back(Name, Options);
 	};
+	const auto AddCertificate = [&](const char* Name, auto Edit)
+	{
+		AuthorityOptions Options;
+		Edit(Options.Certificate);
+		Variants.emplace_back(Name, Options);
+	};
 	Add("Standing.PivotToleranceRelative 0", [](StandingOptions& S) { S.PivotToleranceRelative = 0.0; });
 	Add("Standing.PivotToleranceRelative -1e-10", [](StandingOptions& S) { S.PivotToleranceRelative = -1.0e-10; });
 	Add("Standing.PivotToleranceRelative 1", [](StandingOptions& S) { S.PivotToleranceRelative = 1.0; });
 	Add("Standing.PivotToleranceRelative NaN", [](StandingOptions& S) { S.PivotToleranceRelative = NaN; });
 	Add("Standing.MaxActiveSetIterations 0", [](StandingOptions& S) { S.MaxActiveSetIterations = 0; });
 	Add("Standing.MaxActiveSetIterations -1", [](StandingOptions& S) { S.MaxActiveSetIterations = -1; });
+	AddCertificate("Certificate.ConeGenerators 3", [](CertificateOptions& O) { O.ConeGenerators = 3; });
+	AddCertificate("Certificate.ConeGenerators 5", [](CertificateOptions& O) { O.ConeGenerators = 5; });
+	AddCertificate("Certificate.LoadFactorCap 0", [](CertificateOptions& O) { O.LoadFactorCap = 0.0; });
+	AddCertificate("Certificate.LoadFactorCap +inf", [](CertificateOptions& O) { O.LoadFactorCap = std::numeric_limits<double>::infinity(); });
+	AddCertificate("Certificate.FeasibilityTolerance 0", [](CertificateOptions& O) { O.FeasibilityTolerance = 0.0; });
+	AddCertificate("Certificate.MaxIterations 0", [](CertificateOptions& O) { O.MaxIterations = 0; });
+	AddCertificate("Certificate.Gravity differs from Standing.Gravity", [](CertificateOptions& O) { O.Gravity = Vec3{0.0, 0.0, -9.0}; });
 	for (const auto& [Name, Options] : Variants)
 	{
 		INFO("options: " << std::string(Name));
@@ -1022,15 +1024,21 @@ TEST_CASE("Authority.Judge.DifferentOptionsReuseNothing")
 	AuthorityOptions Cap = Base;
 	Cap.Certificate.LoadFactorCap = 100.0;
 	Variants.emplace_back("Certificate.LoadFactorCap 100", Cap);
-	AuthorityOptions CapSite = Base;
-	CapSite.Certificate.CapSite = CertificateOptions::CapSiteKind::Dense;
-	Variants.emplace_back("Certificate.CapSite Dense", CapSite);
-	AuthorityOptions Window = Base;
-	Window.Certificate.StallWindow = 0;
-	Variants.emplace_back("Certificate.StallWindow 0", Window);
-	AuthorityOptions Improvement = Base;
-	Improvement.Certificate.StallImprovement = 0.25;
-	Variants.emplace_back("Certificate.StallImprovement 0.25", Improvement);
+	const auto Add = [&](const char* Name, auto Edit)
+	{
+		AuthorityOptions Options = Base;
+		Edit(Options);
+		Variants.emplace_back(Name, Options);
+	};
+	Add("Standing.MaxActiveSetIterations 49", [](AuthorityOptions& O) { O.Standing.MaxActiveSetIterations = 49; });
+	Add("Standing.Factor Reference", [](AuthorityOptions& O) { O.Standing.Factor = StandingOptions::FactorKind::Reference; });
+	Add("Certificate.FeasibilityTolerance 1e-8", [](AuthorityOptions& O) { O.Certificate.FeasibilityTolerance = 1.0e-8; });
+	Add("Certificate.MaxIterations 199", [](AuthorityOptions& O) { O.Certificate.MaxIterations = 199; });
+	Add("Certificate.DenseRowLimit 6", [](AuthorityOptions& O) { O.Certificate.DenseRowLimit = 6; });
+	Add("Certificate.CapSite Dense", [](AuthorityOptions& O) { O.Certificate.CapSite = CertificateOptions::CapSiteKind::Dense; });
+	Add("Certificate.StallWindow 11", [](AuthorityOptions& O) { O.Certificate.StallWindow = 11; });
+	Add("Certificate.StallImprovement 0.4", [](AuthorityOptions& O) { O.Certificate.StallImprovement = 0.4; });
+	Add("Certificate.Coupling InFactor", [](AuthorityOptions& O) { O.Certificate.Coupling = CertificateOptions::CouplingKind::InFactor; });
 	for (const auto& [Name, Options] : Variants)
 	{
 		INFO("options differing in " << std::string(Name));
@@ -1070,4 +1078,110 @@ TEST_CASE("Authority.Judge.ADifferentCouplingReusesNothing")
 		CheckFresh(Got, Part);
 	}
 	CheckSameVerdict(Got, Fresh, F.Model, 0.0, 0.0);
+}
+
+TEST_CASE("Structure.Lineage.AMovedFromStructureTakesAFreshLineage")
+{
+	Structure A;
+	AddGroundPlane(A);
+	AddBox(A, BrickShape(0.0, 0));
+	const std::uint64_t Original = A.Lineage();
+	const std::uint64_t Revision = A.Revision();
+	Structure B(std::move(A));
+	CHECK(B.Lineage() == Original);
+	CHECK(B.Revision() == Revision);
+	CHECK(B.LiveBodyCount() == 2u);
+	CHECK(A.Lineage() != B.Lineage());
+	CHECK(A.Lineage() != Original);
+	Structure C;
+	C = std::move(B);
+	CHECK(C.Lineage() == Original);
+	CHECK(C.Revision() == Revision);
+	CHECK(C.LiveBodyCount() == 2u);
+	CHECK(B.Lineage() != C.Lineage());
+	CHECK(B.Lineage() != Original);
+	CHECK(B.Lineage() != A.Lineage());
+}
+
+TEST_CASE("Authority.Judge.AVerdictOnARebuiltMovedFromStructureReusesNothing")
+{
+	const auto Build = [](Structure& Model, const StrengthProfile& Bed, std::vector<BodyLoad>& Loads)
+	{
+		const BodyId Ground = AddGroundPlane(Model);
+		const ProfileId P = AddProfileOk(Model, Bed);
+		const Box Shape = BrickShape(0.0, 0);
+		const BodyId Brick = AddBox(Model, Shape);
+		AddInterfaceOk(Model, OnGroundPlane(Ground, Brick, Shape, P));
+		Loads = {BodyLoad{Brick, Vec3{PushOverWeight * BrickMassKg * GravityMPerS2, 0.0, 0.0}, Shape.CentreM}};
+		return Brick;
+	};
+	const std::unique_ptr<IStructuralAuthority> Authority = MakeAuthority();
+	for (const bool bAssign : {false, true})
+	{
+		INFO(std::string(bAssign ? "move assignment" : "move construction"));
+		Structure A;
+		std::vector<BodyLoad> BondedLoads;
+		const BodyId Brick = Build(A, BondedJoint(1.0e6, 1.0e6, ThreeComponentFriction), BondedLoads);
+		std::optional<Structure> Moved;
+		if (bAssign)
+		{
+			Moved.emplace();
+			*Moved = std::move(A);
+		}
+		else
+		{
+			Moved.emplace(std::move(A));
+		}
+		Structure& B = *Moved;
+		CHECK(B.Revision() == 3u);
+		std::vector<BodyLoad> DryLoads;
+		const BodyId Rebuilt = Build(A, DryJoint(ThreeComponentFriction), DryLoads);
+		CHECK(SameHandle(Rebuilt, Brick));
+		CHECK(SameHandle(DryLoads[0].Body, BondedLoads[0].Body));
+		CHECK(NearVec(DryLoads[0].ForceN, BondedLoads[0].ForceN, 0.0));
+		CHECK(NearVec(DryLoads[0].PointM, BondedLoads[0].PointM, 0.0));
+		const AuthorityResult VA = Authority->Judge(A, DryLoads, AuthorityOptions{}, nullptr);
+		INFO("rebuilt A: " << DescribeAuthority(VA));
+		const ComponentReport* OnA = ComponentOf(VA, {Brick});
+		REQUIRE(OnA != nullptr);
+		CHECK(OnA->Verdict == ComponentVerdict::Collapses);
+		for (int K = 1; K <= 3; ++K)
+		{
+			AddBox(B, BrickShape(static_cast<double>(K), 0));
+		}
+		CHECK(B.Revision() == 6u);
+		const AuthorityResult Fresh = Authority->Judge(B, BondedLoads, AuthorityOptions{}, nullptr);
+		INFO("fresh on B: " << DescribeAuthority(Fresh));
+		const ComponentReport* FreshBrick = ComponentOf(Fresh, {Brick});
+		REQUIRE(FreshBrick != nullptr);
+		CHECK(FreshBrick->Verdict == ComponentVerdict::Stands);
+		const AuthorityResult Got = Authority->Judge(B, BondedLoads, AuthorityOptions{}, &VA);
+		INFO("B judged against A's verdict: " << DescribeAuthority(Got));
+		CheckFresh(Got, {Brick});
+		CheckSameVerdict(Got, Fresh, B, 0.0, 0.0);
+	}
+}
+
+TEST_CASE("Authority.Judge.AChangedLoadForceDirtiesItsComponent")
+{
+	ThreeComponents F = MakeThreeComponents();
+	const auto C = MakeCounted();
+	const BodyId Top = F.Parts[2][1];
+	const Vec3 CentreM = F.Model.Body(Top).CentroidM;
+	std::vector<BodyLoad> Light = F.Loads;
+	Light.push_back(BodyLoad{Top, Vec3{0.1 * BrickMassKg * GravityMPerS2, 0.0, 0.0}, CentreM});
+	std::vector<BodyLoad> Heavy = F.Loads;
+	Heavy.push_back(BodyLoad{Top, Vec3{PushOverWeight * BrickMassKg * GravityMPerS2, 0.0, 0.0}, CentreM});
+	const AuthorityResult First = C->Authority->Judge(F.Model, Light, AuthorityOptions{}, nullptr);
+	C->Solves.clear();
+	const AuthorityResult Second = C->Authority->Judge(F.Model, Heavy, AuthorityOptions{}, &First);
+	INFO("first: " << DescribeAuthority(First));
+	INFO("second: " << DescribeAuthority(Second));
+	CheckSolvedOnly(C->Solves, F.Parts[2]);
+	CheckFresh(Second, F.Parts[2]);
+	const ComponentReport* Pushed = ComponentOf(Second, F.Parts[2]);
+	REQUIRE(Pushed != nullptr);
+	CHECK(Pushed->Verdict == ComponentVerdict::Collapses);
+	CheckReused(Second, First, F.Model, F.Parts[0]);
+	CheckReused(Second, First, F.Model, F.Parts[1]);
 }

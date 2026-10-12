@@ -16,7 +16,6 @@
 
 #include <algorithm>
 #include <cmath>
-#include <concepts>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -28,40 +27,6 @@
 
 namespace loadpath::test
 {
-template <class S>
-constexpr bool HasLineage = requires(const S& Model) { { Model.Lineage() } -> std::same_as<std::uint64_t>; };
-
-template <class R>
-constexpr bool HasResultLineage = requires(const R& Result) { { Result.Lineage } -> std::convertible_to<std::uint64_t>; };
-
-template <class S>
-std::optional<std::uint64_t> LineageOf(const S& Model)
-{
-	if constexpr (HasLineage<S>)
-	{
-		return Model.Lineage();
-	}
-	else
-	{
-		(void)Model;
-		return std::nullopt;
-	}
-}
-
-template <class R>
-std::optional<std::uint64_t> ResultLineageOf(const R& Result)
-{
-	if constexpr (HasResultLineage<R>)
-	{
-		return static_cast<std::uint64_t>(Result.Lineage);
-	}
-	else
-	{
-		(void)Result;
-		return std::nullopt;
-	}
-}
-
 struct SolveCall
 {
 	std::size_t LiveBodies = 0;

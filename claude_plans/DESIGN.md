@@ -802,3 +802,10 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   warehouse's 89 s to 58.6 s; the Slow ratio bar 0.93 from a median 0.871 on the 310-body
   wall, thin over its worst run (0.911), which the 3c review should weigh against a larger
   fixture.
+- *2026-10-12, orchestrator, stage 2 second fix round (merged):* ratified from the dev round:
+  `LineageToken` is a private nested class of `Structure` (not a detail namespace); the
+  default constructor mints, so `Structure() = default`; copy self-assignment keeps the
+  current value rather than minting; the revision counter is untouched by a move (the
+  moved-from structure keeps its count, which the rebuilt-source test relies on). The merge
+  kept the fix round's eight-variant `Add` table in the options-reuse test over the 3c
+  branch's three and added the `Coupling` variant to it.
