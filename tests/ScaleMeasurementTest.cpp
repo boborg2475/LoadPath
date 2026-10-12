@@ -2,6 +2,7 @@
 #include "CatalogueTestSupport.h"
 #include "CertificateTestSupport.h"
 #include "StaticsTestSupport.h"
+#include "WarehouseTestSupport.h"
 
 #include "loadpath/Cascade.h"
 #include "loadpath/Catalogue.h"
@@ -111,30 +112,6 @@ Subject WarehouseSubject(const std::string& Name, geometry::WarehouseSpec Spec, 
 		S.BaseCourse = W.Walls[0].Courses[0];
 	}
 	return S;
-}
-
-geometry::WarehouseSpec ShedSpec()
-{
-	geometry::WarehouseSpec Spec;
-	Spec.LengthBricks = 12;
-	Spec.WidthBricks = 8;
-	Spec.Courses = 10;
-	Spec.Bays = 2;
-	Spec.PlanksPerBay = 3;
-	Spec.Openings = {geometry::Opening{0, 5, 2, 0, 7}, geometry::Opening{2, 3, 2, 4, 8}};
-	return Spec;
-}
-
-geometry::WarehouseSpec HalfWarehouseSpec()
-{
-	geometry::WarehouseSpec Spec;
-	Spec.LengthBricks = 30;
-	Spec.WidthBricks = 15;
-	Spec.Courses = 20;
-	Spec.Bays = 3;
-	Spec.PlanksPerBay = 4;
-	Spec.Openings = {geometry::Opening{0, 10, 3, 0, 12}, geometry::Opening{2, 8, 3, 8, 14}};
-	return Spec;
 }
 
 struct CascadeTiming

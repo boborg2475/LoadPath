@@ -176,8 +176,7 @@ cheap `Measure.Scale.*` rows after them); the `Deferred.*` tier holds the physic
      level, so one site's rounding failure reads the component Undecided (rare); the stall
      rule is a safety stop that no large fixture in the suite reaches since 3c (its pins are
      the ec6 1e-15 wall and the shear-capped brick);
-   - tests: `ShedSpec` exists twice (ScaleMeasurementTest, GeometryWarehouseTest) and wants a
-     shared fixture header; `Certificate.Sparse.AgreesWithTheDensePath` is now the only
+   - tests: `Certificate.Sparse.AgreesWithTheDensePath` is now the only
      two-path comparison for the certificate (13 s in Release; load factors 1e-9, iteration
      counts equal, since the close: a border coupling off by 0.01 % reddens it, by 1.2× over
      the 1e-12 absolute floor; near-zero load factors differ by 7e-22 at base, so a floor near

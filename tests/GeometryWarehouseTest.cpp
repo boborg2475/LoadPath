@@ -1,4 +1,5 @@
 #include "StaticsTestSupport.h"
+#include "WarehouseTestSupport.h"
 
 #include "loadpath/geometry/BoxContacts.h"
 #include "loadpath/geometry/Warehouse.h"
@@ -44,13 +45,7 @@ struct Layout
 
 geometry::WarehouseSpec ShedSpec(Structure& Model)
 {
-	geometry::WarehouseSpec Spec;
-	Spec.LengthBricks = 12;
-	Spec.WidthBricks = 8;
-	Spec.Courses = 10;
-	Spec.Bays = 2;
-	Spec.PlanksPerBay = 3;
-	Spec.Openings = {geometry::Opening{0, 5, 2, 0, 7}, geometry::Opening{2, 3, 2, 4, 8}};
+	geometry::WarehouseSpec Spec = loadpath::test::ShedSpec();
 	Spec.Bed = AddProfileOk(Model, DryJoint(0.7));
 	Spec.Perpend = AddProfileOk(Model, DryJoint(0.6));
 	Spec.Bearing = AddProfileOk(Model, DryJoint(0.3));
