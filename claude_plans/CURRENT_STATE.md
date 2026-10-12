@@ -212,12 +212,18 @@ carries the slice-2, 3, 4a and 4b rulings.
   says so); the nail row's withdrawal 0.42 kN is the 3.1 mm nail's datum on a 4.0 mm nail row
   (noted); the timber bearing friction 0.3 is the Wood Handbook range's low end matched through
   a search snippet, the PDF host unreachable from here: open it and confirm the sentence.
-- **The elastic authority never settles on the dry 10 × 8 running-bond wall** (85 bricks, 227
-  joints, μ 0.7, gravity only; measured 2026-10-11 on the slice-5b generator): Undecided after
-  50, 200 and 1000 active-set passes alike, so the cap is not the cause; the free active set
-  cycles or creeps. The combined authority reads Stands through the certificate, and the host
-  is safe (fail-closed), but a realistic wall should certify elastically: a readout per joint
-  is what slice 3's crack round needs, and an Undecided wall gets no crack round at all. Owed:
-  find the smallest wall that fails to settle (a `Deferred.Slice6.*` case pins it), characterise
-  the pass trajectory (which corners flip), and rule between a damped active set, a settled-only
-  acceptance, or the RBSM reference's R26 amendments from the old project.
+- **The elastic authority never settles on a dry wall with perpends** (slice-5 sweep,
+  2026-10-11, dry μ 0.7 at rest, Release, cap 50): every running-bond wall from 1 × 3 bricks
+  up reads Undecided at 50, 200 and 1000 passes alike; only single-column stacks settle. The
+  1 × 3 wall (3 beds, 2 perpends) is the smallest: one perpend reads N ≈ 1.9e-18 at
+  utilisation 1, the other N ≈ 1.6e-18 at ~5e-25, so a dry perpend carrying no load keeps
+  the active set flipping. With the perpends removed the 4 × 5 wall settles in one pass.
+  Bonded walls settle. The combined authority reads Stands through the certificate, so the
+  host is safe, but a realistic dry wall certifies only through the LP and gets no per-joint
+  readout. Pinned red by design: `Deferred.Slice6.SmallestDryWallThatDoesNotSettleElastically`.
+  **Companion defect:** the 2 × 1 dry wall (one brick, two half bricks on top) reads
+  Overstressed at rest, elastic and combined: the perpend between the halves reads N = 0 with
+  shear utilisation +inf (roundoff shear over zero capacity), the `bNonFinite` family of the
+  slice-2a caveats. Both are the next solver slice (2c, "dry perpends settle"): rule a
+  zero-normal dry corner with roundoff shear as open and zero, and make the active set accept
+  it; before slice 6.
