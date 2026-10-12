@@ -72,7 +72,7 @@ void CheckStallDefaults()
 {
 	if constexpr (HasStallRule<O>)
 	{
-		CHECK(O{}.StallWindow == 10);
+		CHECK(O{}.StallWindow == 20);
 		CHECK(O{}.StallImprovement == 0.5);
 	}
 }
@@ -84,7 +84,7 @@ void RequireTheStallRuleExists()
 
 constexpr double PinnedRelative = 1.0e-10;
 constexpr double PinnedAbsolute = 1.0e-10;
-constexpr int DefaultStallWindow = 10;
+constexpr int DefaultStallWindow = 20;
 constexpr double DefaultStallImprovement = 0.5;
 
 bool Near(double Got, double Want, double Relative, double Absolute)
@@ -206,12 +206,14 @@ Structure HalfWarehouse()
 
 constexpr std::size_t HalfWarehouseWallBodies = 595;
 constexpr double HalfWarehouseWallLower = 350.2085;
-constexpr double HalfWarehouseWallLowerRelative = 1.0e-6;
-constexpr int HalfWarehouseWallIterationCeiling = 100;
+constexpr double HalfWarehouseWallUpper = 350.4239;
+constexpr double HalfWarehouseWallRelative = 1.0e-6;
+constexpr int HalfWarehouseWallIterationCeiling = 69;
 constexpr double UnreachableTolerance = 1.0e-15;
+constexpr int StalledWallFiringIteration = 45;
 }
 
-TEST_CASE("Slow.Certificate.Stall.TheHalfWarehouseWallStopsWhenItStopsImproving")
+TEST_CASE("Slow.Certificate.Stall.TheHalfWarehouseWallConvergesUnderTheRule")
 {
 	if (!oracle::bOptimisedBuild)
 	{
@@ -226,12 +228,12 @@ TEST_CASE("Slow.Certificate.Stall.TheHalfWarehouseWallStopsWhenItStopsImproving"
 	const double Seconds = SecondsSince(Start);
 	MESSAGE(std::setprecision(12) << "595-body wall: " << Got.State << " [" << Got.LoadFactorLower << ", " << Got.LoadFactorUpper << "] in " << Got.Iterations << " iterations, " << Seconds << " s");
 	CHECK(Got.State == CertificateState::Stands);
-	CHECK(Near(Got.LoadFactorLower, HalfWarehouseWallLower, HalfWarehouseWallLowerRelative, 0.0));
-	CHECK(Got.LoadFactorUpper == CertificateOptions{}.LoadFactorCap);
+	CHECK(Near(Got.LoadFactorLower, HalfWarehouseWallLower, HalfWarehouseWallRelative, 0.0));
+	CHECK(Near(Got.LoadFactorUpper, HalfWarehouseWallUpper, HalfWarehouseWallRelative, 0.0));
 	CHECK(Got.Iterations <= HalfWarehouseWallIterationCeiling);
 }
 
-TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Certificate.Stall.ANeverImprovingSolveReturnsItsBestIterate")
+TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Certificate.Stall.ANeverConvergingSolveStopsBeforeTheCap")
 {
 	RequireTheStallRuleExists();
 	CertificateOptions Options = CertificateLateral(0.4);
@@ -305,4 +307,45 @@ TEST_CASE("Certificate.Stall.OptionsAreValidated")
 	}
 	const CertificateResult Disabled = DecideWith(F.Model, WithStall(CertificateOptions{}, 0, DefaultStallImprovement));
 	CHECK(Disabled.State == CertificateState::Stands);
+}
+
+TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Certificate.Stall.TheDefaultWindowLeavesConvergingSolvesRoom")
+{
+	RequireTheStallRuleExists();
+	CHECK(CertificateOptions{}.StallWindow == 20);
+	CertificateOptions Options = CertificateLateral(0.4);
+	Options.FeasibilityTolerance = UnreachableTolerance;
+	const CertificateResult Got = DecideWith(Ec6Wall(4, 4), Options);
+	INFO("ec6 4 x 4 wall at lateral 0.4, tolerance 1e-15, default options: " << Got.State << " in " << Got.Iterations);
+	CHECK(Got.State == CertificateState::Undecided);
+	CHECK(Got.Iterations == StalledWallFiringIteration);
+}
+
+TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Certificate.Stall.TheWindowFiresExactlyItsLengthAfterItsStart")
+{
+	RequireTheStallRuleExists();
+	CertificateOptions Options = CertificateLateral(0.4);
+	Options.FeasibilityTolerance = UnreachableTolerance;
+	const Structure Model = Ec6Wall(4, 4);
+	const CertificateResult Twenty = DecideWith(Model, WithStallWindow(Options, 20));
+	const CertificateResult TwentyOne = DecideWith(Model, WithStallWindow(Options, 21));
+	INFO("ec6 4 x 4 wall at lateral 0.4, tolerance 1e-15: window 20 " << Twenty.State << " in " << Twenty.Iterations << ", window 21 " << TwentyOne.State << " in " << TwentyOne.Iterations);
+	CHECK(Twenty.State == CertificateState::Undecided);
+	CHECK(TwentyOne.State == CertificateState::Undecided);
+	CHECK(Twenty.Iterations == StalledWallFiringIteration);
+	CHECK(TwentyOne.Iterations == StalledWallFiringIteration + 1);
+}
+
+TEST_CASE("Certificate.Stall.ImprovementMustBeByTheFactor")
+{
+	RequireTheStallRuleExists();
+	const Structure Model = MakeBrickOnGround(CappedDryJoint()).Model;
+	const CertificateOptions Options = CertificateLateral(0.29);
+	const CertificateResult Default = DecideWith(Model, Options);
+	const CertificateResult Strict = DecideWith(Model, WithStall(Options, 3, 1.0e-6));
+	INFO("shear-capped brick at lateral 0.29: defaults " << Default.State << " in " << Default.Iterations << ", window 3 factor 1e-6 " << Strict.State << " in " << Strict.Iterations);
+	CHECK(Default.State == CertificateState::Stands);
+	CHECK(Default.Iterations == 8);
+	CHECK(Strict.State == CertificateState::Undecided);
+	CHECK(Strict.Iterations == 3);
 }
