@@ -166,24 +166,27 @@ public:
 
 	AuthorityResult Judge(const Structure& Model, std::span<const BodyLoad> Loads, const AuthorityOptions& Options, const AuthorityResult* Previous) const override
 	{
-		if (!SameVector(Options.Standing.Gravity, Options.Certificate.Gravity) || !statics::AreCertificateOptionsValid(Options.Certificate))
+		if (!SameVector(Options.Standing.Gravity, Options.Certificate.Gravity) || !statics::AreCertificateOptionsValid(Options.Certificate) || !statics::AreStandingOptionsValid(Options.Standing))
 		{
 			AuthorityResult Result = Invalid(InterfaceId{});
 			Result.Options = Options;
+			Result.Lineage = Model.Lineage();
 			return Result;
 		}
-		const bool bMatchable = Previous != nullptr && SameOptions(Previous->Options, Options) && Previous->Revision <= Model.Revision() && AreLoadsAttributable(Model, Loads);
+		const bool bMatchable = Previous != nullptr && SameOptions(Previous->Options, Options) && Previous->Lineage == Model.Lineage() && Previous->Revision <= Model.Revision() && AreLoadsAttributable(Model, Loads);
 		if (bMatchable)
 		{
 			std::optional<AuthorityResult> Reused = JudgeAgainst(Model, Loads, Options, Previous);
 			if (Reused)
 			{
 				Reused->Options = Options;
+				Reused->Lineage = Model.Lineage();
 				return std::move(*Reused);
 			}
 		}
 		AuthorityResult Result = std::move(*JudgeAgainst(Model, Loads, Options, nullptr));
 		Result.Options = Options;
+		Result.Lineage = Model.Lineage();
 		return Result;
 	}
 

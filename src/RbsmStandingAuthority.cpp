@@ -119,15 +119,9 @@ bool IsUsableStiffness(double StiffnessPaPerM)
 	return StiffnessPaPerM > 0.0 && IsFinite(StiffnessPaPerM);
 }
 
-bool AreOptionsValid(const StandingOptions& Options)
-{
-	const double Tolerance = Options.PivotToleranceRelative;
-	return Tolerance > 0.0 && Tolerance < 1.0 && Options.MaxActiveSetIterations >= 1;
-}
-
 bool FindInvalidInput(const Structure& Model, std::span<const BodyLoad> Loads, const StandingOptions& Options, InterfaceId& Offending)
 {
-	if (!AreOptionsValid(Options))
+	if (!statics::AreStandingOptionsValid(Options))
 	{
 		return true;
 	}

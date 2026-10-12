@@ -132,4 +132,10 @@ bool AreCertificateOptionsValid(const CertificateOptions& Options)
 	return IsFinite(Options.Gravity) && Options.ConeGenerators >= 4 && Options.ConeGenerators % 2 == 0 &&
 		IsPositiveFinite(Options.LoadFactorCap) && IsPositiveFinite(Options.FeasibilityTolerance) && Options.MaxIterations >= 1;
 }
+
+bool AreStandingOptionsValid(const StandingOptions& Options)
+{
+	const double Tolerance = Options.PivotToleranceRelative;
+	return Tolerance > 0.0 && Tolerance < 1.0 && Options.MaxActiveSetIterations >= 1;
+}
 }

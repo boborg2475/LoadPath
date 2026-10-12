@@ -18,6 +18,14 @@ namespace loadpath
 class Structure
 {
 public:
+	Structure();
+	// A copy mints a fresh lineage; a move keeps the source's.
+	Structure(const Structure& Other);
+	Structure(Structure&& Other) noexcept = default;
+	Structure& operator=(const Structure& Other);
+	Structure& operator=(Structure&& Other) noexcept = default;
+	~Structure() = default;
+
 	Result<ProfileId> AddProfile(const StrengthProfile& Desc);
 	Result<BodyId> AddBody(const BodyDesc& Desc);
 	Result<InterfaceId> AddInterface(const InterfaceDesc& Desc);
@@ -63,6 +71,8 @@ public:
 	std::uint64_t Revision() const;
 	// The revision of the last mutation touching this body (its AddBody, its interfaces, a removed neighbour); an unknown id reads the largest value.
 	std::uint64_t LastTouched(BodyId Id) const;
+	// Unique per constructed or copied structure in this process; mutations and moves keep it.
+	std::uint64_t Lineage() const;
 
 private:
 	struct BodySlot
@@ -89,6 +99,7 @@ private:
 	// Tracked, never recomputed from records that removal may have rewritten.
 	std::uint32_t HighestStamp = 0;
 	std::uint64_t CurrentRevision = 0;
+	std::uint64_t LineageToken = 0;
 	mutable std::optional<ComponentPartition> CachedComponents;
 };
 }
