@@ -826,3 +826,13 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   103 s from 253 s. A verdict-only option would save only the readings' back-substitution and
   is not worth a third option on the certificate; the stage closes at 3c once its review and
   the 3b fix round land.
+- *2026-10-12, orchestrator, the half warehouse anchor after 3c:* the 3b fix round found the
+  595-body wall's circumscribed solve converging since stage 3c (Stands [350.208526108,
+  350.423921758] in 66 iterations under windows 0, 10 and 20), so the stall rule no longer
+  fires on it and the Slow anchor's "upper equals the cap" check is red at base. Ruled: the
+  anchor becomes a convergence pin (lower and upper within 1e-6 relative, at most 69
+  iterations), keeping its place in the Slow tier as the one large certificate the suite
+  solves to convergence. The rule's own pins are the ec6 1e-15 wall (firing at exactly window
+  start + W) and the shear-capped brick under a 1e-6 factor; it is a safety stop, and the
+  suite now holds no large fixture that reaches it, which is the intended state. The ruling's
+  "still stops at 82" is void with it.
