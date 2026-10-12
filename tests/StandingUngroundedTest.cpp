@@ -13,7 +13,9 @@
 #include <chrono>
 #include <cmath>
 #include <cstddef>
+#include <limits>
 #include <span>
+#include <string>
 #include <vector>
 
 using namespace loadpath;
@@ -270,7 +272,7 @@ TEST_CASE("Slow.Statics.Ungrounded.TheFloatingWallRemainderSolvesInsideItsBudget
 	Characterise(R);
 	CHECK(R.State == StandingState::Mechanism);
 	CHECK(SameIdList(R.UnconstrainedBodies, Floating));
-	CHECK(Ms < 2000.0);
+	CHECK(Ms < 30.0);
 }
 
 TEST_CASE("Statics.Ungrounded.AHeldFloatingBrickStandsAsBefore")
@@ -380,36 +382,133 @@ BodyId AddStiffFloatingPair(Structure& Model, double StiffnessPaPerM)
 }
 }
 
+namespace
+{
+BodyId AddScaledFloatingWall(Structure& Model, ProfileId Profile)
+{
+	geometry::WallSpec Spec;
+	Spec.Bed = Profile;
+	Spec.Perpend = Profile;
+	Spec.Courses = 4;
+	Spec.BricksPerCourse = 3;
+	Spec.BrickM = Vec3{0.215 * 40.0, 0.1025 * 40.0, 0.065 * 40.0};
+	geometry::Wall W = geometry::BuildRunningBondWall(Model, Spec);
+	REQUIRE(W.bComplete);
+	for (const BodyId& Id : W.Courses[0])
+	{
+		REQUIRE(Model.RemoveBody(Id));
+	}
+	return W.Courses.back().back();
+}
+
+BodyId AddBigPairWith(Structure& Model, ProfileId Profile)
+{
+	AddGroundPlane(Model);
+	const Box LowerShape = BoxOfDensity(Vec3{0.0, 0.0, 15.0}, Vec3{5.0, 5.0, 5.0}, 2000.0);
+	const Box UpperShape = BoxOfDensity(Vec3{0.0, 0.0, 25.0}, Vec3{5.0, 5.0, 5.0}, 2000.0);
+	const BodyId Lower = AddBox(Model, LowerShape);
+	const BodyId Upper = AddBox(Model, UpperShape);
+	AddInterfaceOk(Model, *StackedFaces(Lower, LowerShape, Upper, UpperShape, Profile));
+	return Upper;
+}
+
+struct OverflowFixture
+{
+	const char* Name;
+	BodyId (*Build)(Structure&, ProfileId);
+};
+
+StrengthProfile StiffJoint(double NormalPaPerM, double TangentialPaPerM)
+{
+	StrengthProfile P = DryJoint(0.7);
+	P.NormalStiffnessPaPerM = NormalPaPerM;
+	P.TangentialStiffnessPaPerM = TangentialPaPerM;
+	return P;
+}
+}
+
 TEST_CASE("Statics.Ungrounded.AnOverflowingFloatingPairIsInvalidInputAsOnTheFullPath")
 {
-	for (const double Stiffness : {5.0e304, 1.0e305})
+	const OverflowFixture Fixtures[] = {OverflowFixture{"big pair", AddBigPairWith}, OverflowFixture{"4 x 3 wall scaled 40", AddScaledFloatingWall}};
+	const int Points = 100;
+	const double LowExponent = 300.0;
+	const double HighExponent = std::log10(std::numeric_limits<double>::max());
+	int BigPairFinite = 0;
+	int BigPairInvalid = 0;
+	for (const OverflowFixture& F : Fixtures)
 	{
-		INFO("stiffness " << Stiffness << " Pa/m");
+		for (int Mode = 0; Mode < 3; ++Mode)
 		{
-			INFO("unloaded");
-			Structure Model;
-			AddStiffFloatingPair(Model, Stiffness);
-			const StandingResult R = SolveWith(Model, StandingOptions{});
-			Characterise(R);
-			CHECK(R.State == StandingState::InvalidInput);
-			CHECK(JudgeWith(Model, AuthorityOptions{}).Worst == ComponentVerdict::InvalidInput);
-			const CascadeVerdict V = CascadeWith(Model, AuthorityOptions{});
-			CHECK(V.State == CascadeState::InvalidInput);
-			CHECK(V.Clusters.empty());
+			for (const int DenseLimit : {600, 0})
+			{
+				int Agree = 0;
+				int Invalid = 0;
+				double LastFinite = 0.0;
+				double FirstInvalid = 0.0;
+				for (int I = 0; I < Points; ++I)
+				{
+					const double K = I == Points - 1 ? std::numeric_limits<double>::max() : std::pow(10.0, LowExponent + (HighExponent - LowExponent) * I / (Points - 1));
+					const double Kn = Mode == 2 ? 1.0e9 : K;
+					const double Kt = Mode == 1 ? 1.0e9 : K;
+					StandingOptions Options;
+					Options.DenseDofLimit = DenseLimit;
+					Structure Unloaded;
+					F.Build(Unloaded, AddProfileOk(Unloaded, StiffJoint(Kn, Kt)));
+					const StandingResult RU = SolveWith(Unloaded, Options);
+					Structure Loaded;
+					const BodyId Pushed = F.Build(Loaded, AddProfileOk(Loaded, StiffJoint(Kn, Kt)));
+					const BodyLoad Loads[] = {BodyLoad{Pushed, Vec3{1.0, 0.0, 0.0}, Loaded.Body(Pushed).CentroidM}};
+					const StandingResult RL = SolveWith(Loaded, Options, Loads);
+					const bool UnloadedInvalid = RU.State == StandingState::InvalidInput;
+					const bool LoadedInvalid = RL.State == StandingState::InvalidInput;
+					INFO(std::string(F.Name) << ", mode " << Mode << ", dense limit " << DenseLimit << ", k " << K << ": unloaded " << RU.State << ", loaded " << RL.State);
+					CHECK(UnloadedInvalid == LoadedInvalid);
+					Agree += UnloadedInvalid == LoadedInvalid ? 1 : 0;
+					if (UnloadedInvalid)
+					{
+						++Invalid;
+						if (FirstInvalid == 0.0)
+						{
+							FirstInvalid = K;
+						}
+					}
+					else
+					{
+						LastFinite = K;
+					}
+					if (F.Build == AddBigPairWith && Mode == 0)
+					{
+						(UnloadedInvalid ? BigPairInvalid : BigPairFinite) += 1;
+					}
+				}
+				MESSAGE(std::string(F.Name) << ", mode " << Mode << ", dense limit " << DenseLimit << ": " << Agree << " of " << Points << " agree, " << Invalid << " InvalidInput, last finite " << LastFinite << ", first InvalidInput " << FirstInvalid);
+			}
 		}
-		{
-			INFO("a 1 N push on the upper box");
-			Structure Model;
-			const BodyId Upper = AddStiffFloatingPair(Model, Stiffness);
-			const BodyLoad Loads[] = {BodyLoad{Upper, Vec3{1.0, 0.0, 0.0}, Vec3{0.0, 0.0, 25.0}}};
-			const StandingResult R = SolveWith(Model, StandingOptions{}, Loads);
-			Characterise(R);
-			CHECK(R.State == StandingState::InvalidInput);
-			CHECK(JudgeWith(Model, AuthorityOptions{}, Loads).Worst == ComponentVerdict::InvalidInput);
-			const CascadeVerdict V = CascadeWith(Model, AuthorityOptions{}, Loads);
-			CHECK(V.State == CascadeState::InvalidInput);
-			CHECK(V.Clusters.empty());
-		}
+	}
+	CHECK(BigPairFinite > 0);
+	CHECK(BigPairInvalid > 0);
+	{
+		INFO("unloaded at 1e305");
+		Structure Model;
+		AddStiffFloatingPair(Model, 1.0e305);
+		const StandingResult R = SolveWith(Model, StandingOptions{});
+		CHECK(R.State == StandingState::InvalidInput);
+		CHECK(JudgeWith(Model, AuthorityOptions{}).Worst == ComponentVerdict::InvalidInput);
+		const CascadeVerdict V = CascadeWith(Model, AuthorityOptions{});
+		CHECK(V.State == CascadeState::InvalidInput);
+		CHECK(V.Clusters.empty());
+	}
+	{
+		INFO("a 1 N push on the upper box at 1e305");
+		Structure Model;
+		const BodyId Upper = AddStiffFloatingPair(Model, 1.0e305);
+		const BodyLoad Loads[] = {BodyLoad{Upper, Vec3{1.0, 0.0, 0.0}, Vec3{0.0, 0.0, 25.0}}};
+		const StandingResult R = SolveWith(Model, StandingOptions{}, Loads);
+		CHECK(R.State == StandingState::InvalidInput);
+		CHECK(JudgeWith(Model, AuthorityOptions{}, Loads).Worst == ComponentVerdict::InvalidInput);
+		const CascadeVerdict V = CascadeWith(Model, AuthorityOptions{}, Loads);
+		CHECK(V.State == CascadeState::InvalidInput);
+		CHECK(V.Clusters.empty());
 	}
 }
 
