@@ -13,6 +13,7 @@
 
 #include <chrono>
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
 #include <initializer_list>
 #include <sstream>
@@ -28,6 +29,8 @@ constexpr int FuzzMaxPasses = 16;
 constexpr double FuzzCrackBand = 0.5;
 constexpr int FuzzDraws = oracle::bOptimisedBuild ? 40 : 8;
 constexpr std::uint64_t FuzzSeedBase = 0x5c0ffee5ull;
+constexpr int LimeFuzzDraws = oracle::bOptimisedBuild ? 40 : 8;
+constexpr std::uint64_t LimeFuzzSeedBase = 0x11e5eed5ull;
 
 class SplitMix
 {
@@ -65,7 +68,7 @@ const JointRow& CatalogueJoint(const char* Name)
 	return JointOrFail(Loaded.Value, Name);
 }
 
-FuzzDraw MakeDraw(std::uint64_t Seed)
+FuzzDraw MakeDraw(std::uint64_t Seed, bool bLime)
 {
 	FuzzDraw D;
 	SplitMix Rng(Seed);
@@ -81,6 +84,12 @@ FuzzDraw MakeDraw(std::uint64_t Seed)
 		Bed = CatalogueJoint("clay_gp_mortar_bed_ec6").Profile;
 		Perpend = CatalogueJoint("clay_gp_mortar_perpend_ec6").Profile;
 		Out << "bonded ec6";
+	}
+	else if (bLime)
+	{
+		Bed = CatalogueJoint("lime_mortar_handmade_brick_upc_mean").Profile;
+		Perpend = Bed;
+		Out << "lime";
 	}
 	else
 	{
@@ -240,6 +249,22 @@ CascadeState ExpectedEnd(ComponentVerdict Worst)
 	return CascadeState::Undecided;
 }
 
+void CheckNoCohesiveCornerSlips(const Structure& Model, const std::vector<InterfaceReading>& Readings, const std::string& Judge)
+{
+	for (const InterfaceReading& Reading : Readings)
+	{
+		if (!Model.IsLive(Reading.Id) || !(Model.EffectiveProfile(Reading.Id).ShearCohesionPa > 0.0))
+		{
+			continue;
+		}
+		for (std::size_t C = 0; C < Reading.Corners.size(); ++C)
+		{
+			INFO(Judge << ": interface " << Reading.Id.Index << " corner " << C << " has a cohesive effective profile");
+			CHECK_FALSE(Reading.Corners[C].bSlipping);
+		}
+	}
+}
+
 void CheckReleasesCertified(const Structure& Before, const FuzzDraw& D, const CascadeVerdict& V)
 {
 	if (V.Clusters.empty())
@@ -248,6 +273,7 @@ void CheckReleasesCertified(const Structure& Before, const FuzzDraw& D, const Ca
 	}
 	const AuthorityResult Judged = MakeAuthority()->Judge(Before, {}, D.Options, nullptr);
 	INFO("judge before the pass: " << DescribeAuthority(Judged));
+	CheckNoCohesiveCornerSlips(Before, Judged.Readings, "judge before the pass");
 	for (const ReleasedCluster& Cluster : V.Clusters)
 	{
 		INFO("cluster pass " << Cluster.Pass << " bodies " << Describe(Cluster.Bodies));
@@ -347,6 +373,7 @@ void CheckRemainderJudged(const Structure& End, const FuzzDraw& D, const Cascade
 	CHECK(Last.Passes == 0);
 	const AuthorityResult Fresh = MakeAuthority()->Judge(End, {}, D.Options, nullptr);
 	INFO("fresh judge: " << DescribeAuthority(Fresh));
+	CheckNoCohesiveCornerSlips(End, Fresh.Readings, "fresh judge");
 	CHECK(Last.State == ExpectedEnd(Fresh.Worst));
 	REQUIRE(Last.Components.size() == Fresh.Components.size());
 	for (std::size_t C = 0; C < Fresh.Components.size(); ++C)
@@ -403,10 +430,10 @@ struct Coverage
 	int Cracks = 0, Severs = 0, Clusters = 0, MultiBodyClusters = 0, DrawsWithCrack = 0, DrawsWithRelease = 0;
 };
 
-void RunDraw(std::uint64_t Seed, Coverage& Seen)
+void RunDraw(std::uint64_t Seed, bool bLime, Coverage& Seen)
 {
 	const auto DrawStart = std::chrono::steady_clock::now();
-	FuzzDraw D = MakeDraw(Seed);
+	FuzzDraw D = MakeDraw(Seed, bLime);
 	INFO("seed " << Seed << ": " << D.Description);
 	const std::size_t LiveAtEntry = D.Model.LiveInterfaceCount();
 	const std::unique_ptr<ICascade> Cascade = MakeCascade(MakeAuthority());
@@ -420,6 +447,7 @@ void RunDraw(std::uint64_t Seed, Coverage& Seen)
 		Last = Cascade->Run(D.Model, {}, FuzzOptions(D, 1), nullptr);
 		INFO("pass run from " << Before.HighestPass() << ": " << DescribeVerdict(Last));
 		CheckReleasesCertified(Before, D, Last);
+		CheckNoCohesiveCornerSlips(D.Model, Last.Readings, "pass verdict");
 		CheckStampsMatchRecords(Before, D.Model, D, Last);
 		Failures.insert(Failures.end(), Last.Failures.begin(), Last.Failures.end());
 		Clusters.insert(Clusters.end(), Last.Clusters.begin(), Last.Clusters.end());
@@ -437,9 +465,10 @@ void RunDraw(std::uint64_t Seed, Coverage& Seen)
 	}
 	CheckFileRoundTrip(D.Model);
 
-	FuzzDraw Again = MakeDraw(Seed);
+	FuzzDraw Again = MakeDraw(Seed, bLime);
 	const CascadeVerdict Whole = MakeCascade(MakeAuthority())->Run(Again.Model, {}, FuzzOptions(Again, FuzzMaxPasses), nullptr);
 	INFO("whole run: " << DescribeVerdict(Whole));
+	CheckNoCohesiveCornerSlips(Again.Model, Whole.Readings, "whole run");
 	CHECK(Whole.State == End);
 	CHECK(Whole.Passes == Passes);
 	REQUIRE(Whole.Failures.size() == Failures.size());
@@ -484,7 +513,7 @@ TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Cascade.Fuzz.SeededStructuresKeepTheCascadeInv
 	const auto Start = std::chrono::steady_clock::now();
 	for (int Draw = 0; Draw < FuzzDraws; ++Draw)
 	{
-		RunDraw(FuzzSeedBase + static_cast<std::uint64_t>(Draw), Seen);
+		RunDraw(FuzzSeedBase + static_cast<std::uint64_t>(Draw), false, Seen);
 	}
 	const double Seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - Start).count();
 	MESSAGE("cascade fuzz: " << FuzzDraws << " draws in " << Seconds << " s; ends Stands " << Seen.Stands << ", Overstressed " << Seen.Overstressed << ", Undecided " << Seen.Undecided << ", PassCapReached " << Seen.Capped << ", other " << Seen.Other << "; cracks " << Seen.Cracks << " in " << Seen.DrawsWithCrack << " draws, severs " << Seen.Severs << ", clusters " << Seen.Clusters << " (" << Seen.MultiBodyClusters << " multi-body) in " << Seen.DrawsWithRelease << " draws");
@@ -492,4 +521,18 @@ TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Cascade.Fuzz.SeededStructuresKeepTheCascadeInv
 	CHECK(Seen.MultiBodyClusters >= 1);
 	CHECK(Seen.Overstressed >= 1);
 	CHECK(Seen.Stands >= 1);
+}
+
+TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Cascade.Fuzz.LimeStructuresKeepTheCascadeInvariants")
+{
+	Coverage Seen;
+	int LimeDraws = 0;
+	for (int Draw = 0; Draw < LimeFuzzDraws; ++Draw)
+	{
+		const std::uint64_t Seed = LimeFuzzSeedBase + static_cast<std::uint64_t>(Draw);
+		LimeDraws += MakeDraw(Seed, true).Description.rfind("lime", 0) == 0 ? 1 : 0;
+		RunDraw(Seed, true, Seen);
+	}
+	MESSAGE("lime cascade fuzz: " << LimeFuzzDraws << " draws, " << LimeDraws << " with lime joints; ends Stands " << Seen.Stands << ", Overstressed " << Seen.Overstressed << ", Undecided " << Seen.Undecided << ", PassCapReached " << Seen.Capped);
+	CHECK(LimeDraws >= 1);
 }

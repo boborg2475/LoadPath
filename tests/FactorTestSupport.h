@@ -13,6 +13,8 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <cstdint>
+#include <random>
 #include <string>
 #include <vector>
 
@@ -231,6 +233,30 @@ inline Structure Ec6Wall(int Courses, int BricksPerCourse)
 	INFO("line " << Loaded.Error.Line << ": " << Loaded.Error.Message);
 	REQUIRE(Loaded.Ok());
 	return RunningBondWall(JointOrFail(Loaded.Value, "clay_gp_mortar_bed_ec6").Profile, JointOrFail(Loaded.Value, "clay_gp_mortar_perpend_ec6").Profile, Courses, BricksPerCourse);
+}
+
+inline constexpr int FactorDrawCount = oracle::bOptimisedBuild ? 6000 : 40;
+inline constexpr int FactorWallDrawCount = oracle::bOptimisedBuild ? 120 : 3;
+inline constexpr std::uint32_t FactorWallSeedOffset = 1000000u;
+
+inline FactorCase SeededCase(int Draw)
+{
+	oracle::SeededDraw Each = oracle::MakeSeededDraw(Draw);
+	const std::string Name = "master seed " + std::to_string(oracle::MasterSeed) + ", draw " + std::to_string(Draw) + " (generator seed " + std::to_string(Each.Seed) + "): " + Each.Fixture + ", lambda (" + std::to_string(Each.LambdaX) + ", " + std::to_string(Each.LambdaY) + ")";
+	return FactorCase{Name, std::move(Each.Model), Biaxial(Each.LambdaX, Each.LambdaY), {}};
+}
+
+inline FactorCase WallCase(int Draw)
+{
+	const std::uint32_t Seed = oracle::MasterSeed + FactorWallSeedOffset + static_cast<std::uint32_t>(Draw);
+	std::mt19937 Rng(Seed);
+	const int Courses = 3 + static_cast<int>(Rng() % 4u);
+	const int Bricks = 3 + static_cast<int>(Rng() % 6u);
+	const double Friction = oracle::Uniform(Rng, 0.4, 1.0);
+	const double LambdaX = oracle::Uniform(Rng, 0.0, 0.5);
+	const double LambdaY = oracle::Uniform(Rng, 0.0, 0.5);
+	const std::string Name = "master seed " + std::to_string(oracle::MasterSeed) + ", wall draw " + std::to_string(Draw) + " (seed " + std::to_string(Seed) + "): " + std::to_string(Courses) + " x " + std::to_string(Bricks) + " dry wall, mu " + std::to_string(Friction) + ", lambda (" + std::to_string(LambdaX) + ", " + std::to_string(LambdaY) + ")";
+	return FactorCase{Name, RunningBondWall(DryJoint(Friction), DryJoint(Friction), Courses, Bricks), Biaxial(LambdaX, LambdaY), {}};
 }
 
 }

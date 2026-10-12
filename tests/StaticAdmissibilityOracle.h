@@ -40,7 +40,8 @@ enum class Admissibility
 {
 	CanStand,
 	CannotStand,
-	Ambiguous
+	Ambiguous,
+	Unsupported
 };
 
 inline const char* AdmissibilityName(Admissibility Verdict)
@@ -50,6 +51,7 @@ inline const char* AdmissibilityName(Admissibility Verdict)
 	case Admissibility::CanStand: return "CanStand";
 	case Admissibility::CannotStand: return "CannotStand";
 	case Admissibility::Ambiguous: return "Ambiguous";
+	case Admissibility::Unsupported: return "Unsupported";
 	}
 	return "Admissibility(?)";
 }
@@ -453,9 +455,19 @@ struct OracleVerdict
 	bool bConverged = false;
 };
 
+// Unsupported for any live tensile or cohesive profile: the cones are compression and friction only, so a bonded structure would read a false CannotStand.
 inline OracleVerdict StaticAdmissibility(const Structure& Model, const Vec3& GravityVectorMPerS2)
 {
 	OracleVerdict Out;
+	for (const InterfaceId& Id : Model.LiveInterfaces())
+	{
+		const StrengthProfile Profile = Model.EffectiveProfile(Id);
+		if (Profile.TensileStrengthPa > 0.0 || Profile.ShearCohesionPa > 0.0)
+		{
+			Out.Verdict = Admissibility::Unsupported;
+			return Out;
+		}
+	}
 	const EquilibriumSystem Inner = AssembleEquilibrium(Model, GravityVectorMPerS2, 1.0);
 	const double DemandN = NormOf(Inner.Demand);
 	const NnlsOutcome InnerFit = LawsonHanson(Inner.Generators, Inner.Demand);

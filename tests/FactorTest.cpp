@@ -70,30 +70,6 @@ std::vector<FactorCase> MultiPanelCases()
 	return Cases;
 }
 
-constexpr int FactorDrawCount = bOptimisedBuild ? 6000 : 40;
-constexpr int WallDrawCount = bOptimisedBuild ? 120 : 3;
-constexpr std::uint32_t WallSeedOffset = 1000000u;
-
-FactorCase SeededCase(int Draw)
-{
-	SeededDraw Each = MakeSeededDraw(Draw);
-	const std::string Name = "master seed " + std::to_string(MasterSeed) + ", draw " + std::to_string(Draw) + " (generator seed " + std::to_string(Each.Seed) + "): " + Each.Fixture + ", lambda (" + std::to_string(Each.LambdaX) + ", " + std::to_string(Each.LambdaY) + ")";
-	return FactorCase{Name, std::move(Each.Model), Biaxial(Each.LambdaX, Each.LambdaY), {}};
-}
-
-FactorCase WallCase(int Draw)
-{
-	const std::uint32_t Seed = MasterSeed + WallSeedOffset + static_cast<std::uint32_t>(Draw);
-	std::mt19937 Rng(Seed);
-	const int Courses = 3 + static_cast<int>(Rng() % 4u);
-	const int Bricks = 3 + static_cast<int>(Rng() % 6u);
-	const double Friction = Uniform(Rng, 0.4, 1.0);
-	const double LambdaX = Uniform(Rng, 0.0, 0.5);
-	const double LambdaY = Uniform(Rng, 0.0, 0.5);
-	const std::string Name = "master seed " + std::to_string(MasterSeed) + ", wall draw " + std::to_string(Draw) + " (seed " + std::to_string(Seed) + "): " + std::to_string(Courses) + " x " + std::to_string(Bricks) + " dry wall, mu " + std::to_string(Friction) + ", lambda (" + std::to_string(LambdaX) + ", " + std::to_string(LambdaY) + ")";
-	return FactorCase{Name, RunningBondWall(DryJoint(Friction), DryJoint(Friction), Courses, Bricks), Biaxial(LambdaX, LambdaY), {}};
-}
-
 double Tangential(const InterfaceReading& R) { return std::sqrt(R.ShearForceN.X * R.ShearForceN.X + R.ShearForceN.Y * R.ShearForceN.Y + R.ShearForceN.Z * R.ShearForceN.Z); }
 
 bool PinNear(double Got, double Want)
@@ -222,17 +198,17 @@ TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Statics.Factor.TheBlockedFactorReadsItsPinsAcr
 	}
 	SUBCASE("seeded walls")
 	{
-		REQUIRE(static_cast<std::size_t>(WallDrawCount) <= std::size(WallPins));
+		REQUIRE(static_cast<std::size_t>(FactorWallDrawCount) <= std::size(WallPins));
 		PinCheck Out;
 		int MultiPanel = 0;
-		for (int Draw = 0; Draw < WallDrawCount; ++Draw)
+		for (int Draw = 0; Draw < FactorWallDrawCount; ++Draw)
 		{
 			const FactorCase C = WallCase(Draw);
 			MultiPanel += 6 * (C.Model.LiveBodyCount() - 1) > 64 ? 1 : 0;
 			CheckPin(C, WallPins[Draw], WallReadingPins, Out);
 		}
-		MESSAGE(MultiPanel << " of " << WallDrawCount << " wall draws above one panel");
-		CheckTable(Out, WallDrawCount);
+		MESSAGE(MultiPanel << " of " << FactorWallDrawCount << " wall draws above one panel");
+		CheckTable(Out, FactorWallDrawCount);
 	}
 }
 
@@ -348,7 +324,7 @@ TEST_CASE("Measure.Factor.GeneratePins")
 	}
 	EmitPinTable(Out, "Seeded", Seeded);
 	std::vector<FactorCase> Walls;
-	for (int Draw = 0; Draw < WallDrawCount; ++Draw)
+	for (int Draw = 0; Draw < FactorWallDrawCount; ++Draw)
 	{
 		Walls.push_back(WallCase(Draw));
 	}

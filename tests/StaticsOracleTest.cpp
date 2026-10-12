@@ -1,3 +1,4 @@
+#include "FactorTestSupport.h"
 #include "StaticAdmissibilityOracle.h"
 #include "StaticsTestSupport.h"
 
@@ -117,4 +118,14 @@ TEST_CASE("Statics.Solver.VerdictsNeverContradictTheStaticAdmissibilityOracle")
 		CHECK(CanStandDraws > 0);
 		CHECK(CannotStandDraws > 0);
 	}
+}
+
+TEST_CASE("Statics.Oracle.RefusesABondedWallAndJudgesADryOne")
+{
+	const OracleVerdict Bonded = StaticAdmissibility(Ec6Wall(8, 10), BiaxialGravity(0.0, 0.5));
+	INFO("8 x 10 ec6 wall at lambda (0, 0.5): " << Bonded.Verdict);
+	CHECK(Bonded.Verdict == Admissibility::Unsupported);
+	const OracleVerdict Dry = StaticAdmissibility(RunningBondWall(DryJoint(0.7), DryJoint(0.7), 3, 4), BiaxialGravity(0.1, 0.0));
+	INFO("3 x 4 dry wall at lambda (0.1, 0): " << Dry.Verdict << ", inner residual / demand " << Dry.InnerResidualOverDemand);
+	CHECK(Dry.Verdict == Admissibility::CanStand);
 }

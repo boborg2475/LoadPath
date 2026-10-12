@@ -1,4 +1,6 @@
 #include "CatalogueTestSupport.h"
+#include "OwnFieldTestSupport.h"
+#include "SlowInDebug.h"
 #include "StaticAdmissibilityOracle.h"
 #include "StaticsTestSupport.h"
 
@@ -127,7 +129,7 @@ TEST_CASE("Statics.Lime.AReclosingCohesiveCornerStaysOutOfSlipping")
 	CHECK(AboveCohesive == 0);
 }
 
-TEST_CASE("Statics.Dry.LateralWallsStand")
+TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Statics.Dry.LateralWallsStand")
 {
 	for (const LateralPoint P : {LateralPoint{3, 4, 0.1, 0.0, 20}, LateralPoint{5, 5, 0.05, 0.0, 20}, LateralPoint{4, 2, 0.30, 0.15, 20}, LateralPoint{10, 8, 0.2, 0.0, 30}})
 	{
@@ -144,15 +146,40 @@ TEST_CASE("Statics.Dry.LateralWallsStand")
 	}
 }
 
-TEST_CASE("Slow.Statics.Dry.TheLateralGridStandsAndTheOracleAgrees")
+TEST_CASE("Statics.Dry.NamedBridgesStandOnlyWithTheHeldForceAlongTheTrialShear")
 {
-	struct Size
+	struct NamedDraw
 	{
-		int Courses, BricksPerCourse;
+		int Draw;
+		int IterationBar;
 	};
+	for (const NamedDraw N : {NamedDraw{3329, 30}, NamedDraw{3253, 20}})
+	{
+		const oracle::SeededDraw D = oracle::MakeSeededDraw(N.Draw);
+		const StandingResult Result = SolveWith(D.Model, Biaxial(D.LambdaX, D.LambdaY));
+		INFO("draw " << N.Draw << " (seed " << D.Seed << "): " << D.Fixture << ", mu " << D.Friction << ", lambda (" << D.LambdaX << ", " << D.LambdaY << "): " << Result.State << " after " << Result.ActiveSetIterations << " iterations");
+		CHECK(D.Fixture.rfind("bridge", 0) == 0);
+		CHECK(Result.State == StandingState::Stands);
+		CHECK(Result.ActiveSetIterations <= N.IterationBar);
+	}
+}
+
+namespace
+{
+struct GridSize
+{
+	int Courses, BricksPerCourse;
+};
+
+constexpr GridSize GridSizes[] = {{1, 5}, {2, 5}, {3, 4}, {3, 5}, {4, 2}, {5, 4}, {5, 5}, {10, 8}};
+}
+
+TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Statics.Dry.TheLateralGridStandsInItsOwnField")
+{
 	const auto Start = std::chrono::steady_clock::now();
-	int Standing = 0, NotStanding = 0, Refuted = 0, Points = 0;
-	for (const Size S : {Size{1, 5}, Size{2, 5}, Size{3, 4}, Size{3, 5}, Size{4, 2}, Size{5, 4}, Size{5, 5}, Size{10, 8}})
+	int Standing = 0, Points = 0, FieldFailures = 0, WorstIterations = 0;
+	double WorstResidualOverW = 0.0, WorstConeExcessOverW = 0.0;
+	for (const GridSize S : GridSizes)
 	{
 		const DryWall W = BuildDryWall(S.Courses, S.BricksPerCourse);
 		REQUIRE(W.Value.bComplete);
@@ -161,11 +188,8 @@ TEST_CASE("Slow.Statics.Dry.TheLateralGridStandsAndTheOracleAgrees")
 			for (const double LambdaY : {0.0, 0.05, 0.1, 0.15})
 			{
 				++Points;
-				CAPTURE(S.Courses);
-				CAPTURE(S.BricksPerCourse);
-				CAPTURE(LambdaX);
-				CAPTURE(LambdaY);
-				const StandingResult Result = SolveWith(W.Model, Biaxial(LambdaX, LambdaY));
+				const StandingOptions Options = Biaxial(LambdaX, LambdaY);
+				const StandingResult Result = SolveWith(W.Model, Options);
 				INFO(S.Courses << " x " << S.BricksPerCourse << " at (" << LambdaX << ", " << LambdaY << "): " << Result.State << " after " << Result.ActiveSetIterations << " iterations");
 				CHECK(Result.State == StandingState::Stands);
 				CHECK(Result.ActiveSetIterations <= 50);
@@ -175,23 +199,51 @@ TEST_CASE("Slow.Statics.Dry.TheLateralGridStandsAndTheOracleAgrees")
 				}
 				if (Result.State != StandingState::Stands)
 				{
-					++NotStanding;
 					continue;
 				}
 				++Standing;
-				const oracle::OracleVerdict Oracle = oracle::StaticAdmissibility(W.Model, oracle::BiaxialGravity(LambdaX, LambdaY));
-				INFO("oracle " << Oracle.Verdict << ", inner residual / demand " << Oracle.InnerResidualOverDemand);
-				CHECK(Oracle.Verdict == oracle::Admissibility::CanStand);
-				if (Oracle.Verdict != oracle::Admissibility::CanStand)
-				{
-					++Refuted;
-				}
+				WorstIterations = std::max(WorstIterations, Result.ActiveSetIterations);
+				const OwnFieldCheck Field = CheckOwnField(W.Model, Result, Options.Gravity);
+				INFO("own field: residual " << Field.WorstResidualOverW << " W, tension " << Field.WorstTensionOverW << " W, cone excess " << Field.WorstConeExcessOverW << " W");
+				CHECK(Field.Violations == 0);
+				FieldFailures += Field.Violations == 0 ? 0 : 1;
+				WorstResidualOverW = std::max(WorstResidualOverW, Field.WorstResidualOverW);
+				WorstConeExcessOverW = std::max(WorstConeExcessOverW, Field.WorstConeExcessOverW);
 			}
 		}
 	}
 	const double Seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - Start).count();
-	MESSAGE("lateral dry grid: " << Points << " points, " << Standing << " Stand, " << NotStanding << " do not, " << Refuted << " refuted by the oracle, " << Seconds << " s");
+	MESSAGE("lateral dry grid: " << Points << " points, " << Standing << " Stand, worst " << WorstIterations << " iterations, " << FieldFailures << " fail their own field, worst residual " << WorstResidualOverW << " W, worst cone excess " << WorstConeExcessOverW << " W, " << Seconds << " s");
 	CHECK(Points == 160);
+}
+
+TEST_CASE("Slow.Statics.Dry.TheLateralGridSubsetTheOracleAgrees")
+{
+	struct Lambda
+	{
+		double X, Y;
+	};
+	const auto Start = std::chrono::steady_clock::now();
+	int Points = 0, Refuted = 0;
+	for (const GridSize S : GridSizes)
+	{
+		const DryWall W = BuildDryWall(S.Courses, S.BricksPerCourse);
+		REQUIRE(W.Value.bComplete);
+		for (const Lambda L : {Lambda{0.1, 0.0}, Lambda{0.3, 0.15}, Lambda{0.2, 0.05}})
+		{
+			++Points;
+			const StandingResult Result = SolveWith(W.Model, Biaxial(L.X, L.Y));
+			INFO(S.Courses << " x " << S.BricksPerCourse << " at (" << L.X << ", " << L.Y << "): " << Result.State << " after " << Result.ActiveSetIterations << " iterations");
+			REQUIRE(Result.State == StandingState::Stands);
+			const oracle::OracleVerdict Oracle = oracle::StaticAdmissibility(W.Model, oracle::BiaxialGravity(L.X, L.Y));
+			INFO("oracle " << Oracle.Verdict << ", inner residual / demand " << Oracle.InnerResidualOverDemand);
+			CHECK(Oracle.Verdict == oracle::Admissibility::CanStand);
+			Refuted += Oracle.Verdict == oracle::Admissibility::CanStand ? 0 : 1;
+		}
+	}
+	const double Seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - Start).count();
+	MESSAGE("lateral dry grid subset: " << Points << " points, " << Refuted << " not CanStand by the oracle, " << Seconds << " s");
+	CHECK(Points == 24);
 }
 
 TEST_CASE("Slow.Statics.Dry.TheSparsePathWallStandsUnderLateralLoad")
