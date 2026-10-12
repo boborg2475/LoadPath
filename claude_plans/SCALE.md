@@ -271,3 +271,17 @@ attempted; the warehouse now judges in 0.51 s and re-judges after a post removal
 The certificate, never on the judge's path when the elastic field decides, went from 26 min
 to 75 s on the warehouse. The Slow tier holds 9 tests (the two ratio tests retired with the
 referees); the 20 × 15 wall's dense-against-sparse ratio reads 0.37.
+
+## Carried from 6b, item 1: the ungrounded shortcut (2026-10-12, branch carried-6b)
+
+An ungrounded component reads Mechanism before any assembly (DESIGN §10 "carried from 6b,
+item 1 opening"). From a copy of the Release exe, one run each, same day before and after:
+
+| Structure | Cascade: base course, before | after | Floating remainder solve |
+|---|---|---|---|
+| Wall 40 × 32 | 22.1 s | **38 ms** | 1,256 bricks: 20.5 s → 4.5 ms |
+| Half warehouse | 2.2 s | **129 ms** | |
+
+Everything else in those rows is unchanged (wall judge 168 ms, certificate 27 s; half
+warehouse judge 142 ms, certificate 44 s). The base-course cascade was a dense factorisation
+of a singular stiffness spent to learn what connectivity already said.

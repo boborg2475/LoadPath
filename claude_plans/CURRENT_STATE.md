@@ -152,10 +152,10 @@ cheap `Measure.Scale.*` rows after them); the `Deferred.*` tier holds the physic
    - `Structure::Components()` is mutable state behind a const method (no thread-safety
      promise exists anywhere; log it when one is made); `StandingComponent::ReadingSlots` is
      read by nothing in the library;
-   - an ungrounded component is a mechanism by connectivity before any factorisation; the
-     elastic authority could read it (and its rigid-body null space) without factorising, as
-     the certificate's rigid-fall rule does (the 32 × 40 base-course cascade pays 24 s of dense
-     fallback on the floating remainder);
+   - in its fix round 2026-10-12 (branch `carried-6b`; the cold review found a held floating
+     body reading Undecided, ruled: the shortcut needs no host load and a non-zero gravity,
+     DESIGN §10 amendment): an ungrounded component reads Mechanism before any assembly; the 32 × 40
+     base-course cascade 22.1 s to 38 ms, the half warehouse's 2.2 s to 129 ms (SCALE.md);
    - certificate: uncaught mutants recorded in ANCHORS: the retry's `LargestDiagonal` without
      the coupling term (dense and bordered), the bordered regularisation's size (× 100 green),
      the NaN-only part of the positivity scan, either bordered pivot guard alone (they back

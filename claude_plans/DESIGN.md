@@ -902,3 +902,18 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   readings only on certified states, and today's values there are the range solution (mostly
   infinite tension), which the cascade once copied as a sever reason. The reading list still
   covers every live interface. Grounded components are untouched, bit for bit.
+- *2026-10-12, orchestrator, carried from 6b, item 1 amendment (from the cold review):* **the
+  shortcut applies to an ungrounded component that carries no host load, under a non-zero
+  gravity.** The review's probe showed a floating brick held up by a +m·g load reading
+  Undecided (elastic Mechanism, the certificate's general path at a bracket [0, 1000]) where
+  it read Stands, turning a whole structure's verdict; a held pair kept Stands but counted a
+  disagreement and lost a certified reading. Connectivity alone says "cannot be in
+  equilibrium" only when the only load is gravity, which is the 6a amendment's condition for
+  the rigid fall, and those are the cases the measurement needed (the base-course remainders
+  carry no host load). A loaded or weightless ungrounded component takes the full solve as
+  before. The finiteness check the full path makes at its first iteration must still apply
+  before the shortcut (a floating pair with a 1e308 stiffness read InvalidInput and briefly
+  read Collapses). Pinned in the fix round: the held brick Stands with its reading, the held
+  pair's disagreement count, InvalidInput on the non-finite pair, a tilted gravity's motion,
+  the zero-gravity pair as before, the corner points carried, and the sever reason of a lifted
+  floating pair reading None 0 where it read Tension inf.
