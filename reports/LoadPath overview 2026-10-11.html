@@ -330,6 +330,19 @@ a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
     </dl>
   </div>
 </div>
+<div class="slice">
+  <div class="id">2c<small>SOLVER</small></div>
+  <div class="body">
+    <h3>Dry corners at zero load <span class="pill done">done</span></h3>
+    <p>A small solver slice forced by slice 5's finding: a dry joint carrying nothing kept the elastic field from ever settling.</p>
+    <dl class="kv">
+      <dt>Major</dt><dd>A force-noise floor, one millionth of a millionth of the component's own force scale. A corner on a joint with no tension opens only when pulled harder than that; a dry corner inside the band is simply open and reads zero; it closes again only when pushed past twice the floor, so it cannot flutter. A closed tensionless corner inside the band reports zero rather than noise divided by a zero capacity. A structure whose loads overflow the arithmetic reads Undecided, never Stands.</dd>
+      <dt>Pinned by tests</dt><dd>Every dry wall at rest, from three bricks to the 85-brick wall, settles in two iterations; the lime-mortar walls (cohesion, no tension) stand at rest; an end push of one ten-millionth of a brick's weight still passes through the perpends and scales linearly; a push of 2 × 10<sup>154</sup> newtons, in any direction, never reads Stands.</dd>
+      <dt>Reviews</dt><dd>Eight lines of production code took a cold review and two follow-ups. The reviewer built its own probe harness and found an overflow that opened every joint and read a false Stands, a chatter band where a real load sat just under the floor, and guards that would not have caught the mutations they were named for. The fix round found a third defect itself. Each became a test before it became a fix.</dd>
+      <dt>Still open</dt><dd>Laterally loaded dry walls can still read Undecided, and the floor has nothing to do with it: a separate stick/slip non-convergence, measured on a grid of 147 points, none of them a false Stands. That is the next solver item after the scale measurement.</dd>
+    </dl>
+  </div>
+</div>
 </section>
 
 <section class="col">
@@ -343,10 +356,10 @@ a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 <div class="scroll">
 <table>
   <tr><th>Suite</th><th class="num">Cases</th><th class="num">Assertions</th><th class="num">Time</th><th>Notes</th></tr>
-  <tr><td>Debug, default run</td><td class="num">253</td><td class="num">14,178</td><td class="num">~13 s</td><td>at slice 5 close</td></tr>
-  <tr><td>Release, default run</td><td class="num">264</td><td class="num">42,044</td><td class="num">~7 s</td><td>includes the arch, pile, arch-cascade, fuzz and small-wall anchors</td></tr>
+  <tr><td>Debug, default run</td><td class="num">265</td><td class="num">14,367</td><td class="num">~13 s</td><td>at slice 2c close</td></tr>
+  <tr><td>Release, default run</td><td class="num">276</td><td class="num">42,233</td><td class="num">~7 s</td><td>includes the arch, pile, arch-cascade, fuzz and small-wall anchors</td></tr>
   <tr><td>Slow tier (Release)</td><td class="num">3</td><td class="num"></td><td class="num">~15 s</td><td>the 10 × 8 wall anchors; run at every slice close</td></tr>
-  <tr><td>Deferred tier</td><td class="num">2</td><td class="num"></td><td class="num"></td><td>the physical wedge angle (slice 7 referee) and the smallest dry wall the elastic field cannot settle (slice 2c), red by design</td></tr>
+  <tr><td>Deferred tier</td><td class="num">1</td><td class="num"></td><td class="num"></td><td>the physical wedge angle, red by design until the slice 7 referee</td></tr>
 </table>
 </div>
 <p>Two independent reviewers found real defects this month that the authors missed: a design inference in the combined authority that relabelled a healthy component, an arithmetic path for zero shear caps that no test exercised, and a benchmark row stating a criterion that turned out to be false for exact voussoirs. Each was turned into a test before it was fixed.</p>
@@ -359,7 +372,7 @@ a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   <li><strong>Undecided is a real answer.</strong> Rather than guess, the engine says it cannot tell, and the host keeps the structure standing. The band is narrowed by polygon count and by the certificate refereeing the elastic field, but it exists.</li>
   <li><strong>Cost.</strong> The combined authority copies the structure once per component and solves twice. Fine for test fixtures, not for a 5,000-piece warehouse. Slice 6 is scale.</li>
   <li><strong>The pile's bond is reconstructed.</strong> The paper's figure could not be read, so the block layout follows the published dimensions and block count; the assertion is the published bracket only.</li>
-  <li><strong>Dry perpends do not settle elastically.</strong> Any dry wall with perpends between full bricks reads Undecided from the elastic field alone, because a joint carrying nothing flips between stuck and slipping. The combined authority still answers through the certificate; slice 2c gives such a joint a noise floor so it reads open and zero.</li>
+  <li><strong>Laterally loaded dry walls can still read Undecided.</strong> At rest every dry wall now settles, but under a sideways load the free active set can fail to converge on walls of five bricks and more. The combined authority still answers through the certificate; the fix is the next solver item.</li>
   <li><strong>Data is only as good as its citation.</strong> Several catalogue numbers survived two agents and were caught by the reviewer against the repo's own notes. Every row now says what it is, where it came from, and how it was converted.</li>
 </ul>
 </section>
@@ -373,9 +386,9 @@ a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 <section class="col">
 <h2>What comes next</h2>
 <div class="grid">
-  <div class="card"><h3>Slice 2c <span class="pill doing">next</span></h3><ul><li>Dry perpends at zero load settle: a force-noise floor so an unloaded dry corner reads open and zero</li><li>The 2 × 1 wall stops reading overstressed at rest</li></ul></div>
-  <div class="card"><h3>Slice 6 <span class="pill todo">later</span></h3><ul><li>Sparse solves, event regions, panels</li><li>Target: the old 5,612-piece warehouse decided inside 200 ms</li></ul></div>
-  <div class="card"><h3>Slices 7 and 8 <span class="pill todo">later</span></h3><ul><li>HiGHS referee in the test tier, non-associative friction</li><li>The Unreal adapter as its own module</li></ul></div>
+  <div class="card"><h3>Slice 6 <span class="pill doing">next</span></h3><ul><li>First a measurement: a warehouse-sized generator and timing rows for walls, a shed and a 5,000-piece warehouse through the authority and the cascade</li><li>Then, against those numbers: sparse solves, event regions, panels</li></ul></div>
+  <div class="card"><h3>Slice 2d <span class="pill todo">later</span></h3><ul><li>Laterally loaded dry walls converge</li><li>The 5,612-piece warehouse decided inside 200 ms stays slice 6's goal</li></ul></div>
+  <div class="card"><h3>Slices 7 and 8 <span class="pill todo">later</span></h3><ul><li>HiGHS referee in the test tier, non-associative friction</li><li>The Unreal adapter as its own module: on hold by the owner's direction until the library is right and measured at scale</li></ul></div>
 </div>
 </section>
 </div>

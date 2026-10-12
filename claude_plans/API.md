@@ -320,7 +320,11 @@ never mutates the structure. The host may call it on any thread.
   utilisation, re-closing when its trial normal rises above twice the floor (hysteresis, so a
   corner at the floor cannot chatter) or when the restore step finds it closing under a motion,
   so a dry perpend carrying nothing cannot flip the active set (the slip test itself has no slack: it
-  drove no test, DESIGN §10); a corner on an interface whose profile has `ShearCohesionPa == 0`
+  drove no test, DESIGN §10). A closed tensionless corner whose trial `N` lies in `[−floor, 0)`
+  reports `N = 0`, so the interface's reported normal force, moment and tension demand agree at
+  zero rather than reading noise over a zero tensile capacity as +inf. A component whose force
+  scale (the sum of |weight| and |load| over its free bodies) is not finite reads Undecided,
+  never Stands, with its readings filled from the overflowed solve; a corner on an interface whose profile has `ShearCohesionPa == 0`
   slips when its trial `|S|` exceeds `μ N` (and the cap `MaxShearStrengthPa · A/4`), after which its shear is held at capacity
   opposite the trial slip direction with no stiffness along that direction and **no dilation**
   (non-associative, DESIGN §9 row 8). Transverse to the held direction, in the joint plane, a
@@ -1117,3 +1121,39 @@ with these invariants checked per draw and the failing seed printed:
   live bodies, states, stamps and `HighestPass`.
 Draw counts by build (`bOptimisedBuild`), under a second in Release; coverage guards that the
 run saw at least one crack, one multi-body cluster, one Overstressed end and one Stands end.
+
+## Slice 6: scale
+
+DESIGN §8 row 6: "sparse solve, event region, panels; the old warehouse is the benchmark: 5,612
+pieces, 15,042 joints, a decision inside 200 ms." The slice opens with a **measurement**, not a
+design, because every cost item logged so far (the combined authority's per-component copies,
+the cascade's quadratic scans, the dense per-component LDLT, the certificate's interior point)
+is a guess until timed on structures ten and a hundred times the fixtures.
+
+### 6a. The scale measurement (`tests/ScaleMeasurementTest.cpp`, `Slow.Scale.*`)
+
+A generator a step up from the wall: `BuildWarehouse(Structure&, const WarehouseSpec&)` in
+`geometry/Warehouse.h`, built from the slice-5 pieces only (boxes, `FaceContact`, running-bond
+walls): a rectangular plan of four running-bond walls with door and window openings, timber
+posts on the ground along the long walls, beams spanning post to post on the C24 bearing row,
+and a roof of planks across the beams on fastener rows. The spec sets the plan (length, width,
+height in courses, bay count, opening list) so the same function gives a shed of 300 pieces and
+a warehouse of 5,000; the body and joint counts have closed forms the tests assert. Pieces are
+bodies, every contact a `FaceContact`, the ground one grounded body.
+
+Measurements, each a `Slow.Scale.*` case that prints a row (`pieces, joints, components, elastic
+ms, certificate ms, judge ms, cascade pass ms, peak RSS if cheap`) and asserts only what is
+already promised: the structure Stands at rest, every verdict is the same under a second run
+(determinism), and the run completes inside a generous wall-clock ceiling that exists to catch
+a hang, not to set the budget. Sizes: the 10 × 8 wall (85), a 40 × 32 wall (1,296 bodies),
+the shed (about 300), the half warehouse (about 2,500), the warehouse (about 5,000, Release
+only, with `LOADPATH_SLOW_IN_DEBUG`). Three loads: gravity at rest; one post removed; one
+course of one wall removed, each through `ICascade::Run`. The dense per-component LDLT is
+expected to fall over somewhere between 1,000 and 5,000 bodies (7,776 DoF dense is seconds; 30,000
+DoF dense is memory); the measurement says where, and that is the first design input for 6b.
+
+The table the measurement produces is written to `claude_plans/SCALE.md` by the orchestrator
+with the machine named, and 6b's contract (sparse factorisation behind the same
+`IStandingAuthority`; an event region that re-solves only the components a change touched;
+panels that treat an uncracked bonded run as one body until the cascade cracks it) is written
+against those numbers, not before them.

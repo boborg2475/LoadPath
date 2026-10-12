@@ -8,7 +8,7 @@ Deferring something? Add it here with enough context to pick up cold.
 Repository scaffolded: CMake + Visual Studio 2022 generator, vendored doctest 2.4.11 and Eigen
 3.4.0, the compiler contract (no exceptions, no RTTI, `/W4 /WX`, `/fp:precise`) enforced.
 Slices 1 (the model), 1b (JSON structure file, `RunCli`, `loadpath_cli`), 2a (the elastic
-standing authority), 4a (the limit-analysis collapse certificate), 4b (the combined authority,
+standing authority), 2c (dry corners at zero load), 4a (the limit-analysis collapse certificate), 4b (the combined authority,
 the shear cap, the kinematic anchors), 3 (the cascade) and 5 (the catalogue, the geometry
 layer, the structural fuzz) are committed and reviewed, every green-on-arrival row proven by a
 recorded mutation (commit messages and ANCHORS). The engine of DESIGN §8 slices 1 to 3 exists
@@ -32,7 +32,7 @@ stacks, Paterson–Zwick, Couplet–Heyman at Milankovitch's 0.107478 with hinge
 the certificate's associative 31.07°, the cascade on the arch below least thickness, the dry
 wall at t / H within 1 % (10 × 8 and 4 × 5), the bonded 4 × 5 wall at its monolith factor
 `(t/H)(1 + f_t A_base / W) = 2.971` to 1 %, two screws at twice their published shear and
-withdrawal whatever the joint area. Default suite 259 cases in Debug and 270 in Release (the
+withdrawal whatever the joint area. Default suite 265 cases in Debug and 276 in Release (the
 arch, pile, arch-cascade, fuzz and small-wall anchors run only in Release under
 `LOADPATH_SLOW_IN_DEBUG`; three `Slow.*` wall anchors run in Release at every slice close);
 the `Deferred.Slice7` tier holds the physical wedge pin, red by design (the slice-6 pin moved
@@ -42,15 +42,12 @@ and 5 rulings.
 
 ## Next
 
-1. Slice 2c, **dry perpends settle**: implemented (`DryNoiseFloorRelative` 1e-12 of the
-   component's force scale opens a dry corner whose trial |N| is at or below it; every dry wall
-   at rest, 1 × 3 to 10 × 8, settles in two iterations) and in its review-fix round
-   (2026-10-11): the review found that an overflowing force scale (one load component above
-   about 1.3e154) makes the floor +inf, opens every corner and reads a false Stands, and that a
-   corner just under the floor chatters open/closed to Undecided (10 of 81 end pushes between
-   1e-12 W and 1e-8 W); the fixes are a non-finite force scale failing closed and hysteresis
-   (re-close at twice the floor), with the bonded and cohesive guards given real mutation
-   proofs. Open after that round, none host-unsafe:
+1. Slice 2c, **dry perpends settle**: **done** after a cold review and two follow-ups
+   (2026-10-11). `DryNoiseFloorRelative` 1e-12 of the component's force scale: a tensionless
+   corner opens only below −floor, a dry corner is open inside ±floor and re-closes above
+   2 × floor, a closed tensionless corner inside the band reports N 0, a non-finite force scale
+   reads Undecided. Every dry wall at rest, 1 × 3 to 10 × 8, settles in two iterations; the
+   lime-mortar (cohesion, no tension) walls Stand at rest. Open items, none host-unsafe:
    - **laterally loaded dry walls still read Undecided, and the floor has nothing to do with
      it**: on a 5 × 5 grid of sizes × λx 0–0.3, λy 0–0.15, 147 points stay Undecided (1 × 5,
      2 × 5, 3 × 4, 3 × 5, 5 × 4, 5 × 5 at every λ ≥ 0.05; 10 × 8 and 14 × 10 at λ 0.2) with
@@ -70,14 +67,18 @@ and 5 rulings.
    - an unloaded component (zero gravity, no loads) has floor 0 and `<=` opens every dry corner,
      reading Stands with all corners open; `<=` → `<` survives the suite, so the boundary is
      unpinned;
+   - in the overflow case the floor is +inf and the reading clamp then zeroes every tensile
+     reading on tensionless corners (a 2e154 uplift reads Undecided with bed utilisation 0), so
+     "readings filled from the overflowed solve" is not true for tension; fails closed; skip the
+     clamp when the floor is not finite;
    - the floor's size is pinned from above by the end-push scaling test (floor 1e-9 reddens it)
      and from below by nothing: a smaller floor only brings the at-rest chatter back at larger
      sizes (noise reaches 1.5e-16 of the scale on the 14 × 10 wall, so 1e-12 keeps about four
      orders of margin that shrink roughly linearly with size).
-   Next slice: 6, scale, opening with a measurement (API.md "Slice 6" when written: a
-   warehouse-like generator from the slice-5 pieces, `Slow.Scale.*` rows for the wall, shed and
-   warehouse sizes through the combined authority and the cascade, the table in
-   `claude_plans/SCALE.md`), and only then the sparse / event-region / panel contract. **Slice 8,
+   Next slice: 6, scale, opening with the measurement of API.md "Slice 6a" (a warehouse-like
+   generator from the slice-5 pieces, `Slow.Scale.*` rows for the wall, shed and warehouse
+   sizes through the combined authority and the cascade, the table in `claude_plans/SCALE.md`),
+   and only then the sparse / event-region / panel contract (6b). **Slice 8,
    the Unreal adapter, is on hold by owner directive (2026-10-11): do not start it.** The
    remaining slice-2 anchors (item 2) can run alongside slice 6.
    Slice 3 and 4b items still open (none host-unsafe; the unsafe one, the wedge band, is under
