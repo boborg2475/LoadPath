@@ -9,33 +9,60 @@ Repository scaffolded: CMake + Visual Studio 2022 generator, vendored doctest 2.
 3.4.0, the compiler contract (no exceptions, no RTTI, `/W4 /WX`, `/fp:precise`) enforced.
 Slices 1 (the model), 1b (JSON structure file, `RunCli`, `loadpath_cli`), 2a (the elastic
 standing authority), 4a (the limit-analysis collapse certificate), 4b (the combined authority,
-the shear cap, the kinematic anchors) and 3 (the cascade) are committed and reviewed, every
-green-on-arrival row proven by a recorded mutation (commit messages and ANCHORS). The engine
-of DESIGN §8 slices 1 to 3 therefore exists end to end: `IStandingAuthority` (RBSM corner
-springs, per-component Schur-pivoted LDLT, free active set, Stands/Overstressed certified,
-Mechanism a verdict, Undecided fail-closed), `ICollapseCertificate` (inscribed/circumscribed
-LP, homogeneous self-dual interior point, mechanism selection, shear-cap facet rows),
-`IStructuralAuthority` (every component solved alone by the elastic authority, Mechanism and
-Undecided refereed by the certificate, disagreements counted, the certificate's list the only
-release set) and `ICascade` (judge, release certified clusters severing their boundary, crack
-the top band of over-capacity bonded joints, repeat; pass stamps and a pass counter on the
-structure, carried by the file; cracked joints read dry through `EffectiveProfile`; per-axis
-utilisations in every reading). Anchors pinned from the literature: inclines, Housner, walls,
-Itasca slope regimes, harmonic stacks, Paterson–Zwick, Couplet–Heyman at Milankovitch's
-0.107478 with hinges at 0°, ±54°, ±54.484°, ±90° and its 21°/22° friction switch, the Orduña
-pile at λ 0.5005, the 3DEC wedge at the certificate's associative 31.07°, and the cascade on the
-arch below least thickness (six voussoir runs between the seven Heyman hinges). Default suite
-216 cases in Debug (13,192 assertions, about 12 s) and 221 in Release (36,776 assertions, 7 s
-with the build; the arch, pile and arch-cascade anchors run only there under
-`LOADPATH_SLOW_IN_DEBUG`); the `Deferred.Slice7` tier holds the one physical wedge pin, red by
-design. The design brief ([DESIGN.md](DESIGN.md)) has every §9 question decided and §10
-carries the slice-2, 3, 4a and 4b rulings.
+the shear cap, the kinematic anchors), 3 (the cascade) and 5 (the catalogue, the geometry
+layer, the structural fuzz) are committed and reviewed, every green-on-arrival row proven by a
+recorded mutation (commit messages and ANCHORS). The engine of DESIGN §8 slices 1 to 3 exists
+end to end: `IStandingAuthority` (RBSM corner springs, per-component Schur-pivoted LDLT, free
+active set, Stands/Overstressed certified, Mechanism a verdict, Undecided fail-closed),
+`ICollapseCertificate` (inscribed/circumscribed LP, homogeneous self-dual interior point,
+mechanism selection, shear-cap facet rows), `IStructuralAuthority` (every component solved
+alone by the elastic authority, Mechanism and Undecided refereed by the certificate,
+disagreements counted, the certificate's list the only release set) and `ICascade` (judge,
+release certified clusters severing their boundary, crack the top band of over-capacity bonded
+joints, repeat; pass stamps and a pass counter on the structure, carried by the file; cracked
+joints read dry through `EffectiveProfile`; per-axis utilisations in every reading). Above it,
+the producers of slice 5: `data/catalogue.json` (EN 1996-1-1 bed and filled perpend, Gooch and
+UPC measured beds, C24 bearing, EC5 screw, nail and bolt, every row cited and labelled, code
+flexural tension stored as direct f_x / 3, fastener rows with EC5 slip moduli) with a loader
+that converts once and refuses strictly; `FaceContact` and `BuildRunningBondWall` (a 10 × 8
+wall is 85 bricks, 152 beds, 75 perpends); and the seeded cascade fuzz over its five invariants.
+Anchors pinned from the literature: inclines, Housner, walls, Itasca slope regimes, harmonic
+stacks, Paterson–Zwick, Couplet–Heyman at Milankovitch's 0.107478 with hinges at 0°, ±54°,
+±54.484°, ±90° and its 21°/22° friction switch, the Orduña pile at λ 0.5005, the 3DEC wedge at
+the certificate's associative 31.07°, the cascade on the arch below least thickness, the dry
+wall at t / H within 1 % (10 × 8 and 4 × 5), the bonded 4 × 5 wall at its monolith factor
+`(t/H)(1 + f_t A_base / W) = 2.971` to 1 %, two screws at twice their published shear and
+withdrawal whatever the joint area. Default suite 253 cases in Debug and 264 in Release (the
+arch, pile, arch-cascade, fuzz and small-wall anchors run only in Release under
+`LOADPATH_SLOW_IN_DEBUG`; three `Slow.*` wall anchors run in Release at every slice close);
+the `Deferred.Slice7` tier holds the physical wedge pin and `Deferred.Slice6` the smallest dry
+wall the elastic authority cannot settle, both red by design. The design brief
+([DESIGN.md](DESIGN.md)) has every §9 question decided and §10 carries the slice-2, 3, 4a, 4b
+and 5 rulings.
 
 ## Next
 
-1. Slice 3, the cascade (API.md "Slice 3", DESIGN §10): **done** after two reviews and a
-   follow-up (2026-10-11). Open items it leaves, with the slice-4b ones, none host-unsafe (the
-   unsafe one, the wedge band, is under Deferred):
+1. Slice 2c, **dry perpends settle** (the next solver slice, before slice 6): the elastic
+   authority reads Undecided on every dry running-bond wall with perpends between full bricks
+   (1 × 3 and 5 × 1 up; 1 × 2, 3 × 1 and 4 × 1, whose perpends sit between half bricks,
+   settle) because a dry perpend at N ≈ 1e-18 stays closed (`UpdateActiveSet` opens a corner
+   only on N < 0 strictly), its slip capacity μN and its roundoff shear are the same size, and
+   the Stuck ↔ Slipping test flips every iteration; the 2 × 1 dry wall reads Overstressed at
+   rest for the same reason (shear utilisation = roundoff / 0 = +inf). Ruling to write at the
+   slice opening: a corner whose normal force is within a force-noise floor of zero, on a joint
+   with zero tension and cohesion, is Open and reads N 0, shear 0, utilisations 0; the floor is
+   relative to the component's force scale (the `ForceScaleN` the held-force tolerance uses),
+   one named constant; the stick/slip comparison gets the same absolute slack; a genuinely
+   loaded dry corner keeps today's rule. Tests: `Deferred.Slice6.SmallestDryWallThatDoesNot
+   SettleElastically` moves to the default tier green; the 2 × 1 wall Stands at rest with finite
+   zero utilisations on the perpend; a sweep 1 × 3, 2 × 3, 3 × 4, 4 × 5 Stands elastically with
+   the iteration counts recorded; the incline and bridge anchors unchanged (the floor is not a
+   blanket); a dry perpend under a real lateral load (λ 0.2 on the 1 × 3 wall) still carries
+   shear above the floor; a bonded perpend at N ≈ 0 is not opened. Mutations: floor 0 restores
+   the Undecided; floor 1e-3 of the force scale makes the loaded-perpend test red. Then check
+   whether the 10 × 8 dry wall (Slow, Release) settles and how many iterations it takes.
+   Slice 3 and 4b items still open (none host-unsafe; the unsafe one, the wedge band, is under
+   Deferred):
    - the overflow guard (`HighestPass() == UINT32_MAX` → InvalidInput) runs only at entry; a run
      starting at `UINT32_MAX − 1` that needs two counted passes computes pass 0 on the second,
      where Crack/Sever/MarkPass refuse and a release removes bodies with no stamp or record;
@@ -71,10 +98,7 @@ carries the slice-2, 3, 4a and 4b rulings.
    - the 4a items still open: the selection gate is `FeasibilityTolerance`; `t_out` is the
      circumscribed converged primal, not the dual objective; `Iterations` excludes the
      selection solve's count; HiGHS stays slice 7's referee question.
-   Next slice by DESIGN §8: slice 5, the catalogue and fixtures (brick, mortar, perpend, C24
-   timber, nail, screw, bolt with citations and the MPa → Pa loader with its test; a
-   running-bond wall generator; the structural fuzz with its oracle), unless the owner
-   reorders; the remaining slice-2 anchors (item 2) can run alongside it.
+   The remaining slice-2 anchors (item 2) can run alongside slice 2c.
 2. Slice 2b, the remaining slice-2 anchors (BENCHMARKS groups 2 and 3): B-WAL-03 (wall slides at
    λ = μ), B-STK-04 (constant-step stack), B-WDG-02, B-ROK-02, F-CHC-01, F-LIB-01/02, F-EMI-01,
    the 5-diamond (hits the 50-pass cap today, logged below), and the arch and pile rows that
@@ -205,25 +229,40 @@ carries the slice-2, 3, 4a and 4b rulings.
   make the two bridge `Statics.Combined.ThreeBrickBridge*` cases CHECK `Oracle == CanStand` as a
   precondition (`MakeBridge(5.0, 0.12, 0.0)` at (2.5, 0.875), (2.375, 0.875), (2.25, 0.875)
   reads CanStand with inner residual about 1e-16 at μ 5 and 3.5).
-- Slice 5a items left open (2026-10-11): `FastenerProfile` has no guard for `Count ≤ 0` or
-  `AreaM2 ≤ 0` (a zero area gives inf or NaN strengths, which the Structure then refuses, so it
-  fails closed one step later; a test-first guard would name it); the mean screw row keeps the
-  characteristic withdrawal 1.74 kN because Blass & Colling's ratio is lateral only (the note
-  says so); the nail row's withdrawal 0.42 kN is the 3.1 mm nail's datum on a 4.0 mm nail row
-  (noted); the timber bearing friction 0.3 is the Wood Handbook range's low end matched through
-  a search snippet, the PDF host unreachable from here: open it and confirm the sentence.
-- **The elastic authority never settles on a dry wall with perpends** (slice-5 sweep,
-  2026-10-11, dry μ 0.7 at rest, Release, cap 50): every running-bond wall from 1 × 3 bricks
-  up reads Undecided at 50, 200 and 1000 passes alike; only single-column stacks settle. The
-  1 × 3 wall (3 beds, 2 perpends) is the smallest: one perpend reads N ≈ 1.9e-18 at
-  utilisation 1, the other N ≈ 1.6e-18 at ~5e-25, so a dry perpend carrying no load keeps
-  the active set flipping. With the perpends removed the 4 × 5 wall settles in one pass.
-  Bonded walls settle. The combined authority reads Stands through the certificate, so the
-  host is safe, but a realistic dry wall certifies only through the LP and gets no per-joint
-  readout. Pinned red by design: `Deferred.Slice6.SmallestDryWallThatDoesNotSettleElastically`.
-  **Companion defect:** the 2 × 1 dry wall (one brick, two half bricks on top) reads
-  Overstressed at rest, elastic and combined: the perpend between the halves reads N = 0 with
-  shear utilisation +inf (roundoff shear over zero capacity), the `bNonFinite` family of the
-  slice-2a caveats. Both are the next solver slice (2c, "dry perpends settle"): rule a
-  zero-normal dry corner with roundoff shear as open and zero, and make the active set accept
-  it; before slice 6.
+- Slice 5 items left open after its review (2026-10-11), none host-unsafe:
+  - the cascade fuzz never cracks a wall joint: over the 40 Release draws every crack is in a
+    weakened stack, the 8 wall draws release only a whole-wall overturn and loose bricks, and
+    the termination invariant (`Passes ≤ live interfaces at entry`) cannot fail on a wall with
+    ≥ 16 live interfaces against the 16-pass loop cap; the fix is a weakened-wall family
+    (ec6 rows × 10^U[−3,−1], in-plane lateral along x) with coverage guards for one crack in a
+    wall draw and one wall cluster smaller than its component (the review's T5);
+  - invariant (i) reads the release list through the combined authority rather than the raw
+    certificate: equivalent by construction, the same code path rather than an independent
+    oracle;
+  - `BoxContacts.cpp` keeps an unreachable branch (two contact axes → nullopt): on any axis
+    with |gap| ≤ tol the overlap on that axis is ≤ tol, so it can never serve as U or V for
+    another axis;
+  - data caveats the rows disclose: the lime-mortar row carries the M10 GP compression of
+    8.93 MPa; the fasteners bear on the C24 row's 3.75 MPa and 8.2 GPa/m while their examples
+    are in GL30c; the nail row's withdrawal 0.42 kN is the 3.1 mm nail's datum; the timber
+    row's stiffness divides by Ex 3.2's 45 mm joist width because the example gives no other
+    bearing dimension; EN 1995-1-1 Table 7.1's nail expression and the §7.1(3) ×2 were matched
+    through secondary sources (Swedish Wood Vol. 2, the COFORD handbook), the standard itself
+    unopened; the timber bearing friction 0.3 is the Wood Handbook range's low end matched
+    through a search snippet, the PDF unopened;
+  - `FastenerProfile` has no guard for `Count ≤ 0` or `AreaM2 ≤ 0` (a zero area gives inf or
+    NaN strengths, which the Structure refuses, so it fails closed one step later);
+  - a withdrawal (axial) stiffness differs from the bearing stiffness in a real fastened joint;
+    the profile carries one normal stiffness, the bearing member's, both ways;
+  - a mean fastener row waits for a cited mean (Blass & Colling's ratio is characteristic).
+  - after the review round: `FaceContact` still accepts a negative half extent (only non-finite
+    input is refused); the loader refuses unknown keys inside rows but ignores unknown keys at
+    the document level; `BuildRunningBondWall` keeps going after a refused body or interface
+    with `bComplete` false and no phantom interface ids, but `Courses` still lists a refused
+    brick's id and `Ground` a refused ground's; the old `SmallBondedWallCollapseLambda = 8.5`
+    anchor is slack now that λ_c is 2.97 (the tight anchor beside it is the bound).
+- **The elastic authority never settles on a dry wall with perpends between full bricks** (slice-5
+  sweep, 2026-10-11): the next solver slice, Next item 1 (slice 2c), which carries the
+  mechanism, the ruling to write and the tests. Pinned red by design meanwhile:
+  `Deferred.Slice6.SmallestDryWallThatDoesNotSettleElastically` (the 1 × 3 wall). The
+  measured sweep is in its ANCHORS row.

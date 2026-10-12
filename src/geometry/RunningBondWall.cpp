@@ -16,7 +16,19 @@ Wall BuildRunningBondWall(Structure& Model, const WallSpec& Spec)
 	const double FullKg = Spec.DensityKgPerM3 * Brick.X * Brick.Y * Brick.Z;
 
 	const Box GroundBox{Vec3{0.5 * Out.LengthM, 0.0, Spec.GroundZM - 0.5 * Brick.Z}, Vec3{0.5 * Out.LengthM, 0.5 * Brick.Y, 0.5 * Brick.Z}};
-	Out.Ground = Model.AddBody(BodyDesc{0.0, GroundBox.CentreM, true}).Value;
+	const auto Keep = [&Out](const auto& Added, auto& Into) {
+		if (Added.Ok())
+		{
+			Into.push_back(Added.Value);
+		}
+		else
+		{
+			Out.bComplete = false;
+		}
+	};
+	const Result<BodyId> GroundAdded = Model.AddBody(BodyDesc{0.0, GroundBox.CentreM, true});
+	Out.bComplete = GroundAdded.Ok();
+	Out.Ground = GroundAdded.Value;
 
 	std::vector<std::vector<Box>> Boxes;
 	for (int C = 0; C < Spec.Courses; ++C)
@@ -43,13 +55,15 @@ Wall BuildRunningBondWall(Structure& Model, const WallSpec& Spec)
 		{
 			const Box B{Vec3{X + 0.5 * L, 0.0, Z}, Vec3{0.5 * L, 0.5 * Brick.Y, 0.5 * Brick.Z}};
 			X += L;
-			const BodyId Id = Model.AddBody(BodyDesc{FullKg * L / Brick.X, B.CentreM, false}).Value;
+			const Result<BodyId> Added = Model.AddBody(BodyDesc{FullKg * L / Brick.X, B.CentreM, false});
+			Out.bComplete = Out.bComplete && Added.Ok();
+			const BodyId Id = Added.Value;
 			if (C == 0)
 			{
 				const Box Under{Vec3{B.CentreM.X, 0.0, Spec.GroundZM - 0.5 * Brick.Z}, B.HalfExtentsM};
 				if (const std::optional<InterfaceDesc> Bed = FaceContact(Out.Ground, Under, Id, B, Spec.Bed))
 				{
-					Out.Beds.push_back(Model.AddInterface(*Bed).Value);
+					Keep(Model.AddInterface(*Bed), Out.Beds);
 				}
 			}
 			else
@@ -58,7 +72,7 @@ Wall BuildRunningBondWall(Structure& Model, const WallSpec& Spec)
 				{
 					if (const std::optional<InterfaceDesc> Bed = FaceContact(Out.Courses[C - 1][J], Boxes[C - 1][J], Id, B, Spec.Bed))
 					{
-						Out.Beds.push_back(Model.AddInterface(*Bed).Value);
+						Keep(Model.AddInterface(*Bed), Out.Beds);
 					}
 				}
 			}
@@ -66,7 +80,7 @@ Wall BuildRunningBondWall(Structure& Model, const WallSpec& Spec)
 			{
 				if (const std::optional<InterfaceDesc> Perpend = FaceContact(Course.back(), CourseBoxes.back(), Id, B, Spec.Perpend))
 				{
-					Out.Perpends.push_back(Model.AddInterface(*Perpend).Value);
+					Keep(Model.AddInterface(*Perpend), Out.Perpends);
 				}
 			}
 			Course.push_back(Id);

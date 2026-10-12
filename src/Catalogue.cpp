@@ -4,6 +4,9 @@
 
 #include "loadpath/Structure.h"
 
+#include <algorithm>
+#include <cmath>
+#include <initializer_list>
 #include <string>
 #include <unordered_set>
 
@@ -16,12 +19,14 @@ using namespace detail;
 constexpr double PaPerMPa = 1e6;
 constexpr double PaPerMPerGPaPerM = 1e9;
 constexpr double NPerKN = 1e3;
+constexpr double NPerMPerMNPerM = 1e6;
 
 class RowReader
 {
 public:
 	RowReader(const JsonValue& Row, const char* Table, std::size_t Index, FileError& Error)
 		: Fields(Row, std::string(Table) + " " + std::to_string(Index), Error)
+		, Element(Row)
 	{
 	}
 
@@ -46,7 +51,28 @@ public:
 		{
 			return Fields.Fail(std::string(Key) + " is negative");
 		}
+		if (Find(Element, Key) != nullptr && !std::isfinite(Value * Scale))
+		{
+			return Fields.Fail(std::string(Key) + " is " + ModelErrorText(ModelError::NonFiniteInput) + " after conversion");
+		}
 		Out = Value * Scale;
+		return true;
+	}
+
+	bool Positive(std::string_view Key, double Scale, double& Out)
+	{
+		return Scaled(Key, Scale, Out) && (Out > 0.0 || Fields.Fail(std::string(Key) + " must be positive"));
+	}
+
+	bool OnlyKeys(std::initializer_list<std::string_view> Allowed)
+	{
+		for (const std::string& Key : Element.Keys)
+		{
+			if (std::find(Allowed.begin(), Allowed.end(), Key) == Allowed.end())
+			{
+				return Fields.Fail("unknown key " + Key);
+			}
+		}
 		return true;
 	}
 
@@ -80,6 +106,7 @@ public:
 	}
 
 	ElementFields Fields;
+	const JsonValue& Element;
 };
 
 bool ReadJoint(const JsonValue& Value, std::size_t Index, std::unordered_set<std::string>& Seen, FileError& Error, JointRow& Row)
@@ -92,12 +119,15 @@ bool ReadJoint(const JsonValue& Value, std::size_t Index, std::unordered_set<std
 	RowReader Reader(Value, "joint", Index, Error);
 	StrengthProfile& P = Row.Profile;
 	Row.FrictionNormalStressPa = NotANumber;
-	if (!(Reader.Name(Row.Name, Seen) && Reader.Kind(Row.Kind) && Reader.Basis(Row.Basis) &&
+	if (!(Reader.Name(Row.Name, Seen) &&
+			Reader.OnlyKeys({"name", "kind", "basis", "compressive_mpa", "cohesion_mpa", "tensile_mpa", "friction", "shear_cap_mpa",
+				"normal_stiffness_gpa_per_m", "tangential_stiffness_gpa_per_m", "friction_normal_stress_mpa", "source", "note"}) &&
+			Reader.Kind(Row.Kind) && Reader.Basis(Row.Basis) &&
 			Reader.Scaled("compressive_mpa", PaPerMPa, P.CompressiveStrengthPa) && Reader.Scaled("cohesion_mpa", PaPerMPa, P.ShearCohesionPa) &&
 			Reader.Scaled("tensile_mpa", PaPerMPa, P.TensileStrengthPa) && Reader.Scaled("friction", 1.0, P.FrictionCoefficient) &&
 			Reader.Scaled("shear_cap_mpa", PaPerMPa, P.MaxShearStrengthPa, false) &&
-			Reader.Scaled("normal_stiffness_gpa_per_m", PaPerMPerGPaPerM, P.NormalStiffnessPaPerM) &&
-			Reader.Scaled("tangential_stiffness_gpa_per_m", PaPerMPerGPaPerM, P.TangentialStiffnessPaPerM) &&
+			Reader.Positive("normal_stiffness_gpa_per_m", PaPerMPerGPaPerM, P.NormalStiffnessPaPerM) &&
+			Reader.Positive("tangential_stiffness_gpa_per_m", PaPerMPerGPaPerM, P.TangentialStiffnessPaPerM) &&
 			Reader.Scaled("friction_normal_stress_mpa", PaPerMPa, Row.FrictionNormalStressPa, false) &&
 			Reader.Fields.String("source", Row.Source) && Reader.Fields.String("note", Row.Note)))
 	{
@@ -116,8 +146,13 @@ bool ReadFastener(const JsonValue& Value, std::size_t Index, std::unordered_set<
 		return false;
 	}
 	RowReader Reader(Value, "fastener", Index, Error);
-	return Reader.Name(Row.Name, Seen) && Reader.Basis(Row.Basis) && Reader.Scaled("shear_per_plane_kn", NPerKN, Row.ShearPerPlaneN) &&
-		Reader.Scaled("withdrawal_kn", NPerKN, Row.WithdrawalN) && Reader.Scaled("bearing_mpa", PaPerMPa, Row.BearingStrengthPa) &&
+	return Reader.Name(Row.Name, Seen) &&
+		Reader.OnlyKeys({"name", "basis", "shear_per_plane_kn", "withdrawal_kn", "bearing_mpa", "slip_modulus_mn_per_m",
+			"bearing_normal_stiffness_gpa_per_m", "source", "note"}) &&
+		Reader.Basis(Row.Basis) && Reader.Scaled("shear_per_plane_kn", NPerKN, Row.ShearPerPlaneN) &&
+		Reader.Scaled("withdrawal_kn", NPerKN, Row.WithdrawalN) && Reader.Positive("bearing_mpa", PaPerMPa, Row.BearingStrengthPa) &&
+		Reader.Positive("slip_modulus_mn_per_m", NPerMPerMNPerM, Row.SlipModulusNPerM) &&
+		Reader.Positive("bearing_normal_stiffness_gpa_per_m", PaPerMPerGPaPerM, Row.BearingNormalStiffnessPaPerM) &&
 		Reader.Fields.String("source", Row.Source) && Reader.Fields.String("note", Row.Note);
 }
 
@@ -213,6 +248,8 @@ StrengthProfile FastenerProfile(const FastenerRow& Row, int Count, double AreaM2
 	Profile.MaxShearStrengthPa = Profile.ShearCohesionPa;
 	Profile.TensileStrengthPa = Count * Row.WithdrawalN / AreaM2;
 	Profile.CompressiveStrengthPa = Row.BearingStrengthPa;
+	Profile.TangentialStiffnessPaPerM = Count * Row.SlipModulusNPerM / AreaM2;
+	Profile.NormalStiffnessPaPerM = Row.BearingNormalStiffnessPaPerM;
 	return Profile;
 }
 }

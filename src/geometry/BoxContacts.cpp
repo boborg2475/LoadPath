@@ -25,6 +25,17 @@ void SetComponent(Vec3& V, int Axis, double Value)
 
 std::optional<InterfaceDesc> FaceContact(BodyId A, const Box& BoxA, BodyId B, const Box& BoxB, ProfileId Profile, double ToleranceM)
 {
+	for (const Vec3& V : {BoxA.CentreM, BoxA.HalfExtentsM, BoxB.CentreM, BoxB.HalfExtentsM})
+	{
+		if (!std::isfinite(V.X) || !std::isfinite(V.Y) || !std::isfinite(V.Z))
+		{
+			return std::nullopt;
+		}
+	}
+	if (!std::isfinite(ToleranceM))
+	{
+		return std::nullopt;
+	}
 	double Gap[3];
 	double Overlap[3];
 	double Mid[3];
