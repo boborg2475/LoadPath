@@ -1,10 +1,13 @@
+#include "CatalogueTestSupport.h"
 #include "StaticAdmissibilityOracle.h"
 #include "StaticsTestSupport.h"
 
+#include "loadpath/Catalogue.h"
 #include "loadpath/geometry/RunningBondWall.h"
 
 #include "doctest.h"
 
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <vector>
@@ -75,6 +78,53 @@ TEST_CASE("Statics.Dry.AReclosingCornerWithBuiltUpSlipEntersSlipping")
 		}
 	}
 	CHECK(SlippingCorners > 0);
+}
+
+TEST_CASE("Statics.Lime.AReclosingCohesiveCornerStaysOutOfSlipping")
+{
+	const CatalogueResult Loaded = LoadCatalogue(ReadCatalogueFile());
+	INFO("line " << Loaded.Error.Line << ": " << Loaded.Error.Message);
+	REQUIRE(Loaded.Ok());
+	const StrengthProfile Lime = JointOrFail(Loaded.Value, "lime_mortar_handmade_brick_upc_mean").Profile;
+	REQUIRE(Lime.TensileStrengthPa == 0.0);
+	REQUIRE(Lime.ShearCohesionPa > 0.0);
+	Structure Model;
+	geometry::WallSpec Spec;
+	Spec.Bed = AddProfileOk(Model, Lime);
+	Spec.Perpend = AddProfileOk(Model, Lime);
+	Spec.Courses = 4;
+	Spec.BricksPerCourse = 5;
+	const geometry::Wall W = geometry::BuildRunningBondWall(Model, Spec);
+	REQUIRE(W.bComplete);
+	const StandingResult Result = SolveWith(Model, Biaxial(0.1, 0.0));
+	INFO("4 x 5 lime wall at lambda x 0.1: " << Result.State << " after " << Result.ActiveSetIterations << " iterations");
+	REQUIRE(Result.State == StandingState::Stands);
+	int Slipping = 0, OpenCorners = 0, AboveFriction = 0, AboveCohesive = 0;
+	double WorstExcessN = 0.0, WorstOverCohesive = 0.0;
+	for (const InterfaceReading& R : Result.Readings)
+	{
+		const double CohesionN = Lime.ShearCohesionPa * Model.Interface(R.Id).AreaM2 / 4.0;
+		for (const CornerReading& C : R.Corners)
+		{
+			Slipping += C.bSlipping ? 1 : 0;
+			OpenCorners += C.bOpen ? 1 : 0;
+			const double ShearN = Length(C.ShearForceN);
+			const double FrictionN = Lime.FrictionCoefficient * std::max(C.NormalForceN, 0.0);
+			if (C.bOpen || !(ShearN > FrictionN))
+			{
+				continue;
+			}
+			++AboveFriction;
+			WorstExcessN = std::max(WorstExcessN, ShearN - FrictionN);
+			WorstOverCohesive = std::max(WorstOverCohesive, ShearN / (CohesionN + FrictionN));
+			AboveCohesive += ShearN > CohesionN + FrictionN ? 1 : 0;
+		}
+	}
+	MESSAGE("4 x 5 lime wall: " << Result.ActiveSetIterations << " iterations, " << OpenCorners << " open, " << Slipping << " slipping, " << AboveFriction << " closed corners above mu N, worst excess " << WorstExcessN << " N, worst shear over c A + mu N " << WorstOverCohesive);
+	CHECK(Slipping == 0);
+	CHECK(OpenCorners > 0);
+	CHECK(AboveFriction > 0);
+	CHECK(AboveCohesive == 0);
 }
 
 TEST_CASE("Statics.Dry.LateralWallsStand")

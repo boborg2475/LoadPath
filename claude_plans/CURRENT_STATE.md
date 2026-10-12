@@ -60,7 +60,13 @@ the non-associative answer) and the two hanging-component cases (slice 6), red b
      until a cohesive fixture was added (in flight); the regeneration's oracle audit found one
      pre-existing pinned Stands the oracle reads CannotStand and 26 Ambiguous among 1,420
      (handed to the review to identify); the restore-step Undecideds below are now more
-     visible (145 of the 196 Mechanism-to-Undecided pin trades);
+     visible (145 of the 196 Mechanism-to-Undecided pin trades); **the same cycle hits
+     cohesive tensionless (lime-mortar) perpends**: the 4 × 5 lime wall at λx 0.8, the 5 × 5 at
+     0.8 and the 10 × 8 at (0.2, 0.1), (0.5, 0.1), (0.8, 0) and (0.8, 0.1) read Undecided at
+     50, and all Stand in 5 to 9 iterations if the dry rule is applied to them, which the
+     scope ruling forbids (`Statics.Lime.AReclosingCohesiveCornerStaysOutOfSlipping`); a
+     re-closing cohesive corner needs its own ruling (forget the tangential offset built up
+     while open, or read the cohesive capacity), measured against the oracle first;
    - the restore step (`RestoreInadmissibleReleases`) re-closes a floor-opened corner on a
      motion gap with no floor check: a corner Open in the full-rank state returns Undecided
      (the 3 × 1 wall at λ (0.8, 0.8) went Mechanism → Undecided), otherwise the corner re-enters
