@@ -283,6 +283,23 @@ Eigen::MatrixXd AssembleStiffness(const Problem& P, const std::vector<JointState
 
 using SparseMatrix = Eigen::SparseMatrix<double>;
 
+SparseMatrix AssembleSparseStiffness(const Problem& P, const std::vector<JointState>& States)
+{
+	std::vector<Eigen::Triplet<double>> Triplets;
+	ForEachStiffnessBlock(P, States, [&](int Row, int Col, const Eigen::Matrix<double, 6, 6>& Block) {
+		for (int R = 0; R < 6; ++R)
+		{
+			for (int S = 0; S < 6; ++S)
+			{
+				Triplets.emplace_back(Row + R, Col + S, Block(R, S));
+			}
+		}
+	});
+	SparseMatrix K(P.DofCount, P.DofCount);
+	K.setFromTriplets(Triplets.begin(), Triplets.end());
+	return K;
+}
+
 SparseMatrix AssembleScaledSparseStiffness(const Problem& P, const std::vector<JointState>& States)
 {
 	std::vector<Eigen::Triplet<double>> Triplets;
@@ -855,7 +872,7 @@ StandingResult FallRigid(const Problem& P, const StandingOptions& Options)
 	StandingResult Result;
 	Result.State = StandingState::Mechanism;
 	const double Largest = std::max({std::abs(Options.Gravity.X), std::abs(Options.Gravity.Y), std::abs(Options.Gravity.Z)});
-	const Vec3 Fall = Scale(1.0 / Largest, Options.Gravity);
+	const Vec3 Fall{Options.Gravity.X / Largest, Options.Gravity.Y / Largest, Options.Gravity.Z / Largest};
 	for (const BodyId Id : P.FreeBodies)
 	{
 		Result.UnconstrainedBodies.push_back(Id);
@@ -889,7 +906,9 @@ StandingResult SolveProblem(const Problem& P, const StandingOptions& Options)
 	const bool bGravity = Options.Gravity.X != 0.0 || Options.Gravity.Y != 0.0 || Options.Gravity.Z != 0.0;
 	if (!P.bGrounded && !P.bHostLoaded && bGravity)
 	{
-		if (!IsAllFinite(AssembleScaledSparseStiffness(P, States)))
+		const auto Scaling = P.Scaling.asDiagonal();
+		const SparseMatrix K = Scaling * AssembleSparseStiffness(P, States) * Scaling;
+		if (!IsAllFinite(K))
 		{
 			Result.State = StandingState::InvalidInput;
 			return Result;
