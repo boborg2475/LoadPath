@@ -32,8 +32,8 @@ stacks, Paterson–Zwick, Couplet–Heyman at Milankovitch's 0.107478 with hinge
 the certificate's associative 31.07°, the cascade on the arch below least thickness, the dry
 wall at t / H within 1 % (10 × 8 and 4 × 5), the bonded 4 × 5 wall at its monolith factor
 `(t/H)(1 + f_t A_base / W) = 2.971` to 1 %, two screws at twice their published shear and
-withdrawal whatever the joint area. Default suite 349 cases in Debug and 375 in Release after
-slice 2d (325 and 347 at the 6b close) (the arch, pile, arch-cascade, fuzz, small-wall and multi-panel factor anchors
+withdrawal whatever the joint area. Default suite 352 cases in Debug and 379 in Release after
+slice 2e (325 and 347 at the 6b close) (the arch, pile, arch-cascade, fuzz, small-wall and multi-panel factor anchors
 run only in Release under `LOADPATH_SLOW_IN_DEBUG`; fourteen `Slow.*` cases run in Release at
 every slice close, and the
 cheap `Measure.Scale.*` rows after them); the `Deferred.*` tier holds the physical wedge pin
@@ -73,8 +73,21 @@ the non-associative answer) and the two hanging-component cases (slice 6), red b
      0.8 and the 10 × 8 at (0.2, 0.1), (0.5, 0.1), (0.8, 0) and (0.8, 0.1) read Undecided at
      50, and all Stand in 5 to 9 iterations if the dry rule is applied to them, which the
      scope ruling forbids (`Statics.Lime.AReclosingCohesiveCornerStaysOutOfSlipping`); a
-     re-closing cohesive corner needs its own ruling (forget the tangential offset built up
-     while open, or read the cohesive capacity), measured against the oracle first;
+     re-closing cohesive corner got its own ruling in slice 2e;
+   - **slice 2e, green and in cold review 2026-10-12 (red step d089f5a; DESIGN §10 "slice 2e
+     opening", "dev notes")**: a cohesive tensionless corner that re-closes for the second or
+     later time in one solve resets its tangential reference to the current offset (carried as
+     a held pre-force kt·Ref in the load), the first re-closure keeps the full offset, and a
+     guard keeps it whenever the forgotten shear would exceed cA/4 + μN; the seven lime points
+     Stand in 8 to 16 iterations, the 140-point lime grid goes from 52 Undecided to 5, every
+     converged solve and every pin is bit-identical. Left from the round: the guard is
+     unobservable by verdict (90-point sweep: wherever it fires the unguarded solve reads
+     Overstressed from a neighbouring perpend), so the mutant "guard removed" survives the
+     suite by design and `AWallWhoseForgottenShearWouldExceedTheCohesiveCapacityDoesNotStand`
+     pins only not-Stands; the five 10 × 8 lime exceptions at (1, 0.15) and λx 1.2 read
+     Undecided after 3 to 9 iterations, not at the cap, so they are an early fail-closed exit
+     (a floor or a factor refusal) still untraced; readings at formerly cycling points are
+     path-dependent between equally admissible rules (accepted in the opening);
    - the restore step (`RestoreInadmissibleReleases`) re-closes a floor-opened corner on a
      motion gap with no floor check: a corner Open in the full-rank state returns Undecided
      (the 3 × 1 wall at λ (0.8, 0.8) went Mechanism → Undecided), otherwise the corner re-enters

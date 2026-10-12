@@ -188,17 +188,24 @@ TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Statics.Lime.TheLateralGridStandsInItsOwnField
 	CHECK(UnexpectedUndecided == 0);
 }
 
-TEST_CASE("Statics.Lime.AForgottenShearAboveTheCohesiveCapacityIsKept")
+TEST_CASE("Statics.Lime.AWallWhoseForgottenShearWouldExceedTheCohesiveCapacityDoesNotStand")
 {
-	StrengthProfile Weak = LoadLime();
-	Weak.ShearCohesionPa = 1000.0;
-	const LimeWall W = BuildWall(Weak, 2, 5);
+	const StrengthProfile Lime = LoadLime();
+	StrengthProfile WeakPerpend = Lime;
+	WeakPerpend.ShearCohesionPa = 100.0;
+	LimeWall W;
+	geometry::WallSpec Spec;
+	Spec.Bed = AddProfileOk(W.Model, Lime);
+	Spec.Perpend = AddProfileOk(W.Model, WeakPerpend);
+	Spec.Courses = 2;
+	Spec.BricksPerCourse = 5;
+	W.Value = geometry::BuildRunningBondWall(W.Model, Spec);
 	REQUIRE(W.Value.bComplete);
 	for (const double LambdaX : {0.3, 0.5, 0.7})
 	{
 		const StandingOptions Options = Biaxial(LambdaX, 0.0);
 		const StandingResult Result = SolveWith(W.Model, Options);
-		INFO("2 x 5 wall, c 1 kPa, at lambda x " << LambdaX << ": " << Result.State << " after " << Result.ActiveSetIterations << " iterations");
+		INFO("2 x 5 wall, lime beds, perpend c 100 Pa, at lambda x " << LambdaX << ": " << Result.State << " after " << Result.ActiveSetIterations << " iterations");
 		CHECK(Result.State != StandingState::Stands);
 	}
 }

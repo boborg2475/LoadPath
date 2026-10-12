@@ -60,6 +60,8 @@ struct JointState
 	std::array<CornerStatus, CornerCount> Status{};
 	std::array<Vec3, CornerCount> HeldN{};
 	std::array<double, CornerCount> TransverseNPerM{};
+	std::array<Vec3, CornerCount> ReferenceM{};
+	std::array<int, CornerCount> ReclosureCount{};
 };
 
 struct Problem
@@ -353,6 +355,12 @@ Eigen::VectorXd AssembleLoad(const Problem& P, const std::vector<JointState>& St
 		const Joint& J = P.Joints[I];
 		for (std::size_t C = 0; C < CornerCount; ++C)
 		{
+			if (States[I].Status[C] == CornerStatus::Stuck)
+			{
+				const Vec3 PreForceN = Scale(J.TangentialStiffnessNPerM, States[I].ReferenceM[C]);
+				AddForceAt(Load, J.OffsetB, J.CentroidBM, J.CornerM[C], PreForceN);
+				AddForceAt(Load, J.OffsetA, J.CentroidAM, J.CornerM[C], Scale(-1.0, PreForceN));
+			}
 			if (States[I].Status[C] != CornerStatus::Slipping)
 			{
 				continue;
@@ -562,6 +570,22 @@ void ReEnterSlipping(const Joint& J, std::size_t C, const Vec3& TangentialMotion
 	State.TransverseNPerM[C] = 0.0;
 }
 
+void ResetReferenceOnReclosure(const Joint& J, std::size_t C, const TrialForces& T, JointState& State)
+{
+	State.ReclosureCount[C] += 1;
+	if (State.ReclosureCount[C] < 2)
+	{
+		return;
+	}
+	const Vec3 OffsetM = Scale(-1.0 / J.TangentialStiffnessNPerM, T.ShearN);
+	const double ForgottenN = J.TangentialStiffnessNPerM * Length(Sub(OffsetM, State.ReferenceM[C]));
+	if (!(ForgottenN <= J.CohesionCapacityN + J.Friction * PositivePart(T.NormalN)))
+	{
+		return;
+	}
+	State.ReferenceM[C] = OffsetM;
+}
+
 UpdateOutcome UpdateActiveSet(const Problem& P, const Eigen::VectorXd& X, const std::vector<Eigen::VectorXd>& NeutralMotions, std::vector<JointState>& States)
 {
 	UpdateOutcome Outcome;
@@ -597,6 +621,10 @@ UpdateOutcome UpdateActiveSet(const Problem& P, const Eigen::VectorXd& X, const 
 					else
 					{
 						Status = CornerStatus::Stuck;
+						if (!J.bReleasesSlip)
+						{
+							ResetReferenceOnReclosure(J, C, T, State);
+						}
 					}
 					Outcome.bStatusChanged = true;
 				}
@@ -752,7 +780,7 @@ InterfaceReading ReadJoint(const Joint& J, const JointState& State, const Eigen:
 			const TrialForces T = Trial(J, C, X);
 			const bool bNoiseTension = J.bReleasesOpening && T.NormalN < 0.0 && T.NormalN >= -NoiseFloorN;
 			Corner.NormalForceN = bNoiseTension ? 0.0 : T.NormalN;
-			Corner.ShearForceN = Corner.bSlipping ? State.HeldN[C] : T.ShearN;
+			Corner.ShearForceN = Corner.bSlipping ? State.HeldN[C] : Add(T.ShearN, Scale(J.TangentialStiffnessNPerM, State.ReferenceM[C]));
 		}
 		const Vec3 ForceN = Add(Scale(Corner.NormalForceN, J.Normal), Corner.ShearForceN);
 		Reading.NormalForceN += Corner.NormalForceN;

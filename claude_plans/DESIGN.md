@@ -1178,3 +1178,42 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   converged grid points unchanged (readings pinned at 1e-12 on a sample, which the every-
   re-closure rule breaks); a guard fixture where the forgotten shear would exceed the
   capacity, if one can be built; the lime scope test and fuzz stay green.
+- *2026-10-12, orchestrator, slice 2e dev notes:* landed as ruled. `JointState` carries a
+  per-corner tangential reference `ReferenceM` and a per-solve `ReclosureCount`; both start at
+  zero and `States` is built fresh in every `SolveProblem`, which is the per-solve reset. In
+  `UpdateActiveSet`'s Open branch a corner of a joint with `!bReleasesSlip` that re-closes Stuck
+  calls `ResetReferenceOnReclosure`: the count goes up, the first re-closure returns, and from
+  the second the reference becomes the current offset −T.ShearN / kt unless the forgotten
+  shear kt·|offset − Ref| fails `<=` cA/4 + μ·max(N, 0) (written so a NaN keeps the old
+  reference). `AssembleLoad` adds kt·Ref as a pre-force on every Stuck corner, + on B and − on
+  A, exactly as `HeldN` enters for Slipping corners; `ReadJoint` reports a non-slipping
+  corner's shear as T.ShearN + kt·Ref, the elastic shear the corner carries, which is what the
+  Overstressed ratio and the own-field check read. Slip-releasing corners, the slip test (which
+  cohesive corners skip), the consistency test and `RestoreInadmissibleReleases` are untouched.
+  Measured: the seven points Stand in 8, 6, 9, 10, 9, 16, 10 (the probe's counts exactly); the
+  140-point grid 128 Stand, 5 Undecided, 7 Mechanism, no own-field failure, 2.7 s (7.2 s red);
+  every pin and anchor unchanged, 379 Release / 352 Debug green, `Slow.*` 14 green, the shed
+  and half-warehouse judge times unchanged within noise (31 / 147 ms against 44 / 150 ms at
+  HEAD). Mutants: no reset reddens the seven and the grid at the red step's counts; reset at
+  every re-closure reddens `ConvergedWallsAreUnchanged` at five of seven points (four converge
+  one iteration sooner, the 5 × 5 at (0.8, 0.1) moves its readings); reset on slip-releasing
+  corners too is caught by `Statics.Factor.TheBlockedFactorReadsItsPins` (four draws, 125
+  trades against a budget of 6), not by a Dry test. **The guard is unobservable by verdict.**
+  The red step's guard fixture (c 1 kPa on every joint, 2 × 5 at λx 0.3 to 0.7) reached its
+  second re-closures with forgotten shear at 16 to 38 % of cA/4 + μN, so the guard never
+  fired and the walls Stand in 5 under the rule; the orchestrator then swept 90 points of
+  weak-perpend walls (lime beds, perpend c 50 to 500 Pa, 2 to 4 courses, λx 0.3 to 1.0) under
+  the rule and under the rule with the guard removed. At every point where the guard fires the
+  guarded solve reads Undecided at 50 (the kept offset keeps the cycle) or Overstressed, and
+  the unguarded solve reads Overstressed after 4 to 9, from neighbouring perpends that carry
+  comparable shear and are over the same capacity; at every point where the unguarded solve
+  Stands the guarded one Stands identically. Ruling: the guard stays, as the fail-closed
+  invariant the opening asked for (a reset never forgets more than the bond could carry), with
+  the record that no reachable fixture isolates it by verdict, so the mutant "guard removed"
+  survives the suite by design; the fixture is rewritten to pin what is observable (the
+  weak-perpend 2 × 5 at λx 0.3, 0.5, 0.7 does not read Stands, today Undecided/50). The reason
+  is structural: a re-closing corner's forgotten offset is comparable to what its closed
+  neighbours carry, so when it exceeds the capacity the neighbours do too. Observed and
+  logged, not traced: the five 10 × 8 exceptions at λx ≥ 1.0 read Undecided after 3 to 9
+  iterations, not at the cap, so they are an early fail-closed exit (a floor or a factor
+  refusal), not the cycle. The grid test stays in the default tier at 2.7 s.
