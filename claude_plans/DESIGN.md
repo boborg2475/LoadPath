@@ -755,9 +755,10 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   Sherman–Morrison correction is ill-posed (35 to 115 iterations when tried). The bordered
   symmetric indefinite system `[M_sites + ρI, d; dᵀ, −1/c]`, factored by `SimplicialLDLT`
   with the border eliminated last, solves the original system exactly (`y = c dᵀx`), keeps
-  the site block's sparsity, and needs no invertible site part: its success condition is
-  positive site pivots and one negative border pivot, with the same regularised retry as
-  today. `CertificateOptions::CouplingKind { InFactor, Bordered }` defaults to Bordered;
+  the site block's sparsity; eliminating the border last means factoring the site block first,
+  so it needs positive site pivots as Sherman–Morrison did, with the same regularised retry as
+  today when they are not (corrected by the cold review; see "stage 3c rulings from the cold
+  review"). Its success condition is positive site pivots and one negative border pivot. `CertificateOptions::CouplingKind { InFactor, Bordered }` defaults to Bordered;
   InFactor is the third referee removed at the 6b close. The contract is answers unchanged
   (iteration counts equal, load factors to 1e-9) and the large-component time down; the Slow
   ratio test's bar is set halfway in log terms between the first measured ratio and 1.0. The
@@ -794,10 +795,9 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   bordered system is algebraically InFactor's regularised one. A non-positive c makes −1/c
   non-finite, fails the finiteness checks and reads Undecided (fails closed; InFactor would
   handle c = 0; unreachable with interior-point D > 0). `Coupling` has no range validation,
-  matching `CapSite` (both logged in CURRENT_STATE). The border pivot's sign check and the
-  first-n positivity check are guards no test reaches: by Sylvester inertia the border pivot
-  is negative whenever the site pivots are positive, and an exactly singular site block fails
-  `info()` first; recorded in ANCHORS as uncaught. Measured: iteration counts equal and bounds
+  matching `CapSite` (both logged in CURRENT_STATE). The dev round recorded the border pivot's
+  sign check and the first-n positivity check as unreachable; the cold review showed that
+  wrong (see its entry). Measured: iteration counts equal and bounds
   identical on every case; the 40 × 32 wall's certificate 118 s to 34.4 s, the half
   warehouse's 89 s to 58.6 s; the Slow ratio bar 0.93 from a median 0.871 on the 310-body
   wall, thin over its worst run (0.911), which the 3c review should weigh against a larger
@@ -836,3 +836,18 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   start + W) and the shear-capped brick under a 1e-6 factor; it is a safety stop, and the
   suite now holds no large fixture that reaches it, which is the intended state. The ruling's
   "still stops at 82" is void with it.
+- *2026-10-12, orchestrator, stage 3c rulings from the cold review (425506a):* the algebra
+  is exact and the border is last at runtime (`permutationP().indices()(n) == n`); the code
+  needs no change; the lineage fix (Part B) is clean under swap, container reallocation and
+  copies of moved-from structures. **The record was wrong about the pivot guards.** The
+  bordered factor factors the site block first, so the site pivots must be positive: the
+  suite reaches the retry ten times (first-attempt `info()` Success with a site pivot between
+  −3.6e-7 and −3.7e-3 and a positive border pivot, c between 1e10 and 2.5e14, in the Coupling
+  agreement tests and `Sparse.AgreesWithTheDensePath`); in nine of the ten InFactor's first
+  attempt would have succeeded. The two checks back each other up (removing both leaves the
+  88 Certificate/Authority tests green at the same 1.76e-11 worst gap), which is why neither
+  alone was caught; Sylvester only makes the border check redundant once the site pivots are
+  positive. "Needs no invertible site part" is withdrawn. The Slow ratio test moves to
+  `Ec6Wall(30, 24)` (735 bodies: InFactor 18.2 s, Bordered 11.3 s, ratio 0.62, bar 0.79), run
+  I, B, B, I, because at 310 bodies the bar had a 2 % false-red margin against a 5 % detection
+  margin (forcing InFactor reads 0.976, forcing Bordered 0.990). The `requires` stand-ins go.

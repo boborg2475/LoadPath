@@ -229,7 +229,7 @@ loaded machine (the structured cap-site factor's 0.72 on the shed is inside the 
 run alongside two builds), and the 32 × 40 wall is unchanged because its cost is the
 coupling block in the factor, which stage 3c removes.
 
-## Rows after stage 3c (2026-10-12, the bordered coupling, uncommitted dev tree)
+## Rows after stage 3c (2026-10-12, the bordered coupling, 425506a)
 
 From a copy of the Release exe, one run each, two other rounds building alongside:
 

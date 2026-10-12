@@ -228,14 +228,16 @@ cheap `Measure.Scale.*` rows after them); the `Deferred.*` tier holds the physic
    3b, the stall rule: green (722c41b); the cold review (DESIGN §10 "stage 3b rulings from the
    cold review") found the rule correct and sent it back on margin (default window 10 against
    runs of 9 in converging anchors: ruled 20), two surviving mutants (the factor, the
-   off-by-one) and docs; fix round on branch `stage-3b-fix` (tests in progress, then the
-   default change). Deferred from it: the header sentence should name the tracked quantity
-   as the largest of the three relative residuals (goes with the fix). 3c, the coupling out of the factor
-   (bordered system): green, in cold review (DESIGN §10 "stage 3c rulings from the dev
-   round"); the 40 × 32 wall's certificate 118 s to 34 s, the half warehouse's 89 s to 59 s.
-   Open from it: the Slow ratio test's bar (0.93) is thin over its worst run (0.911) because
-   the 310-body wall gains only 13 %; a larger fixture (about 700 bodies) would show the gain
-   and hold a bar near 0.7; `Coupling`, like `CapSite`, has no range validation. 3d, the verdict-only option, is dropped: the warehouse's warm post-removal cascade reads
+   off-by-one) and docs; fix round merged (default 20, both pinned, the half warehouse anchor
+   re-pinned as a convergence check since its solve converges after 3c, DESIGN §10 "the half
+   warehouse anchor after 3c"). 3c, the coupling out of the factor
+   (bordered system): green (425506a); the cold review (DESIGN §10 "stage 3c rulings from the
+   cold review") passed the code and the lineage fix and sent back the records (the pivot
+   guards are reached, not unreachable) and the Slow ratio fixture (310 bodies, 2 % false-red
+   against 5 % detection); fix round on branch `stage-3c-fix` (735-body wall, bar 0.79, order
+   I, B, B, I, stand-ins removed). The 40 × 32 wall's certificate 118 s to 34 s, the half
+   warehouse's 89 s to 59 s. Open: `Coupling`, like `CapSite`, has no range validation;
+   dropping the coupling term from the retry's LargestDiagonal is uncaught on both paths. 3d, the verdict-only option, is dropped: the warehouse's warm post-removal cascade reads
    175 ms against the 200 ms target and its certificate 103 s (SCALE.md, DESIGN §10 "stage 3d
    dropped"). Panels contingent; the `Measure.Scale.*` rows re-run after each stage into
    SCALE.md. Then the 6b close: remove the three referees `FactorKind::Reference`,
