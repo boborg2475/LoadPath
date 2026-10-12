@@ -887,3 +887,18 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   the generator is deterministic, a border coupling off by 0.01 % reddens the tightened
   comparison. Merged to master. Not done from the pins ruling's list: the null-space check of
   mechanism motions, which needs a seam to the assembled stiffness (CURRENT_STATE carries it).
+- *2026-10-12, orchestrator, carried from 6b, item 1 opening:* **an ungrounded component is a
+  mechanism by connectivity, read before any factorisation.** A component with no live
+  interface to a grounded body cannot be in equilibrium under gravity; today the elastic
+  authority assembles and factorises it (the sparse estimate rejects the singular stiffness,
+  the dense blocked factor finds the rank defect: 20.5 s on the 1,256-brick remainder of the
+  32 × 40 wall) to read what connectivity already says. After this item it reads Mechanism,
+  every body unconstrained, the motion the rigid fall (every body translated (0, 0, −1) in
+  the mechanism normalisation, zero rotation) whatever the host load (the rule is
+  connectivity, not force; the certificate's gravity-only rigid-fall rule decides the
+  release, which is the combined authority's and cascade's business), zero active-set
+  iterations, and **every reading of the component zero with axis None**: nothing is
+  certified about the joints of a body that falls rigid, the stage-1a ruling already compared
+  readings only on certified states, and today's values there are the range solution (mostly
+  infinite tension), which the cascade once copied as a sever reason. The reading list still
+  covers every live interface. Grounded components are untouched, bit for bit.
