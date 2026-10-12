@@ -323,6 +323,27 @@ TEST_CASE("Geometry.Wall.AnOriginShiftsEveryCentroidByIt")
 			CHECK(Length(Minus(Moved.Model.Body(Moved.Value.Courses[C][K]).CentroidM, Want)) <= Exact);
 		}
 	}
+	const std::size_t BaseBeds = Plain.Value.Courses[0].size();
+	REQUIRE(Moved.Value.Beds.size() >= BaseBeds);
+	REQUIRE(Plain.Value.Beds.size() >= BaseBeds);
+	if (Moved.Value.Beds.size() < BaseBeds || Plain.Value.Beds.size() < BaseBeds)
+	{
+		return;
+	}
+	std::size_t MovedOnGround = 0;
+	for (const InterfaceId& Id : Moved.Value.Beds)
+	{
+		MovedOnGround += SameHandle(Moved.Model.Interface(Id).BodyA, Moved.Value.Ground) ? 1u : 0u;
+	}
+	CHECK(MovedOnGround == BaseBeds);
+	for (std::size_t K = 0; K < BaseBeds; ++K)
+	{
+		INFO("base bed " << K);
+		const InterfaceRecord& Got = Moved.Model.Interface(Moved.Value.Beds[K]);
+		CHECK(SameHandle(Got.BodyA, Moved.Value.Ground));
+		const Vec3 Want = Plus(Plain.Model.Interface(Plain.Value.Beds[K]).CentreM, Moved.Spec.OriginM);
+		CHECK(Length(Minus(Got.CentreM, Want)) <= Exact);
+	}
 }
 
 TEST_CASE("Geometry.Wall.AWallAlongYHasItsLengthAlongYAndItsThicknessAlongX")

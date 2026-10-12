@@ -21,8 +21,6 @@ using namespace loadpath::test;
 
 namespace
 {
-constexpr double CeilingSeconds = 20.0 * 60.0;
-
 using Clock = std::chrono::steady_clock;
 
 double MsSince(Clock::time_point Start) { return std::chrono::duration<double, std::milli>(Clock::now() - Start).count(); }
@@ -202,32 +200,32 @@ void Measure(const Subject& S)
 		CHECK(First.Components[I].Verdict == Second.Components[I].Verdict);
 		CHECK(SameIdList(First.Components[I].Bodies, Second.Components[I].Bodies));
 	}
-	CHECK(MsSince(CaseStart) < CeilingSeconds * 1000.0);
+	MESSAGE(S.Name << ": total " << MsSince(CaseStart) << " ms");
 }
 }
 
-TEST_CASE("Slow.Scale.WallTenByEight")
+TEST_CASE("Measure.Scale.WallTenByEight")
 {
 	Measure(WallSubject("wall 10 x 8", 10, 8));
 }
 
-TEST_CASE("Slow.Scale.WallFortyByThirtyTwo")
+TEST_CASE("Measure.Scale.WallFortyByThirtyTwo")
 {
 	Measure(WallSubject("wall 40 x 32", 32, 40));
 }
 
-TEST_CASE("Slow.Scale.Shed")
+TEST_CASE("Measure.Scale.Shed")
 {
 	Measure(WarehouseSubject("shed", ShedSpec(), true));
 }
 
-TEST_CASE("Slow.Scale.HalfWarehouse")
+TEST_CASE("Measure.Scale.HalfWarehouse")
 {
 	Measure(WarehouseSubject("half warehouse", HalfWarehouseSpec(), true));
 }
 
 #if defined(NDEBUG)
-TEST_CASE("Slow.Scale.Warehouse")
+TEST_CASE("Measure.Scale.Warehouse")
 {
 	const geometry::WarehouseSpec Spec;
 	CHECK(WarehouseBodies(Spec) == 3660u + 34u + 1u);

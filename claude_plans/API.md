@@ -562,7 +562,7 @@ is exactly 0 or the cap; finite load factors come only from bonded, cohesive or 
 (`ft A L / (W (λh − L))` for tension tipping, `c A / (W (sin θ − μ cos θ))` for cohesive sliding,
 `fc A / W` for crushing). Load factors compare at 1e-7 relative plus 1e-6 absolute. A massless
 free body with no load is Stands; a free body with no interface is Collapses at `t = 0` and is
-listed. Across components the state is the worst in the order InvalidInput > Undecided >
+listed, and so is an ungrounded component carrying no `BodyLoad` (the rigid fall, slice 6a). Across components the state is the worst in the order InvalidInput > Undecided >
 Collapses > Stands, load factors are the minimum, the lists collect **every Collapses
 component whatever the overall state**, and `Iterations` is the maximum. A single state hides
 which component collapsed; the combined authority (slice 4b) reports per component.
@@ -1071,6 +1071,9 @@ struct WallSpec {
 	ProfileId Bed, Perpend;                   // the bed also serves the base course on the ground
 	bool bRunningBond = true;                 // odd courses offset by half a brick, with half bricks at the ends
 	double GroundZM = 0.0;
+	Vec3 OriginM = {0, 0, 0};                 // shifts every brick and the base beds (slice 6a)
+	bool bAlongY = false;                     // length along y, thickness along x; brick centre = origin + (0, s, z)
+	BodyId Ground;                            // Invalid: make a new grounded ground; valid: build on it and add none
 };
 struct Wall { std::vector<std::vector<BodyId>> Courses; std::vector<InterfaceId> Beds, Perpends; BodyId Ground; double LengthM, HeightM; bool bComplete; };   // bComplete false when any AddBody/AddInterface was refused (an Invalid profile): the wall is then not a wall
 Wall BuildRunningBondWall(Structure& Model, const WallSpec& Spec);
@@ -1130,30 +1133,67 @@ design, because every cost item logged so far (the combined authority's per-comp
 the cascade's quadratic scans, the dense per-component LDLT, the certificate's interior point)
 is a guess until timed on structures ten and a hundred times the fixtures.
 
-### 6a. The scale measurement (`tests/ScaleMeasurementTest.cpp`, `Slow.Scale.*`)
+### 6a. The scale measurement (`geometry/Warehouse.h`, `tests/ScaleMeasurementTest.cpp`, `Measure.Scale.*`)
 
-A generator a step up from the wall: `BuildWarehouse(Structure&, const WarehouseSpec&)` in
-`geometry/Warehouse.h`, built from the slice-5 pieces only (boxes, `FaceContact`, running-bond
-walls): a rectangular plan of four running-bond walls with door and window openings, timber
-posts on the ground along the long walls, beams spanning post to post on the C24 bearing row,
-and a roof of planks across the beams on fastener rows. The spec sets the plan (length, width,
-height in courses, bay count, opening list) so the same function gives a shed of 300 pieces and
-a warehouse of 5,000; the body and joint counts have closed forms the tests assert. Pieces are
-bodies, every contact a `FaceContact`, the ground one grounded body.
+A generator a step up from the wall, built from the slice-5 pieces only (boxes, `FaceContact`,
+running-bond walls), and timing rows that say what the engine costs before anything is
+redesigned. Nothing in `src/` solver code includes the generator.
 
-Measurements, each a `Slow.Scale.*` case that prints a row (`pieces, joints, components, elastic
-ms, certificate ms, judge ms, cascade pass ms, peak RSS if cheap`) and asserts only what is
-already promised: the structure Stands at rest, every verdict is the same under a second run
-(determinism), and the run completes inside a generous wall-clock ceiling that exists to catch
-a hang, not to set the budget. Sizes: the 10 × 8 wall (85), a 40 × 32 wall (1,296 bodies),
-the shed (about 300), the half warehouse (about 2,500), the warehouse (about 5,000, Release
-only, with `LOADPATH_SLOW_IN_DEBUG`). Three loads: gravity at rest; one post removed; one
-course of one wall removed, each through `ICascade::Run`. The dense per-component LDLT is
-expected to fall over somewhere between 1,000 and 5,000 bodies (7,776 DoF dense is seconds; 30,000
-DoF dense is memory); the measurement says where, and that is the first design input for 6b.
+```cpp
+struct Opening { int Wall; int StartBrick; int WidthBricks; int SillCourse; int LintelCourse; };   // Wall 0/2 the long walls at y = 0 and y = width, 1/3 the short walls at x = 0 and x = length
+struct WarehouseSpec {
+	int LengthBricks = 40; int WidthBricks = 20; int Courses = 30;
+	Vec3 BrickM = {0.215, 0.1025, 0.065}; double DensityKgPerM3 = 2000.0;
+	int Bays = 4; double PostSideM = 0.2; double BeamDepthM = 0.3; double BeamWidthM = 0.2;
+	double PlankThicknessM = 0.05; double PlankWidthM = 0.2; int PlanksPerBay = 4; double TimberDensityKgPerM3 = 420.0;
+	ProfileId Bed, Perpend, Bearing, Plank; std::vector<Opening> Openings; double GroundZM = 0.0; double CornerGapM = 0.01;
+};
+struct Warehouse {
+	std::array<Wall, 4> Walls; std::vector<BodyId> Posts, Beams, Planks; std::vector<InterfaceId> Bearings, PlankJoints;
+	BodyId Ground; bool bComplete; std::size_t LiveBodies, LiveInterfaces;   // counts taken when the build finishes
+	std::size_t BodyCount() const; std::size_t InterfaceCount() const;
+};
+Warehouse BuildWarehouse(Structure& Model, const WarehouseSpec& Spec);
+```
 
-The table the measurement produces is written to `claude_plans/SCALE.md` by the orchestrator
-with the machine named, and 6b's contract (sparse factorisation behind the same
-`IStandingAuthority`; an event region that re-solves only the components a change touched;
-panels that treat an uncracked bonded run as one body until the cascade cracks it) is written
-against those numbers, not before them.
+Layout (pinned by `tests/GeometryWarehouseTest.cpp`'s `ExpectedLayout`): one grounded ground
+under the plan; wall 0 at `y ∈ [0, T]` and wall 2 at `y ∈ [W − T, W]`, both along `x ∈ [0, L]`;
+walls 1 and 3 along y (`WallSpec::bAlongY`) outside the long walls by `CornerGapM`, so the four
+walls are four components (the corners are not bonded and nothing in the frame bears on a
+wall); `Bays + 1` posts per long wall at `x = P/2 + k (L − P) / Bays`, `y = T + P` and
+`W − T − P`, standing on the ground through `Bearing`; one beam per bay per side from post
+centre to post centre on half of each post top; `PlanksPerBay` planks per bay across the width
+on both beams through `Plank` (a fastener profile made for the `PlankWidthM × BeamWidthM`
+contact). Every contact is a `FaceContact`; mass is density × volume; the order is walls 0..3,
+posts (side 0 then 2), beams, planks, deterministic. An opening removes (by `RemoveBody`,
+after the wall is built) every brick whose span lies inside it along the wall and whose
+course is in `[Sill, Lintel)`; the dead ids are filtered from `Courses` but remain in `Beds`
+and `Perpends`. Closed forms: bricks per wall as 5b; posts `2(Bays + 1)`; beams `2 Bays`;
+planks `Bays · PlanksPerBay`; bearings `2(Bays + 1) + 4 Bays`; plank joints
+`2 · Bays · PlanksPerBay`; an opening away from a wall end removes `W` bricks on even courses
+and `W − 1` on odd ones. Sizes as built: the shed (12 × 8 plan, 10 courses, 2 bays, a door and
+a window) 420 live bodies; the half warehouse (30 × 15 × 20, 3 bays, two openings) 1,822; the
+default warehouse 3,695 (3,660 bricks, 34 timbers, the ground), 34 % below the 5,612-piece
+benchmark it stands in for.
+
+The measurement rows, `Measure.Scale.*` (excluded from every tier by `Scripts/Test.ps1`, run
+one per process from a copy of the Release exe, never as a tier, because two of them do not
+finish on the dense solver): for each of the 10 × 8 wall, a 40 × 32 wall (1,296 bricks), the
+shed, the half warehouse and the warehouse (Release only), build; time the elastic authority
+alone, the certificate alone and `Judge` at rest; on copies time one `ICascade::Run` after
+removing one post and after removing wall 0's base course; print one row. Asserted: the live
+body count equals the closed form, `Judge` at rest reads Stands (not for the warehouse), two
+judges agree. The table is `claude_plans/SCALE.md`, with the HEAD and the machine named; 6b's
+contract is written against it. First findings: the hand-rolled rank-1 `Factorise` is 10–17×
+slower than a blocked dense factorisation at the same size and stops finishing near 7,800 DoF;
+the judge costs twice the elastic solve (the whole structure, then every component again); the
+certificate is never called when the elastic field decides; and a floating component was cut
+into bricks, which led to the rigid-fall rule (below).
+
+**The rigid fall (slice 6a).** An ungrounded component (no live joint to a grounded body) that
+carries no `BodyLoad` is Collapses at load factor 0/0 before any solve: every body translates
+`(0, 0, −1)` (the header's normalisation, zero rotation) and no joint hinges, so the cascade
+releases it as one cluster with nothing severed. That is exact under gravity alone. A loaded
+ungrounded component, and a component hanging from or wedged under a grounded body through dry
+contacts, takes the general selection, which today can split it or read Undecided
+(`Deferred.Slice6.*`, DESIGN §10).

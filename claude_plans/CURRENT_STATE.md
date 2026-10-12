@@ -77,7 +77,7 @@ and 5 rulings.
      orders of margin that shrink roughly linearly with size).
    **Slice 6a, the scale measurement, is built and measured (2026-10-11), in review:**
    `BuildWarehouse` (four walls on one ground, posts, beams, planks; openings by removal),
-   `WallSpec` origin / orientation / shared ground, the `Slow.Scale.*` harness, the table in
+   `WallSpec` origin / orientation / shared ground, the `Measure.Scale.*` harness, the table in
    [SCALE.md](SCALE.md): the shed (420 pieces) judges in 0.5 s, the half warehouse (1,822) in
    91 s, the 1,296-brick wall never finishes its first dense solve (killed at 25 min, 1.07 GB).
    First finding fixed in the round: an ungrounded component with a net force falls rigid, so
@@ -86,11 +86,23 @@ and 5 rulings.
    `Tension inf` as the reason (the cascade copies the reading); an ungrounded component with
    zero net force (a pure couple) still goes through the general selection and can list
    hinges; the rigid-fall motion is a pure translation even when the net load misses the
-   centroid; the grounded selection near t* ≈ 0 may still differ between Debug and Release
-   (the 10 × 8 read Collapses in Debug and Undecided in Release before the fix: the selection
-   LP's convergence at a degenerate point); the warehouse generator removes opening bricks
+   centroid; the general selection near t* ≈ 0 does not converge on a bonded floating or hanging wall
+   (the bonded 10 × 8 with its base course removed read Undecided with 0 passes in both builds
+   before the rigid fall; a 3 × 8 ec6 wall hanging from a dry ceiling still does) and splits a
+   dry pair wedged under a ceiling into singletons: the least-joint-movement selection ruled in
+   DESIGN §10 is still owed (`Deferred.Slice6.*`); there was no Debug/Release difference (the
+   review rebuilt the pre-fix commit in both); the warehouse generator removes opening bricks
    after building them (O(interfaces) per brick); the shed's frame does not bear on its walls
-   and the corners are not bonded (five components by construction). Then 6b: the sparse /
+   and the corners are not bonded (five components by construction). From the review:
+   the rigid fall must be gravity-only (a loaded floating pair read one cluster where the upper
+   brick lifts or slides off alone; red tests written, dev round pending), a rounding residue
+   in the net force flipped a squeezed floating pair to Collapses (red test written), the fall motion and the origin's base
+   beds had no tests (added), the `ExpectedLayout` oracle copies the post/beam/plank formulas
+   from the generator (brick positions and the areas are independent), `Beds`/`Perpends` keep
+   removed ids after openings (the header says so now), the spec is not validated (`Bays ≤ 0`
+   gives a NaN span), `OriginM.Z` and `GroundZM` overlap, the test helper undercounts openings
+   at a wall end, cascade determinism is unchecked, and the never-finishing rows moved from the
+   `Slow.` tier to `Measure.*`. Then 6b: the sparse /
    event-region / panel contract written against SCALE.md.
  **Slice 8,
    the Unreal adapter, is on hold by owner directive (2026-10-11): do not start it.** The
@@ -143,9 +155,9 @@ and 5 rulings.
    pier geometry (Portioli 2012), B-DER-01 wall geometry, B-SW-01 exact limit load (graphical
    only), F-RON-01 panel thickness, B-FTL-01 layout. B-BUR-01 needs a soil-pressure driver;
    F-PYR-01 needs a zero-extent contact; group 9 runs only in the host adapter's suite.
-3. `Scripts/Test.ps1` excludes `Slow.*` and `Deferred.*` from the default run (2026-10-11; the
+3. `Scripts/Test.ps1` excludes `Slow.*`, `Deferred.*` and `Measure.*` from the default run (2026-10-11; the
    arch and pile anchors carry `LOADPATH_SLOW_IN_DEBUG`, Slow. in Debug only). Still open: any
-   caller `-tc` or `-tce` is passed straight through and drops both exclusions.
+   caller `-tc` or `-tce` is passed straight through and drops all three exclusions.
 
 ## Deferred
 

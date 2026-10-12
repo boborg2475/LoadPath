@@ -430,7 +430,7 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   structures ten and a hundred times the fixtures, so slice 6 opens with 6a (API.md): a
   warehouse generator built only from the slice-5 pieces (four separate running-bond walls, a
   post-and-beam frame on the C24 bearing row, planks on fastener rows, one ground), and
-  `Slow.Scale.*` rows that time the elastic authority, the certificate, the combined judge and
+  `Measure.Scale.*` rows that time the elastic authority, the certificate, the combined judge and
   one cascade pass at five sizes from the 85-brick wall to a 3,700-piece warehouse, asserting
   only what is already promised (Stands at rest, determinism, a hang ceiling). The table goes
   to `claude_plans/SCALE.md` with the machine named; 6b (sparse factorisation behind the same
@@ -451,3 +451,25 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   reason: a joint released by a rigid fall has no failure. The Release measurement read this
   same case Undecided with zero passes where Debug read Collapses: a build-dependent answer
   from the interior point at `t* ≈ 1e-12` is the second thing the dev round must explain.
+- *2026-10-11, orchestrator, after the slice-6a review:* corrections to the ruling above, which
+  described a selection the round did not build. **As built, the rigid fall is a check before
+  any solve**: a component with no live joint to a grounded body falls rigid, Collapses at
+  load factor 0/0 with no hinge. The review showed that is exact only under gravity alone
+  (every body accelerates at g, no joint carries anything) and wrong with a host load (a dry
+  pair in free fall with +100 N on the upper brick read one cluster where the upper brick lifts
+  off alone), and that a rounding residue in the net force could flip a squeezed floating pair
+  from Stands to Collapses. Ruled: **the rigid fall applies only to an ungrounded component
+  carrying no `BodyLoad`**; a loaded ungrounded component, and any component hanging from or
+  wedged under a grounded body through dry contacts, takes the general path, where the
+  least-joint-movement selection of the ruling above is still owed (the hanging bonded wall
+  reads Undecided, the dry pair under a ceiling splits): pinned under `Deferred.Slice6.*`. The
+  selected fall motion is `(0, 0, −1)` per body with zero rotation, the header's normalisation.
+  **There was no Debug/Release difference**: the measured Undecided was the bonded 10 × 8 wall
+  and the Debug Collapses the dry one; rebuilt at the pre-fix commit, both builds agree on
+  both. **The measurement's cost reading changes too**: the certificate is never called when
+  the elastic field decides (0 of 5 components on the shed and the half warehouse); the judge
+  costs twice the elastic solve because it solves the whole structure and then every component
+  again; and the hand-rolled rank-1 `Factorise` is 10–17× slower than Eigen's blocked dense
+  factorisation at the same size (20.4 s against 1.2 s at 3,660 DoF), so 6b's first stage is
+  the factorisation itself, before any sparsity. Measurement rows that cannot finish leave the
+  `Slow.` tier for `Measure.*`, excluded from every tier and run one per process.
