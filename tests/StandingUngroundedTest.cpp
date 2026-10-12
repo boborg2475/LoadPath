@@ -116,6 +116,23 @@ geometry::Wall BuildFloatingWall(Structure& Model, const StrengthProfile& Bed, c
 	}
 	return W;
 }
+void CheckUncertifiedReadings(const StandingResult& R, std::size_t Expected)
+{
+	CHECK(R.Readings.size() == Expected);
+	for (const InterfaceReading& Reading : R.Readings)
+	{
+		INFO("reading " << Reading.Id.Index);
+		CHECK(Reading.Utilisation == 0.0);
+		CHECK(Reading.Axis == GoverningAxis::None);
+		CHECK(Reading.NormalForceN == 0.0);
+		CHECK(NearVec(Reading.ShearForceN, Vec3{}, 0.0, 0.0));
+		CHECK(NearVec(Reading.MomentNm, Vec3{}, 0.0, 0.0));
+		for (const CornerReading& Corner : Reading.Corners)
+		{
+			CHECK(Corner.NormalForceN == 0.0);
+		}
+	}
+}
 }
 
 TEST_CASE("Statics.Ungrounded.AFloatingPairIsAMechanismWithoutIterating")
@@ -129,6 +146,7 @@ TEST_CASE("Statics.Ungrounded.AFloatingPairIsAMechanismWithoutIterating")
 		const StandingResult R = SolveWith(Model, StandingOptions{});
 		Characterise(R);
 		CheckRigidFall(R, {P.Lower, P.Upper}, Vec3{0.0, 0.0, -1.0});
+		CheckUncertifiedReadings(R, 1);
 	}
 	SUBCASE("a sideways push on the upper brick")
 	{
@@ -136,6 +154,7 @@ TEST_CASE("Statics.Ungrounded.AFloatingPairIsAMechanismWithoutIterating")
 		const StandingResult R = SolveWith(Model, StandingOptions{}, Loads);
 		Characterise(R);
 		CheckRigidFall(R, {P.Lower, P.Upper}, Vec3{0.0, 0.0, -1.0});
+		CheckUncertifiedReadings(R, 1);
 	}
 }
 

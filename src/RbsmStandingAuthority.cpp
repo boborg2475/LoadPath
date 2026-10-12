@@ -70,6 +70,7 @@ struct Problem
 	Eigen::VectorXd AppliedLoad;
 	Eigen::VectorXd Scaling;
 	double ForceScaleN = 0;
+	bool bGrounded = false;
 };
 
 using IndexVector = Eigen::Matrix<Eigen::Index, Eigen::Dynamic, 1>;
@@ -213,6 +214,7 @@ std::vector<Problem> BuildProblems(const Structure& Model, std::span<const BodyL
 		Problem& P = Problems[static_cast<std::size_t>(Component + 1)];
 		P.Joints.push_back(MakeJoint(Model, Interfaces[Slot], OffsetOfSlot));
 		P.ReadingSlots.push_back(Slot);
+		P.bGrounded = P.bGrounded || P.Joints.back().OffsetA < 0 || P.Joints.back().OffsetB < 0;
 	}
 	for (Problem& P : Problems)
 	{
@@ -846,6 +848,30 @@ StepOutcome AdvanceActiveSet(const Problem& P, const Eigen::VectorXd& X, const s
 	return StepOutcome::Continue;
 }
 
+StandingResult FallRigid(const Problem& P, const StandingOptions& Options)
+{
+	StandingResult Result;
+	Result.State = StandingState::Mechanism;
+	const double Largest = std::max({std::abs(Options.Gravity.X), std::abs(Options.Gravity.Y), std::abs(Options.Gravity.Z)});
+	const Vec3 Fall = Largest > 0.0 ? Scale(1.0 / Largest, Options.Gravity) : Vec3{0.0, 0.0, -1.0};
+	for (const BodyId Id : P.FreeBodies)
+	{
+		Result.UnconstrainedBodies.push_back(Id);
+		Result.Mechanism.push_back(MechanismMotion{Id, Fall, Vec3{}});
+	}
+	for (const Joint& J : P.Joints)
+	{
+		InterfaceReading Reading;
+		Reading.Id = J.Id;
+		for (std::size_t C = 0; C < CornerCount; ++C)
+		{
+			Reading.Corners[C].PointM = J.CornerM[C];
+		}
+		Result.Readings.push_back(Reading);
+	}
+	return Result;
+}
+
 StandingResult SolveProblem(const Problem& P, const StandingOptions& Options)
 {
 	StandingResult Result;
@@ -857,6 +883,10 @@ StandingResult SolveProblem(const Problem& P, const StandingOptions& Options)
 		Result.Readings = ReadAll(P, States, X, bOverstressed);
 		Result.State = bOverstressed ? StandingState::Overstressed : StandingState::Stands;
 		return Result;
+	}
+	if (!P.bGrounded)
+	{
+		return FallRigid(P, Options);
 	}
 	std::vector<JointState> FullRankStates;
 	Eigen::VectorXd FullRankX;
