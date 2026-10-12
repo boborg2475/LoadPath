@@ -95,6 +95,15 @@ void MarkPositions(std::vector<std::size_t>& Table, const std::vector<IdType>& I
 	}
 }
 
+template <typename IdType>
+void ClearPositions(std::vector<std::size_t>& Table, const std::vector<IdType>& Ids)
+{
+	for (const IdType Id : Ids)
+	{
+		Table[Id.Index] = NoSlot;
+	}
+}
+
 std::vector<PendingCluster> ClustersOf(const Structure& Model, const ComponentReport& Component, const std::vector<std::size_t>& PositionOf, const std::vector<std::size_t>& HingingAt)
 {
 	const std::vector<BodyId>& Released = Component.Release;
@@ -171,14 +180,6 @@ bool Release(Structure& Model, const AuthorityResult& Judged, std::uint32_t Pass
 {
 	std::vector<std::size_t> PositionOf;
 	std::vector<std::size_t> HingingAt;
-	for (const ComponentReport& Component : Judged.Components)
-	{
-		if (Component.Verdict == ComponentVerdict::Collapses)
-		{
-			MarkPositions(PositionOf, Component.Release);
-			MarkPositions(HingingAt, Component.Hinging);
-		}
-	}
 	std::vector<PendingCluster> Pending;
 	for (const ComponentReport& Component : Judged.Components)
 	{
@@ -186,10 +187,14 @@ bool Release(Structure& Model, const AuthorityResult& Judged, std::uint32_t Pass
 		{
 			continue;
 		}
+		MarkPositions(PositionOf, Component.Release);
+		MarkPositions(HingingAt, Component.Hinging);
 		for (PendingCluster& Cluster : ClustersOf(Model, Component, PositionOf, HingingAt))
 		{
 			Pending.push_back(std::move(Cluster));
 		}
+		ClearPositions(PositionOf, Component.Release);
+		ClearPositions(HingingAt, Component.Hinging);
 	}
 	std::stable_sort(Pending.begin(), Pending.end(),
 		[](const PendingCluster& A, const PendingCluster& B) { return A.Bodies.front().Index < B.Bodies.front().Index; });
@@ -261,21 +266,49 @@ bool Release(Structure& Model, const AuthorityResult& Judged, std::uint32_t Pass
 
 bool CrackBand(Structure& Model, const AuthorityResult& Judged, std::uint32_t Pass, double BandFraction, CascadeVerdict& Verdict)
 {
-	bool bCracked = false;
-	for (const ComponentReport& Component : Judged.Components)
+	std::vector<std::size_t> ComponentOf;
+	for (std::size_t C = 0; C < Judged.Components.size(); ++C)
 	{
-		if (Component.Verdict != ComponentVerdict::Overstressed)
+		if (Judged.Components[C].Verdict != ComponentVerdict::Overstressed)
 		{
 			continue;
 		}
+		for (const BodyId Body : Judged.Components[C].Bodies)
+		{
+			if (Body.Index >= ComponentOf.size())
+			{
+				ComponentOf.resize(static_cast<std::size_t>(Body.Index) + 1, NoSlot);
+			}
+			if (ComponentOf[Body.Index] == NoSlot)
+			{
+				ComponentOf[Body.Index] = C;
+			}
+		}
+	}
+	std::vector<std::vector<std::size_t>> Bucket(Judged.Components.size());
+	for (std::size_t R = 0; R < Judged.Readings.size(); ++R)
+	{
+		const InterfaceRecord& Record = Model.Interface(Judged.Readings[R].Id);
+		std::size_t C = Lookup(ComponentOf, Record.BodyA);
+		if (C == NoSlot)
+		{
+			C = Lookup(ComponentOf, Record.BodyB);
+		}
+		if (C != NoSlot)
+		{
+			Bucket[C].push_back(R);
+		}
+	}
+	bool bCracked = false;
+	for (std::size_t C = 0; C < Judged.Components.size(); ++C)
+	{
 		std::vector<CrackCandidate> Eligible;
 		double RMax = -Infinity;
-		const std::vector<std::size_t> MemberAt = PositionTable(Component.Bodies);
-		for (const InterfaceReading& Reading : Judged.Readings)
+		for (const std::size_t R : Bucket[C])
 		{
+			const InterfaceReading& Reading = Judged.Readings[R];
 			const InterfaceRecord& Record = Model.Interface(Reading.Id);
-			if (!Model.IsLive(Reading.Id) || Record.State != InterfaceState::Intact ||
-				(Lookup(MemberAt, Record.BodyA) == NoSlot && Lookup(MemberAt, Record.BodyB) == NoSlot))
+			if (!Model.IsLive(Reading.Id) || Record.State != InterfaceState::Intact)
 			{
 				continue;
 			}

@@ -41,6 +41,7 @@ struct CertificateOptions
 };
 
 // One decided component's verdict; the fields mean what CertificateResult's aggregate fields mean, restricted to its bodies.
+// The bounds are capped at LoadFactorCap, exactly as the aggregate's are.
 struct CertificateComponent
 {
 	std::vector<BodyId> Bodies;
