@@ -220,7 +220,6 @@ constexpr double ArchEtaTolerance = 1.0e-5;
 constexpr double PileLambda = 0.5005;
 constexpr double PileLambdaTolerance = 1.0e-3;
 constexpr double WedgeToleranceDeg = 0.05;
-constexpr double ShedSecondsCeiling = 8.0;
 constexpr double BoundaryWallLateral = 0.8;
 }
 
@@ -297,16 +296,24 @@ TEST_CASE("Certificate.Sparse.ADenseFixtureKeepsItsPath")
 }
 
 #if defined(NDEBUG)
-TEST_CASE("Slow.Certificate.Sparse.TheShedCertificateInsideItsBudget")
+TEST_CASE("Slow.Certificate.Sparse.TheShedCertificateIsNoSlowerThanDense")
 {
 	RequireTheRowLimitExists();
 	const Structure Model = Shed();
-	const Clock::time_point Start = Clock::now();
-	const CertificateResult Result = DecideWith(Model, CertificateOptions{});
-	const double Seconds = SecondsSince(Start);
-	MESSAGE("shed certificate " << Result.State << " [" << Result.LoadFactorLower << ", " << Result.LoadFactorUpper << "] in " << Result.Iterations << " iterations, " << Seconds << " s");
-	CHECK(Result.State == CertificateState::Stands);
-	CHECK(Seconds <= ShedSecondsCeiling);
+	Clock::time_point Start = Clock::now();
+	const CertificateResult Dense = DecideWith(Model, WithDenseRowLimit(CertificateOptions{}, INT_MAX));
+	const double DenseSeconds = SecondsSince(Start);
+	Start = Clock::now();
+	const CertificateResult Sparse = DecideWith(Model, CertificateOptions{});
+	const double SparseSeconds = SecondsSince(Start);
+	const double Ratio = SparseSeconds / DenseSeconds;
+	MESSAGE(std::setprecision(10) << "shed certificate dense " << Dense.State << " [" << Dense.LoadFactorLower << ", " << Dense.LoadFactorUpper << "] in " << Dense.Iterations << " iterations, " << DenseSeconds << " s; sparse " << Sparse.State << " [" << Sparse.LoadFactorLower << ", " << Sparse.LoadFactorUpper << "] in " << Sparse.Iterations << " iterations, " << SparseSeconds << " s; ratio " << Ratio);
+	SparseGaps G;
+	CHECK(Dense.State == CertificateState::Stands);
+	CHECK(Sparse.State == Dense.State);
+	CHECK(NearLoadFactor(Sparse.LoadFactorLower, Dense.LoadFactorLower, G));
+	CHECK(NearLoadFactor(Sparse.LoadFactorUpper, Dense.LoadFactorUpper, G));
+	CHECK(Ratio <= 1.0);
 }
 #endif
 
