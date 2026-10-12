@@ -211,10 +211,14 @@ cheap `Measure.Scale.*` rows after them); the `Deferred.*` tier holds the physic
    (a 1e-12 shift), the NaN-only positivity scan. `StandingComponent::ReadingSlots` is read by
    nothing in the library. The three asked-for tests landed in f872105 (the sparse timing
    subject is now a 310-body wall, ratio 0.42–0.47 against a 0.67 threshold).
-   **Next: stage 3, the certificate at scale (DESIGN §10 "stage 3 opening", SCALE.md
-   profile): 3a the structured cap-site factor (exact), 3b the stall rule, 3c the coupling out
-   of the factor with refinement, 3d a verdict-only option last; panels contingent; the
-   `Measure.Scale.*` rows re-run after each stage into SCALE.md.** Then the 6b close: remove
+   **Stage 3, the certificate at scale (DESIGN §10 "stage 3 opening", API.md "6b, stage 3",
+   SCALE.md profile).** 3a, the structured cap-site factor: green and merged (2623138), in
+   cold review; shed 6.65 s to 4.4 s, the 32 × 40 wall 107 s to 92 s; the Slow ratio test
+   sits at 0.85 against a measured 0.66–0.75 and may still flake under heavy load. 3b, the
+   stall rule: red tests committed, dev in progress. Then 3c the coupling out of the factor
+   (bordered system), 3d a verdict-only option last; panels contingent; the `Measure.Scale.*`
+   rows re-run after each stage into SCALE.md. The stage-2 fix round (lineage token, option
+   validation in Judge) is merged and in its follow-up review. Then the 6b close: remove
    `FactorKind::Reference`, the overview artifact, the Slow tier and cheap Measure rows.
  **Slice 8,
    the Unreal adapter, is on hold by owner directive (2026-10-11): do not start it.** The

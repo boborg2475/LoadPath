@@ -1322,3 +1322,28 @@ panel. Not contracted here.
 of the Release exe, so the repo's exe stays free) and appended to SCALE.md with the HEAD, and
 with the default suites green in both configurations; a stage that changes any anchor reading
 is a stage that is wrong.
+
+### 6b, stage 3: the certificate at scale (written against the profile in SCALE.md)
+
+**3a, the structured cap-site factor (done 2026-10-12, merged at 2623138, in review).**
+`CertificateOptions::CapSiteKind { Dense, Structured }` (default Structured; Dense is the
+referee for one slice and goes at the 6b close with `FactorKind::Reference`). Per cap site
+the Schur block `Mww` is factored by eliminating its diagonal group rows and factoring the
+facet block `diag(D_facet) + Facets K′ Facetsᵀ` with a 3 × 3 core formed as a sum of PSD terms
+(DESIGN §10); `Mww⁻¹Fᵀ` is cached per site; the constant geometry is cached per component and
+the normal-equation buffers are reused across interior-point iterations. Every certificate
+answer is unchanged: `Certificate.CapSite.TheCertificateReadsTheSameEverywhere` pins twelve
+fixtures' iteration counts and 17-digit load factors (worst movement 3e-13 relative);
+`StructuredSolveMatchesTheDenseSchurBlock` (200 seeded blocks, backward error 1.5e-16 at κ
+up to 4e12) and `FailureIsReportedWhereTheDenseFactorFailed` (the same positivity verdict,
+NaN failing closed) pin the factor itself; the Slow ratio test has the shed's certificate
+structured at most 0.85 of dense (measured 0.66–0.75). Measured: shed 6.65 s to 4.4 s; the
+32 × 40 wall 106.8 s to 92.4 s.
+
+**3b, the stall rule (in progress).** `CertificateOptions::StallWindow` (10; 0 disables) and
+`StallImprovement` (0.5): a cone solve keeps its best iterate (smallest max relative
+residual) and stops when a window of iterations has not halved it, continuing with the best
+iterate under the same verdict rules as the iteration cap. Pinned by `Certificate.Stall.*`.
+
+**3c, the coupling out of the factor; 3d, a verdict-only option.** As ruled in DESIGN §10
+"stage 3 opening"; 3c's candidate is the bordered system the 1b-iii review proposed.
