@@ -164,3 +164,24 @@ retries (59 s for nothing, the verdict Stands anyway on the inscribed factor); i
 counts do not grow with size. Stage 3 (DESIGN §10) takes these in order: the structured
 cap-site factor (exact), the stall rule, the coupling out of the factor with refinement, and
 only then a verdict-only option that skips the circumscribed solve.
+
+## Rows at the merged HEAD b72c262 (2026-10-12): stages 1b-i, 1b-ii, 1b-iii and 2 together
+
+From a copy of the Release exe, one process each, with two reviews and a test round building
+alongside (small numbers carry noise). The cascade rows are COLD: the harness builds the
+structure, removes the post or the course and runs the cascade with no previous verdict, so
+the event region (stage 2) helps only between passes, not on the first judge.
+
+| Structure | Elastic | Certificate | Judge | Cascade: one post removed | Cascade: base course removed |
+|---|---|---|---|---|---|
+| Shed | 45 ms | 6.9 s | 32 ms | 82 ms, 0 passes | 51 ms, 1 pass |
+| Half warehouse | 173 ms | 155 s | 192 ms | 453 ms, 0 passes | 3.1 s, 1 pass |
+| Warehouse | 509 ms | **254 s** (1,566 s at 1b-i) | **485 ms** (1.56 s at 1b-i, never finished before 1a) | 698 ms, 0 passes | 20.9 s, 1 pass |
+
+Against 6a's first rows: the half warehouse's judge 90.8 s to 0.19 s, its post cascade 89.6 s
+to 0.45 s, its course cascade 255 s to 3.1 s; the warehouse now has rows at all. The post
+cascade's 0.70 s on the warehouse is one cold judge (0.49 s) plus the removal's bookkeeping;
+the stage-2 target of 200 ms is for the WARM case (a previous verdict in hand, only the frame
+dirty), which the harness does not yet measure: a `Measure.Scale.*Warm` row that judges once,
+removes the post and runs the cascade with that verdict as Previous is owed. The course
+cascades are the one dense solve of the rank-deficient floating remainder (CURRENT_STATE).

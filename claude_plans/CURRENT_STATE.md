@@ -185,8 +185,10 @@ cheap `Measure.Scale.*` rows after them); the `Deferred.*` tier holds the physic
    passed to `ICascade::Run` (`CascadeVerdict` carries no `AuthorityResult` to feed back).
    Decisions from the dev round ratified in the amendment (live-neighbour stamps, free-end
    rule for ground readings, exact load tuples, fail-closed on an uncopyable reading).
-   Measurement owed: the warehouse post cascade (1.70 s at 1b-i; target under 200 ms when
-   only the frame is touched), running.
+   Measured at b72c262 (SCALE.md): the warehouse judges in 0.49 s and its cold post cascade
+   takes 0.70 s; the 200 ms target is for the warm case, and a `Measure.Scale.*Warm` row
+   (judge once, remove the post, cascade with that verdict as Previous) is owed to the
+   measurement harness.
    **Stage 1b-iii, the certificate's sparse normal equations: green and merged (b72c262), in
    cold review.** Uncaught mutant recorded: the NaN-only part of the sparse positivity scan
    (Eigen's own `info()` catches a non-positive pivot; no finite input reaches a NaN pivot).

@@ -660,3 +660,10 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   option the judge sets, never the default. Eight cone generators are rejected: 5× on cap
   sites for a 2 % to 8 % inscribed/circumscribed gap. Panels stay contingent on the stage-3
   rows.
+- *2026-10-12, orchestrator, timing tests:* **a Slow-tier timing assertion compares two paths
+  in the same process, or carries at least three times headroom; never a thin absolute
+  ceiling.** The shed certificate's 8.0 s ceiling (6.7 s quiet) read 8.56 s, 9.9 s and 10.4 s
+  on three loaded runs with no code change in the certificate. It becomes "sparse at most the
+  dense time, both measured back to back" (the regression it exists to catch is the sparse
+  path falling to dense speed); the 1.0 s ceiling on the 32 × 40 wall's 0.19 s and the 1.0 s
+  on the 16 × 20 wall's 0.56 s stand on headroom.

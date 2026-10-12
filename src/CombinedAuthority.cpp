@@ -32,6 +32,27 @@ bool SameVector(const Vec3& A, const Vec3& B)
 	return A.X == B.X && A.Y == B.Y && A.Z == B.Z;
 }
 
+bool SameStanding(const StandingOptions& A, const StandingOptions& B)
+{
+	const auto& [AGravity, AIterations, APivot, AFactor, ADense] = A;
+	const auto& [BGravity, BIterations, BPivot, BFactor, BDense] = B;
+	return SameVector(AGravity, BGravity) && AIterations == BIterations && APivot == BPivot && AFactor == BFactor && ADense == BDense;
+}
+
+bool SameCertificate(const CertificateOptions& A, const CertificateOptions& B)
+{
+	const auto& [AGravity, AGenerators, ACap, ATolerance, AIterations, ARows] = A;
+	const auto& [BGravity, BGenerators, BCap, BTolerance, BIterations, BRows] = B;
+	return SameVector(AGravity, BGravity) && AGenerators == BGenerators && ACap == BCap && ATolerance == BTolerance && AIterations == BIterations && ARows == BRows;
+}
+
+bool SameOptions(const AuthorityOptions& A, const AuthorityOptions& B)
+{
+	const auto& [AStanding, ACertificate] = A;
+	const auto& [BStanding, BCertificate] = B;
+	return SameStanding(AStanding, BStanding) && SameCertificate(ACertificate, BCertificate);
+}
+
 AuthorityResult Invalid(InterfaceId Interface)
 {
 	AuthorityResult Result;
@@ -147,18 +168,23 @@ public:
 	{
 		if (!SameVector(Options.Standing.Gravity, Options.Certificate.Gravity) || !statics::AreCertificateOptionsValid(Options.Certificate))
 		{
-			return Invalid(InterfaceId{});
+			AuthorityResult Result = Invalid(InterfaceId{});
+			Result.Options = Options;
+			return Result;
 		}
-		const bool bMatchable = Previous != nullptr && Previous->Revision <= Model.Revision() && AreLoadsAttributable(Model, Loads);
+		const bool bMatchable = Previous != nullptr && SameOptions(Previous->Options, Options) && Previous->Revision <= Model.Revision() && AreLoadsAttributable(Model, Loads);
 		if (bMatchable)
 		{
 			std::optional<AuthorityResult> Reused = JudgeAgainst(Model, Loads, Options, Previous);
 			if (Reused)
 			{
+				Reused->Options = Options;
 				return std::move(*Reused);
 			}
 		}
-		return std::move(*JudgeAgainst(Model, Loads, Options, nullptr));
+		AuthorityResult Result = std::move(*JudgeAgainst(Model, Loads, Options, nullptr));
+		Result.Options = Options;
+		return Result;
 	}
 
 private:

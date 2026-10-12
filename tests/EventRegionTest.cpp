@@ -550,3 +550,185 @@ TEST_CASE("Cascade.EventRegion.ASecondPassSolvesOnlyWhatTheFirstReleased")
 		CHECK(ReusedOf(*Kept).value_or(false));
 	}
 }
+
+namespace
+{
+template <class R>
+constexpr bool HasResultOptions = requires(const R& Result) { { Result.Options } -> std::convertible_to<const AuthorityOptions&>; };
+
+template <class R>
+std::optional<Vec3> RecordedGravityOf(const R& Result)
+{
+	if constexpr (HasResultOptions<R>)
+	{
+		return static_cast<const AuthorityOptions&>(Result.Options).Standing.Gravity;
+	}
+	else
+	{
+		(void)Result;
+		return std::nullopt;
+	}
+}
+
+std::vector<InterfaceId> ExpectedFilteredIds(const Structure& Model, const std::vector<BodyId>& Bodies)
+{
+	std::vector<InterfaceId> Ids;
+	for (const InterfaceId Id : Model.LiveInterfaces())
+	{
+		const InterfaceRecord& Record = Model.Interface(Id);
+		const bool bBothGrounded = Model.Body(Record.BodyA).bGrounded && Model.Body(Record.BodyB).bGrounded;
+		if (bBothGrounded || Holds(Bodies, Record.BodyA) || Holds(Bodies, Record.BodyB))
+		{
+			Ids.push_back(Id);
+		}
+	}
+	return Ids;
+}
+
+void CheckFilteredSolve(const Structure& Model, const StandingResult& Whole, const StandingResult& Got, const std::vector<std::vector<BodyId>>& Wanted)
+{
+	INFO("filtered state " << std::string(StandingStateName(Got.State)) << ", readings " << Got.Readings.size() << ", components " << Got.Components.size());
+	std::vector<BodyId> AllWanted;
+	for (const std::vector<BodyId>& Part : Wanted)
+	{
+		AllWanted.insert(AllWanted.end(), Part.begin(), Part.end());
+	}
+	const std::vector<InterfaceId> Ids = ExpectedFilteredIds(Model, AllWanted);
+	CHECK(Got.Components.size() == Wanted.size());
+	StandingState WorstWanted = StandingState::Stands;
+	for (std::size_t K = 0; K < Wanted.size() && K < Got.Components.size(); ++K)
+	{
+		INFO("component " << K << " want " << Describe(Wanted[K]) << " got " << Describe(Got.Components[K].Bodies));
+		CHECK(SameIdList(Got.Components[K].Bodies, Wanted[K]));
+		const StandingComponent* Alone = nullptr;
+		for (const StandingComponent& C : Whole.Components)
+		{
+			if (SameIdList(C.Bodies, Wanted[K]))
+			{
+				Alone = &C;
+			}
+		}
+		CHECK(Alone != nullptr);
+		if (Alone == nullptr)
+		{
+			continue;
+		}
+		CHECK(Got.Components[K].State == Alone->State);
+		if (static_cast<int>(Alone->State) > static_cast<int>(WorstWanted))
+		{
+			WorstWanted = Alone->State;
+		}
+		const std::vector<InterfaceId> Own = InterfacesTouching(Model, Wanted[K]);
+		CHECK(Got.Components[K].ReadingSlots.size() == Own.size());
+		for (const std::size_t Slot : Got.Components[K].ReadingSlots)
+		{
+			INFO("reading slot " << Slot);
+			CHECK(Slot < Got.Readings.size());
+			if (Slot < Got.Readings.size())
+			{
+				CHECK(std::any_of(Own.begin(), Own.end(), [&](InterfaceId Id) { return SameHandle(Id, Got.Readings[Slot].Id); }));
+			}
+		}
+	}
+	CHECK(Got.State == WorstWanted);
+	CHECK(Got.Readings.size() == Ids.size());
+	for (std::size_t K = 0; K < Ids.size() && K < Got.Readings.size(); ++K)
+	{
+		INFO("reading " << K << " want interface " << Ids[K].Index << " got " << Got.Readings[K].Id.Index);
+		CHECK(SameHandle(Got.Readings[K].Id, Ids[K]));
+		const InterfaceReading* W = FindReading(Whole.Readings, Ids[K]);
+		CHECK(W != nullptr);
+		CHECK((W != nullptr && SameReading(Got.Readings[K], *W, 0.0, 0.0)));
+	}
+}
+}
+
+TEST_CASE("Statics.Solve.AComponentFilterSolvesTheListedComponentsOnly")
+{
+	ThreeComponents F = MakeThreeComponents();
+	const ProfileId Dry = AddProfileOk(F.Model, DryJoint(ThreeComponentFriction));
+	const Box PlinthShape = BrickShape(4.0);
+	const BodyId Plinth = AddBox(F.Model, PlinthShape, true);
+	AddInterfaceOk(F.Model, OnGroundPlane(F.Ground, Plinth, PlinthShape, Dry));
+	const std::unique_ptr<IStandingAuthority> Authority = MakeRbsmStandingAuthority();
+	const StandingResult Whole = Authority->Solve(F.Model, F.Loads, StandingOptions{}, {});
+	CHECK(Whole.Components.size() == 3u);
+	{
+		INFO("Only = the first stack");
+		CheckFilteredSolve(F.Model, Whole, Authority->Solve(F.Model, F.Loads, StandingOptions{}, F.Parts[0]), {F.Parts[0]});
+	}
+	{
+		INFO("Only = the last stack's upper brick");
+		CheckFilteredSolve(F.Model, Whole, Authority->Solve(F.Model, F.Loads, StandingOptions{}, std::vector<BodyId>{F.Parts[2][1]}), {F.Parts[2]});
+	}
+	{
+		INFO("Only = the pushed brick and the last stack");
+		const std::vector<BodyId> Only{F.Parts[2][0], F.Parts[1][0]};
+		CheckFilteredSolve(F.Model, Whole, Authority->Solve(F.Model, F.Loads, StandingOptions{}, Only), {F.Parts[1], F.Parts[2]});
+	}
+	{
+		INFO("Only = the first stack with a duplicate entry");
+		const std::vector<BodyId> Only{F.Parts[0][1], F.Parts[0][0], F.Parts[0][1]};
+		CheckFilteredSolve(F.Model, Whole, Authority->Solve(F.Model, F.Loads, StandingOptions{}, Only), {F.Parts[0]});
+	}
+	const std::vector<std::pair<const char*, std::vector<BodyId>>> BadFilters{
+		{"the ground", {F.Ground}},
+		{"a grounded plinth", {Plinth}},
+		{"an unknown id", {BodyId{999u, 1u}}},
+		{"the invalid handle", {BodyId::Invalid()}},
+		{"a free body and the ground", {F.Parts[0][0], F.Ground}},
+	};
+	for (const auto& [Name, Only] : BadFilters)
+	{
+		const StandingResult Got = Authority->Solve(F.Model, F.Loads, StandingOptions{}, Only);
+		INFO("filter naming " << std::string(Name) << ": state " << std::string(StandingStateName(Got.State)) << ", readings " << Got.Readings.size() << ", invalid interface " << Got.InvalidInterface.Index);
+		CHECK(Got.State == StandingState::InvalidInput);
+		CHECK(SameHandle(Got.InvalidInterface, InterfaceId::Invalid()));
+		CHECK(Got.Readings.empty());
+		CHECK(Got.Components.empty());
+	}
+}
+
+TEST_CASE("Authority.Judge.DifferentOptionsReuseNothing")
+{
+	ThreeComponents F = MakeThreeComponents();
+	const auto C = MakeCounted();
+	const AuthorityOptions Base;
+	const AuthorityResult First = JudgeWithPrevious(*C->Authority, F.Model, F.Loads, Base, nullptr);
+	CHECK_MESSAGE(HasResultOptions<AuthorityResult>, "AuthorityResult has no Options (the AuthorityOptions it was judged under)");
+	const std::optional<Vec3> Recorded = RecordedGravityOf(First);
+	if (Recorded)
+	{
+		CHECK(NearVec(*Recorded, Base.Standing.Gravity, 0.0));
+	}
+	std::vector<std::pair<const char*, AuthorityOptions>> Variants;
+	Variants.emplace_back("gravity tilted 5 deg", AuthorityTilted(5.0 * RadPerDegree));
+	AuthorityOptions Pivot = Base;
+	Pivot.Standing.PivotToleranceRelative = 1.0e-9;
+	Variants.emplace_back("Standing.PivotToleranceRelative 1e-9", Pivot);
+	AuthorityOptions Dof = Base;
+	Dof.Standing.DenseDofLimit = 6;
+	Variants.emplace_back("Standing.DenseDofLimit 6", Dof);
+	AuthorityOptions Cone = Base;
+	Cone.Certificate.ConeGenerators = 8;
+	Variants.emplace_back("Certificate.ConeGenerators 8", Cone);
+	AuthorityOptions Cap = Base;
+	Cap.Certificate.LoadFactorCap = 100.0;
+	Variants.emplace_back("Certificate.LoadFactorCap 100", Cap);
+	for (const auto& [Name, Options] : Variants)
+	{
+		INFO("options differing in " << std::string(Name));
+		const AuthorityResult Fresh = JudgeWithPrevious(*MakeAuthority(), F.Model, F.Loads, Options, nullptr);
+		C->Solves.clear();
+		C->Decides.clear();
+		const AuthorityResult Got = JudgeWithPrevious(*C->Authority, F.Model, F.Loads, Options, &First);
+		INFO("got: " << DescribeAuthority(Got));
+		CheckSolvedOnly(C->Solves, {});
+		CHECK(Got.Components.size() == 3u);
+		for (const std::vector<BodyId>& Part : F.Parts)
+		{
+			CheckFresh(Got, Part);
+		}
+		CheckSameVerdict(Got, Fresh, F.Model, 0.0, 0.0);
+	}
+}
