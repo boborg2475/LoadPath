@@ -50,22 +50,25 @@ the non-associative answer) and the two hanging-component cases (slice 6), red b
    2 × floor, a closed tensionless corner inside the band reports N 0, a non-finite force scale
    reads Undecided. Every dry wall at rest, 1 × 3 to 10 × 8, settles in two iterations; the
    lime-mortar (cohesion, no tension) walls Stand at rest. Open items, none host-unsafe:
-   - **laterally loaded dry walls still read Undecided, and the floor has nothing to do with
-     it**: on a 5 × 5 grid of sizes × λx 0–0.3, λy 0–0.15, 147 points stay Undecided (1 × 5,
-     2 × 5, 3 × 4, 3 × 5, 5 × 4, 5 × 5 at every λ ≥ 0.05; 10 × 8 and 14 × 10 at λ 0.2) with
-     perpend corners carrying real load (3e-7 to 5e-4 of the scale) and slipping; floors from
-     1e-14 to 1e-6, slip slack, and a 2000-iteration cap change nothing; the NNLS oracle says
-     CanStand for all of them and no point reads a false Stands. This is a stick/slip
-     non-convergence of the free active set, the next solver item (2d) after slice 6 opens;
+   - **slice 2d, in cold review 2026-10-12 (c4a372a; DESIGN §10 "slice 2d opening")**: the
+     laterally loaded dry walls read Undecided because a re-closing corner carried its
+     built-up slip as elastic shear and was reopened; a slip-releasing corner that re-closes
+     above μN now enters Slipping at the cap, and the 160-point grid all Stands (mean 8.1
+     iterations, worst 30) with zero oracle refutations; the pins were regenerated under the
+     pins ruling. Left from the round: the grid test runs the oracle on all 160 Stands and
+     takes 6.5 min (`Slow.`); the mutant "apply the rule to cohesive corners too" survived
+     until a cohesive fixture was added (in flight); the regeneration's oracle audit found one
+     pre-existing pinned Stands the oracle reads CannotStand and 26 Ambiguous among 1,420
+     (handed to the review to identify); the restore-step Undecideds below are now more
+     visible (145 of the 196 Mechanism-to-Undecided pin trades);
    - the restore step (`RestoreInadmissibleReleases`) re-closes a floor-opened corner on a
      motion gap with no floor check: a corner Open in the full-rank state returns Undecided
      (the 3 × 1 wall at λ (0.8, 0.8) went Mechanism → Undecided), otherwise the corner re-enters
      Slipping and is reopened in a cycle (a light body on a heavy one at mass ratio 1e-12 to
      3e-12 reads Undecided/50 where it read Stands/1; at 1e-13 it reads Stands with the light
      body's support corners open, floating). Fails closed; untested;
-   - one regression independent of the floor value: the 4 × 2 wall at λ (0.30, 0.15) went from
-     Stands/14 to Undecided/50, and still reads Undecided/50 after the hysteresis (dev
-     measurement, 2026-10-11): it belongs with the lateral non-convergence above;
+   - the 4 × 2 wall at λ (0.30, 0.15), Stands/14 before 2c and Undecided/50 after it, Stands in
+     13 since 2d (the same re-closing cycle, on one top-course perpend);
    - an unloaded component (zero gravity, no loads) has floor 0 and `<=` opens every dry corner,
      reading Stands with all corners open; `<=` → `<` survives the suite, so the boundary is
      unpinned;

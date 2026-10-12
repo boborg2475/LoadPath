@@ -1098,3 +1098,15 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   along the offset; "close into Stuck" must redden it), the four points' iteration counts
   with margin, the grid with zero refutations, the 14 × 10 sparse case, the rest walls at two
   iterations, every existing anchor.
+- *2026-10-12, orchestrator, slice 2d dev notes:* the Open branch calls `ReEnterSlipping` with
+  the trial shear and normal and then zeroes the corner's transverse stiffness, as the
+  Stuck-to-Slipping branch does; without that line the pin trades read 62 / 30 / 168 / 206 / 6
+  against the probe's 62 / 30 / 175 / 196 / 7, and no test but the generated pins tells the
+  two apart (the review judges the arithmetic). The grid test now runs the NNLS oracle on
+  all 160 Stands and takes 6.5 min, so it stays in the Slow tier. The warehouse's mortared
+  walls under λx 0.1 Stand or read Overstressed after one iteration, the 34-body frame
+  Mechanism after three: the cap of 50 is nowhere near at scale, and the dry rule barely
+  enters. The regeneration's oracle audit: all 62 new Stands CanStand; of the 1,420 draws
+  Stands before and after, 26 Ambiguous and one CannotStand, pre-existing, handed to the cold
+  review. The mutant applying the rule to cohesive (non-slip-releasing) corners survives the
+  suite: a cohesive fixture that pins the ruling's scope follows.
