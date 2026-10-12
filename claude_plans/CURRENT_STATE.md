@@ -179,27 +179,33 @@ cheap `Measure.Scale.*` rows after them); the `Deferred.*` tier holds the physic
    connectivity before any factorisation; the elastic authority could read it (and its
    rigid-body null space) without factorising, as the certificate's rigid-fall rule already
    does. Not in 1b; log for stage 2 or the certificate's next item.
-   **Stage 2, the event region: green (0fc14a5), in cold review.** In progress: the direct
-   contract test for `Solve`'s filter and the options-as-cleanliness rule (DESIGN §10 stage 2
-   amendment; `AuthorityResult` to carry its options). Not yet tested: the initial Previous
-   passed to `ICascade::Run` (`CascadeVerdict` carries no `AuthorityResult` to feed back).
-   Decisions from the dev round ratified in the amendment (live-neighbour stamps, free-end
-   rule for ground readings, exact load tuples, fail-closed on an uncopyable reading).
-   Measured (SCALE.md): the warehouse judges in 0.49 s; its warm post cascade (a previous
-   verdict in hand, 4 of 5 components reused) is 254 ms against the 200 ms target, the
-   remainder being the frame's own certificate (about 225 ms), which is stage 3's.
+   **Stage 2, the event region: green (0fc14a5), reviewed, fix round in progress.** Done
+   since the review: options are part of cleanliness (`AuthorityResult::Options`, exact
+   comparison, e92c4df); the direct contract test of `Solve`'s filter; the warm Measure rows.
+   The cold review (2026-10-12) sent it back on two defects, both with red tests on branch
+   `stage-2-fix` (989b5a0) and dev in progress: a verdict from a diverged copy of a structure
+   was matched and reused (ruled: a lineage token minted at construction and on every copy,
+   recorded in the verdict, DESIGN §10 second amendment), and invalid standing options with
+   nothing dirty returned the copied verdict (ruled: `Judge` validates options before
+   matching). The same branch pins the first-pass Previous of `Run`, the cap re-judge, a
+   moved load point, a load on a dead body with nothing dirty, a ground contact added to a
+   loose brick and `LastTouched` of an unknown id, strengthens the fuzz guard (reused
+   components exact, Mechanism and Disagreements compared, a cascade-parity variant: 32 draws,
+   251 components, 68 reused) and removes the red-phase scaffolding. Decisions from the dev
+   round ratified in the amendments (live-neighbour stamps, free-end rule for ground readings,
+   exact load tuples, fail-closed on an uncopyable reading). Measured (SCALE.md): the
+   warehouse judges in 0.49 s; its warm post cascade (4 of 5 components reused) is 254 ms
+   against the 200 ms target, the remainder the frame's own certificate (about 225 ms),
+   which is stage 3's.
    **Stage 1b-iii, the certificate's sparse normal equations: green and merged (b72c262);
    the cold review (2026-10-12) found no correctness defect** (assembly bit-identical to the
    dense matrix on 1,268 matrices) and blocked on docs and the shed ceiling, both fixed; it
    asked for a filter test naming two components (kills a "stop after the first chosen
    component" mutant), the cache test extended to AddBody/AddProfile/MarkPass, and a timing
-   subject of about 310 bodies instead of the shed (ratio 0.45–0.59 against the shed's 0.8):
-   in progress. Uncaught mutants recorded: the retry's LargestDiagonal without the coupling
+   subject of about 310 bodies instead of the shed (ratio 0.45–0.59 against the shed's 0.8). Uncaught mutants recorded: the retry's LargestDiagonal without the coupling
    (a 1e-12 shift), the NaN-only positivity scan. `StandingComponent::ReadingSlots` is read by
-   nothing in the library. Uncaught mutant recorded: the NaN-only part of the sparse positivity scan
-   (Eigen's own `info()` catches a non-positive pivot; no finite input reaches a NaN pivot).
-   The shed's 8.0 s Slow ceiling is thin under load (8.56 s once with another test process
-   running; 6.65–6.8 s quiet).
+   nothing in the library. The three asked-for tests landed in f872105 (the sparse timing
+   subject is now a 310-body wall, ratio 0.42–0.47 against a 0.67 threshold).
    **Next: stage 3, the certificate at scale (DESIGN §10 "stage 3 opening", SCALE.md
    profile): 3a the structured cap-site factor (exact), 3b the stall rule, 3c the coupling out
    of the factor with refinement, 3d a verdict-only option last; panels contingent; the
