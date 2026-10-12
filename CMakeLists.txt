@@ -31,6 +31,7 @@ endif()
 
 # The engine.
 add_library(loadpath STATIC
+	src/CapSiteFactor.cpp
 	src/Cascade.cpp
 	src/Catalogue.cpp
 	src/Cli.cpp

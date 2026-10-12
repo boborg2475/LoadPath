@@ -34,6 +34,13 @@ struct CertificateOptions
 	int MaxIterations = 200;
 	// Components with more equilibrium rows than this factor the normal matrix sparsely; at or below it, dense.
 	int DenseRowLimit = 600;
+	// How a cap site's group-and-facet block is factored; Dense keeps the full LLT as the referee for the structured form.
+	enum class CapSiteKind : std::uint8_t
+	{
+		Dense,
+		Structured
+	};
+	CapSiteKind CapSite = CapSiteKind::Structured;
 };
 
 struct CertificateResult

@@ -221,7 +221,8 @@ constexpr double PileLambda = 0.5005;
 constexpr double PileLambdaTolerance = 1.0e-3;
 constexpr double WedgeToleranceDeg = 0.05;
 constexpr double ShedSecondsCeiling = 8.0;
-constexpr double ShedCapSiteSecondsCeiling = 6.5;
+constexpr double ShedCapSiteTimeRatio = 0.8;
+constexpr double ShedCapSiteLoadFactorRelative = 1.0e-7;
 constexpr double BoundaryWallLateral = 0.8;
 }
 
@@ -310,15 +311,23 @@ TEST_CASE("Slow.Certificate.Sparse.TheShedCertificateInsideItsBudget")
 	CHECK(Seconds <= ShedSecondsCeiling);
 }
 
-TEST_CASE("Slow.Certificate.CapSite.TheShedCertificateIsFasterThanTheDenseBlock")
+TEST_CASE("Slow.Certificate.CapSite.TheShedCertificateIsFasterWithTheStructuredBlock")
 {
 	const Structure Model = Shed();
-	const Clock::time_point Start = Clock::now();
-	const CertificateResult Result = DecideWith(Model, CertificateOptions{});
-	const double Seconds = SecondsSince(Start);
-	MESSAGE("shed certificate " << Result.State << " [" << Result.LoadFactorLower << ", " << Result.LoadFactorUpper << "] in " << Result.Iterations << " iterations, " << Seconds << " s against " << ShedCapSiteSecondsCeiling << " s");
-	CHECK(Result.State == CertificateState::Stands);
-	CHECK(Seconds <= ShedCapSiteSecondsCeiling);
+	CertificateOptions DenseOptions;
+	DenseOptions.CapSite = CertificateOptions::CapSiteKind::Dense;
+	Clock::time_point Start = Clock::now();
+	const CertificateResult Dense = DecideWith(Model, DenseOptions);
+	const double DenseSeconds = SecondsSince(Start);
+	Start = Clock::now();
+	const CertificateResult Structured = DecideWith(Model, CertificateOptions{});
+	const double StructuredSeconds = SecondsSince(Start);
+	MESSAGE(std::setprecision(17) << "shed dense " << Dense.State << " [" << Dense.LoadFactorLower << ", " << Dense.LoadFactorUpper << "] in " << Dense.Iterations << " iterations, " << DenseSeconds << " s; structured " << Structured.State << " [" << Structured.LoadFactorLower << ", " << Structured.LoadFactorUpper << "] in " << Structured.Iterations << " iterations, " << StructuredSeconds << " s");
+	CHECK(Dense.State == CertificateState::Stands);
+	CHECK(Structured.State == Dense.State);
+	CHECK(std::abs(Structured.LoadFactorLower - Dense.LoadFactorLower) <= ShedCapSiteLoadFactorRelative * std::abs(Dense.LoadFactorLower));
+	CHECK(std::abs(Structured.LoadFactorUpper - Dense.LoadFactorUpper) <= ShedCapSiteLoadFactorRelative * std::abs(Dense.LoadFactorUpper));
+	CHECK(StructuredSeconds <= ShedCapSiteTimeRatio * DenseSeconds);
 }
 #endif
 

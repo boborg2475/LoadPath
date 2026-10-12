@@ -660,3 +660,28 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   option the judge sets, never the default. Eight cone generators are rejected: 5× on cap
   sites for a 2 % to 8 % inscribed/circumscribed gap. Panels stay contingent on the stage-3
   rows.
+- *2026-10-12, orchestrator, timing tests:* **a Slow-tier timing assertion compares two paths
+  in the same process, or carries at least three times headroom; never a thin absolute
+  ceiling.** The shed certificate's 8.0 s ceiling (6.7 s quiet) read 8.56 s, 9.9 s and 10.4 s
+  on three loaded runs with no code change in the certificate. It becomes "sparse at most the
+  dense time, both measured back to back" (the regression it exists to catch is the sparse
+  path falling to dense speed); the 1.0 s ceiling on the 32 × 40 wall's 0.19 s and the 1.0 s
+  on the 16 × 20 wall's 0.56 s stand on headroom.
+- *2026-10-12, orchestrator, stage 3a rulings from the test round:* **the structured cap-site
+  factor must match the dense block to a backward error of 1e-12 across the full slack range,
+  so it cannot be a textbook Woodbury; the dense block stays as the referee for one slice.**
+  The test round proved a plain Woodbury (`Dg⁻¹ − Dg⁻¹U(I + C UᵀDg⁻¹U)⁻¹CUᵀDg⁻¹`) fails all
+  200 seeded cases at slack 1e-6 against direction weights 1e6 (backward error 3e-5, the
+  dense reference's κ reaching 4e12), and a scaled QR form fails 199. So the structured form
+  eliminates the group rows first (their block is diagonal), leaving
+  `diag(D_facet) + Facets · K′ · Facetsᵀ` with K′ 3 × 3, and factors that by a stable
+  rank-3 update (a Cholesky rank update, or a 3 × 3 core formed without inverting the
+  diagonal); the tolerances stand (backward 1e-12, forward max(1e-10, 1e-14 κ), Schur 1e-10
+  of ‖K3‖). Positivity: the structured factor reports exactly the dense verdict on every
+  finite input, including a zero facet slack whose facet still sees a direction (positive),
+  and fails closed on a NaN slack, which Eigen's `info()` lets through. The dense block stays
+  behind `CertificateOptions::CapSiteKind { Dense, Structured }` (default Structured) for one
+  slice as the referee, so the Slow timing test is a same-process ratio (structured at most
+  0.8 of dense on the shed) rather than the 6.5 s ceiling the brief asked for, which the
+  timing-test ruling forbids; both referees (`FactorKind::Reference`, `CapSiteKind::Dense`)
+  go at the 6b close.
