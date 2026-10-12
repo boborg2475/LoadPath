@@ -1333,7 +1333,7 @@ is a stage that is wrong.
 
 ### 6b, stage 3: the certificate at scale (written against the profile in SCALE.md)
 
-**3a, the structured cap-site factor (done 2026-10-12, merged at 2623138, in review).**
+**3a, the structured cap-site factor (done 2026-10-12, merged at 2623138; reviewed, fix round merged at 0214d3e).**
 `CertificateOptions::CapSiteKind { Dense, Structured }` (default Structured; Dense is the
 referee for one slice and goes at the 6b close with `FactorKind::Reference`). Per cap site
 the Schur block `Mww` is factored by eliminating its diagonal group rows and factoring the
@@ -1344,16 +1344,30 @@ answer is unchanged: `Certificate.CapSite.TheCertificateReadsTheSameEverywhere` 
 fixtures' iteration counts and 17-digit load factors (worst movement 3e-13 relative);
 `StructuredSolveMatchesTheDenseSchurBlock` (200 seeded blocks, backward error 1.5e-16 at κ
 up to 4e12) and `FailureIsReportedWhereTheDenseFactorFailed` (the same positivity verdict,
-NaN failing closed) pin the factor itself; the Slow ratio test has the shed's certificate
-structured at most 0.85 of dense (measured 0.66–0.75). Measured: shed 6.65 s to 4.4 s; the
+NaN failing closed; 160 cases in eight kinds after the review, one per guard) pin the
+factor itself, with `StructuredSolveMatchesOnTheCapSiteShape` building the site the way
+`BuildProgram` does; the Slow ratio test decides the shed D, S, S, D in one process and has
+the structured minimum at most 0.85 of the dense minimum (measured 0.67–0.84). Measured: shed 6.65 s to 4.4 s; the
 32 × 40 wall 106.8 s to 92.4 s.
 
-**3b, the stall rule (done 2026-10-12, in review).** `CertificateOptions::StallWindow` (10; 0
+**3b, the stall rule (done 2026-10-12; reviewed, fix round in progress: the default window
+becomes 20, DESIGN §10).** `CertificateOptions::StallWindow` (10 today, 20 after the fix; 0
 disables) and `StallImprovement` (0.5): a cone solve tracks its best largest relative
 residual and stops when a window of iterations has not brought it below `StallImprovement`
 times the best at the window's start, returning the iteration cap's outcome (no iterate is
 kept: one within tolerance would already have ended the solve, DESIGN §10). The selection
 solve is untouched. Pinned by `Certificate.Stall.*`.
 
-**3c, the coupling out of the factor; 3d, a verdict-only option.** As ruled in DESIGN §10
-"stage 3 opening"; 3c's candidate is the bordered system the 1b-iii review proposed.
+**3c, the coupling out of the factor (done 2026-10-12, 425506a, in review).**
+`CertificateOptions::CouplingKind { InFactor, Bordered }` (default Bordered; InFactor is the
+third referee, gone at the 6b close). Above `DenseRowLimit` the normal system
+`M = M_sites + c·d dᵀ` is no longer assembled with its dense coupling block: the sparse path
+factors the bordered symmetric indefinite system `[M_sites + ρI, d; dᵀ, −1/c]` with
+`SimplicialLDLT` under an ordering that runs AMD on the site block and eliminates the border
+last, accepts positive site pivots and a negative border pivot, retries with the same ρ as
+before, and solves `[r; 0]` taking the site part. Answers unchanged: iteration counts equal and
+bounds identical on the 66 agreement cases and the 12 pinned fixtures (`Certificate.Coupling.*`).
+Measured: the 40 × 32 wall's certificate 118 s to 34 s, the half warehouse's 89 s to 59 s.
+
+**3d, a verdict-only option.** As ruled in DESIGN §10 "stage 3 opening", last and only if the
+warm-cascade target still needs it after 3a–3c (measurement in SCALE.md).
