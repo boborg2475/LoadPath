@@ -415,3 +415,12 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   tensionless corner opens only at N < −floor, and a dry corner is open inside ±floor as well
   because it carries nothing either way; a cohesive tensionless corner inside the band stays
   closed and carries its cohesion.
+- *2026-10-11, orchestrator, after the slice-2c follow-up review:* two corrections to the
+  round before. **A non-finite force scale is Undecided**, not a frozen active set: frozen, a
+  pure in-plane overflow (2e154 along the bed plane) read Stands with shear utilisation 1e153,
+  because a dry corner's slip lives in the active set and the overstress rule never flags dry
+  shear. **A closed tensionless corner inside the noise band reads zero tension**: with the
+  opening threshold at −floor, a corner with N in [−floor, 0) stayed closed and its noise
+  tension over a zero tensile capacity read +inf, so every wall on the lime-mortar row
+  (cohesion, no tension) read Overstressed at rest, the very class the slice was opened to
+  remove, and one that would feed the cascade's crack band.

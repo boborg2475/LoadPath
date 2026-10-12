@@ -250,11 +250,40 @@ TEST_CASE("Statics.Solver.ACohesiveTensionlessPerpendAtRestStaysClosed")
 	const StandingResult Elastic = SolveWith(W.Model, StandingOptions{});
 	const std::vector<const InterfaceReading*> Perpends = PerpendReadings(W, Elastic);
 	INFO("cohesive tensionless 1 x 3 wall at rest: " << Elastic.State << " after " << Elastic.ActiveSetIterations << " iterations; perpends " << DescribePerpends(Perpends));
+	CHECK(Elastic.State == StandingState::Stands);
 	for (const InterfaceReading* R : Perpends)
 	{
+		CHECK(std::isfinite(R->TensionUtilisation));
+		CHECK(R->TensionUtilisation == 0.0);
 		for (const CornerReading& C : R->Corners)
 		{
 			CHECK_FALSE(C.bOpen);
+		}
+	}
+}
+
+TEST_CASE("Statics.Solver.LimeMortarWallsWithNoTensionStandAtRest")
+{
+	const CatalogueResult Loaded = LoadCatalogue(ReadCatalogueFile());
+	INFO("line " << Loaded.Error.Line << ": " << Loaded.Error.Message);
+	REQUIRE(Loaded.Ok());
+	const StrengthProfile Lime = JointOrFail(Loaded.Value, "lime_mortar_handmade_brick_upc_mean").Profile;
+	struct Size
+	{
+		int Courses, BricksPerCourse;
+	};
+	for (const Size S : {Size{2, 1}, Size{1, 3}})
+	{
+		CAPTURE(S.Courses);
+		CAPTURE(S.BricksPerCourse);
+		const NoiseFloorWall W = BuildNoiseFloorWall(Lime, Lime, S.Courses, S.BricksPerCourse);
+		REQUIRE(W.Value.bComplete);
+		const AuthorityResult Combined = Judge(W.Model, AuthorityOptions{});
+		INFO("lime mortar wall at rest: combined " << DescribeAuthority(Combined));
+		CHECK(Combined.Worst == ComponentVerdict::Stands);
+		for (const InterfaceReading& R : Combined.Readings)
+		{
+			CHECK(std::isfinite(R.TensionUtilisation));
 		}
 	}
 }

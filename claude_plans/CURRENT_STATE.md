@@ -67,10 +67,6 @@ and 5 rulings.
    - one regression independent of the floor value: the 4 × 2 wall at λ (0.30, 0.15) went from
      Stands/14 to Undecided/50, and still reads Undecided/50 after the hysteresis (dev
      measurement, 2026-10-11): it belongs with the lateral non-convergence above;
-   - the non-finite force scale fails closed by freezing the active set (no corner opens, the
-     overflowed load reads through closed joints as Overstressed), which is narrower than the
-     ruling "never Stands": a non-finite scale whose load stays within capacity through closed
-     corners would still read Stands; no such case could be constructed and none is tested;
    - an unloaded component (zero gravity, no loads) has floor 0 and `<=` opens every dry corner,
      reading Stands with all corners open; `<=` → `<` survives the suite, so the boundary is
      unpinned;

@@ -577,6 +577,15 @@ TEST_CASE("Statics.Solver.LoadsWhoseForceScaleOverflowsNeverStand")
 		CHECK(Result.State != StandingState::Stands);
 		CHECK_FALSE(bAllBedsWithin);
 	}
+	SUBCASE("one lateral body load at the bed plane whose length squared overflows")
+	{
+		const BrickOnGround F = MakeBrickOnGround(DryJoint(0.7));
+		const std::array<BodyLoad, 1> Loads{BodyLoad{F.Brick, Vec3{2.0e154, 0.0, 0.0}, Vec3{0.0, 0.0, 0.0}}};
+		const StandingResult Result = SolveWith(F.Model, StandingOptions{}, Loads);
+		const InterfaceReading* Bed = RequireReading(Result, F.Bed);
+		INFO("state " << Result.State << " after " << Result.ActiveSetIterations << ", bed utilisation " << (Bed ? Bed->Utilisation : -1.0) << ", shear " << (Bed ? Bed->ShearUtilisation : -1.0));
+		CHECK(Result.State != StandingState::Stands);
+	}
 }
 
 TEST_CASE("Statics.Solver.BrickOverturnedByABiaxialLoadIsAMechanismAboutItsToe")
