@@ -11,6 +11,7 @@
 #include <limits>
 #include <optional>
 #include <random>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -283,21 +284,48 @@ Eigen::MatrixXd AssembleStiffness(const Problem& P, const std::vector<JointState
 
 using SparseMatrix = Eigen::SparseMatrix<double>;
 
-SparseMatrix AssembleSparseStiffness(const Problem& P, const std::vector<JointState>& States)
+bool IsScaledStiffnessFinite(const Problem& P, const std::vector<JointState>& States)
 {
-	std::vector<Eigen::Triplet<double>> Triplets;
-	ForEachStiffnessBlock(P, States, [&](int Row, int Col, const Eigen::Matrix<double, 6, 6>& Block) {
+	using Block6 = Eigen::Matrix<double, 6, 6>;
+	std::vector<Block6> Diagonal(static_cast<std::size_t>(P.DofCount / 6), Block6::Zero());
+	std::unordered_map<std::int64_t, Block6> OffDiagonal;
+	ForEachStiffnessBlock(P, States, [&](int Row, int Col, const Block6& Block) {
+		if (Row == Col)
+		{
+			Diagonal[static_cast<std::size_t>(Row / 6)] += Block;
+			return;
+		}
+		const std::int64_t Key = static_cast<std::int64_t>(Row) * P.DofCount + Col;
+		OffDiagonal.try_emplace(Key, Block6::Zero()).first->second += Block;
+	});
+	const auto IsFinite = [&](int Row, int Col, const Block6& K) {
 		for (int R = 0; R < 6; ++R)
 		{
 			for (int S = 0; S < 6; ++S)
 			{
-				Triplets.emplace_back(Row + R, Col + S, Block(R, S));
+				if (!std::isfinite(P.Scaling[Row + R] * K(R, S) * P.Scaling[Col + S]))
+				{
+					return false;
+				}
 			}
 		}
-	});
-	SparseMatrix K(P.DofCount, P.DofCount);
-	K.setFromTriplets(Triplets.begin(), Triplets.end());
-	return K;
+		return true;
+	};
+	for (std::size_t B = 0; B < Diagonal.size(); ++B)
+	{
+		if (!IsFinite(static_cast<int>(B) * 6, static_cast<int>(B) * 6, Diagonal[B]))
+		{
+			return false;
+		}
+	}
+	for (const auto& [Key, K] : OffDiagonal)
+	{
+		if (!IsFinite(static_cast<int>(Key / P.DofCount), static_cast<int>(Key % P.DofCount), K))
+		{
+			return false;
+		}
+	}
+	return true;
 }
 
 SparseMatrix AssembleScaledSparseStiffness(const Problem& P, const std::vector<JointState>& States)
@@ -906,9 +934,7 @@ StandingResult SolveProblem(const Problem& P, const StandingOptions& Options)
 	const bool bGravity = Options.Gravity.X != 0.0 || Options.Gravity.Y != 0.0 || Options.Gravity.Z != 0.0;
 	if (!P.bGrounded && !P.bHostLoaded && bGravity)
 	{
-		const auto Scaling = P.Scaling.asDiagonal();
-		const SparseMatrix K = Scaling * AssembleSparseStiffness(P, States) * Scaling;
-		if (!IsAllFinite(K))
+		if (!IsScaledStiffnessFinite(P, States))
 		{
 			Result.State = StandingState::InvalidInput;
 			return Result;
