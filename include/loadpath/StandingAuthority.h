@@ -114,7 +114,7 @@ class IStandingAuthority
 public:
 	virtual ~IStandingAuthority() = default;
 	// Only empty solves every component; otherwise only the components holding a listed body, and any entry that is not a live free body is InvalidInput.
-	// A component with no live interface to a grounded body, no host load and a non-zero gravity reads Mechanism without a solve: every body unconstrained, the gravity direction as its motion, zero iterations, every reading zero with axis None; a zero-force load counts as no load, and a non-finite stiffness still reads InvalidInput.
+	// A component with no live interface to a grounded body, no host load and a non-zero gravity reads Mechanism without a solve: every body unconstrained, the gravity direction as its motion, zero iterations, every reading zero with axis None; a zero-force load counts as no load, and an assembled stiffness that overflows reads InvalidInput, as on the full path.
 	virtual StandingResult Solve(const Structure& Model, std::span<const BodyLoad> Loads, const StandingOptions& Options, std::span<const BodyId> Only) const = 0;
 };
 

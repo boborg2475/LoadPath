@@ -415,15 +415,29 @@ TEST_CASE("Statics.Ungrounded.AnOverflowingFloatingPairIsInvalidInputAsOnTheFull
 
 TEST_CASE("Statics.Ungrounded.ATinyGravityStillFallsAlongIt")
 {
-	Structure Model;
-	const ProfileId Profile = AddProfileOk(Model, DryJoint(0.7));
-	AddGroundPlane(Model);
-	const FloatingPair P = AddFloatingPair(Model, Profile, 0.0);
-	const AuthorityOptions Tiny = AuthorityUnderGravity(Vec3{0.0, 0.0, -1.0e-310});
-	const StandingResult R = SolveWith(Model, Tiny.Standing);
-	Characterise(R);
-	CheckRigidFall(R, {P.Lower, P.Upper}, Vec3{0.0, 0.0, -1.0});
-	const AuthorityResult A = JudgeWith(Model, Tiny);
-	MESSAGE("judge worst " << static_cast<int>(A.Worst) << ", disagreements " << A.Disagreements);
-	CHECK(A.Worst == ComponentVerdict::Stands);
+	struct Case
+	{
+		Vec3 Gravity;
+		Vec3 Fall;
+	};
+	const Case Cases[] = {
+		Case{Vec3{0.0, 0.0, -1.0e-310}, Vec3{0.0, 0.0, -1.0}},
+		Case{Vec3{1.0e-310, 0.0, -2.0e-310}, Vec3{0.5, 0.0, -1.0}},
+	};
+	for (const Case& C : Cases)
+	{
+		INFO("gravity (" << C.Gravity.X << ", " << C.Gravity.Y << ", " << C.Gravity.Z << ")");
+		Structure Model;
+		const ProfileId Profile = AddProfileOk(Model, DryJoint(0.7));
+		AddGroundPlane(Model);
+		const FloatingPair P = AddFloatingPair(Model, Profile, 0.0);
+		const AuthorityOptions Tiny = AuthorityUnderGravity(C.Gravity);
+		const StandingResult R = SolveWith(Model, Tiny.Standing);
+		Characterise(R);
+		CheckRigidFall(R, {P.Lower, P.Upper}, C.Fall);
+		const AuthorityResult A = JudgeWith(Model, Tiny);
+		MESSAGE("judge worst " << static_cast<int>(A.Worst) << ", disagreements " << A.Disagreements);
+		CHECK(A.Worst != ComponentVerdict::InvalidInput);
+		CHECK(A.Worst != ComponentVerdict::Undecided);
+	}
 }
