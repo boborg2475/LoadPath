@@ -3,6 +3,7 @@
 #include "StaticsCommon.h"
 
 #include <algorithm>
+#include <atomic>
 #include <cmath>
 #include <limits>
 
@@ -49,6 +50,49 @@ Vec3 Divided(const Vec3& V, double Divisor)
 {
 	return Vec3{V.X / Divisor, V.Y / Divisor, V.Z / Divisor};
 }
+
+std::atomic<std::uint64_t> NextLineage{1};
+
+std::uint64_t MintLineage()
+{
+	return NextLineage.fetch_add(1, std::memory_order_relaxed);
+}
+}
+
+Structure::Structure()
+	: LineageToken(MintLineage())
+{
+}
+
+Structure::Structure(const Structure& Other)
+	: Profiles(Other.Profiles)
+	, Bodies(Other.Bodies)
+	, Interfaces(Other.Interfaces)
+	, HighestStamp(Other.HighestStamp)
+	, CurrentRevision(Other.CurrentRevision)
+	, LineageToken(MintLineage())
+	, CachedComponents(Other.CachedComponents)
+{
+}
+
+Structure& Structure::operator=(const Structure& Other)
+{
+	if (this != &Other)
+	{
+		Profiles = Other.Profiles;
+		Bodies = Other.Bodies;
+		Interfaces = Other.Interfaces;
+		HighestStamp = Other.HighestStamp;
+		CurrentRevision = Other.CurrentRevision;
+		CachedComponents = Other.CachedComponents;
+		LineageToken = MintLineage();
+	}
+	return *this;
+}
+
+std::uint64_t Structure::Lineage() const
+{
+	return LineageToken;
 }
 
 Result<ProfileId> Structure::AddProfile(const StrengthProfile& Desc)

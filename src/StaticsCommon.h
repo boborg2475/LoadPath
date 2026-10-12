@@ -5,6 +5,7 @@
 #include "loadpath/CollapseCertificate.h"
 #include "loadpath/Handles.h"
 #include "loadpath/Interface.h"
+#include "loadpath/StandingAuthority.h"
 #include "loadpath/Structure.h"
 #include "loadpath/Vec3.h"
 
@@ -60,6 +61,8 @@ int ComponentOf(const ComponentPartition& Partition, const InterfaceRecord& Reco
 
 // Shared so the combined authority rejects exactly what the certificate rejects.
 bool AreCertificateOptionsValid(const CertificateOptions& Options);
+// Shared so the combined authority rejects exactly what the standing authority rejects.
+bool AreStandingOptionsValid(const StandingOptions& Options);
 
 // Row-major 3x6: the velocity of a point at ArmM from its body's (translation, rotation).
 std::array<double, 18> CornerJacobianRows(const Vec3& ArmM);

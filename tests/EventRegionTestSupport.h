@@ -29,29 +29,17 @@
 namespace loadpath::test
 {
 template <class S>
-constexpr bool HasRevision = requires(const S& Model, BodyId Body) {
-	{ Model.Revision() } -> std::same_as<std::uint64_t>;
-	{ Model.LastTouched(Body) } -> std::same_as<std::uint64_t>;
-};
-
-template <class A>
-constexpr bool HasSolveFilter = requires(const A& X, const Structure& Model, std::span<const BodyLoad> Loads, const StandingOptions& Options, std::span<const BodyId> Only) { X.Solve(Model, Loads, Options, Only); };
-
-template <class A>
-constexpr bool HasJudgePrevious = requires(const A& X, const Structure& Model, std::span<const BodyLoad> Loads, const AuthorityOptions& Options, const AuthorityResult* Previous) { X.Judge(Model, Loads, Options, Previous); };
+constexpr bool HasLineage = requires(const S& Model) { { Model.Lineage() } -> std::same_as<std::uint64_t>; };
 
 template <class R>
-constexpr bool HasReuseFlag = requires(const R& Report) { { Report.bReused } -> std::convertible_to<bool>; };
-
-template <class R>
-constexpr bool HasResultRevision = requires(R& Result) { Result.Revision = std::uint64_t{0}; };
+constexpr bool HasResultLineage = requires(const R& Result) { { Result.Lineage } -> std::convertible_to<std::uint64_t>; };
 
 template <class S>
-std::optional<std::uint64_t> RevisionOf(const S& Model)
+std::optional<std::uint64_t> LineageOf(const S& Model)
 {
-	if constexpr (HasRevision<S>)
+	if constexpr (HasLineage<S>)
 	{
-		return Model.Revision();
+		return Model.Lineage();
 	}
 	else
 	{
@@ -60,93 +48,17 @@ std::optional<std::uint64_t> RevisionOf(const S& Model)
 	}
 }
 
-template <class S>
-std::optional<std::uint64_t> LastTouchedOf(const S& Model, BodyId Body)
-{
-	if constexpr (HasRevision<S>)
-	{
-		return Model.LastTouched(Body);
-	}
-	else
-	{
-		(void)Model;
-		(void)Body;
-		return std::nullopt;
-	}
-}
-
 template <class R>
-std::optional<bool> ReusedOf(const R& Report)
+std::optional<std::uint64_t> ResultLineageOf(const R& Result)
 {
-	if constexpr (HasReuseFlag<R>)
+	if constexpr (HasResultLineage<R>)
 	{
-		return static_cast<bool>(Report.bReused);
-	}
-	else
-	{
-		(void)Report;
-		return std::nullopt;
-	}
-}
-
-template <class R>
-bool SetResultRevision(R& Result, std::uint64_t Revision)
-{
-	if constexpr (HasResultRevision<R>)
-	{
-		Result.Revision = Revision;
-		return true;
+		return static_cast<std::uint64_t>(Result.Lineage);
 	}
 	else
 	{
 		(void)Result;
-		(void)Revision;
-		return false;
-	}
-}
-
-template <class A>
-std::optional<AuthorityResult> JudgeAfter(const A& Authority, const Structure& Model, std::span<const BodyLoad> Loads, const AuthorityOptions& Options, const AuthorityResult* Previous)
-{
-	if constexpr (HasJudgePrevious<A>)
-	{
-		return Authority.Judge(Model, Loads, Options, Previous);
-	}
-	else
-	{
-		(void)Authority;
-		(void)Model;
-		(void)Loads;
-		(void)Options;
-		(void)Previous;
 		return std::nullopt;
-	}
-}
-
-template <class A>
-AuthorityResult JudgeFresh(const A& Authority, const Structure& Model, std::span<const BodyLoad> Loads, const AuthorityOptions& Options)
-{
-	if constexpr (HasJudgePrevious<A>)
-	{
-		return Authority.Judge(Model, Loads, Options, nullptr);
-	}
-	else
-	{
-		return Authority.Judge(Model, Loads, Options);
-	}
-}
-
-template <class A>
-StandingResult ForwardSolve(const A& Inner, const Structure& Model, std::span<const BodyLoad> Loads, const StandingOptions& Options, std::span<const BodyId> Only)
-{
-	if constexpr (HasSolveFilter<A>)
-	{
-		return Inner.Solve(Model, Loads, Options, Only);
-	}
-	else
-	{
-		(void)Only;
-		return Inner.Solve(Model, Loads, Options);
 	}
 }
 
@@ -162,7 +74,6 @@ struct DecideCall
 	std::vector<BodyId> Only;
 };
 
-// Both Solve signatures are declared so the decorator compiles before and after Solve takes a component filter.
 class CountingStanding final : public IStandingAuthority
 {
 public:
@@ -172,16 +83,10 @@ public:
 	{
 	}
 
-	StandingResult Solve(const Structure& Model, std::span<const BodyLoad> Loads, const StandingOptions& Options) const
-	{
-		Calls.push_back(SolveCall{Model.LiveBodyCount(), {}});
-		return ForwardSolve(*Inner, Model, Loads, Options, {});
-	}
-
-	StandingResult Solve(const Structure& Model, std::span<const BodyLoad> Loads, const StandingOptions& Options, std::span<const BodyId> Only) const
+	StandingResult Solve(const Structure& Model, std::span<const BodyLoad> Loads, const StandingOptions& Options, std::span<const BodyId> Only) const override
 	{
 		Calls.push_back(SolveCall{Model.LiveBodyCount(), std::vector<BodyId>(Only.begin(), Only.end())});
-		return ForwardSolve(*Inner, Model, Loads, Options, Only);
+		return Inner->Solve(Model, Loads, Options, Only);
 	}
 
 private:

@@ -64,6 +64,8 @@ struct AuthorityResult
 	InterfaceId InvalidInterface{};
 	// The structure's Revision() when judged.
 	std::uint64_t Revision = 0;
+	// The structure's Lineage() when judged; a Previous from another lineage reuses nothing.
+	std::uint64_t Lineage = 0;
 	// The options this result was judged under; a Previous judged under any other options reuses nothing.
 	AuthorityOptions Options;
 };
