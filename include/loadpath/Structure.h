@@ -94,6 +94,8 @@ private:
 		BodyDesc Desc;
 		bool bLive = false;
 		std::uint64_t Touched = 0;
+		// Ascending slots of every interface ever added against this body, live or not.
+		std::vector<std::uint32_t> Incident;
 	};
 
 	struct InterfaceSlot

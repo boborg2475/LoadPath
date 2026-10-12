@@ -28,26 +28,9 @@ bool Contains(const std::vector<BodyId>& Bodies, BodyId Id)
 	return std::find(Bodies.begin(), Bodies.end(), Id) != Bodies.end();
 }
 
-bool Contains(const std::vector<InterfaceId>& Interfaces, InterfaceId Id)
-{
-	return std::find(Interfaces.begin(), Interfaces.end(), Id) != Interfaces.end();
-}
-
 bool IsLowerSlot(BodyId A, BodyId B)
 {
 	return A.Index < B.Index;
-}
-
-const InterfaceReading* FindReading(const std::vector<InterfaceReading>& Readings, InterfaceId Id)
-{
-	for (const InterfaceReading& Reading : Readings)
-	{
-		if (Reading.Id == Id)
-		{
-			return &Reading;
-		}
-	}
-	return nullptr;
 }
 
 CascadeState FinalState(ComponentVerdict Worst)
@@ -63,13 +46,56 @@ CascadeState FinalState(ComponentVerdict Worst)
 	return CascadeState::Undecided;
 }
 
+constexpr std::size_t NoSlot = std::numeric_limits<std::size_t>::max();
+
+template <typename IdType>
+std::vector<std::size_t> PositionTable(const std::vector<IdType>& Ids)
+{
+	std::size_t Size = 0;
+	for (const IdType Id : Ids)
+	{
+		Size = std::max(Size, static_cast<std::size_t>(Id.Index) + 1);
+	}
+	std::vector<std::size_t> Table(Size, NoSlot);
+	for (std::size_t I = 0; I < Ids.size(); ++I)
+	{
+		if (Table[Ids[I].Index] == NoSlot)
+		{
+			Table[Ids[I].Index] = I;
+		}
+	}
+	return Table;
+}
+
+template <typename IdType>
+std::size_t Lookup(const std::vector<std::size_t>& Table, IdType Id)
+{
+	return Id.Index < Table.size() ? Table[Id.Index] : NoSlot;
+}
+
 struct PendingCluster
 {
 	std::vector<BodyId> Bodies;
 	const ComponentReport* Component = nullptr;
 };
 
-std::vector<PendingCluster> ClustersOf(const Structure& Model, const ComponentReport& Component)
+template <typename IdType>
+void MarkPositions(std::vector<std::size_t>& Table, const std::vector<IdType>& Ids)
+{
+	for (std::size_t I = 0; I < Ids.size(); ++I)
+	{
+		if (Ids[I].Index >= Table.size())
+		{
+			Table.resize(static_cast<std::size_t>(Ids[I].Index) + 1, NoSlot);
+		}
+		if (Table[Ids[I].Index] == NoSlot)
+		{
+			Table[Ids[I].Index] = I;
+		}
+	}
+}
+
+std::vector<PendingCluster> ClustersOf(const Structure& Model, const ComponentReport& Component, const std::vector<std::size_t>& PositionOf, const std::vector<std::size_t>& HingingAt)
 {
 	const std::vector<BodyId>& Released = Component.Release;
 	std::vector<std::size_t> Parent(Released.size());
@@ -78,30 +104,30 @@ std::vector<PendingCluster> ClustersOf(const Structure& Model, const ComponentRe
 	{
 		while (Parent[I] != I)
 		{
+			Parent[I] = Parent[Parent[I]];
 			I = Parent[I];
 		}
 		return I;
 	};
-	const auto IndexOf = [&Released](BodyId Id)
+	for (const BodyId Body : Released)
 	{
-		return static_cast<std::size_t>(std::find(Released.begin(), Released.end(), Id) - Released.begin());
-	};
-	for (const InterfaceId Id : Model.LiveInterfaces())
-	{
-		if (Contains(Component.Hinging, Id))
+		for (const InterfaceId Id : Model.InterfacesOf(Body))
 		{
-			continue;
+			if (Lookup(HingingAt, Id) != NoSlot)
+			{
+				continue;
+			}
+			const InterfaceRecord& Record = Model.Interface(Id);
+			const std::size_t A = Lookup(PositionOf, Record.BodyA);
+			const std::size_t B = Lookup(PositionOf, Record.BodyB);
+			if (A == NoSlot || B == NoSlot)
+			{
+				continue;
+			}
+			const std::size_t RootA = Root(A);
+			const std::size_t RootB = Root(B);
+			Parent[std::max(RootA, RootB)] = std::min(RootA, RootB);
 		}
-		const InterfaceRecord& Record = Model.Interface(Id);
-		const std::size_t A = IndexOf(Record.BodyA);
-		const std::size_t B = IndexOf(Record.BodyB);
-		if (A == Released.size() || B == Released.size())
-		{
-			continue;
-		}
-		const std::size_t RootA = Root(A);
-		const std::size_t RootB = Root(B);
-		Parent[std::max(RootA, RootB)] = std::min(RootA, RootB);
 	}
 	std::vector<PendingCluster> Clusters;
 	std::vector<std::size_t> ClusterOfRoot(Released.size(), Released.size());
@@ -143,6 +169,16 @@ struct CrackCandidate
 
 bool Release(Structure& Model, const AuthorityResult& Judged, std::uint32_t Pass, CascadeVerdict& Verdict, std::vector<BodyId>& ReleasedThisRun)
 {
+	std::vector<std::size_t> PositionOf;
+	std::vector<std::size_t> HingingAt;
+	for (const ComponentReport& Component : Judged.Components)
+	{
+		if (Component.Verdict == ComponentVerdict::Collapses)
+		{
+			MarkPositions(PositionOf, Component.Release);
+			MarkPositions(HingingAt, Component.Hinging);
+		}
+	}
 	std::vector<PendingCluster> Pending;
 	for (const ComponentReport& Component : Judged.Components)
 	{
@@ -150,31 +186,60 @@ bool Release(Structure& Model, const AuthorityResult& Judged, std::uint32_t Pass
 		{
 			continue;
 		}
-		for (PendingCluster& Cluster : ClustersOf(Model, Component))
+		for (PendingCluster& Cluster : ClustersOf(Model, Component, PositionOf, HingingAt))
 		{
 			Pending.push_back(std::move(Cluster));
 		}
 	}
 	std::stable_sort(Pending.begin(), Pending.end(),
 		[](const PendingCluster& A, const PendingCluster& B) { return A.Bodies.front().Index < B.Bodies.front().Index; });
-	for (const PendingCluster& Cluster : Pending)
+	std::vector<InterfaceId> ReadingIds;
+	ReadingIds.reserve(Judged.Readings.size());
+	for (const InterfaceReading& Reading : Judged.Readings)
 	{
+		ReadingIds.push_back(Reading.Id);
+	}
+	const std::vector<std::size_t> ReadingAt = PositionTable(ReadingIds);
+	std::vector<std::size_t> ClusterOfBody;
+	for (std::size_t C = 0; C < Pending.size(); ++C)
+	{
+		for (const BodyId Body : Pending[C].Bodies)
+		{
+			if (Body.Index >= ClusterOfBody.size())
+			{
+				ClusterOfBody.resize(static_cast<std::size_t>(Body.Index) + 1, NoSlot);
+			}
+			ClusterOfBody[Body.Index] = C;
+		}
+	}
+	std::vector<std::vector<InterfaceId>> Crossing(Pending.size());
+	for (const InterfaceId Id : Model.LiveInterfaces())
+	{
+		const InterfaceRecord& Record = Model.Interface(Id);
+		const std::size_t A = Lookup(ClusterOfBody, Record.BodyA);
+		const std::size_t B = Lookup(ClusterOfBody, Record.BodyB);
+		if (A != B)
+		{
+			Crossing[std::min(A, B)].push_back(Id);
+		}
+	}
+	for (std::size_t C = 0; C < Pending.size(); ++C)
+	{
+		const PendingCluster& Cluster = Pending[C];
 		ReleasedCluster Released;
 		Released.Pass = Pass;
 		Released.Bodies = Cluster.Bodies;
 		Released.Motion = MotionOf(*Cluster.Component, Cluster.Bodies.front());
 		Released.LoadFactorLower = Cluster.Component->LoadFactorLower;
 		Released.LoadFactorUpper = Cluster.Component->LoadFactorUpper;
-		for (const InterfaceId Id : Model.LiveInterfaces())
+		for (const InterfaceId Id : Crossing[C])
 		{
-			const InterfaceRecord& Record = Model.Interface(Id);
-			const bool bInA = Contains(Cluster.Bodies, Record.BodyA);
-			const bool bInB = Contains(Cluster.Bodies, Record.BodyB);
-			if (bInA == bInB || !Model.Sever(Id, Pass))
+			if (!Model.Sever(Id, Pass))
 			{
 				continue;
 			}
-			const InterfaceReading* Reading = FindReading(Judged.Readings, Id);
+			const std::size_t At = Lookup(ReadingAt, Id);
+			const InterfaceReading* Reading = At != NoSlot ? &Judged.Readings[At] : nullptr;
 			FailedInterface Failure;
 			Failure.Id = Id;
 			Failure.Pass = Pass;
@@ -205,11 +270,12 @@ bool CrackBand(Structure& Model, const AuthorityResult& Judged, std::uint32_t Pa
 		}
 		std::vector<CrackCandidate> Eligible;
 		double RMax = -Infinity;
+		const std::vector<std::size_t> MemberAt = PositionTable(Component.Bodies);
 		for (const InterfaceReading& Reading : Judged.Readings)
 		{
 			const InterfaceRecord& Record = Model.Interface(Reading.Id);
 			if (!Model.IsLive(Reading.Id) || Record.State != InterfaceState::Intact ||
-				(!Contains(Component.Bodies, Record.BodyA) && !Contains(Component.Bodies, Record.BodyB)))
+				(Lookup(MemberAt, Record.BodyA) == NoSlot && Lookup(MemberAt, Record.BodyB) == NoSlot))
 			{
 				continue;
 			}

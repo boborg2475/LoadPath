@@ -219,6 +219,8 @@ Result<InterfaceId> Structure::AddInterface(const InterfaceDesc& Desc)
 	const InterfaceId Id{static_cast<std::uint32_t>(Interfaces.size()), FirstGeneration};
 	CachedComponents.reset();
 	Interfaces.push_back(InterfaceSlot{Record});
+	Bodies[Desc.BodyA.Index].Incident.push_back(Id.Index);
+	Bodies[Desc.BodyB.Index].Incident.push_back(Id.Index);
 	++CurrentRevision;
 	TouchInterface(Record);
 	return {Id, ModelError::None};
@@ -233,9 +235,10 @@ bool Structure::RemoveBody(BodyId Id)
 	CachedComponents.reset();
 	Bodies[Id.Index].bLive = false;
 	++CurrentRevision;
-	for (InterfaceSlot& Each : Interfaces)
+	for (const std::uint32_t Slot : Bodies[Id.Index].Incident)
 	{
-		if ((Each.Record.BodyA == Id || Each.Record.BodyB == Id) && Each.Record.State != InterfaceState::Severed)
+		InterfaceSlot& Each = Interfaces[Slot];
+		if (Each.Record.State != InterfaceState::Severed)
 		{
 			if (IsLiveState(Each.Record.State))
 			{
@@ -406,12 +409,15 @@ std::vector<InterfaceId> Structure::LiveInterfaces() const
 std::vector<InterfaceId> Structure::InterfacesOf(BodyId Id) const
 {
 	std::vector<InterfaceId> Ids;
-	for (const InterfaceId Each : LiveInterfaces())
+	if (!IsKnown(Id))
 	{
-		const InterfaceRecord& Record = Interfaces[Each.Index].Record;
-		if (Record.BodyA == Id || Record.BodyB == Id)
+		return Ids;
+	}
+	for (const std::uint32_t Slot : Bodies[Id.Index].Incident)
+	{
+		if (IsLiveState(Interfaces[Slot].Record.State))
 		{
-			Ids.push_back(Each);
+			Ids.push_back(InterfaceId{Slot, FirstGeneration});
 		}
 	}
 	return Ids;
