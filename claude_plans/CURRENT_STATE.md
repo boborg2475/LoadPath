@@ -32,8 +32,8 @@ stacks, Paterson–Zwick, Couplet–Heyman at Milankovitch's 0.107478 with hinge
 the certificate's associative 31.07°, the cascade on the arch below least thickness, the dry
 wall at t / H within 1 % (10 × 8 and 4 × 5), the bonded 4 × 5 wall at its monolith factor
 `(t/H)(1 + f_t A_base / W) = 2.971` to 1 %, two screws at twice their published shear and
-withdrawal whatever the joint area. Default suite 334 cases in Debug and 356 in Release after
-the first carried 6b item (325 and 347 at the 6b close) (the arch, pile, arch-cascade, fuzz, small-wall and multi-panel factor anchors
+withdrawal whatever the joint area. Default suite 343 cases in Debug and 366 in Release after
+the carried 6b items 1 to 3 (325 and 347 at the 6b close) (the arch, pile, arch-cascade, fuzz, small-wall and multi-panel factor anchors
 run only in Release under `LOADPATH_SLOW_IN_DEBUG`; nine `Slow.*` cases run in Release at
 every slice close, and the
 cheap `Measure.Scale.*` rows after them); the `Deferred.*` tier holds the physical wedge pin
@@ -154,10 +154,10 @@ cheap `Measure.Scale.*` rows after them); the `Deferred.*` tier holds the physic
      one disagreement against the elastic Mechanism (the verdict flips between 1e-162 and
      1e-163; the fix is the same division by the largest component before the length, and
      `Statics.Ungrounded.ATinyGravityStillFallsAlongIt` then wants its judge pinned to
-     Collapses); the shortcut assembles and scales a sparse stiffness only to test finiteness
-     (about 65 ms on the 1,256-brick remainder; a fold over `ForEachStiffnessBlock` that sums
-     then scales per entry avoids it: done as item 3, in review 2026-10-12, with the
-     agreement sweep in place of the absolute pins);
+     Collapses); an association-order mutant in the shortcut's finiteness fold, `d_i·(K·d_j)`
+     for `(d_i·K)·d_j`, survives the agreement sweep and the review's exact bisection (the
+     two orders agreed to the last bit on every fixture tried); the fold test could adopt that
+     bisection with a twin-joint pair and a six-brick slab (the review's `ProbeFoldTest`);
    - sparse elastic path: the pivot test is pinned by no mutant once the estimate exists; the
      estimate's constructed adversary (a soft mode orthogonal to the ±1 start with a second
      mode within 10³) accepts at λ_min 1e-3 of the bar (worst consequence a 1e-3 equilibrium
@@ -208,16 +208,18 @@ cheap `Measure.Scale.*` rows after them); the `Deferred.*` tier holds the physic
      needs a minimum rotation is still open, and this is the measurement against it;
    - the mechanism selection ignores finite positive shear caps (harmless at `t* = 0`; for
      `0 < t* < 1e-9` it reads Undecided, which fails closed);
-   - in its fix round 2026-10-12 (97a2ff9 plus the cold-review rulings in DESIGN §10 "carried
-     from 6b, items 2 and 3 cold-review rulings": capped entry bounds, per-component release
-     marks, the crack band bucketed, the no-entries certificate): the cascade's release scans
-     and `RemoveBody` are indexed (the crack band is in the fix round), the
-     combined authority consults the certificate once per judge through
-     `CertificateResult::Components`, and the ungrounded shortcut's finiteness check is a
-     fold; 8,000 floating pairs cascade in 67 ms (was 8.8 s), the warehouse base course in
-     314 ms (was 512), the 40 × 32 wall's in 16 ms (was 110) (SCALE.md);
-   - the per-component certificate InvalidInput branch in CombinedAuthority.cpp is
-     unreachable today: fail closed, untested;
+   - from the cascade-scan reviews (pre-existing, logged): the pass loop's load filter
+     (`Contains(ReleasedThisRun, Load.Body)`) and `MotionOf` are linear searches, O(loads ×
+     released) and O(clusters × mechanism) per pass, unmeasured; `FindClean` and the report
+     index call `front()` on a previous report's bodies, undefined for a forged empty list; the
+     sever sweep's cluster-of-body table points at the later cluster if a forged authority
+     lists one body in two components' release lists; the fuzz test could assert after each
+     pass that `InterfacesOf(b)` equals `LiveInterfaces` filtered by endpoint;
+   - the shipped certificate never returns a per-component InvalidInput entry, so that arm of
+     `Consult` is reached only through the no-entries branch (pinned by
+     `Authority.Combined.ACertificateWithNoEntriesReadsInvalidInput`); `std::min(Cap, NaN)`
+     reads the cap, so a NaN component bound would read as standing at the cap (the
+     aggregate's existing expression; for the NaN audit);
    - a cap-0 corner on the inscribed side still uses the inner tension offset min(ft, c/μ):
      conservative, not unsafe;
    - the reverse hinge property only checks that a cluster of listed bodies touches a hinge;

@@ -5,6 +5,7 @@
 
 #include "doctest.h"
 
+#include <algorithm>
 #include <chrono>
 #include <cstddef>
 #include <memory>
@@ -265,10 +266,15 @@ AuthorityResult TwoCollapsesScript(const CrossFixture& F)
 TEST_CASE("Slow.Cascade.Scans.AFieldOfOverstressedBricksCracksInLinearTime")
 {
 	TimeCrackField(CrackFieldBricks);
-	const double SmallMs = TimeCrackField(CrackFieldBricks).Ms;
-	const double LargeMs = TimeCrackField(4 * CrackFieldBricks).Ms;
+	double SmallMs = TimeCrackField(CrackFieldBricks).Ms;
+	double LargeMs = TimeCrackField(4 * CrackFieldBricks).Ms;
+	for (int Repeat = 0; Repeat < 2; ++Repeat)
+	{
+		SmallMs = std::min(SmallMs, TimeCrackField(CrackFieldBricks).Ms);
+		LargeMs = std::min(LargeMs, TimeCrackField(4 * CrackFieldBricks).Ms);
+	}
 	const double Ratio = LargeMs / SmallMs;
-	MESSAGE("overstressed bricks: " << CrackFieldBricks << " in " << SmallMs << " ms, " << 4 * CrackFieldBricks << " in " << LargeMs << " ms, ratio " << Ratio);
+	MESSAGE("overstressed bricks, best of three: " << CrackFieldBricks << " in " << SmallMs << " ms, " << 4 * CrackFieldBricks << " in " << LargeMs << " ms, ratio " << Ratio);
 	CHECK(Ratio < QuadraticRatioBar);
 }
 
@@ -313,5 +319,88 @@ TEST_CASE("Cascade.Scans.AnInterfaceBetweenTwoComponentsMergesNothing")
 		{
 			CHECK_FALSE(SameHandle(Failure.Id, F.InsideY));
 		}
+	}
+}
+
+namespace
+{
+struct DupFixture
+{
+	Structure Model;
+	BodyId B1;
+	BodyId B2;
+	InterfaceId GroundJoint;
+	InterfaceId Between;
+};
+
+DupFixture MakeDupFixture(bool bGroundHoldsB1)
+{
+	DupFixture F;
+	const ProfileId Profile = AddProfileOk(F.Model, DryJoint(0.7));
+	const BodyId Ground = F.Model.AddBody(BrickAt(StackedBrickCentroidM(0), true)).Value;
+	F.B1 = F.Model.AddBody(BrickAt(StackedBrickCentroidM(1))).Value;
+	F.B2 = F.Model.AddBody(BrickAt(StackedBrickCentroidM(2))).Value;
+	F.GroundJoint = AddInterfaceOk(F.Model, BedJoint(Ground, bGroundHoldsB1 ? F.B1 : F.B2, 1, Profile));
+	F.Between = AddInterfaceOk(F.Model, BedJoint(F.B1, F.B2, 2, Profile));
+	return F;
+}
+
+AuthorityResult ReleaseScript(const DupFixture& F, std::vector<std::vector<BodyId>> Releases)
+{
+	AuthorityResult Script;
+	Script.Worst = ComponentVerdict::Collapses;
+	for (const std::vector<BodyId>& Release : Releases)
+	{
+		ComponentReport Component;
+		Component.Bodies = Release;
+		Component.Verdict = ComponentVerdict::Collapses;
+		Component.Release = Release;
+		Script.Components.push_back(Component);
+	}
+	for (const InterfaceId Id : F.Model.LiveInterfaces())
+	{
+		InterfaceReading Reading;
+		Reading.Id = Id;
+		Script.Readings.push_back(Reading);
+	}
+	return Script;
+}
+
+std::vector<InterfaceId> FailureIds(const CascadeVerdict& V)
+{
+	std::vector<InterfaceId> Ids;
+	for (const FailedInterface& Failure : V.Failures)
+	{
+		Ids.push_back(Failure.Id);
+	}
+	return Ids;
+}
+}
+
+TEST_CASE("Cascade.Scans.AReleasedBodyListedTwiceSeversAsTheSequentialRuleSays")
+{
+	SUBCASE("one body in two components' release lists")
+	{
+		DupFixture F = MakeDupFixture(false);
+		const CascadeVerdict V = RunScripted(F.Model, {ReleaseScript(F, {{F.B1}, {F.B1, F.B2}}), StandsScript()});
+		INFO(DescribeVerdict(V));
+		REQUIRE(V.Clusters.size() == 2u);
+		CHECK(SameIdList(V.Clusters[0].Bodies, {F.B1}));
+		CHECK(SameIdList(V.Clusters[0].Severed, {F.Between}));
+		CHECK(SameIdList(V.Clusters[1].Bodies, {F.B1, F.B2}));
+		CHECK(SameIdList(V.Clusters[1].Severed, {F.GroundJoint}));
+		CHECK(SameIdList(FailureIds(V), {F.GroundJoint, F.Between}));
+	}
+	SUBCASE("one body twice in one component's release list")
+	{
+		DupFixture F = MakeDupFixture(true);
+		const CascadeVerdict V = RunScripted(F.Model, {ReleaseScript(F, {{F.B2, F.B1, F.B1}}), StandsScript()});
+		INFO(DescribeVerdict(V));
+		REQUIRE(V.Clusters.size() == 2u);
+		CHECK(SameIdList(V.Clusters[0].Bodies, {F.B1, F.B2}));
+		CHECK(SameIdList(V.Clusters[0].Severed, {F.GroundJoint}));
+		CHECK(SameIdList(V.Clusters[1].Bodies, {F.B1}));
+		CHECK(V.Clusters[1].Severed.empty());
+		CHECK(SameIdList(FailureIds(V), {F.GroundJoint}));
 	}
 }

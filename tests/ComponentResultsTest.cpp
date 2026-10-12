@@ -191,10 +191,19 @@ void CheckEveryComponent(const R& Whole, const ThreeComponents& F, const IStandi
 constexpr int JudgeDraws = 40;
 constexpr std::uint64_t JudgeSeedBase = 0x6b1b2ull;
 
-void CheckJudgeMatchesEachComponentAlone(std::uint64_t Seed, int& ComponentsSeen, int& Consulted, int& Mismatches)
+bool SameBound(double A, double B)
 {
-	const MultiDraw D = MakeMultiDraw(Seed);
-	INFO("seed " << Seed << ": " << D.Description);
+	return A == B || (std::isnan(A) && std::isnan(B));
+}
+
+void CheckJudgeMatchesEachComponentAlone(std::uint64_t Seed, double Cap, int& ComponentsSeen, int& Consulted, int& Mismatches)
+{
+	MultiDraw D = MakeMultiDraw(Seed);
+	if (Cap > 0.0)
+	{
+		D.Options.Certificate.LoadFactorCap = Cap;
+	}
+	INFO("seed " << Seed << " (cap " << D.Options.Certificate.LoadFactorCap << "): " << D.Description);
 	const AuthorityResult Whole = Judge(D.Model, D.Options, D.Loads);
 	INFO("whole: " << DescribeAuthority(Whole));
 	CHECK(Whole.Worst != ComponentVerdict::InvalidInput);
@@ -224,15 +233,15 @@ void CheckJudgeMatchesEachComponentAlone(std::uint64_t Seed, int& ComponentsSeen
 				++Mismatched;
 			}
 		}
-		const bool bSame = SameIdList(Got.Bodies, Want.Bodies) && Got.Verdict == Want.Verdict && Got.Elastic == Want.Elastic && Got.Kinematic == Want.Kinematic && Got.bConsultedCertificate == Want.bConsultedCertificate && Near(Got.LoadFactorLower, Want.LoadFactorLower, 1.0e-9) && Near(Got.LoadFactorUpper, Want.LoadFactorUpper, 1.0e-9) && Mismatched == 0;
+		const bool bSame = SameIdList(Got.Bodies, Want.Bodies) && Got.Verdict == Want.Verdict && Got.Elastic == Want.Elastic && Got.Kinematic == Want.Kinematic && Got.bConsultedCertificate == Want.bConsultedCertificate && SameBound(Got.LoadFactorLower, Want.LoadFactorLower) && SameBound(Got.LoadFactorUpper, Want.LoadFactorUpper) && Mismatched == 0;
 		Mismatches += bSame ? 0 : 1;
 		CHECK(SameIdList(Got.Bodies, Want.Bodies));
 		CHECK(Got.Verdict == Want.Verdict);
 		CHECK(Got.Elastic == Want.Elastic);
 		CHECK(Got.Kinematic == Want.Kinematic);
 		CHECK(Got.bConsultedCertificate == Want.bConsultedCertificate);
-		CHECK(Near(Got.LoadFactorLower, Want.LoadFactorLower, 1.0e-9));
-		CHECK(Near(Got.LoadFactorUpper, Want.LoadFactorUpper, 1.0e-9));
+		CHECK(SameBound(Got.LoadFactorLower, Want.LoadFactorLower));
+		CHECK(SameBound(Got.LoadFactorUpper, Want.LoadFactorUpper));
 		CHECK_MESSAGE(Mismatched == 0, Mismatched << " of " << Reference.Readings.size() << " readings differ from the component alone");
 	}
 }
@@ -429,15 +438,18 @@ TEST_CASE("Structure.Components.IsCachedUntilAMutation")
 
 TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Authority.Judge.MatchesSolvingEachComponentAlone")
 {
-	int ComponentsSeen = 0;
-	int Consulted = 0;
-	int Mismatches = 0;
-	for (int Draw = 0; Draw < JudgeDraws; ++Draw)
+	for (const double Cap : {0.0, 1.2})
 	{
-		CheckJudgeMatchesEachComponentAlone(JudgeSeedBase + static_cast<std::uint64_t>(Draw), ComponentsSeen, Consulted, Mismatches);
+		int ComponentsSeen = 0;
+		int Consulted = 0;
+		int Mismatches = 0;
+		for (int Draw = 0; Draw < JudgeDraws; ++Draw)
+		{
+			CheckJudgeMatchesEachComponentAlone(JudgeSeedBase + static_cast<std::uint64_t>(Draw), Cap, ComponentsSeen, Consulted, Mismatches);
+		}
+		MESSAGE("judge per component (cap " << (Cap > 0.0 ? Cap : CertificateOptions{}.LoadFactorCap) << "): " << JudgeDraws << " draws, " << ComponentsSeen << " components, " << Consulted << " consulted the certificate, " << Mismatches << " differ from the component alone");
+		CHECK(Consulted >= 1);
 	}
-	MESSAGE("judge per component: " << JudgeDraws << " draws, " << ComponentsSeen << " components, " << Consulted << " consulted the certificate, " << Mismatches << " differ from the component alone");
-	CHECK(Consulted >= 1);
 }
 
 namespace
