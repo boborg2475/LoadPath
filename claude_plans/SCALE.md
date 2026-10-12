@@ -185,3 +185,18 @@ the stage-2 target of 200 ms is for the WARM case (a previous verdict in hand, o
 dirty), which the harness does not yet measure: a `Measure.Scale.*Warm` row that judges once,
 removes the post and runs the cascade with that verdict as Previous is owed. The course
 cascades are the one dense solve of the rank-deficient floating remainder (CURRENT_STATE).
+
+## Warm rows (2026-10-12, HEAD 2ccc878): a previous verdict in hand
+
+`Measure.Scale.ShedPostRemovedWarm` and `WarehousePostRemovedWarm` judge once, remove the
+same post as the cold row, and cascade with that verdict as Previous (stage 2):
+
+| Structure | First judge | Warm cascade, one post removed | Reused | Cold cascade (row above) |
+|---|---|---|---|---|
+| Shed | 36 ms | 59 ms, 0 passes | 4 of 5 | 93 ms |
+| Warehouse | 488 ms | **254 ms**, 0 passes | 4 of 5 | 698 ms |
+
+The stage-2 target (200 ms when only the frame is touched) is missed by 54 ms on a loaded
+machine; the review measured the same case at 317 ms with 225 ms of it the frame's own
+certificate (one Solve on the frame's 33 bodies is 52 ms, everything else about 40 ms). The
+event region has done its part; the remainder is stage 3's.
