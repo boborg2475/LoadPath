@@ -186,9 +186,18 @@ TEST_CASE("Statics.Ungrounded.AFloatingPairIsAMechanismWithoutIterating")
 		CheckUncertifiedReadings(R, 1);
 		CheckCornerPointsMatchAGroundedSolve(R, P.Joint);
 	}
-	SUBCASE("a sideways push on the upper brick")
+	SUBCASE("a sideways push on the upper brick takes the full solve")
 	{
 		const BodyLoad Loads[] = {BodyLoad{P.Upper, Vec3{30.0, 0.0, 0.0}, BrickShape(0.0, 2).CentreM}};
+		const StandingResult R = SolveWith(Model, StandingOptions{}, Loads);
+		Characterise(R);
+		CHECK(R.State == StandingState::Mechanism);
+		CHECK(R.ActiveSetIterations >= 1);
+		CHECK(R.UnconstrainedBodies.size() == 2u);
+	}
+	SUBCASE("a zero-force load is no load")
+	{
+		const BodyLoad Loads[] = {BodyLoad{P.Upper, Vec3{0.0, 0.0, 0.0}, BrickShape(0.0, 2).CentreM}};
 		const StandingResult R = SolveWith(Model, StandingOptions{}, Loads);
 		Characterise(R);
 		CheckRigidFall(R, {P.Lower, P.Upper}, Vec3{0.0, 0.0, -1.0});
@@ -351,22 +360,4 @@ TEST_CASE("Statics.Ungrounded.TheFallFollowsATiltedGravity")
 	const StandingResult R = SolveWith(Model, AuthorityTilted(0.5).Standing);
 	Characterise(R);
 	CheckRigidFall(R, {P.Lower, P.Upper}, Vec3{std::tan(0.5), 0.0, -1.0});
-}
-
-TEST_CASE("Cascade.Ungrounded.ALiftedFloatingPairSeversWithNoReason")
-{
-	Structure Model;
-	const ProfileId Profile = AddProfileOk(Model, DryJoint(0.7));
-	AddGroundPlane(Model);
-	const FloatingPair P = AddFloatingPair(Model, Profile, 0.0);
-	const BodyLoad Lift[] = {BodyLoad{P.Upper, Vec3{0.0, 0.0, 100.0}, BrickShape(0.0, 2).CentreM}};
-	const CascadeVerdict V = CascadeWith(Model, AuthorityOptions{}, Lift);
-	MESSAGE("cascade " << static_cast<int>(V.State) << ", passes " << V.Passes << ", clusters " << V.Clusters.size() << ", failures " << V.Failures.size());
-	REQUIRE(V.Failures.size() == 1u);
-	const FailedInterface& F = V.Failures[0];
-	INFO("failure " << F.Id.Index << ": axis " << F.Axis << ", ratio " << F.Ratio << ", severed " << F.bSevered);
-	CHECK(SameHandle(F.Id, P.Joint));
-	CHECK(F.bSevered);
-	CHECK(F.Axis == GoverningAxis::None);
-	CHECK(F.Ratio == 0.0);
 }

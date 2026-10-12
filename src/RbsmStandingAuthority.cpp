@@ -71,6 +71,7 @@ struct Problem
 	Eigen::VectorXd Scaling;
 	double ForceScaleN = 0;
 	bool bGrounded = false;
+	bool bHostLoaded = false;
 };
 
 using IndexVector = Eigen::Matrix<Eigen::Index, Eigen::Dynamic, 1>;
@@ -205,6 +206,7 @@ std::vector<Problem> BuildProblems(const Structure& Model, std::span<const BodyL
 			Problem& P = Problems[static_cast<std::size_t>(Partition.ComponentOfSlot[Load.Body.Index] + 1)];
 			AddForceAt(P.AppliedLoad, Offset, Model.Body(Load.Body).CentroidM, Load.PointM, Load.ForceN);
 			P.ForceScaleN += Length(Load.ForceN);
+			P.bHostLoaded = P.bHostLoaded || Load.ForceN.X != 0.0 || Load.ForceN.Y != 0.0 || Load.ForceN.Z != 0.0;
 		}
 	}
 	for (std::size_t Slot = 0; Slot < Interfaces.size(); ++Slot)
@@ -853,7 +855,7 @@ StandingResult FallRigid(const Problem& P, const StandingOptions& Options)
 	StandingResult Result;
 	Result.State = StandingState::Mechanism;
 	const double Largest = std::max({std::abs(Options.Gravity.X), std::abs(Options.Gravity.Y), std::abs(Options.Gravity.Z)});
-	const Vec3 Fall = Largest > 0.0 ? Scale(1.0 / Largest, Options.Gravity) : Vec3{0.0, 0.0, -1.0};
+	const Vec3 Fall = Scale(1.0 / Largest, Options.Gravity);
 	for (const BodyId Id : P.FreeBodies)
 	{
 		Result.UnconstrainedBodies.push_back(Id);
@@ -884,8 +886,14 @@ StandingResult SolveProblem(const Problem& P, const StandingOptions& Options)
 		Result.State = bOverstressed ? StandingState::Overstressed : StandingState::Stands;
 		return Result;
 	}
-	if (!P.bGrounded)
+	const bool bGravity = Options.Gravity.X != 0.0 || Options.Gravity.Y != 0.0 || Options.Gravity.Z != 0.0;
+	if (!P.bGrounded && !P.bHostLoaded && bGravity)
 	{
+		if (!IsAllFinite(AssembleScaledSparseStiffness(P, States)))
+		{
+			Result.State = StandingState::InvalidInput;
+			return Result;
+		}
 		return FallRigid(P, Options);
 	}
 	std::vector<JointState> FullRankStates;
