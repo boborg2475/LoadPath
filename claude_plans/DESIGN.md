@@ -438,3 +438,16 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   keep an uncracked bonded run as one body) is contracted against those numbers, not before
   them. The generator is a producer above the engine like the wall (DESIGN §2.1): no solver
   code includes it. Slice 8, the Unreal adapter, is on hold by owner directive (2026-10-11).
+- *2026-10-11, orchestrator, slice 6a first finding:* **a floating component falls rigid.** The
+  measurement's course removal showed the cascade cutting a floating wall into one cluster per
+  brick with every joint severed (dry joints at `Tension inf`, bonded joints at ratios of
+  0.002 to 0.37), because at `t* = 0` every motion is a mechanism and the certificate's
+  selection picked one with relative motion at every joint; on the 10 × 8 wall the selected
+  motion did not even cover the top bricks, which left for a second pass. Ruled: the mechanism
+  selection prefers the motion with the least joint movement (an L1 measure of opening and
+  sliding over the joints, at unit external work), so a component with no path to the ground
+  selects the rigid fall, lists no hinging joint, and the cascade releases it as one cluster
+  with nothing severed. A severed joint must also never carry a reading of `inf` as its
+  reason: a joint released by a rigid fall has no failure. The Release measurement read this
+  same case Undecided with zero passes where Debug read Collapses: a build-dependent answer
+  from the interior point at `t* ≈ 1e-12` is the second thing the dev round must explain.

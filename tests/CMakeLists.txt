@@ -33,6 +33,7 @@ add_executable(loadpath_tests
 	GeometryAnchorsTest.cpp
 	DryCornerNoiseFloorTest.cpp
 	CascadeFuzzTest.cpp
+	CascadeFloatingWallTest.cpp
 	GeometryWarehouseTest.cpp
 	ScaleMeasurementTest.cpp)
 target_link_libraries(loadpath_tests PRIVATE loadpath doctest)
