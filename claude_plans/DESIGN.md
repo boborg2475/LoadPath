@@ -685,3 +685,23 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   0.8 of dense on the shed) rather than the 6.5 s ceiling the brief asked for, which the
   timing-test ruling forbids; both referees (`FactorKind::Reference`, `CapSiteKind::Dense`)
   go at the 6b close.
+- *2026-10-12, orchestrator, stage 2 second amendment (from the cold review):* **a verdict
+  belongs to one structure's lineage, and the judge validates its options before it matches
+  anything.** A copied `Structure` copies the revision and the stamps, so two histories
+  forked from one copy number their revisions identically, and a verdict from the fork was
+  matched and reused on the original (the review's repro: crack A's bed on the copy, crack
+  B's on the original, judge the original with the copy's verdict: A read Collapses where a
+  fresh judge reads Stands). So `Structure` carries a lineage token minted at construction
+  and by every copy construction and copy assignment (a move keeps it; mutations keep it),
+  `AuthorityResult` records it, and a mismatch reuses nothing. And the standing options are
+  validated in `Judge` before matching, since `Solve` is skipped when nothing is dirty and
+  `PivotToleranceRelative = 0` with a clean verdict returned the copied verdict instead of
+  InvalidInput; the conditions are `FindInvalidInput`'s (tolerance in (0, 1) and finite,
+  MaxActiveSetIterations at least 1). The review also found the free-end rule for ground
+  readings unreachable (every unsolved interface belongs to a clean component), kept as
+  documented defence; the live-neighbour stamp redundant with the body-list match (kept, it
+  is what the ruling says); and five behaviours unpinned (the first-pass Previous of `Run`,
+  the re-judge after the cap, a moved load point, a load on a dead body with nothing dirty,
+  a ground contact added to a loose brick), pinned in the fix round. Measured by the review
+  on the warehouse: a judge with Previous after one post removed is 317 ms against 558 ms
+  fresh (4 of 5 reused), of which the frame's own certificate is about 225 ms.

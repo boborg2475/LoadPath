@@ -9,7 +9,6 @@
 
 #include "loadpath/Catalogue.h"
 #include "loadpath/CollapseCertificate.h"
-#include "loadpath/geometry/Warehouse.h"
 
 #include "doctest.h"
 
@@ -186,34 +185,6 @@ std::vector<SparseCase> SparseCases()
 	return Cases;
 }
 
-geometry::WarehouseSpec ShedSpec()
-{
-	geometry::WarehouseSpec Spec;
-	Spec.LengthBricks = 12;
-	Spec.WidthBricks = 8;
-	Spec.Courses = 10;
-	Spec.Bays = 2;
-	Spec.PlanksPerBay = 3;
-	Spec.Openings = {geometry::Opening{0, 5, 2, 0, 7}, geometry::Opening{2, 3, 2, 4, 8}};
-	return Spec;
-}
-
-Structure Shed()
-{
-	const CatalogueResult Loaded = LoadCatalogue(ReadCatalogueFile());
-	INFO("line " << Loaded.Error.Line << ": " << Loaded.Error.Message);
-	REQUIRE(Loaded.Ok());
-	const FastenerRow Screw = FastenerOrFail(Loaded.Value, "ec5_screw_8x60_steel_to_glulam");
-	Structure Model;
-	geometry::WarehouseSpec Spec = ShedSpec();
-	Spec.Bed = AddProfileOk(Model, JointOrFail(Loaded.Value, "clay_gp_mortar_bed_ec6").Profile);
-	Spec.Perpend = AddProfileOk(Model, JointOrFail(Loaded.Value, "clay_gp_mortar_perpend_ec6").Profile);
-	Spec.Bearing = AddProfileOk(Model, JointOrFail(Loaded.Value, "c24_bearing_perp_to_grain").Profile);
-	Spec.Plank = AddProfileOk(Model, FastenerProfile(Screw, 2, Spec.PlankWidthM * Spec.BeamWidthM));
-	geometry::BuildWarehouse(Model, Spec);
-	return Model;
-}
-
 constexpr double ArchFriction = 0.7;
 constexpr double ArchLeastEta = 0.107478;
 constexpr double ArchEtaTolerance = 1.0e-5;
@@ -221,6 +192,10 @@ constexpr double PileLambda = 0.5005;
 constexpr double PileLambdaTolerance = 1.0e-3;
 constexpr double WedgeToleranceDeg = 0.05;
 constexpr double BoundaryWallLateral = 0.8;
+constexpr int LargeWallCourses = 20;
+constexpr int LargeWallBricks = 15;
+constexpr int LargeWallRowLimit = 600;
+constexpr double LargeWallRatioCeiling = 0.67;
 }
 
 TEST_CASE("Certificate.Sparse.AgreesWithTheDensePath")
@@ -296,24 +271,33 @@ TEST_CASE("Certificate.Sparse.ADenseFixtureKeepsItsPath")
 }
 
 #if defined(NDEBUG)
-TEST_CASE("Slow.Certificate.Sparse.TheShedCertificateIsNoSlowerThanDense")
+TEST_CASE("Slow.Certificate.Sparse.IsFasterThanDenseOnALargeComponent")
 {
 	RequireTheRowLimitExists();
-	const Structure Model = Shed();
-	Clock::time_point Start = Clock::now();
-	const CertificateResult Dense = DecideWith(Model, WithDenseRowLimit(CertificateOptions{}, INT_MAX));
-	const double DenseSeconds = SecondsSince(Start);
-	Start = Clock::now();
-	const CertificateResult Sparse = DecideWith(Model, CertificateOptions{});
-	const double SparseSeconds = SecondsSince(Start);
-	const double Ratio = SparseSeconds / DenseSeconds;
-	MESSAGE(std::setprecision(10) << "shed certificate dense " << Dense.State << " [" << Dense.LoadFactorLower << ", " << Dense.LoadFactorUpper << "] in " << Dense.Iterations << " iterations, " << DenseSeconds << " s; sparse " << Sparse.State << " [" << Sparse.LoadFactorLower << ", " << Sparse.LoadFactorUpper << "] in " << Sparse.Iterations << " iterations, " << SparseSeconds << " s; ratio " << Ratio);
+	const Structure Model = Ec6Wall(LargeWallCourses, LargeWallBricks);
+	const CertificateOptions Sparse = WithDenseRowLimit(CertificateOptions{}, LargeWallRowLimit);
+	const CertificateOptions Dense = WithDenseRowLimit(CertificateOptions{}, INT_MAX);
+	double DenseMin = 1.0e300;
+	double SparseMin = 1.0e300;
+	CertificateResult DenseResult;
+	CertificateResult SparseResult;
+	for (int Round = 0; Round < 2; ++Round)
+	{
+		Clock::time_point Start = Clock::now();
+		DenseResult = DecideWith(Model, Dense);
+		DenseMin = std::min(DenseMin, SecondsSince(Start));
+		Start = Clock::now();
+		SparseResult = DecideWith(Model, Sparse);
+		SparseMin = std::min(SparseMin, SecondsSince(Start));
+	}
+	const double Ratio = SparseMin / DenseMin;
+	MESSAGE(std::setprecision(10) << "ec6 " << LargeWallCourses << " x " << LargeWallBricks << " wall, " << Model.LiveBodyCount() << " live bodies: dense " << DenseResult.State << " [" << DenseResult.LoadFactorLower << ", " << DenseResult.LoadFactorUpper << "] in " << DenseResult.Iterations << " iterations, min " << DenseMin << " s; sparse " << SparseResult.State << " [" << SparseResult.LoadFactorLower << ", " << SparseResult.LoadFactorUpper << "] in " << SparseResult.Iterations << " iterations, min " << SparseMin << " s; ratio " << Ratio);
 	SparseGaps G;
-	CHECK(Dense.State == CertificateState::Stands);
-	CHECK(Sparse.State == Dense.State);
-	CHECK(NearLoadFactor(Sparse.LoadFactorLower, Dense.LoadFactorLower, G));
-	CHECK(NearLoadFactor(Sparse.LoadFactorUpper, Dense.LoadFactorUpper, G));
-	CHECK(Ratio <= 1.0);
+	CHECK(DenseResult.State == CertificateState::Stands);
+	CHECK(SparseResult.State == DenseResult.State);
+	CHECK(NearLoadFactor(SparseResult.LoadFactorLower, DenseResult.LoadFactorLower, G));
+	CHECK(NearLoadFactor(SparseResult.LoadFactorUpper, DenseResult.LoadFactorUpper, G));
+	CHECK(Ratio < LargeWallRatioCeiling);
 }
 #endif
 

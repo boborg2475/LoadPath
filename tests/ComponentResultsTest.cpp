@@ -348,6 +348,24 @@ TEST_CASE("Certificate.Decide.AComponentFilterReadsAsTheComponentAlone")
 	}
 }
 
+TEST_CASE("Certificate.Decide.AFilterNamingTwoComponentsReadsAsThoseTwoAlone")
+{
+	const ThreeComponents F = MakeThreeComponents();
+	const std::unique_ptr<ICollapseCertificate> Certificate = MakeLimitAnalysisCertificate();
+	const CertificateOptions Options;
+	std::vector<BodyId> Both = F.Parts[0];
+	Both.insert(Both.end(), F.Parts[1].begin(), F.Parts[1].end());
+	const std::vector<BodyId> Only{F.Parts[1][0], F.Parts[0][0], F.Parts[0][0]};
+	const CertificateResult StackAlone = ForwardDecide(*Certificate, KeepOnly(F.Model, F.Parts[0]), LoadsOn(F.Loads, F.Parts[0]), Options, {});
+	const CertificateResult PushedAlone = ForwardDecide(*Certificate, KeepOnly(F.Model, F.Parts[1]), LoadsOn(F.Loads, F.Parts[1]), Options, {});
+	CHECK(StackAlone.State == CertificateState::Stands);
+	CHECK(PushedAlone.State == CertificateState::Collapses);
+	const CertificateResult Want = ForwardDecide(*Certificate, KeepOnly(F.Model, Both), LoadsOn(F.Loads, Both), Options, {});
+	const std::optional<CertificateResult> Got = DecideFiltered(*Certificate, F.Model, F.Loads, Options, Only);
+	REQUIRE(Got.has_value());
+	CheckSameCertificate(*Got, Want);
+}
+
 TEST_CASE("Structure.Components.IsCachedUntilAMutation")
 {
 	Structure Model;
@@ -388,14 +406,25 @@ TEST_CASE("Structure.Components.IsCachedUntilAMutation")
 	CHECK(First->second == 2u);
 	CHECK(Second->first == First->first);
 	CHECK(Second->second == 2u);
+	AddBox(Model, BrickShape(5.0));
+	const auto Grown = PartitionOf(Model);
+	CHECK(Grown->second == 3u);
+	CHECK(Model.AddProfile(DryJoint(0.5)).Ok());
+	const auto AfterProfile = PartitionOf(Model);
+	CHECK(AfterProfile->first == Grown->first);
+	CHECK(AfterProfile->second == 3u);
+	CHECK(Model.MarkPass(5));
+	const auto AfterPass = PartitionOf(Model);
+	CHECK(AfterPass->first == Grown->first);
+	CHECK(AfterPass->second == 3u);
 	CHECK(Model.RemoveBody(Row[1]));
-	CHECK(PartitionOf(Model)->second == 3u);
-	CHECK(Model.Sever(PairJoint, 1));
 	CHECK(PartitionOf(Model)->second == 4u);
+	CHECK(Model.Sever(PairJoint, 6));
+	CHECK(PartitionOf(Model)->second == 5u);
 	AddInterfaceOk(Model, PairHead);
-	CHECK(PartitionOf(Model)->second == 3u);
-	CHECK(Model.Crack(FirstBed, 2));
-	CHECK(PartitionOf(Model)->second == 3u);
+	CHECK(PartitionOf(Model)->second == 4u);
+	CHECK(Model.Crack(FirstBed, 7));
+	CHECK(PartitionOf(Model)->second == 4u);
 }
 
 TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Authority.Judge.MatchesSolvingEachComponentAlone")
