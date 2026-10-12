@@ -555,6 +555,13 @@ bool IsGapIndeterminate(const Problem& P, const Joint& J, std::size_t C, const s
 	});
 }
 
+void ReEnterSlipping(const Joint& J, std::size_t C, const Vec3& TangentialMotionM, double FullRankNormalN, JointState& State)
+{
+	State.Status[C] = CornerStatus::Slipping;
+	State.HeldN[C] = HeldForce(Scale(-1.0, TangentialMotionM), SlipCapacityN(J, FullRankNormalN));
+	State.TransverseNPerM[C] = 0.0;
+}
+
 UpdateOutcome UpdateActiveSet(const Problem& P, const Eigen::VectorXd& X, const std::vector<Eigen::VectorXd>& NeutralMotions, std::vector<JointState>& States)
 {
 	UpdateOutcome Outcome;
@@ -581,7 +588,16 @@ UpdateOutcome UpdateActiveSet(const Problem& P, const Eigen::VectorXd& X, const 
 				const bool bLoaded = bDry ? T.NormalN > 2.0 * NoiseFloorN : T.GapM <= 0.0;
 				if (bLoaded && !IsGapIndeterminate(P, J, C, NeutralMotions))
 				{
-					Status = CornerStatus::Stuck;
+					const double ClosingCapacityN = SlipCapacityN(J, T.NormalN);
+					if (J.bReleasesSlip && Length(T.ShearN) > ClosingCapacityN)
+					{
+						ReEnterSlipping(J, C, Scale(-1.0, T.ShearN), T.NormalN, State);
+						TransverseNPerM = TransverseStiffnessNPerM(J, T.ShearN, ClosingCapacityN);
+					}
+					else
+					{
+						Status = CornerStatus::Stuck;
+					}
 					Outcome.bStatusChanged = true;
 				}
 				continue;
@@ -627,13 +643,6 @@ UpdateOutcome UpdateActiveSet(const Problem& P, const Eigen::VectorXd& X, const 
 		}
 	}
 	return Outcome;
-}
-
-void ReEnterSlipping(const Joint& J, std::size_t C, const Vec3& TangentialMotionM, double FullRankNormalN, JointState& State)
-{
-	State.Status[C] = CornerStatus::Slipping;
-	State.HeldN[C] = HeldForce(Scale(-1.0, TangentialMotionM), SlipCapacityN(J, FullRankNormalN));
-	State.TransverseNPerM[C] = 0.0;
 }
 
 Restoration RestoreInadmissibleReleases(const Problem& P, const Eigen::VectorXd& Motion, const std::vector<JointState>* FullRankStates, const Eigen::VectorXd& FullRankX, std::vector<JointState>& States)
