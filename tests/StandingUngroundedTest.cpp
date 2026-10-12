@@ -361,3 +361,69 @@ TEST_CASE("Statics.Ungrounded.TheFallFollowsATiltedGravity")
 	Characterise(R);
 	CheckRigidFall(R, {P.Lower, P.Upper}, Vec3{std::tan(0.5), 0.0, -1.0});
 }
+
+namespace
+{
+BodyId AddStiffFloatingPair(Structure& Model, double StiffnessPaPerM)
+{
+	StrengthProfile Stiff = DryJoint(0.7);
+	Stiff.NormalStiffnessPaPerM = StiffnessPaPerM;
+	Stiff.TangentialStiffnessPaPerM = StiffnessPaPerM;
+	const ProfileId Profile = AddProfileOk(Model, Stiff);
+	AddGroundPlane(Model);
+	const Box LowerShape = BoxOfDensity(Vec3{0.0, 0.0, 15.0}, Vec3{5.0, 5.0, 5.0}, 2000.0);
+	const Box UpperShape = BoxOfDensity(Vec3{0.0, 0.0, 25.0}, Vec3{5.0, 5.0, 5.0}, 2000.0);
+	const BodyId Lower = AddBox(Model, LowerShape);
+	const BodyId Upper = AddBox(Model, UpperShape);
+	AddInterfaceOk(Model, *StackedFaces(Lower, LowerShape, Upper, UpperShape, Profile));
+	return Upper;
+}
+}
+
+TEST_CASE("Statics.Ungrounded.AnOverflowingFloatingPairIsInvalidInputAsOnTheFullPath")
+{
+	for (const double Stiffness : {5.0e304, 1.0e305})
+	{
+		INFO("stiffness " << Stiffness << " Pa/m");
+		{
+			INFO("unloaded");
+			Structure Model;
+			AddStiffFloatingPair(Model, Stiffness);
+			const StandingResult R = SolveWith(Model, StandingOptions{});
+			Characterise(R);
+			CHECK(R.State == StandingState::InvalidInput);
+			CHECK(JudgeWith(Model, AuthorityOptions{}).Worst == ComponentVerdict::InvalidInput);
+			const CascadeVerdict V = CascadeWith(Model, AuthorityOptions{});
+			CHECK(V.State == CascadeState::InvalidInput);
+			CHECK(V.Clusters.empty());
+		}
+		{
+			INFO("a 1 N push on the upper box");
+			Structure Model;
+			const BodyId Upper = AddStiffFloatingPair(Model, Stiffness);
+			const BodyLoad Loads[] = {BodyLoad{Upper, Vec3{1.0, 0.0, 0.0}, Vec3{0.0, 0.0, 25.0}}};
+			const StandingResult R = SolveWith(Model, StandingOptions{}, Loads);
+			Characterise(R);
+			CHECK(R.State == StandingState::InvalidInput);
+			CHECK(JudgeWith(Model, AuthorityOptions{}, Loads).Worst == ComponentVerdict::InvalidInput);
+			const CascadeVerdict V = CascadeWith(Model, AuthorityOptions{}, Loads);
+			CHECK(V.State == CascadeState::InvalidInput);
+			CHECK(V.Clusters.empty());
+		}
+	}
+}
+
+TEST_CASE("Statics.Ungrounded.ATinyGravityStillFallsAlongIt")
+{
+	Structure Model;
+	const ProfileId Profile = AddProfileOk(Model, DryJoint(0.7));
+	AddGroundPlane(Model);
+	const FloatingPair P = AddFloatingPair(Model, Profile, 0.0);
+	const AuthorityOptions Tiny = AuthorityUnderGravity(Vec3{0.0, 0.0, -1.0e-310});
+	const StandingResult R = SolveWith(Model, Tiny.Standing);
+	Characterise(R);
+	CheckRigidFall(R, {P.Lower, P.Upper}, Vec3{0.0, 0.0, -1.0});
+	const AuthorityResult A = JudgeWith(Model, Tiny);
+	MESSAGE("judge worst " << static_cast<int>(A.Worst) << ", disagreements " << A.Disagreements);
+	CHECK(A.Worst == ComponentVerdict::Stands);
+}
