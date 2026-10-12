@@ -32,6 +32,10 @@ struct CertificateOptions
 	double FeasibilityTolerance = 1.0e-9;
 	// Interior-point iterations allowed per solve (inscribed, circumscribed, selection); a failed solve reads Undecided unless t_in >= 1.
 	int MaxIterations = 200;
+	// A cone solve stops as at the cap once this many iterations pass without its best relative residual falling below StallImprovement times the best at the window's start; 0 disables.
+	int StallWindow = 10;
+	// In (0, 1): the factor the best residual must improve by within StallWindow iterations.
+	double StallImprovement = 0.5;
 	// Components with more equilibrium rows than this factor the normal matrix sparsely; at or below it, dense.
 	int DenseRowLimit = 600;
 	// How a cap site's group-and-facet block is factored; Dense keeps the full LLT as the referee for the structured form.

@@ -1340,10 +1340,12 @@ NaN failing closed) pin the factor itself; the Slow ratio test has the shed's ce
 structured at most 0.85 of dense (measured 0.66–0.75). Measured: shed 6.65 s to 4.4 s; the
 32 × 40 wall 106.8 s to 92.4 s.
 
-**3b, the stall rule (in progress).** `CertificateOptions::StallWindow` (10; 0 disables) and
-`StallImprovement` (0.5): a cone solve keeps its best iterate (smallest max relative
-residual) and stops when a window of iterations has not halved it, continuing with the best
-iterate under the same verdict rules as the iteration cap. Pinned by `Certificate.Stall.*`.
+**3b, the stall rule (done 2026-10-12, in review).** `CertificateOptions::StallWindow` (10; 0
+disables) and `StallImprovement` (0.5): a cone solve tracks its best largest relative
+residual and stops when a window of iterations has not brought it below `StallImprovement`
+times the best at the window's start, returning the iteration cap's outcome (no iterate is
+kept: one within tolerance would already have ended the solve, DESIGN §10). The selection
+solve is untouched. Pinned by `Certificate.Stall.*`.
 
 **3c, the coupling out of the factor; 3d, a verdict-only option.** As ruled in DESIGN §10
 "stage 3 opening"; 3c's candidate is the bordered system the 1b-iii review proposed.

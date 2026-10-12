@@ -130,7 +130,8 @@ bool AreCertificateOptionsValid(const CertificateOptions& Options)
 {
 	const auto IsPositiveFinite = [](double X) { return X > 0.0 && IsFinite(X); };
 	return IsFinite(Options.Gravity) && Options.ConeGenerators >= 4 && Options.ConeGenerators % 2 == 0 &&
-		IsPositiveFinite(Options.LoadFactorCap) && IsPositiveFinite(Options.FeasibilityTolerance) && Options.MaxIterations >= 1;
+		IsPositiveFinite(Options.LoadFactorCap) && IsPositiveFinite(Options.FeasibilityTolerance) && Options.MaxIterations >= 1 &&
+		Options.StallWindow >= 0 && Options.StallImprovement > 0.0 && Options.StallImprovement < 1.0;
 }
 
 bool AreStandingOptionsValid(const StandingOptions& Options)

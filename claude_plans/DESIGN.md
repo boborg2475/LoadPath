@@ -731,3 +731,16 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   stiffness is reached only through a touched body; the lineage counter is a process-wide
   atomic starting at 1, copy assignment guarded against self-assignment, and an InvalidInput
   result carries the judged structure's lineage like any other.
+- *2026-10-12, orchestrator, stage 3b rulings from the dev round:* **the stall rule stops a
+  cone solve; it does not keep an iterate.** Every iterate is tested against the tolerance as
+  it arrives, so an iterate that was ever within tolerance ended the solve then; the best
+  iterate of a stalled solve is by construction not within tolerance, and the not-converged
+  outcome carries no load factor, so a stored best iterate would never be read. The rule
+  therefore tracks only the best residual: the window restarts whenever the largest relative
+  residual falls below `StallImprovement` times the best at the window's start, and when
+  `StallWindow` iterations pass without that the solve returns the iteration cap's outcome.
+  The selection solve keeps its own loop and residuals and is untouched. Measured: the
+  half warehouse's 595-body wall from 200 iterations in 127 s to 72 in 45 s, the verdict and
+  lower bound unchanged; the twelve pinned fixtures and the 64 agreement cases bit-identical
+  with the rule on and off. The brief's "returns its best iterate" mutation has no code to
+  mutate; the ANCHORS row says so.

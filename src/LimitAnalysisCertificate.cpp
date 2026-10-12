@@ -1196,7 +1196,7 @@ Residuals ComputeResiduals(const Component& C, const Program& P, const Embedding
 	return R;
 }
 
-bool IsConverged(const Component& C, const Program& P, const Embedding& E, const Residuals& R, double Tolerance, bool& bFinite)
+bool IsConverged(const Component& C, const Program& P, const Embedding& E, const Residuals& R, double Tolerance, bool& bFinite, double& Largest)
 {
 	const double T = E.X.data()[P.LoadFactor] / E.Tau;
 	const double* Primal = R.Primal.data();
@@ -1218,6 +1218,7 @@ bool IsConverged(const Component& C, const Program& P, const Embedding& E, const
 	const double DualRelative = LargestMagnitude(R.Dual.data(), P.Variables) / E.Tau / DualScale;
 	const double GapRelative = DotProduct(E.X, E.S) / (E.Tau * E.Tau) / (1.0 + std::abs(T));
 	bFinite = IsFinite(PrimalRelative) && IsFinite(DualRelative) && IsFinite(GapRelative) && IsFinite(T);
+	Largest = std::max({PrimalRelative, DualRelative, GapRelative});
 	return PrimalRelative <= Tolerance && DualRelative <= Tolerance && GapRelative <= Tolerance;
 }
 
@@ -1265,11 +1266,14 @@ Outcome SolveProgram(const Component& C, const Program& P, const CertificateOpti
 	SparseNormal Sparse;
 	const bool bSparse = C.Rows > Options.DenseRowLimit;
 	Normal N;
+	double WindowBest = 0.0;
+	int WindowStart = 0;
 	for (int Iteration = 0;; ++Iteration)
 	{
 		const Residuals R = ComputeResiduals(C, P, E, Bounds);
 		bool bFinite = false;
-		const bool bConverged = IsConverged(C, P, E, R, Options.FeasibilityTolerance, bFinite);
+		double Largest = 0.0;
+		const bool bConverged = IsConverged(C, P, E, R, Options.FeasibilityTolerance, bFinite, Largest);
 		Out.Iterations = Iteration;
 		if (!bFinite)
 		{
@@ -1283,6 +1287,15 @@ Outcome SolveProgram(const Component& C, const Program& P, const CertificateOpti
 			return Out;
 		}
 		if (Iteration >= Options.MaxIterations)
+		{
+			return Out;
+		}
+		if (Iteration == 0 || Largest < Options.StallImprovement * WindowBest)
+		{
+			WindowBest = Largest;
+			WindowStart = Iteration;
+		}
+		else if (Options.StallWindow > 0 && Iteration - WindowStart >= Options.StallWindow)
 		{
 			return Out;
 		}
