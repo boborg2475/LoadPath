@@ -317,7 +317,19 @@ never mutates the structure. The host may call it on any thread.
 - **Relative displacement at a corner** `p`: `δ = (uB + θB × (p − cB)) − (uA + θA × (p − cA))`
   with `u` the translation and `θ` the small rotation of each body. Normal gap `g = δ · n`
   (positive opening, `n` from A to B). Corner normal force on B, compression positive,
-  `N = −(kn A/4) g`; shear force on B `S = −(kt A/4) (δ − g n)`.
+  `N = −(kn A/4) g`; shear force on B `S = −(kt A/4) (δ − g n − Ref)`, where `Ref` is the
+  corner's tangential reference: zero as built and for every corner that has not re-closed
+  twice, so on a dry or bonded joint the shear is `kt A/4` times the whole tangential offset.
+  A cohesive tensionless corner (`c > 0`, `f_t = 0`) that re-closes for the second or later time
+  in one solve takes the tangential offset at that re-closure as `Ref` (slice 2e, DESIGN §10),
+  carried into the load as a held pre-force the way a slipping corner's held friction is; the
+  reference and the re-closure count live for one solve and start at zero in the next. The
+  first re-closure keeps the full offset. A cohesive corner never slips. A slip-releasing corner
+  (`c == 0`) that re-closes with its trial shear above `μN` re-enters Slipping holding `μN`
+  (slice 2d) instead of re-closing Stuck. Both rules choose among equally admissible elastic
+  fields: a Stands is certified by the readings it returns (equilibrium on every free body and
+  the cone test on every closed corner), not by the path that reached them, so readings at a
+  point that would otherwise cycle are path-dependent by up to about 1 W per interface.
 - **Free releases in the active set** (slice 2): a corner on an interface whose profile has
   `TensileStrengthPa == 0` opens when its trial `N < 0` and then carries nothing, and (slice 2c,
   DESIGN §10) that opening threshold is `N < −floor`, the force-noise floor (one named constant

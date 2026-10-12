@@ -1217,3 +1217,51 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   logged, not traced: the five 10 × 8 exceptions at λx ≥ 1.0 read Undecided after 3 to 9
   iterations, not at the cap, so they are an early fail-closed exit (a floor or a factor
   refusal), not the cycle. The grid test stays in the default tier at 2.7 s.
+- *2026-10-12, orchestrator, slice 2e cold-review rulings (amendment):* the cold review ran
+  the claims above and two of them failed. **Bit-identity was overclaimed.** Twelve of the 82
+  lime grid points that Stood at fa1a35d move under the rule (eight change their iteration
+  count), because a cohesive corner re-closed twice before the old solve converged; the worst
+  moves are 0.87 W per interface on the 6 × 8 at (1.0, 0.1) and 0.77 W on the 10 × 8 at
+  (0.7, 0.05), with eleven and sixteen corners changing open status; all six Mechanism points
+  change their readings and mechanism; every new field passes the own-field check. The probe
+  had sampled, not swept. Ruling: accepted, as the same path dependence the opening accepted
+  at the cycling points (a Stands certifies an admissible field, not a unique one, and the
+  rule is a choice of reference, not a strength claim); the twelve are pinned at their new
+  values so the next rule change has to say so. Everything else is bit-identical: the dry
+  grid, the factor, sparse and field tests, the fuzz with its ec6 and lime draws, the Slow
+  tier and the three Measure fixtures, 29,900 solves. Not quite: adding kt·0 in `AssembleLoad`
+  and `ReadJoint` turned −0.0 shear components into +0.0 on 6,235 of the suite's 6,242
+  converged solves; harmless (nothing reads a sign bit) but false under a hexfloat diff, so
+  the pre-force and the reading add are skipped when the reference is exactly zero, and the
+  claim becomes true. **The guard goes.** The review swept 6,960 fixtures and found the guard
+  firing in 709 and changing the verdict in 404: in 400 it turns an Overstressed found in 4 to
+  9 iterations into Undecided at 50; in two (a 4 × 3 with c 3 kPa beds at (0.7, 0.1), a 6 × 3
+  with c 10 kPa everywhere at (0.8, 0.1)) it turns a Stands with an admissible field (residual
+  under 3e-15 W, no violation) into Undecided; in one (one course of three, every joint c 1 kPa,
+  30 N held down on the middle brick, λx 0.3) the unguarded solve exits Undecided after 9
+  through the restore step where the guarded one Stands in 15; in one both Stand with
+  different readings. The structural argument in the dev notes holds only for weak perpends on
+  strong beds. The reason to drop it is not the count but the principle the review named: a
+  Stands is certified by its readings (equilibrium plus the cone test on every closed corner),
+  and by the static lower-bound theorem any admissible equilibrium field proves standing
+  whatever path reached it, so the forgotten offset was never a bond force the guard could be
+  protecting; the guard bounded nothing (per reset, not in total, and without the shear cap)
+  and mostly replaced an answer with a non-answer. Ruling: a cohesive tensionless corner that
+  re-closes for the second or later time in one solve resets its reference, unconditionally;
+  the weak-perpend fixture now pins Overstressed after 5 at λx 0.3, 0.5, 0.7 (the direction of
+  the change) and the two walls above pin Stands with the own-field check; the one-course
+  host-load case is logged under the restore step, not pinned. With the guard gone the review's
+  surviving mutants "guard on |offset|" and "guard without μN" vanish, and "clear the
+  reference when the corner opens" is equivalent (an open corner carries no pre-force and the
+  next re-closure re-references anyway), so it is recorded as such. **Restore-step
+  re-closures neither count nor reset**: the restore step rebuilds the full-rank state for the
+  consistency check, it is not an iterate; a cohesive corner it re-closes keeps its reference.
+  The mutant that makes them count survives the suite under this ruling. **The five 10 × 8
+  exceptions are traced**: all five leave through `RestoreInadmissibleReleases` returning
+  Undecided because the closing corner was Open in the full-rank state and the step has no
+  trial shear to decide slip; every one is a cohesive corner, which never slips, so the refusal
+  is unnecessary for them and re-closing them Stuck is the candidate fix, logged as the next
+  item, not folded into this slice. Also logged: readings at the iteration cap on a corner
+  reset in the last pass are out of equilibrium (the advanced reference against the previous
+  field, the `HeldN` pattern); the grid test pins its Stand and Mechanism counts as well as
+  its Undecided; API.md gains the tangential reference, the 2d slip re-entry and this rule.

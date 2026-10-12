@@ -74,20 +74,26 @@ the non-associative answer) and the two hanging-component cases (slice 6), red b
      50, and all Stand in 5 to 9 iterations if the dry rule is applied to them, which the
      scope ruling forbids (`Statics.Lime.AReclosingCohesiveCornerStaysOutOfSlipping`); a
      re-closing cohesive corner got its own ruling in slice 2e;
-   - **slice 2e, green and in cold review 2026-10-12 (red step d089f5a; DESIGN §10 "slice 2e
-     opening", "dev notes")**: a cohesive tensionless corner that re-closes for the second or
-     later time in one solve resets its tangential reference to the current offset (carried as
-     a held pre-force kt·Ref in the load), the first re-closure keeps the full offset, and a
-     guard keeps it whenever the forgotten shear would exceed cA/4 + μN; the seven lime points
-     Stand in 8 to 16 iterations, the 140-point lime grid goes from 52 Undecided to 5, every
-     converged solve and every pin is bit-identical. Left from the round: the guard is
-     unobservable by verdict (90-point sweep: wherever it fires the unguarded solve reads
-     Overstressed from a neighbouring perpend), so the mutant "guard removed" survives the
-     suite by design and `AWallWhoseForgottenShearWouldExceedTheCohesiveCapacityDoesNotStand`
-     pins only not-Stands; the five 10 × 8 lime exceptions at (1, 0.15) and λx 1.2 read
-     Undecided after 3 to 9 iterations, not at the cap, so they are an early fail-closed exit
-     (a floor or a factor refusal) still untraced; readings at formerly cycling points are
-     path-dependent between equally admissible rules (accepted in the opening);
+   - **slice 2e, in its cold-review fix round 2026-10-12 (red step d089f5a, rule 8db9af3;
+     DESIGN §10 "slice 2e opening", "dev notes", "cold-review rulings")**: a cohesive
+     tensionless corner that re-closes for the second or later time in one solve resets its
+     tangential reference to the current offset (carried as a held pre-force kt·Ref in the
+     load); the seven lime points Stand in 8 to 16 iterations, the 140-point lime grid goes
+     from 52 Undecided to 5. The review found the bit-identity claim overclaimed (12 converged
+     lime points move, accepted and pinned) and the guard observable and harmful (402 of 404
+     verdict changes for the worse), so the fix round drops the guard, skips the pre-force when
+     the reference is zero (signed zeros), pins the moved points, the two walls the guard kept
+     from standing and the weak-perpend Overstressed, adds a solve-twice test and the grid's
+     Stand/Mechanism counts, and updates API.md. Left from the review: the five 10 × 8 lime
+     exceptions at (1, 0.15) and λx 1.2, and the one-course three-brick wall with c 1 kPa
+     joints under a 30 N held load at λx 0.3, exit Undecided through
+     `RestoreInadmissibleReleases` because the closing corner was Open in the full-rank state
+     and the step has no trial shear to decide slip; all are cohesive corners, which never
+     slip, so re-closing them Stuck is the candidate fix (**the next item after 2e closes**);
+     readings at the iteration cap on a corner reset in the last pass are out of equilibrium
+     (the `HeldN` pattern, untested); restore-step re-closures neither count nor reset by
+     ruling, and the mutant making them count survives the suite; readings at formerly cycling
+     points are path-dependent between equally admissible rules (accepted);
    - the restore step (`RestoreInadmissibleReleases`) re-closes a floor-opened corner on a
      motion gap with no floor check: a corner Open in the full-rank state returns Undecided
      (the 3 × 1 wall at λ (0.8, 0.8) went Mechanism → Undecided), otherwise the corner re-enters
