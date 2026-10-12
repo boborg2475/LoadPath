@@ -386,3 +386,15 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   comparison gets the same absolute slack so a capacity and a shear both at noise level never
   flip a corner. A genuinely loaded corner keeps the slice-2 rule unchanged, so the incline,
   bridge and wall anchors must not move. Bonded corners are untouched: cohesion carries at N 0.
+- *2026-10-11, orchestrator, after the slice-2c dev round:* **the floor opens; it does not slacken
+  the slip test.** As built, `DryNoiseFloorRelative = 1e-12` of the component's force scale
+  opens a dry corner whose trial `|N|` is at or below it, and such a corner re-closes only when
+  its full-rank trial normal rises above the floor (a zero gap no longer re-closes it; without
+  that the flip moves to the re-close step). The slip-test slack the opening ruling asked for
+  drove no test once the opening rule was in and was withdrawn under the TDD gate; the 1 × 3,
+  2 × 3, 3 × 4, 4 × 5 and 10 × 8 dry walls all settle in two iterations. Two edges recorded,
+  not ruled: a NaN trial normal stays closed (`abs(N) <= floor` is false for NaN), because
+  opening is the direction that hides an overflow and the overflow test reads +inf through the
+  closed corner; and an overflowing component makes the force scale and the floor +inf, so
+  every dry corner in it would open if any finite load remained (fails closed today only
+  because the overflow test has no finite dry corner beside the overflow).

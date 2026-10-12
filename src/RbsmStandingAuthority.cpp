@@ -25,6 +25,7 @@ using statics::Sub;
 
 constexpr double StickMarginRelative = 1.0e-9;
 constexpr double HeldForceToleranceRelative = 1.0e-12;
+constexpr double DryNoiseFloorRelative = 1.0e-12;
 constexpr double NeutralLoadToleranceRelative = 1.0e-12;
 constexpr double AdmissibilityToleranceRelative = 1.0e-9;
 constexpr double UnconstrainedComponent = 1.0e-6;
@@ -461,6 +462,7 @@ UpdateOutcome UpdateActiveSet(const Problem& P, const Eigen::VectorXd& X, const 
 {
 	UpdateOutcome Outcome;
 	const double HeldToleranceN = HeldForceToleranceRelative * P.ForceScaleN;
+	const double NoiseFloorN = DryNoiseFloorRelative * P.ForceScaleN;
 	for (std::size_t I = 0; I < P.Joints.size(); ++I)
 	{
 		const Joint& J = P.Joints[I];
@@ -471,16 +473,18 @@ UpdateOutcome UpdateActiveSet(const Problem& P, const Eigen::VectorXd& X, const 
 			CornerStatus& Status = State.Status[C];
 			Vec3& HeldN = State.HeldN[C];
 			double& TransverseNPerM = State.TransverseNPerM[C];
+			const bool bDry = J.bReleasesOpening && J.bReleasesSlip;
 			if (Status == CornerStatus::Open)
 			{
-				if (T.GapM <= 0.0 && !IsGapIndeterminate(P, J, C, NeutralMotions))
+				const bool bLoaded = bDry ? T.NormalN > NoiseFloorN : T.GapM <= 0.0;
+				if (bLoaded && !IsGapIndeterminate(P, J, C, NeutralMotions))
 				{
 					Status = CornerStatus::Stuck;
 					Outcome.bStatusChanged = true;
 				}
 				continue;
 			}
-			if (J.bReleasesOpening && T.NormalN < 0.0)
+			if ((J.bReleasesOpening && T.NormalN < 0.0) || (bDry && std::abs(T.NormalN) <= NoiseFloorN))
 			{
 				Status = CornerStatus::Open;
 				HeldN = Vec3{};

@@ -316,9 +316,10 @@ never mutates the structure. The host may call it on any thread.
   DESIGN §10) a corner on an interface with zero tension and zero cohesion whose trial `|N|` lies
   within the force-noise floor (one named constant relative to the component's force scale, of
   the order of the held-force tolerance) is open as well, reading `N = 0`, `S = 0` and zero
-  utilisation, so a dry perpend carrying nothing cannot flip the active set; a corner on an
-  interface whose profile has `ShearCohesionPa == 0` slips when its trial `|S|` exceeds
-  `μ N` (and the cap `MaxShearStrengthPa · A/4`) by more than the same absolute slack, after which its shear is held at capacity
+  utilisation, re-closing only when its full-rank trial normal rises above the floor, so a dry
+  perpend carrying nothing cannot flip the active set (the slip test itself has no slack: it
+  drove no test, DESIGN §10); a corner on an interface whose profile has `ShearCohesionPa == 0`
+  slips when its trial `|S|` exceeds `μ N` (and the cap `MaxShearStrengthPa · A/4`), after which its shear is held at capacity
   opposite the trial slip direction with no stiffness along that direction and **no dilation**
   (non-associative, DESIGN §9 row 8). Transverse to the held direction, in the joint plane, a
   slipping corner carries the tangent of its held friction, `kt · capacity / |trial S|` (at most
