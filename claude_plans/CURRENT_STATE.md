@@ -94,9 +94,11 @@ and 5 rulings.
    review rebuilt the pre-fix commit in both); the warehouse generator removes opening bricks
    after building them (O(interfaces) per brick); the shed's frame does not bear on its walls
    and the corners are not bonded (five components by construction). From the review:
-   the rigid fall must be gravity-only (a loaded floating pair read one cluster where the upper
-   brick lifts or slides off alone; red tests written, dev round pending), a rounding residue
-   in the net force flipped a squeezed floating pair to Collapses (red test written), the fall motion and the origin's base
+   the rigid fall is now gravity-only (a loaded floating pair read one cluster where the upper
+   brick lifts or slides off alone; fixed red-first), a rounding residue in the net force
+   flipped a squeezed floating pair to Collapses (fixed by the gravity-only rule; the relative
+   floor `FeasibilityTolerance` on the net force in the gravity-only branch is unreached by any
+   test, a `> 0` mutant survives: pin it or remove it), the fall motion and the origin's base
    beds had no tests (added), the `ExpectedLayout` oracle copies the post/beam/plank formulas
    from the generator (brick positions and the areas are independent), `Beds`/`Perpends` keep
    removed ids after openings (the header says so now), the spec is not validated (`Bays ≤ 0`
