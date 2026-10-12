@@ -37,7 +37,8 @@ the carried 6b items 1 to 3 (325 and 347 at the 6b close) (the arch, pile, arch-
 run only in Release under `LOADPATH_SLOW_IN_DEBUG`; nine `Slow.*` cases run in Release at
 every slice close, and the
 cheap `Measure.Scale.*` rows after them); the `Deferred.*` tier holds the physical wedge pin
-(slice 7) and the two hanging-component cases (slice 6), red by design. The design brief
+(it belonged to slice 7, which the owner dropped on 2026-10-12; the pin stays as the record of
+the non-associative answer) and the two hanging-component cases (slice 6), red by design. The design brief
 ([DESIGN.md](DESIGN.md)) has every §9 question decided and §10 carries the slice-2, 3, 4a, 4b,
 5, 2c, 6a and 6b rulings.
 
@@ -230,7 +231,9 @@ cheap `Measure.Scale.*` rows after them); the `Deferred.*` tier holds the physic
      or below);
    - the 4a items still open: the selection gate is `FeasibilityTolerance`; `t_out` is the
      circumscribed converged primal, not the dual objective; `Iterations` excludes the
-     selection solve's count; HiGHS stays slice 7's referee question.
+     selection solve's count; HiGHS was slice 7's referee question, and slice 7 is dropped by owner
+     directive (2026-10-12), so no independent LP referee is coming: the NNLS oracle, the pins and
+     the dense-against-sparse comparison are the certificate's referees.
    The remaining slice-2 anchors (item 2) can run alongside slice 2c.
 2. Slice 2b, the remaining slice-2 anchors (BENCHMARKS groups 2 and 3): B-WAL-03 (wall slides at
    λ = μ), B-STK-04 (constant-step stack), B-WDG-02, B-ROK-02, F-CHC-01, F-LIB-01/02, F-EMI-01,
