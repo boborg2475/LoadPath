@@ -619,10 +619,10 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   per body, that block is dense and the ruling is revisited. The sparse factor is tried
   without regularisation first and retried with `RegularisationRelative × LargestDiagonal`
   only on failure, exactly as the dense `HasPositivePivots` retry; both triangles are stored.
-  Measured: the shed's certificate 6.65 s sparse against 8.2 s dense, same 35 iterations;
+  Measured: the shed's certificate 6.65 s sparse against 7.7–8.2 s dense, same 35 iterations;
   its components are 684 and 714 rows, barely above the limit, so the factor was not the
   shed's cost; the half-warehouse and 32 × 40 rows (589 s and 754 s dense) are the
-  measurement that matters and are being re-run. What remains per iteration after the factor
+  measurement that matters: 152 s and 114 s (SCALE.md). What remains per iteration after the factor
   (the per-component dense LLT in `SelectionSystem`, the cap-site loops, assembly) is to be
   profiled before anything else is changed.
 - *2026-10-12, orchestrator, stage 2 amendment:* **options are part of cleanliness.** A

@@ -110,7 +110,7 @@ no host load, so the rigid-fall rule decides it without an interior point): the 
 1,215-brick remainder is rank-deficient, the sparse factor hands it to the dense blocked
 factor at about 24 s, and the 1b-i judge still solved it twice (whole structure, then the
 component); the warehouse's base-course cascade is the same 40.6 s for the same reason, and
-the half warehouse's 5.1 s is its 600-brick wall going dense once or twice. 1b-ii removes the second solve; the first is a dense factorisation spent to
+the half warehouse's 5.1 s is its 595-body wall going dense once or twice. 1b-ii removes the second solve; the first is a dense factorisation spent to
 discover that an ungrounded component is a mechanism, which its connectivity already says. Stage 1b-ii (one solve
 per judge, no copies) measured on the shed from a second copy: judge 40 ms against an elastic
 solve of 39–54 ms, since no component is consulted. Stage 1b-iii puts the certificate's
@@ -130,7 +130,7 @@ the branch's Release exe, one process each, with the stage-2 dev round building 
 
 What the rows say: the factor was a quarter to a sixth of the certificate's cost at scale,
 not the whole of it. The shed's components (684 and 714 rows) barely cross the limit and gain
-nothing; the half warehouse's 600-brick wall (3,600 rows) and the 1,296-brick wall (7,776
+nothing; the half warehouse's 580- and 595-body walls (3,480 and 3,570 rows) and the 1,296-brick wall (7,776
 rows) gain 4–7×, which leaves 114–152 s per structure at rest. What remains per
 interior-point iteration is unprofiled: the per-component dense `Eigen::LLT` in
 `SelectionSystem`, the cap-site loops, the dense `Demand`/`AddSiteBlock` work on the dense
@@ -200,3 +200,13 @@ The stage-2 target (200 ms when only the frame is touched) is missed by 54 ms on
 machine; the review measured the same case at 317 ms with 225 ms of it the frame's own
 certificate (one Solve on the frame's 33 bodies is 52 ms, everything else about 40 ms). The
 event region has done its part; the remainder is stage 3's.
+
+The 1b-ii/1b-iii review traced the half warehouse's 595-body component on both paths: its
+circumscribed solve reaches a gap of 1.04e-9 against 1e-9 at iteration 62, every factor
+after that needs the regularised retry, the primal residual jumps to 6.7e-6 and the solve
+runs to the 200 cap, identically on the dense path (537 s for that component dense, 145 s
+sparse); about 137 stalled iterations at 0.55 s. The stall predates 1b-iii and is stage 3b.
+The review also measured the sparse assembly bit-identical to the dense matrix on 1,268
+matrices, coupling included, and proposed for stage 3c a bordered system
+`[M_sites d; dᵀ −1/Coupling]` eliminated last under `SimplicialLDLT`, which keeps the
+coupling out of the factor without needing the site part to be invertible.

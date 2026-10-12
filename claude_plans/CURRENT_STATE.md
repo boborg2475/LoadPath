@@ -32,7 +32,7 @@ stacks, Paterson–Zwick, Couplet–Heyman at Milankovitch's 0.107478 with hinge
 the certificate's associative 31.07°, the cascade on the arch below least thickness, the dry
 wall at t / H within 1 % (10 × 8 and 4 × 5), the bonded 4 × 5 wall at its monolith factor
 `(t/H)(1 + f_t A_base / W) = 2.971` to 1 %, two screws at twice their published shear and
-withdrawal whatever the joint area. Default suite 285 cases in Debug and 297 in Release (the
+withdrawal whatever the joint area. Default suite 306 cases in Debug and 322 in Release (the
 arch, pile, arch-cascade, fuzz, small-wall and multi-panel factor anchors run only in Release
 under `LOADPATH_SLOW_IN_DEBUG`; six `Slow.*` cases run in Release at every slice close, and the
 cheap `Measure.Scale.*` rows after them); the `Deferred.*` tier holds the physical wedge pin
@@ -188,8 +188,15 @@ cheap `Measure.Scale.*` rows after them); the `Deferred.*` tier holds the physic
    Measured (SCALE.md): the warehouse judges in 0.49 s; its warm post cascade (a previous
    verdict in hand, 4 of 5 components reused) is 254 ms against the 200 ms target, the
    remainder being the frame's own certificate (about 225 ms), which is stage 3's.
-   **Stage 1b-iii, the certificate's sparse normal equations: green and merged (b72c262), in
-   cold review.** Uncaught mutant recorded: the NaN-only part of the sparse positivity scan
+   **Stage 1b-iii, the certificate's sparse normal equations: green and merged (b72c262);
+   the cold review (2026-10-12) found no correctness defect** (assembly bit-identical to the
+   dense matrix on 1,268 matrices) and blocked on docs and the shed ceiling, both fixed; it
+   asked for a filter test naming two components (kills a "stop after the first chosen
+   component" mutant), the cache test extended to AddBody/AddProfile/MarkPass, and a timing
+   subject of about 310 bodies instead of the shed (ratio 0.45–0.59 against the shed's 0.8):
+   in progress. Uncaught mutants recorded: the retry's LargestDiagonal without the coupling
+   (a 1e-12 shift), the NaN-only positivity scan. `StandingComponent::ReadingSlots` is read by
+   nothing in the library. Uncaught mutant recorded: the NaN-only part of the sparse positivity scan
    (Eigen's own `info()` catches a non-positive pivot; no finite input reaches a NaN pivot).
    The shed's 8.0 s Slow ceiling is thin under load (8.56 s once with another test process
    running; 6.65–6.8 s quiet).
@@ -221,13 +228,13 @@ cheap `Measure.Scale.*` rows after them); the `Deferred.*` tier holds the physic
      needs a minimum rotation is still open, and this is the measurement against it;
    - the mechanism selection ignores finite positive shear caps (harmless at `t* = 0`; for
      `0 < t* < 1e-9` it reads Undecided, which fails closed);
-   - the combined authority copies the structure for EVERY component (RemoveBody scans every
-     interface per call, O(C · B · I)) and solves every structure twice; the cascade's scans
+   - the cascade's scans
      are quadratic (`IndexOf`/`Contains`, union-find without path compression, the release
      scanning every interface per cluster, `FindReading` O(I) per sever, the crack band
-     O(K·I·|component|)): slice 6 exposes the RBSM's per-component states and indexes these;
-   - two InvalidInput branches in CombinedAuthority.cpp are unreachable today (a sub-solve
-     InvalidInput; a per-component certificate InvalidInput): fail closed, untested;
+     O(K·I·|component|)): the RBSM's per-component states are exposed since 1b-ii; the
+     cascade's own scans are still to be indexed;
+   - the per-component certificate InvalidInput branch in CombinedAuthority.cpp is
+     unreachable today: fail closed, untested;
    - a cap-0 corner on the inscribed side still uses the inner tension offset min(ft, c/μ):
      conservative, not unsafe;
    - the reverse hinge property only checks that a cluster of listed bodies touches a hinge;
