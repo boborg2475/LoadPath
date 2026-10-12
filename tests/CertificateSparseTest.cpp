@@ -9,6 +9,7 @@
 
 #include "loadpath/Catalogue.h"
 #include "loadpath/CollapseCertificate.h"
+#include "loadpath/geometry/Warehouse.h"
 
 #include "doctest.h"
 
@@ -185,12 +186,42 @@ std::vector<SparseCase> SparseCases()
 	return Cases;
 }
 
+geometry::WarehouseSpec ShedSpec()
+{
+	geometry::WarehouseSpec Spec;
+	Spec.LengthBricks = 12;
+	Spec.WidthBricks = 8;
+	Spec.Courses = 10;
+	Spec.Bays = 2;
+	Spec.PlanksPerBay = 3;
+	Spec.Openings = {geometry::Opening{0, 5, 2, 0, 7}, geometry::Opening{2, 3, 2, 4, 8}};
+	return Spec;
+}
+
+Structure Shed()
+{
+	const CatalogueResult Loaded = LoadCatalogue(ReadCatalogueFile());
+	INFO("line " << Loaded.Error.Line << ": " << Loaded.Error.Message);
+	REQUIRE(Loaded.Ok());
+	const FastenerRow Screw = FastenerOrFail(Loaded.Value, "ec5_screw_8x60_steel_to_glulam");
+	Structure Model;
+	geometry::WarehouseSpec Spec = ShedSpec();
+	Spec.Bed = AddProfileOk(Model, JointOrFail(Loaded.Value, "clay_gp_mortar_bed_ec6").Profile);
+	Spec.Perpend = AddProfileOk(Model, JointOrFail(Loaded.Value, "clay_gp_mortar_perpend_ec6").Profile);
+	Spec.Bearing = AddProfileOk(Model, JointOrFail(Loaded.Value, "c24_bearing_perp_to_grain").Profile);
+	Spec.Plank = AddProfileOk(Model, FastenerProfile(Screw, 2, Spec.PlankWidthM * Spec.BeamWidthM));
+	geometry::BuildWarehouse(Model, Spec);
+	return Model;
+}
+
 constexpr double ArchFriction = 0.7;
 constexpr double ArchLeastEta = 0.107478;
 constexpr double ArchEtaTolerance = 1.0e-5;
 constexpr double PileLambda = 0.5005;
 constexpr double PileLambdaTolerance = 1.0e-3;
 constexpr double WedgeToleranceDeg = 0.05;
+constexpr double ShedCapSiteTimeRatio = 0.85;
+constexpr double ShedCapSiteLoadFactorRelative = 1.0e-7;
 constexpr double BoundaryWallLateral = 0.8;
 constexpr int LargeWallCourses = 20;
 constexpr int LargeWallBricks = 15;
@@ -298,6 +329,25 @@ TEST_CASE("Slow.Certificate.Sparse.IsFasterThanDenseOnALargeComponent")
 	CHECK(NearLoadFactor(SparseResult.LoadFactorLower, DenseResult.LoadFactorLower, G));
 	CHECK(NearLoadFactor(SparseResult.LoadFactorUpper, DenseResult.LoadFactorUpper, G));
 	CHECK(Ratio < LargeWallRatioCeiling);
+}
+
+TEST_CASE("Slow.Certificate.CapSite.TheShedCertificateIsFasterWithTheStructuredBlock")
+{
+	const Structure Model = Shed();
+	CertificateOptions DenseOptions;
+	DenseOptions.CapSite = CertificateOptions::CapSiteKind::Dense;
+	Clock::time_point Start = Clock::now();
+	const CertificateResult Dense = DecideWith(Model, DenseOptions);
+	const double DenseSeconds = SecondsSince(Start);
+	Start = Clock::now();
+	const CertificateResult Structured = DecideWith(Model, CertificateOptions{});
+	const double StructuredSeconds = SecondsSince(Start);
+	MESSAGE(std::setprecision(17) << "shed dense " << Dense.State << " [" << Dense.LoadFactorLower << ", " << Dense.LoadFactorUpper << "] in " << Dense.Iterations << " iterations, " << DenseSeconds << " s; structured " << Structured.State << " [" << Structured.LoadFactorLower << ", " << Structured.LoadFactorUpper << "] in " << Structured.Iterations << " iterations, " << StructuredSeconds << " s");
+	CHECK(Dense.State == CertificateState::Stands);
+	CHECK(Structured.State == Dense.State);
+	CHECK(std::abs(Structured.LoadFactorLower - Dense.LoadFactorLower) <= ShedCapSiteLoadFactorRelative * std::abs(Dense.LoadFactorLower));
+	CHECK(std::abs(Structured.LoadFactorUpper - Dense.LoadFactorUpper) <= ShedCapSiteLoadFactorRelative * std::abs(Dense.LoadFactorUpper));
+	CHECK(StructuredSeconds <= ShedCapSiteTimeRatio * DenseSeconds);
 }
 #endif
 

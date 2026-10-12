@@ -41,9 +41,9 @@ bool SameStanding(const StandingOptions& A, const StandingOptions& B)
 
 bool SameCertificate(const CertificateOptions& A, const CertificateOptions& B)
 {
-	const auto& [AGravity, AGenerators, ACap, ATolerance, AIterations, ARows] = A;
-	const auto& [BGravity, BGenerators, BCap, BTolerance, BIterations, BRows] = B;
-	return SameVector(AGravity, BGravity) && AGenerators == BGenerators && ACap == BCap && ATolerance == BTolerance && AIterations == BIterations && ARows == BRows;
+	const auto& [AGravity, AGenerators, ACap, ATolerance, AIterations, ARows, ACapSite] = A;
+	const auto& [BGravity, BGenerators, BCap, BTolerance, BIterations, BRows, BCapSite] = B;
+	return SameVector(AGravity, BGravity) && AGenerators == BGenerators && ACap == BCap && ATolerance == BTolerance && AIterations == BIterations && ARows == BRows && ACapSite == BCapSite;
 }
 
 bool SameOptions(const AuthorityOptions& A, const AuthorityOptions& B)

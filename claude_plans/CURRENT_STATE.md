@@ -193,7 +193,12 @@ cheap `Measure.Scale.*` rows after them); the `Deferred.*` tier holds the physic
    components exact, Mechanism and Disagreements compared, a cascade-parity variant: 32 draws,
    251 components, 68 reused) and removes the red-phase scaffolding. Decisions from the dev
    round ratified in the amendments (live-neighbour stamps, free-end rule for ground readings,
-   exact load tuples, fail-closed on an uncopyable reading). Measured (SCALE.md): the
+   exact load tuples, fail-closed on an uncopyable reading).
+   Owed to the test-expert: `Authority.Judge.DifferentOptionsReuseNothing` has no variant
+   for the fields added after it (`Certificate.CapSite`, and the stage-3b stall fields); the
+   structured bindings in `SameCertificate` force the comparison to grow (the stage-3a merge
+   broke the build until `CapSite` was added), but nothing pins that a differing new field
+   reuses nothing. Measured (SCALE.md): the
    warehouse judges in 0.49 s; its warm post cascade (4 of 5 components reused) is 254 ms
    against the 200 ms target, the remainder the frame's own certificate (about 225 ms),
    which is stage 3's.
