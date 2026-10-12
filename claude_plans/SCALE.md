@@ -242,3 +242,17 @@ The coupling block was 62 % of the wall's certificate time; with it out of the f
 gains 3.4× and the half warehouse 1.5× (its five components are smaller, so the coupling block
 was a smaller share). The 310-body wall of the Slow ratio test gains only 13 %: at that size the
 coupling block is 96k of about 400k non-zeros and the factor is not the dominant cost.
+
+## Rows after stages 3a–3c with the fix rounds (2026-10-12, HEAD 0214d3e)
+
+From a copy of the Release exe, one process, a review and a test round building alongside:
+
+| Structure | Elastic | Certificate | Judge | Cascade: post (cold) | Cascade: base course | Warm post cascade (4 of 5 reused) |
+|---|---|---|---|---|---|---|
+| Shed | 38 ms | 8.0 s | 47 ms | 118 ms | 84 ms | 50 ms |
+| Warehouse | 648 ms | **103 s** (253 s at 3b, 1,566 s at 1b-i) | 519 ms | 660 ms | 29.5 s | **175 ms** |
+
+The warehouse's warm post-removal cascade is under the 200 ms target (254 ms at stage 2), so
+stage 3d (a verdict-only option) is dropped; the frame's own certificate is what remains of
+the 175 ms. The shed's certificate is unchanged (its components are below `DenseRowLimit`, so
+3c does not apply, and 3a's gain is inside the noise of a loaded run).

@@ -820,3 +820,9 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   survive mutation, so the fix round pins both (Undecided under `StallImprovement` 1e-6 with
   window 3; the firing iteration exactly WindowStart + W), renames the never-converging test to
   what it asserts, and tightens the Slow anchor's iteration bar to the measured count.
+- *2026-10-12, orchestrator, stage 3d dropped:* the 3c measurement meets the warm-cascade
+  target the stage-2 opening set (warehouse post-removal cascade with four of five components
+  reused: 175 ms against 200 ms; 254 ms at stage 2), and the warehouse's full certificate is
+  103 s from 253 s. A verdict-only option would save only the readings' back-substitution and
+  is not worth a third option on the certificate; the stage closes at 3c once its review and
+  the 3b fix round land.
