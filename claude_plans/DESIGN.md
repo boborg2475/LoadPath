@@ -1059,3 +1059,42 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   power at caps 1.2 and 3.0 rests on one report (seed 0x6b1b2 + 14); a forged body in two
   Overstressed components is owned by the first in the crack band, where 685a5be let the
   second count it too; the indexed tables match a forged stale-generation handle by slot.
+- *2026-10-12, orchestrator, slice 2d opening (laterally loaded dry walls converge):* the
+  investigation (a probe copy of the solver with the active set dumped per iteration, Release,
+  cd25019) found the cause of the 2c leftovers. Every iterate is in equilibrium (residuals at
+  roundoff); what cycles is status consistency, and only on perpend corners: the 3 × 4 wall at
+  λx 0.1 alternates two base-course perpends with period 2, the 5 × 5 at λx 0.05 has period 6,
+  the 4 × 2 at λ (0.30, 0.15) period 2 on one top perpend, the 10 × 8 at λx 0.2 wanders and
+  settles into period 36. No slip direction ever flips and no bed corner ever changes. **The
+  mechanism: a corner that re-closes (Open to Stuck) brings with it the whole tangential
+  displacement it built up while open; as elastic shear that is 30× to 1,700× the corner's
+  friction capacity, which wrenches the field, puts the corner (or its twins on the perpend)
+  into tension, and the opening test, which runs before the slip test, opens it again, so it
+  never reaches Slipping.** The remedies tried: one change per iteration (Dantzig) and an
+  NNLS-style single release converge but slowly and break the two-iteration rest pins (89 of
+  160 grid points Undecided at cap 50); forbidding Slipping-to-Stuck, under-relaxing the slip
+  direction and a status-hash anti-cycling rule do nothing, because the cycle is open/close.
+  **Ruling: a slip-releasing corner that re-closes enters Slipping when its trial shear
+  exceeds μN at closure, holding μN along the trial shear,** which is what the restore step's
+  `ReEnterSlipping` and the 2a ruling already do for restored corners and what
+  `UpdateActiveSet`'s Open branch never did. Simultaneous updates stay; the consistency test
+  that certifies a converged state is unchanged, so Stands remains a lower-bound certificate.
+  Measured in the probe: the four points Stand in 9, 8, 13 and 9 iterations; the 160-point
+  grid (eight sizes × λx {0, 0.05, 0.1, 0.2, 0.3} × λy {0, 0.05, 0.1, 0.15}) goes from 47
+  Stands and 113 Undecided to 160 Stands, mean 8.1 iterations, every rest point still 2, the
+  worst 30 (10 × 8 at (0.3, 0.15)), with zero Stands the NNLS oracle refutes; the 14 × 10 on
+  the sparse path at λy 0.1 Stands in 22 to 33 iterations where it read Undecided at 50. The
+  points are not ill-posed: the oracle keeps them CanStand to 7× to 14× the test load, and
+  four different update rules reach the same readings to 1e-12 with identical slipping
+  counts. Consequences accepted: the generated factor pins and the sparse hidden-pivot pin
+  move (62 Undecided to Stands, 30 fewer iterations, 175 Undecided to Mechanism, 195
+  Mechanism to Undecided of which 145 by the restore step, 7 mechanism shapes; the oracle
+  refutes none of the new Stands), so they are regenerated under the pins ruling with this
+  entry as the reason and an oracle audit of zero false Stands; iteration counts grow with
+  wall size, so the cap of 50 is measured against the warehouse's walls under lateral load
+  before it is trusted at scale (a separate ruling if it needs raising); the restore-step
+  Undecideds (a 2c open item) become more visible and stay logged. Pinned: the mechanism (a
+  dry corner re-closing with a tangential offset above μN/kt goes Open to Slipping holding μN
+  along the offset; "close into Stuck" must redden it), the four points' iteration counts
+  with margin, the grid with zero refutations, the 14 × 10 sparse case, the rest walls at two
+  iterations, every existing anchor.
