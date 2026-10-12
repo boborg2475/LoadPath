@@ -1139,3 +1139,42 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   subset in Slow. The cap of 50 is close near the stability limit, not at size: random walls at
   μ 0.99 and λ (0.38, 0.28) took 46 iterations; over the cap fails closed to Undecided and the
   certificate referees it (logged).
+- *2026-10-12, orchestrator, slice 2e opening (a re-closing cohesive corner):* the lime-mortar
+  walls that read Undecided under lateral load (the 4 × 5 at λx 0.8, the 5 × 5 at 0.8, the
+  10 × 8 at (0.2, 0.1), (0.5, 0.1), (0.8, 0) and (0.8, 0.1); 52 of a 140-point wider grid)
+  cycle for the 2d reason: a cohesive tensionless perpend corner re-closes with the tangential
+  offset it built up while open, 60× to 260× its friction capacity but under 6 % of its
+  cohesive capacity cA/4 + μN, the fictitious shear puts it back into tension, and it reopens,
+  with periods of 2 and 4; on the 10 × 8 single bed corners join in through out-of-plane
+  rocking. The dry rule is wrong here, as the scope ruling said and the probe now shows: a
+  cohesive corner put into Slipping holds μN, skips the slip update, and four of the seven
+  points then fail their own equilibrium by up to 2e-2 W. The solver keeps no shear reference
+  (shear is kt times the total tangential displacement from the as-built position), and the
+  iteration is not a load history: a tensionless cohesive joint in contact may carry up to
+  cA/4 + μN at any normal force, so the offset is an artefact of the iterates, and a Stands
+  certifies an admissible field, not a unique one. Rules tried: capping the re-closed shear at
+  the cohesive capacity does nothing (no trial reaches it); resetting the reference at every
+  re-closure stands all seven but moves 12 converged points by up to 0.28 W; **resetting it
+  only from a corner's second re-closure in one solve stands all seven (8, 6, 9, 10, 9, 16, 10
+  iterations), takes the wide grid from 52 Undecided to 5 (the 10 × 8 at λx ≥ 1.0, untraced),
+  passes the own-field check everywhere (equilibrium to 1.7e-13 W, no tension, |S| at most
+  0.098 of capacity, no cohesive corner Slipping), and leaves every solve that converges today
+  bit-identical, pins included (every pinned fixture is dry or ec6, whose corners never
+  open).** Ruling: a cohesive tensionless corner that re-closes for the second or later time in
+  one solve re-closes Stuck with its tangential reference reset to the current offset, carried
+  as a held pre-force kt·Ref in the load the way `HeldN` is; the first re-closure keeps the
+  full offset; a guard keeps the full offset whenever the forgotten shear kt|Ref| would exceed
+  cA/4 + μN, so the reset can never mask a sheared bond (the probe's worst forgotten shear is
+  0.19 of cA/4); the certifying consistency test and the scope ruling (no cohesive corner ever
+  slips) are unchanged. Accepted: readings at formerly cycling points are path-dependent (up to
+  about 1 W per interface on the 10 × 8 between equally admissible rules), so the crack band
+  could pick a different first joint than another valid rule would; per-corner state grows by
+  a reference and a re-closure count. The physical answer: these walls stand only because of
+  cohesion (λx 0.8 exceeds μ 0.667; the base bed's cohesion has about 94× margin), which the
+  friction-only oracle correctly refuses to certify. There is no normal-direction twin (a
+  re-closing corner's normal force has a geometric zero); the opening side drops the elastic
+  shear at opening, under 4 % of cA/4, and stops cycling with the reset. Pinned: the seven points
+  within iteration bars (12; 20 for the 10 × 8 at (0.8, 0)) with the own-field check; the 25
+  converged grid points unchanged (readings pinned at 1e-12 on a sample, which the every-
+  re-closure rule breaks); a guard fixture where the forgotten shear would exceed the
+  capacity, if one can be built; the lime scope test and fuzz stay green.
