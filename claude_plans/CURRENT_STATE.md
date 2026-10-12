@@ -75,10 +75,24 @@ and 5 rulings.
      and from below by nothing: a smaller floor only brings the at-rest chatter back at larger
      sizes (noise reaches 1.5e-16 of the scale on the 14 × 10 wall, so 1e-12 keeps about four
      orders of margin that shrink roughly linearly with size).
-   Next slice: 6, scale, opening with the measurement of API.md "Slice 6a" (a warehouse-like
-   generator from the slice-5 pieces, `Slow.Scale.*` rows for the wall, shed and warehouse
-   sizes through the combined authority and the cascade, the table in `claude_plans/SCALE.md`),
-   and only then the sparse / event-region / panel contract (6b). **Slice 8,
+   **Slice 6a, the scale measurement, is built and measured (2026-10-11), in review:**
+   `BuildWarehouse` (four walls on one ground, posts, beams, planks; openings by removal),
+   `WallSpec` origin / orientation / shared ground, the `Slow.Scale.*` harness, the table in
+   [SCALE.md](SCALE.md): the shed (420 pieces) judges in 0.5 s, the half warehouse (1,822) in
+   91 s, the 1,296-brick wall never finishes its first dense solve (killed at 25 min, 1.07 GB).
+   First finding fixed in the round: an ungrounded component with a net force falls rigid, so
+   a floating wall releases as one cluster (it was cut into bricks, or Undecided in Release).
+   Left from the round: a grounded mechanism that severs a dry joint can still record
+   `Tension inf` as the reason (the cascade copies the reading); an ungrounded component with
+   zero net force (a pure couple) still goes through the general selection and can list
+   hinges; the rigid-fall motion is a pure translation even when the net load misses the
+   centroid; the grounded selection near t* ≈ 0 may still differ between Debug and Release
+   (the 10 × 8 read Collapses in Debug and Undecided in Release before the fix: the selection
+   LP's convergence at a degenerate point); the warehouse generator removes opening bricks
+   after building them (O(interfaces) per brick); the shed's frame does not bear on its walls
+   and the corners are not bonded (five components by construction). Then 6b: the sparse /
+   event-region / panel contract written against SCALE.md.
+ **Slice 8,
    the Unreal adapter, is on hold by owner directive (2026-10-11): do not start it.** The
    remaining slice-2 anchors (item 2) can run alongside slice 6.
    Slice 3 and 4b items still open (none host-unsafe; the unsafe one, the wedge band, is under
