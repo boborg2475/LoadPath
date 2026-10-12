@@ -17,6 +17,7 @@ add_executable(loadpath_tests
 	StackAnchorsTest.cpp
 	StandingSolverTest.cpp
 	StandingLocalityTest.cpp
+	StandingUngroundedTest.cpp
 	StaticsOracleTest.cpp
 	CollapseCertificateTest.cpp
 	CertificateAnchorsTest.cpp

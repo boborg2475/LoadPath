@@ -70,6 +70,8 @@ struct Problem
 	Eigen::VectorXd AppliedLoad;
 	Eigen::VectorXd Scaling;
 	double ForceScaleN = 0;
+	bool bGrounded = false;
+	bool bHostLoaded = false;
 };
 
 using IndexVector = Eigen::Matrix<Eigen::Index, Eigen::Dynamic, 1>;
@@ -204,6 +206,7 @@ std::vector<Problem> BuildProblems(const Structure& Model, std::span<const BodyL
 			Problem& P = Problems[static_cast<std::size_t>(Partition.ComponentOfSlot[Load.Body.Index] + 1)];
 			AddForceAt(P.AppliedLoad, Offset, Model.Body(Load.Body).CentroidM, Load.PointM, Load.ForceN);
 			P.ForceScaleN += Length(Load.ForceN);
+			P.bHostLoaded = P.bHostLoaded || Load.ForceN.X != 0.0 || Load.ForceN.Y != 0.0 || Load.ForceN.Z != 0.0;
 		}
 	}
 	for (std::size_t Slot = 0; Slot < Interfaces.size(); ++Slot)
@@ -213,6 +216,7 @@ std::vector<Problem> BuildProblems(const Structure& Model, std::span<const BodyL
 		Problem& P = Problems[static_cast<std::size_t>(Component + 1)];
 		P.Joints.push_back(MakeJoint(Model, Interfaces[Slot], OffsetOfSlot));
 		P.ReadingSlots.push_back(Slot);
+		P.bGrounded = P.bGrounded || P.Joints.back().OffsetA < 0 || P.Joints.back().OffsetB < 0;
 	}
 	for (Problem& P : Problems)
 	{
@@ -278,6 +282,23 @@ Eigen::MatrixXd AssembleStiffness(const Problem& P, const std::vector<JointState
 }
 
 using SparseMatrix = Eigen::SparseMatrix<double>;
+
+SparseMatrix AssembleSparseStiffness(const Problem& P, const std::vector<JointState>& States)
+{
+	std::vector<Eigen::Triplet<double>> Triplets;
+	ForEachStiffnessBlock(P, States, [&](int Row, int Col, const Eigen::Matrix<double, 6, 6>& Block) {
+		for (int R = 0; R < 6; ++R)
+		{
+			for (int S = 0; S < 6; ++S)
+			{
+				Triplets.emplace_back(Row + R, Col + S, Block(R, S));
+			}
+		}
+	});
+	SparseMatrix K(P.DofCount, P.DofCount);
+	K.setFromTriplets(Triplets.begin(), Triplets.end());
+	return K;
+}
 
 SparseMatrix AssembleScaledSparseStiffness(const Problem& P, const std::vector<JointState>& States)
 {
@@ -846,6 +867,30 @@ StepOutcome AdvanceActiveSet(const Problem& P, const Eigen::VectorXd& X, const s
 	return StepOutcome::Continue;
 }
 
+StandingResult FallRigid(const Problem& P, const StandingOptions& Options)
+{
+	StandingResult Result;
+	Result.State = StandingState::Mechanism;
+	const double Largest = std::max({std::abs(Options.Gravity.X), std::abs(Options.Gravity.Y), std::abs(Options.Gravity.Z)});
+	const Vec3 Fall{Options.Gravity.X / Largest, Options.Gravity.Y / Largest, Options.Gravity.Z / Largest};
+	for (const BodyId Id : P.FreeBodies)
+	{
+		Result.UnconstrainedBodies.push_back(Id);
+		Result.Mechanism.push_back(MechanismMotion{Id, Fall, Vec3{}});
+	}
+	for (const Joint& J : P.Joints)
+	{
+		InterfaceReading Reading;
+		Reading.Id = J.Id;
+		for (std::size_t C = 0; C < CornerCount; ++C)
+		{
+			Reading.Corners[C].PointM = J.CornerM[C];
+		}
+		Result.Readings.push_back(Reading);
+	}
+	return Result;
+}
+
 StandingResult SolveProblem(const Problem& P, const StandingOptions& Options)
 {
 	StandingResult Result;
@@ -857,6 +902,18 @@ StandingResult SolveProblem(const Problem& P, const StandingOptions& Options)
 		Result.Readings = ReadAll(P, States, X, bOverstressed);
 		Result.State = bOverstressed ? StandingState::Overstressed : StandingState::Stands;
 		return Result;
+	}
+	const bool bGravity = Options.Gravity.X != 0.0 || Options.Gravity.Y != 0.0 || Options.Gravity.Z != 0.0;
+	if (!P.bGrounded && !P.bHostLoaded && bGravity)
+	{
+		const auto Scaling = P.Scaling.asDiagonal();
+		const SparseMatrix K = Scaling * AssembleSparseStiffness(P, States) * Scaling;
+		if (!IsAllFinite(K))
+		{
+			Result.State = StandingState::InvalidInput;
+			return Result;
+		}
+		return FallRigid(P, Options);
 	}
 	std::vector<JointState> FullRankStates;
 	Eigen::VectorXd FullRankX;
