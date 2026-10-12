@@ -253,7 +253,7 @@ std::vector<Component> BuildComponents(const Structure& Model, std::span<const B
 		const Vec3 Arm = Scale(1.0 / C.LengthM, Sub(Load.PointM, Model.Body(Load.Body).CentroidM));
 		AddWrench(Applied[static_cast<std::size_t>(K)].data(), Partition.OffsetOfSlot[Load.Body.Index], Arm, Load.ForceN);
 		C.ForceScaleN += Length(Load.ForceN);
-		C.bHasBodyLoad = true;
+		C.bHasBodyLoad = C.bHasBodyLoad || Length(Load.ForceN) > 0.0;
 	}
 	for (std::size_t K = 0; K < Components.size(); ++K)
 	{
@@ -1542,7 +1542,7 @@ bool IsGrounded(const Component& C)
 	return std::any_of(C.Sites.begin(), C.Sites.end(), [](const Site& S) { return S.OffsetA < 0 || S.OffsetB < 0; });
 }
 
-bool FallRigid(const Component& C, double Tolerance, ComponentVerdict& V)
+bool FallRigid(const Component& C, ComponentVerdict& V)
 {
 	Vec3 Net;
 	for (int Offset = 0; Offset < C.Rows; Offset += DofPerBody)
@@ -1550,7 +1550,7 @@ bool FallRigid(const Component& C, double Tolerance, ComponentVerdict& V)
 		Net = statics::Add(Net, Vec3{-C.Demand(Offset + 0), -C.Demand(Offset + 1), -C.Demand(Offset + 2)});
 	}
 	const double Magnitude = Length(Net);
-	if (!(Magnitude > Tolerance) || !IsFinite(Magnitude))
+	if (!(Magnitude > 0.0) || !IsFinite(Magnitude))
 	{
 		return false;
 	}
@@ -1570,7 +1570,7 @@ ComponentVerdict DecideComponent(const Component& C, const CertificateOptions& O
 {
 	ComponentVerdict V;
 	V.Upper = Options.LoadFactorCap;
-	if (!IsGrounded(C) && !C.bHasBodyLoad && FallRigid(C, Options.FeasibilityTolerance, V))
+	if (!IsGrounded(C) && !C.bHasBodyLoad && FallRigid(C, V))
 	{
 		return V;
 	}
