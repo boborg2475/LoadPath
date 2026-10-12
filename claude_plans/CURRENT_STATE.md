@@ -75,7 +75,8 @@ and 5 rulings.
      and from below by nothing: a smaller floor only brings the at-rest chatter back at larger
      sizes (noise reaches 1.5e-16 of the scale on the 14 × 10 wall, so 1e-12 keeps about four
      orders of margin that shrink roughly linearly with size).
-   **Slice 6a, the scale measurement, is built and measured (2026-10-11), in review:**
+   **Slice 6a, the scale measurement: done** (2026-10-12, after a cold review and two
+   follow-ups).
    `BuildWarehouse` (four walls on one ground, posts, beams, planks; openings by removal),
    `WallSpec` origin / orientation / shared ground, the `Measure.Scale.*` harness, the table in
    [SCALE.md](SCALE.md): the shed (420 pieces) judges in 0.5 s, the half warehouse (1,822) in
@@ -100,14 +101,19 @@ and 5 rulings.
    by construction, the net magnitude there being exactly 0 or 1, and was removed), and a
    floating component carrying any non-zero `BodyLoad` takes the general selection and can be
    cut (0.01 N on the bonded 4 × 4: 2 clusters, 8 failures) until the least-joint-movement
-   selection exists, the fall motion and the origin's base
+   selection exists, a `BodyLoad` with a NaN force reads as no load on the rigid-fall test
+   (`Length > 0` is false for NaN; the structure validation upstream is what should refuse it,
+   check it does), the fall motion and the origin's base
    beds had no tests (added), the `ExpectedLayout` oracle copies the post/beam/plank formulas
    from the generator (brick positions and the areas are independent), `Beds`/`Perpends` keep
    removed ids after openings (the header says so now), the spec is not validated (`Bays ≤ 0`
    gives a NaN span), `OriginM.Z` and `GroundZM` overlap, the test helper undercounts openings
    at a wall end, cascade determinism is unchecked, and the never-finishing rows moved from the
-   `Slow.` tier to `Measure.*`. Then 6b: the sparse /
-   event-region / panel contract written against SCALE.md.
+   `Slow.` tier to `Measure.*`. Next: **6b** (API.md "6b", DESIGN §10): stage 1a the
+   factorisation (Eigen pivoted dense LDLT behind the same rank test, the old factor the
+   referee in the test tier), 1b sparse above a DoF limit plus no per-component copies, 2 the
+   event region, panels contingent; the `Measure.Scale.*` rows re-run after each stage into
+   SCALE.md.
  **Slice 8,
    the Unreal adapter, is on hold by owner directive (2026-10-11): do not start it.** The
    remaining slice-2 anchors (item 2) can run alongside slice 6.

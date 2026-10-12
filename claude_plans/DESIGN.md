@@ -473,3 +473,17 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   factorisation at the same size (20.4 s against 1.2 s at 3,660 DoF), so 6b's first stage is
   the factorisation itself, before any sparsity. Measurement rows that cannot finish leave the
   `Slow.` tier for `Measure.*`, excluded from every tier and run one per process.
+- *2026-10-12, orchestrator, slice 6b opening:* **the factorisation first, sparsity second,
+  the event region third, panels only if the rows still demand them** (API.md "6b"). The
+  measurement says the elastic solve is the cost and the hand-rolled rank-1 factor is 10–17×
+  slower than a blocked dense one at the same size, so stage 1a swaps `Factorise` for Eigen's
+  pivoted dense `LDLT` behind the same rank test and keeps the old factor in the test tier as
+  the referee for one slice; every anchor must read the same to 1e-9. Stage 1b puts a sparse
+  `SimplicialLDLT` above a DoF limit with the dense path kept below it, so no anchor changes
+  path, verifies candidate null vectors before calling a mechanism and reads Undecided when it
+  cannot, and removes the combined authority's whole-structure-then-every-component double
+  solve and its per-component copies through per-component results and a component filter on
+  the certificate. Stage 2 re-solves only the components a change touched, with a fuzz guard
+  that a reused verdict equals a fresh one. Each stage ends with the `Measure.Scale.*` rows
+  appended to SCALE.md. The least-joint-movement selection owed to the hanging cases
+  (`Deferred.Slice6.*`) is not in 6b; it is the certificate's next item.

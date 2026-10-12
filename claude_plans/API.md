@@ -1197,3 +1197,72 @@ releases it as one cluster with nothing severed. That is exact under gravity alo
 ungrounded component, and a component hanging from or wedged under a grounded body through dry
 contacts, takes the general selection, which today can split it or read Undecided
 (`Deferred.Slice6.*`, DESIGN §10).
+
+### 6b. Scale design, written against SCALE.md
+
+The 6a rows (SCALE.md) say four things: the hand-rolled rank-1 `Factorise` is 10–17× slower
+than a blocked dense factorisation at the same size and stops finishing at about 7,800 DoF
+(the 40 × 32 wall); the dense factor is n³ whatever its constant; the combined authority
+solves the whole structure and then every component again, copying the structure per
+component; and the certificate's interior point factors dense normal equations (594 s on the
+half warehouse) but is never called when the elastic field decides. Nothing in the rows says a
+5,000-piece structure needs a different physics, so 6b changes the linear algebra and the
+bookkeeping behind the same interfaces and measures after each stage. Panels (an uncracked
+bonded run solved as one body) are contingent: built only if stages 1 and 2 leave the
+warehouse outside its budget.
+
+**Stage 1a, the factorisation itself.** `Factorise` becomes Eigen's blocked dense `LDLT`
+(symmetric pivoting, so the rank test that detects a mechanism stays a pivot test on `D`
+against `PivotToleranceRelative × max |D|`, and the null vectors come from the same factor),
+with the Schur-elimination of the slipping corners' transverse terms kept as it is. Every
+anchor must read the same state, the same active set and the same readings to 1e-9 relative:
+the property `Statics.Factor.EigenAgreesWithTheRankOneFactor` runs the seeded structures of the
+oracle test through both (the old factor kept in the test tier as the referee for one slice),
+and the `Measure.Scale.*` rows are re-run. Expected from the review's bench: the half
+warehouse's elastic solve from 59 s to about 5 s, the 40 × 32 wall finishing.
+
+**Stage 1b, the sparse solve and no copies.**
+- `RbsmStandingAuthority`: `AssembleStiffness` builds an `Eigen::SparseMatrix<double>` from
+  triplets (6 DoF per body, one 12 × 12 block per joint corner); the factorisation is
+  `Eigen::SimplicialLDLT` with AMD ordering for a component above `DenseDofLimit` (default 600
+  DoF, 100 bodies) and the stage-1a dense LDLT at or below it, so every anchor in the suite
+  keeps its exact path and reading. Mechanism detection on the sparse path: a pivot of `D` at
+  or below `PivotToleranceRelative × max |D|` flags a candidate null direction; the candidate
+  null vectors are verified by `‖K v‖ ≤ tol ‖K‖ ‖v‖`; a flagged factor whose candidates do not
+  verify reads Undecided (fail closed, refereed by the certificate). The property
+  `Statics.Sparse.AgreesWithTheDensePath` runs seeded structures of 60 to 200 bodies through
+  both paths (the limit forced to 0 and to ∞) and requires identical states, identical active
+  sets and readings within 1e-9 relative.
+- `StandingResult` gains `Components` (bodies, state, iterations, the readings' indices), the
+  per-component answer the solver already computes, so `CombinedAuthority` stops copying the
+  structure per component for the elastic verdict. `ICollapseCertificate::Decide` gains a
+  component filter (`std::span<const BodyId>`; empty = whole structure) so the referee call
+  copies nothing either. `Structure` gains a cached component partition invalidated by every
+  mutating call, with `Components()` O(1) after the first query.
+- `LimitAnalysisCertificate`: the IPM's normal-equation factor becomes `SimplicialLLT` on the
+  sparse `A D Aᵀ` (the equilibrium matrix is 6 rows per body, a handful of columns per corner),
+  dense below the same DoF limit. The arch, pile and wedge anchors must not move (0.107478,
+  0.5005, 31.07° at their recorded tolerances).
+- Targets, asserted as `Slow.Scale.*` ceilings only after the first measurement and recorded in
+  SCALE.md: the half warehouse judges at rest in under 2 s (from 91 s); the 40 × 32 wall
+  judges; the warehouse (3,695 pieces) judges in under 10 s.
+
+**Stage 2, the event region.** A judge after a change re-solves only the components that
+contain a changed body or joint. `Structure` carries a version counter and a dirty set (bodies
+whose joints were added, removed, cracked or severed since the last judge); `IStructuralAuthority::Judge`
+takes the last verdict and returns the clean components' entries unchanged (same verdict, same
+readings, flagged `bReused`), solving only the dirty ones; `ICascade::Run` passes its own last
+verdict between passes. Correctness guard: `Cascade.EventRegion.ReusedComponentsEqualAFreshJudge`
+re-judges everything on a copy after every pass of the fuzz and requires equality. Target: one
+post removed from the warehouse decided in under 200 ms when the touched component is the
+frame; one brick removed from a wall decided in the time of that wall alone.
+
+**Stage 3, panels (contingent).** Written only if stage 2's rows leave the warehouse outside
+200 ms: an uncracked bonded run is solved as one rigid body against its supports until the
+crack rule needs its per-joint readings, which are then recovered by a local solve of the
+panel. Not contracted here.
+
+**Measurement discipline.** Every stage ends with the `Slow.Scale.*` rows re-run (from a copy
+of the Release exe, so the repo's exe stays free) and appended to SCALE.md with the HEAD, and
+with the default suites green in both configurations; a stage that changes any anchor reading
+is a stage that is wrong.
