@@ -83,7 +83,7 @@ constexpr double SingularLoadFactor = 1000.0;
 constexpr int LargeWallCourses = 20;
 constexpr int LargeWallBricks = 15;
 constexpr std::size_t LargeWallBodies = 310;
-constexpr double LargeWallRatioCeiling = 1.0;
+constexpr double LargeWallRatioCeiling = 0.93;
 
 struct NamedCase
 {

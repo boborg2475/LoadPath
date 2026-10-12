@@ -45,6 +45,13 @@ struct CertificateOptions
 		Structured
 	};
 	CapSiteKind CapSite = CapSiteKind::Structured;
+	// How the sparse path carries the load-factor coupling; InFactor adds it to the normal matrix and is the referee, removed at the 6b close.
+	enum class CouplingKind : std::uint8_t
+	{
+		InFactor,
+		Bordered
+	};
+	CouplingKind Coupling = CouplingKind::Bordered;
 };
 
 struct CertificateResult

@@ -106,12 +106,37 @@ struct Program
 	Eigen::Index RowCount = 0;
 };
 
+struct BorderLastOrdering
+{
+	using PermutationType = Eigen::PermutationMatrix<Eigen::Dynamic, Eigen::Dynamic, int>;
+
+	template <typename MatrixType>
+	void operator()(const MatrixType& Mat, PermutationType& Perm)
+	{
+		const Eigen::Index Sites = Mat.rows() - 1;
+		const Eigen::SparseMatrix<double, Eigen::ColMajor, int> Block = Mat.topLeftCorner(Sites, Sites);
+		PermutationType Inner;
+		Eigen::AMDOrdering<int>()(Block, Inner);
+		Perm.resize(Sites + 1);
+		for (Eigen::Index I = 0; I < Sites; ++I)
+		{
+			Perm.indices()(I) = Inner.indices()(I);
+		}
+		Perm.indices()(Sites) = static_cast<int>(Sites);
+	}
+};
+
 struct SparseNormal
 {
 	Eigen::SimplicialLLT<Eigen::SparseMatrix<double>, Eigen::Lower, Eigen::AMDOrdering<int>> Factor;
 	Eigen::SparseMatrix<double> M;
 	std::vector<Eigen::Triplet<double>> Triplets;
 	bool bAnalysed = false;
+	bool bBordered = false;
+	Eigen::SimplicialLDLT<Eigen::SparseMatrix<double>, Eigen::Lower, BorderLastOrdering> BorderedFactor;
+	Eigen::SparseMatrix<double> Bordered;
+	std::vector<Eigen::Triplet<double>> BorderedTriplets;
+	bool bBorderedAnalysed = false;
 };
 
 struct CapScratch
@@ -621,6 +646,67 @@ void AddSparseSiteBlock(std::vector<Eigen::Triplet<double>>& Triplets, int Offse
 	}
 }
 
+bool HasBorderedPivots(const SparseNormal& S)
+{
+	if (S.BorderedFactor.info() != Eigen::Success)
+	{
+		return false;
+	}
+	const Eigen::VectorXd Pivots = S.BorderedFactor.vectorD();
+	const Eigen::Index Last = Pivots.size() - 1;
+	for (Eigen::Index I = 0; I < Last; ++I)
+	{
+		if (!(Pivots(I) > 0.0) || !IsFinite(Pivots(I)))
+		{
+			return false;
+		}
+	}
+	return Pivots(Last) < 0.0 && IsFinite(Pivots(Last));
+}
+
+bool FactorBordered(const Component& C, double Coupling, SparseNormal& S)
+{
+	const int Border = C.Rows;
+	const double* Demand = C.Demand.data();
+	S.BorderedTriplets.assign(S.Triplets.begin(), S.Triplets.end());
+	S.BorderedTriplets.emplace_back(Border, Border, -1.0 / Coupling);
+	for (int Row = 0; Row < C.Rows; ++Row)
+	{
+		if (Demand[Row] != 0.0)
+		{
+			S.BorderedTriplets.emplace_back(Row, Border, Demand[Row]);
+			S.BorderedTriplets.emplace_back(Border, Row, Demand[Row]);
+		}
+	}
+	S.Bordered.resize(C.Rows + 1, C.Rows + 1);
+	S.Bordered.setFromTriplets(S.BorderedTriplets.begin(), S.BorderedTriplets.end());
+	if (!S.bBorderedAnalysed)
+	{
+		S.BorderedFactor.analyzePattern(S.Bordered);
+		S.bBorderedAnalysed = true;
+	}
+	S.BorderedFactor.factorize(S.Bordered);
+	if (HasBorderedPivots(S))
+	{
+		return true;
+	}
+	double LargestDiagonal = -std::numeric_limits<double>::infinity();
+	for (int Row = 0; Row < C.Rows; ++Row)
+	{
+		LargestDiagonal = std::max(LargestDiagonal, S.Bordered.coeff(Row, Row) + Coupling * Demand[Row] * Demand[Row]);
+	}
+	if (!(LargestDiagonal > 0.0))
+	{
+		return false;
+	}
+	for (int Row = 0; Row < C.Rows; ++Row)
+	{
+		S.Bordered.coeffRef(Row, Row) += RegularisationRelative * LargestDiagonal;
+	}
+	S.BorderedFactor.factorize(S.Bordered);
+	return HasBorderedPivots(S);
+}
+
 bool FactorSparse(const Component& C, double Dt, double DeltaT, const std::vector<Matrix3>& SiteMatrix, Normal& N)
 {
 	SparseNormal& S = *N.Sparse;
@@ -648,6 +734,10 @@ bool FactorSparse(const Component& C, double Dt, double DeltaT, const std::vecto
 	}
 	N.Ht = Dt + DeltaT;
 	const double Coupling = Dt * DeltaT / N.Ht;
+	if (S.bBordered)
+	{
+		return FactorBordered(C, Coupling, S);
+	}
 	const double* Demand = C.Demand.data();
 	for (int Col = 0; Col < C.Rows; ++Col)
 	{
@@ -915,7 +1005,16 @@ Eigen::VectorXd SolveNormal(const Component& C, const Program& P, const Normal& 
 	auto Equilibrium = Y.head(C.Rows);
 	if (N.Sparse != nullptr)
 	{
-		Equilibrium = N.Sparse->Factor.solve(Eigen::VectorXd(Equilibrium));
+		if (N.Sparse->bBordered)
+		{
+			Eigen::VectorXd Extended = Eigen::VectorXd::Zero(C.Rows + 1);
+			Extended.head(C.Rows) = Equilibrium;
+			Equilibrium = N.Sparse->BorderedFactor.solve(Extended).head(C.Rows);
+		}
+		else
+		{
+			Equilibrium = N.Sparse->Factor.solve(Eigen::VectorXd(Equilibrium));
+		}
 	}
 	else
 	{
@@ -1300,6 +1399,7 @@ Outcome SolveProgram(const Component& C, const Program& P, const CertificateOpti
 			return Out;
 		}
 		N.Sparse = bSparse ? &Sparse : nullptr;
+		Sparse.bBordered = Options.Coupling == CertificateOptions::CouplingKind::Bordered;
 		N.bStructuredCaps = Options.CapSite == CertificateOptions::CapSiteKind::Structured;
 		N.D = Eigen::VectorXd(P.Variables);
 		for (Eigen::Index I = 0; I < P.Variables; ++I)

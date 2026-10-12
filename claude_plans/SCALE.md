@@ -228,3 +228,17 @@ from 200 iterations to 72); the shed and the warehouse show no certificate gain 
 loaded machine (the structured cap-site factor's 0.72 on the shed is inside the noise of a
 run alongside two builds), and the 32 × 40 wall is unchanged because its cost is the
 coupling block in the factor, which stage 3c removes.
+
+## Rows after stage 3c (2026-10-12, the bordered coupling, uncommitted dev tree)
+
+From a copy of the Release exe, one run each, two other rounds building alongside:
+
+| Structure | Elastic | Certificate | Judge | Cascade: post | Cascade: base course |
+|---|---|---|---|---|---|
+| Wall 40 × 32 | 284 ms | **34.4 s** (118 s at 3b, 107 s dense at 1b-iii) | 218 ms | n/a | 28.8 s |
+| Half warehouse | 201 ms | **58.6 s** (89 s at 3b, 152 s at 1b-iii, 589 s at 1b-i) | 169 ms | 256 ms | 2.62 s |
+
+The coupling block was 62 % of the wall's certificate time; with it out of the factor the wall
+gains 3.4× and the half warehouse 1.5× (its five components are smaller, so the coupling block
+was a smaller share). The 310-body wall of the Slow ratio test gains only 13 %: at that size the
+coupling block is 96k of about 400k non-zeros and the factor is not the dominant cost.

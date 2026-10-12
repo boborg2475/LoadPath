@@ -786,3 +786,19 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   than dense (1.70 s against 1.05 s on the shed, about 1 s recoverable with `SolveInto` into a
   scratch); three copies of `ShedSpec` in the tests; an out-of-range `CapSiteKind` selects
   Dense unvalidated; no regularised retry at the cap-site level (pre-existing).
+- *2026-10-12, orchestrator, stage 3c rulings from the dev round:* ratified. The ordering is a
+  functor that runs AMD on the n × n site block and appends the border as the last
+  permutation entry; the pattern is analysed once per decision (the demand's support is fixed
+  per component, as the LLT path already assumes). On the retry ρ is `RegularisationRelative`
+  times the largest of `M_sites_ii + c·d_i²`, not the site diagonal alone, so the regularised
+  bordered system is algebraically InFactor's regularised one. A non-positive c makes −1/c
+  non-finite, fails the finiteness checks and reads Undecided (fails closed; InFactor would
+  handle c = 0; unreachable with interior-point D > 0). `Coupling` has no range validation,
+  matching `CapSite` (both logged in CURRENT_STATE). The border pivot's sign check and the
+  first-n positivity check are guards no test reaches: by Sylvester inertia the border pivot
+  is negative whenever the site pivots are positive, and an exactly singular site block fails
+  `info()` first; recorded in ANCHORS as uncaught. Measured: iteration counts equal and bounds
+  identical on every case; the 40 × 32 wall's certificate 118 s to 34.4 s, the half
+  warehouse's 89 s to 58.6 s; the Slow ratio bar 0.93 from a median 0.871 on the 310-body
+  wall, thin over its worst run (0.911), which the 3c review should weigh against a larger
+  fixture.
