@@ -25,51 +25,13 @@ using namespace loadpath::test;
 
 namespace
 {
-template <class O>
-constexpr bool HasCoupling = requires(O X) {
-	X.Coupling = O::CouplingKind::InFactor;
-	X.Coupling = O::CouplingKind::Bordered;
-};
-
-enum class Coupling
-{
-	InFactor,
-	Bordered
-};
-
-template <class O>
-O WithCoupling(O Options, Coupling Kind)
-{
-	if constexpr (HasCoupling<O>)
-	{
-		Options.Coupling = Kind == Coupling::Bordered ? O::CouplingKind::Bordered : O::CouplingKind::InFactor;
-	}
-	else
-	{
-		(void)Kind;
-	}
-	return Options;
-}
-
-template <class O>
-void CheckCouplingDefault()
-{
-	if constexpr (HasCoupling<O>)
-	{
-		CHECK(O{}.Coupling == O::CouplingKind::Bordered);
-	}
-}
-
-void RequireTheCouplingExists()
-{
-	CHECK_MESSAGE(HasCoupling<CertificateOptions>, "CertificateOptions has no Coupling, so both decisions factored the coupling in the normal matrix");
-	CheckCouplingDefault<CertificateOptions>();
-}
+using Coupling = CertificateOptions::CouplingKind;
 
 CertificateOptions Sparse(CertificateOptions Options, Coupling Kind)
 {
 	Options.DenseRowLimit = 0;
-	return WithCoupling(Options, Kind);
+	Options.Coupling = Kind;
+	return Options;
 }
 
 constexpr double AgreementRelative = 1.0e-9;
@@ -83,7 +45,10 @@ constexpr double SingularLoadFactor = 1000.0;
 constexpr int LargeWallCourses = 20;
 constexpr int LargeWallBricks = 15;
 constexpr std::size_t LargeWallBodies = 310;
-constexpr double LargeWallRatioCeiling = 0.93;
+constexpr int RatioWallCourses = 30;
+constexpr int RatioWallBricks = 24;
+constexpr std::size_t RatioWallBodies = 735;
+constexpr double RatioWallCeiling = 0.79;
 
 struct NamedCase
 {
@@ -258,7 +223,7 @@ std::vector<PinnedCase> PinnedCases()
 
 TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Certificate.Coupling.BorderedAgreesWithTheCouplingInTheFactor")
 {
-	RequireTheCouplingExists();
+	CHECK(CertificateOptions{}.Coupling == Coupling::Bordered);
 	const Clock::time_point Start = Clock::now();
 	CouplingGaps G;
 	const std::vector<NamedCase> Cases = AgreementCases();
@@ -272,7 +237,6 @@ TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Certificate.Coupling.BorderedAgreesWithTheCoup
 
 TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Certificate.Coupling.ThePinnedFixturesReadTheSame")
 {
-	RequireTheCouplingExists();
 	int Mismatches = 0;
 	for (const PinnedCase& C : PinnedCases())
 	{
@@ -287,7 +251,6 @@ TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Certificate.Coupling.ThePinnedFixturesReadTheS
 
 TEST_CASE("Certificate.Coupling.ASingularSiteBlockIsRegularisedOnTheBorderedPath")
 {
-	RequireTheCouplingExists();
 	const Structure Model = RunningBondWall(DryJoint(0.0), DryJoint(0.0), 9, 12);
 	REQUIRE(Model.LiveBodyCount() == 113);
 	const CertificateResult Got = DecideWith(Model, Sparse(CertificateLateral(0.0), Coupling::Bordered));
@@ -301,31 +264,33 @@ TEST_CASE("Certificate.Coupling.ASingularSiteBlockIsRegularisedOnTheBorderedPath
 #if defined(NDEBUG)
 TEST_CASE("Slow.Certificate.Coupling.IsFasterThanTheCouplingInTheFactorOnALargeComponent")
 {
-	RequireTheCouplingExists();
-	const Structure Model = Ec6Wall(LargeWallCourses, LargeWallBricks);
+	const Structure Model = Ec6Wall(RatioWallCourses, RatioWallBricks);
 	REQUIRE(Model.Components().FreeBodies.size() == 1u);
-	REQUIRE(Model.Components().FreeBodies[0].size() == LargeWallBodies);
+	REQUIRE(Model.Components().FreeBodies[0].size() == RatioWallBodies);
 	const CertificateOptions InFactorOptions = Sparse(CertificateOptions{}, Coupling::InFactor);
 	const CertificateOptions BorderedOptions = Sparse(CertificateOptions{}, Coupling::Bordered);
 	double InFactorMin = 1.0e300;
 	double BorderedMin = 1.0e300;
 	CertificateResult InFactor;
 	CertificateResult Bordered;
-	for (int Round = 0; Round < 2; ++Round)
+	const Coupling Order[] = {Coupling::InFactor, Coupling::Bordered, Coupling::Bordered, Coupling::InFactor};
+	for (const Coupling Kind : Order)
 	{
-		Clock::time_point Start = Clock::now();
-		InFactor = DecideWith(Model, InFactorOptions);
-		InFactorMin = std::min(InFactorMin, SecondsSince(Start));
-		Start = Clock::now();
-		Bordered = DecideWith(Model, BorderedOptions);
-		BorderedMin = std::min(BorderedMin, SecondsSince(Start));
+		const bool bBordered = Kind == Coupling::Bordered;
+		const Clock::time_point Start = Clock::now();
+		const CertificateResult Got = DecideWith(Model, bBordered ? BorderedOptions : InFactorOptions);
+		const double Seconds = SecondsSince(Start);
+		MESSAGE(std::setprecision(10) << (bBordered ? "bordered " : "in factor ") << Seconds << " s");
+		double& Min = bBordered ? BorderedMin : InFactorMin;
+		Min = std::min(Min, Seconds);
+		(bBordered ? Bordered : InFactor) = Got;
 	}
 	const double Ratio = BorderedMin / InFactorMin;
-	MESSAGE(std::setprecision(10) << "ec6 20 x 15 wall: in factor " << InFactor.State << " [" << InFactor.LoadFactorLower << ", " << InFactor.LoadFactorUpper << "] in " << InFactor.Iterations << " iterations, min " << InFactorMin << " s; bordered " << Bordered.State << " [" << Bordered.LoadFactorLower << ", " << Bordered.LoadFactorUpper << "] in " << Bordered.Iterations << " iterations, min " << BorderedMin << " s; ratio " << Ratio);
+	MESSAGE(std::setprecision(10) << "ec6 30 x 24 wall: in factor " << InFactor.State << " [" << InFactor.LoadFactorLower << ", " << InFactor.LoadFactorUpper << "] in " << InFactor.Iterations << " iterations, min " << InFactorMin << " s; bordered " << Bordered.State << " [" << Bordered.LoadFactorLower << ", " << Bordered.LoadFactorUpper << "] in " << Bordered.Iterations << " iterations, min " << BorderedMin << " s; ratio " << Ratio);
 	CHECK(InFactor.State == CertificateState::Stands);
 	CHECK(Bordered.State == InFactor.State);
 	CHECK(Near(Bordered.LoadFactorLower, InFactor.LoadFactorLower, AgreementRelative, AgreementAbsolute));
 	CHECK(Near(Bordered.LoadFactorUpper, InFactor.LoadFactorUpper, AgreementRelative, AgreementAbsolute));
-	CHECK(Ratio < LargeWallRatioCeiling);
+	CHECK(Ratio < RatioWallCeiling);
 }
 #endif
