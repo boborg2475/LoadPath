@@ -120,6 +120,11 @@ public:
 	size_t LiveBodyCount() const;  size_t LiveInterfaceCount() const;
 	std::vector<BodyId> LiveBodies() const;  std::vector<InterfaceId> LiveInterfaces() const;  // ascending index order
 	std::vector<InterfaceId> InterfacesOf(BodyId) const;  // live only, ascending
+	// Stage 2: a revision per successful mutation, the revision at which a body was last touched (its own AddBody, an interface added/cracked/severed on it, a live neighbour removed; an unknown id reads the largest value), and a lineage token minted at construction and by every copy (a move keeps it in the destination and mints a fresh one for the source).
+	std::uint64_t Revision() const;
+	std::uint64_t LastTouched(BodyId Id) const;
+	std::uint64_t Lineage() const;
+	const ComponentPartition& Components() const;   // cached partition, reset by every successful mutation (stage 1b-ii)
 };
 ```
 
@@ -672,6 +677,7 @@ struct AuthorityResult {
 	std::vector<ComponentReport> Components;     // ascending by lowest body slot
 	int Disagreements = 0;                       // components where the certificate overruled an elastic Mechanism
 	std::uint64_t Revision = 0;                  // Structure::Revision() when judged (stage 2)
+	std::uint64_t Lineage = 0;                   // Structure::Lineage() of the judged structure; a Previous from another lineage is unmatched (stage 2 fix)
 	AuthorityOptions Options;                    // the options judged under; a Previous under other options is unmatched (stage 2)
 	InterfaceId InvalidInterface{};
 };
@@ -1296,14 +1302,16 @@ warehouse's elastic solve 59 s to 5.9 s, the 32 × 40 wall finishing in 24 s).
   SCALE.md: the half warehouse judges at rest in under 2 s (from 91 s); the 40 × 32 wall
   judges; the warehouse (3,695 pieces) judges in under 10 s.
 
-**Stage 2, the event region.** Done 2026-10-12 (0fc14a5, DESIGN §10 "stage 2 opening" and
-amendment), in review: cleanliness is derived from `Structure::Revision()` and per-body
+**Stage 2, the event region.** Done 2026-10-12 (0fc14a5 and its fix rounds, DESIGN §10 "stage 2
+opening" and its amendments), second follow-up review in progress: cleanliness is derived from `Structure::Revision()` and per-body
 `LastTouched` stamps, not a dirty set; `IStandingAuthority::Solve` takes the component
 filter; `AuthorityResult` records its revision and `ComponentReport` its loads and `bReused`;
 `Judge(..., Previous)` copies clean components and their readings forward and solves the
 dirty ones through one filtered `Solve`; `Run(..., Previous)` passes each pass's verdict to
-the next. Owed: options as part of cleanliness (ruled, test in progress). The contract as
-first written follows. A judge after a change re-solves only the components that
+the next. Options are part of cleanliness (`AuthorityResult::Options`, every field compared
+exactly); a verdict belongs to one lineage (`Structure::Lineage()`, `AuthorityResult::Lineage`);
+the standing options are validated in `Judge` before any matching. The contract as first
+written follows. A judge after a change re-solves only the components that
 contain a changed body or joint. `Structure` carries a version counter and a dirty set (bodies
 whose joints were added, removed, cracked or severed since the last judge); `IStructuralAuthority::Judge`
 takes the last verdict and returns the clean components' entries unchanged (same verdict, same

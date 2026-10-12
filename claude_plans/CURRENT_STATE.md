@@ -179,11 +179,10 @@ cheap `Measure.Scale.*` rows after them); the `Deferred.*` tier holds the physic
    connectivity before any factorisation; the elastic authority could read it (and its
    rigid-body null space) without factorising, as the certificate's rigid-fall rule already
    does. Not in 1b; log for stage 2 or the certificate's next item.
-   **Stage 2, the event region: green (0fc14a5), reviewed, fix round in progress.** Done
+   **Stage 2, the event region: green (0fc14a5), fix round merged, second fix round in progress.** Done
    since the review: options are part of cleanliness (`AuthorityResult::Options`, exact
    comparison, e92c4df); the direct contract test of `Solve`'s filter; the warm Measure rows.
-   The cold review (2026-10-12) sent it back on two defects, both with red tests on branch
-   `stage-2-fix` (989b5a0) and dev in progress: a verdict from a diverged copy of a structure
+   The cold review (2026-10-12) sent it back on two defects, fixed and merged (6692e84): a verdict from a diverged copy of a structure
    was matched and reused (ruled: a lineage token minted at construction and on every copy,
    recorded in the verdict, DESIGN §10 second amendment), and invalid standing options with
    nothing dirty returned the copied verdict (ruled: `Judge` validates options before
@@ -194,11 +193,12 @@ cheap `Measure.Scale.*` rows after them); the `Deferred.*` tier holds the physic
    251 components, 68 reused) and removes the red-phase scaffolding. Decisions from the dev
    round ratified in the amendments (live-neighbour stamps, free-end rule for ground readings,
    exact load tuples, fail-closed on an uncopyable reading).
-   Owed to the test-expert: `Authority.Judge.DifferentOptionsReuseNothing` has no variant
-   for the fields added after it (`Certificate.CapSite`, and the stage-3b stall fields); the
-   structured bindings in `SameCertificate` force the comparison to grow (the stage-3a merge
-   broke the build until `CapSite` was added), but nothing pins that a differing new field
-   reuses nothing. Measured (SCALE.md): the
+   The follow-up review (2026-10-12) found one more wrong-reuse path, a moved-from structure
+   sharing its lineage with the destination (DESIGN §10 third amendment; red tests on branch
+   `stage-2-fix2`, dev next), six option-field comparisons and a force-only load change
+   unpinned, the certificate-option checks pinned only without a Previous, and stale API and
+   CURRENT_STATE text: all in the second fix round. The CapSite and stall-field variants of
+   the options test landed with the stage-3c red tests. Measured (SCALE.md): the
    warehouse judges in 0.49 s; its warm post cascade (4 of 5 components reused) is 254 ms
    against the 200 ms target, the remainder the frame's own certificate (about 225 ms),
    which is stage 3's.

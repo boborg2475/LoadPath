@@ -27,6 +27,19 @@ using namespace loadpath::test;
 
 namespace
 {
+template <class O>
+constexpr bool HasCoupling = requires(O X) { X.Coupling = O::CouplingKind::InFactor; };
+
+template <class O>
+O WithInFactorCoupling(O Options)
+{
+	if constexpr (HasCoupling<O>)
+	{
+		Options.Coupling = O::CouplingKind::InFactor;
+	}
+	return Options;
+}
+
 struct Counted
 {
 	std::vector<SolveCall> Solves;
@@ -1009,6 +1022,15 @@ TEST_CASE("Authority.Judge.DifferentOptionsReuseNothing")
 	AuthorityOptions Cap = Base;
 	Cap.Certificate.LoadFactorCap = 100.0;
 	Variants.emplace_back("Certificate.LoadFactorCap 100", Cap);
+	AuthorityOptions CapSite = Base;
+	CapSite.Certificate.CapSite = CertificateOptions::CapSiteKind::Dense;
+	Variants.emplace_back("Certificate.CapSite Dense", CapSite);
+	AuthorityOptions Window = Base;
+	Window.Certificate.StallWindow = 0;
+	Variants.emplace_back("Certificate.StallWindow 0", Window);
+	AuthorityOptions Improvement = Base;
+	Improvement.Certificate.StallImprovement = 0.25;
+	Variants.emplace_back("Certificate.StallImprovement 0.25", Improvement);
 	for (const auto& [Name, Options] : Variants)
 	{
 		INFO("options differing in " << std::string(Name));
@@ -1025,4 +1047,27 @@ TEST_CASE("Authority.Judge.DifferentOptionsReuseNothing")
 		}
 		CheckSameVerdict(Got, Fresh, F.Model, 0.0, 0.0);
 	}
+}
+
+TEST_CASE("Authority.Judge.ADifferentCouplingReusesNothing")
+{
+	CHECK_MESSAGE(HasCoupling<CertificateOptions>, "CertificateOptions has no Coupling, so the variant equals the base options");
+	ThreeComponents F = MakeThreeComponents();
+	const auto C = MakeCounted();
+	const AuthorityOptions Base;
+	const AuthorityResult First = C->Authority->Judge(F.Model, F.Loads, Base, nullptr);
+	AuthorityOptions Options = Base;
+	Options.Certificate = WithInFactorCoupling(Base.Certificate);
+	const AuthorityResult Fresh = MakeAuthority()->Judge(F.Model, F.Loads, Options, nullptr);
+	C->Solves.clear();
+	C->Decides.clear();
+	const AuthorityResult Got = C->Authority->Judge(F.Model, F.Loads, Options, &First);
+	INFO("got: " << DescribeAuthority(Got));
+	CheckSolvedOnly(C->Solves, {});
+	CHECK(Got.Components.size() == 3u);
+	for (const std::vector<BodyId>& Part : F.Parts)
+	{
+		CheckFresh(Got, Part);
+	}
+	CheckSameVerdict(Got, Fresh, F.Model, 0.0, 0.0);
 }

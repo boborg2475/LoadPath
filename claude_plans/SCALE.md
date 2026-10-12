@@ -210,3 +210,21 @@ The review also measured the sparse assembly bit-identical to the dense matrix o
 matrices, coupling included, and proposed for stage 3c a bordered system
 `[M_sites d; dᵀ −1/Coupling]` eliminated last under `SimplicialLDLT`, which keeps the
 coupling out of the factor without needing the site part to be invertible.
+
+## Rows after stages 3a and 3b (2026-10-12, HEAD 722c41b)
+
+From a copy of the Release exe, one process each, with two reviews and a test round building
+alongside:
+
+| Structure | Elastic | Certificate | Judge | Cascade: post | Cascade: base course |
+|---|---|---|---|---|---|
+| Shed | 57 ms | 7.1 s | 56 ms | 127 ms | 80 ms |
+| Wall 40 × 32 | 276 ms | 118 s | 224 ms | n/a | 27.1 s |
+| Half warehouse | 210 ms | **89 s** (152 s at 1b-iii, 589 s at 1b-i) | 186 ms | 316 ms | 3.0 s |
+| Warehouse | 797 ms | 253 s | 625 ms | 828 ms | 21.0 s |
+
+The stall rule took the half warehouse's certificate from 152 s to 89 s (its 595-body wall
+from 200 iterations to 72); the shed and the warehouse show no certificate gain on this
+loaded machine (the structured cap-site factor's 0.72 on the shed is inside the noise of a
+run alongside two builds), and the 32 × 40 wall is unchanged because its cost is the
+coupling block in the factor, which stage 3c removes.

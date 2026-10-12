@@ -705,7 +705,7 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   a ground contact added to a loose brick), pinned in the fix round. Measured by the review
   on the warehouse: a judge with Previous after one post removed is 317 ms against 558 ms
   fresh (4 of 5 reused), of which the frame's own certificate is about 225 ms.
-- *2026-10-12, orchestrator, stage 3a rulings from the dev round (branch, pending merge):*
+- *2026-10-12, orchestrator, stage 3a rulings from the dev round (merged 2623138):*
   **the 3 × 3 core is formed as a sum of PSD terms, the facet block is factored dense, and
   the structured path caches `Mww⁻¹Fᵀ` per site.** The core
   `K′ = Σ_J D_J (d_J − m_W)(d_J − m_W)ᵀ + Σ_W (T_W · gs_W / P_W) m_W m_Wᵀ` (m_W the D-weighted
@@ -723,7 +723,7 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   still spends half its time copying constant geometry per iteration and allocating small
   dynamic matrices; the follow-up caches the geometry per component. The 32 × 40 wall read
   119 s with no dense comparison yet.
-- *2026-10-12, orchestrator, stage 2 fix round (branch, pending merge):* ratified from the dev
+- *2026-10-12, orchestrator, stage 2 fix round (merged):* ratified from the dev
   round: the standing option conditions live in one shared `statics::AreStandingOptionsValid`
   used by both `FindInvalidInput` and `Judge`'s first guard; a non-finite standing gravity
   needs no separate check in `Judge` because the gravities must match and the certificate's
@@ -744,3 +744,28 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   lower bound unchanged; the twelve pinned fixtures and the 64 agreement cases bit-identical
   with the rule on and off. The brief's "returns its best iterate" mutation has no code to
   mutate; the ANCHORS row says so.
+- *2026-10-12, orchestrator, stage 3c opening:* **the load-factor coupling leaves the sparse
+  factor through a bordered system, behind a referee option for one slice.** The coupling
+  `c · d dᵀ` is a dense (bodies)² block on the demand's support (84 % of the 32 × 40 wall's
+  non-zeros, 62 % of its certificate time), and the site part alone is singular, so a
+  Sherman–Morrison correction is ill-posed (35 to 115 iterations when tried). The bordered
+  symmetric indefinite system `[M_sites + ρI, d; dᵀ, −1/c]`, factored by `SimplicialLDLT`
+  with the border eliminated last, solves the original system exactly (`y = c dᵀx`), keeps
+  the site block's sparsity, and needs no invertible site part: its success condition is
+  positive site pivots and one negative border pivot, with the same regularised retry as
+  today. `CertificateOptions::CouplingKind { InFactor, Bordered }` defaults to Bordered;
+  InFactor is the third referee removed at the 6b close. The contract is answers unchanged
+  (iteration counts equal, load factors to 1e-9) and the large-component time down; the Slow
+  ratio test's bar is set halfway in log terms between the first measured ratio and 1.0. The
+  same round adds the owed options-reuse variants (CapSite, the stall fields, Coupling).
+- *2026-10-12, orchestrator, stage 2 third amendment (from the follow-up review):* **a move
+  keeps the lineage in the destination and mints a fresh one for the source.** A defaulted
+  move left the moved-from structure holding the same token, and a host that rebuilds that
+  object (the builder-variable-outside-the-loop pattern) re-issues the same slot ids under the
+  same lineage; the review's repro judged the rebuilt source, then reused its brick on the
+  destination and read Collapses where a fresh judge reads Stands. The token becomes a small
+  member type that owns these rules so `Structure`'s special members can be defaulted again
+  (the hand-listed copy members were a second trap). The review also found six of the eleven
+  option-field comparisons and a force-only load change unpinned (each a surviving mutant),
+  and the certificate-option checks pinned only without a Previous; all in the second fix
+  round.
