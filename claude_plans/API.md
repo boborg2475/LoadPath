@@ -252,13 +252,15 @@ struct StandingResult {
 	std::vector<InterfaceReading> Readings;        // every live interface, ascending slot order
 	std::vector<MechanismMotion> Mechanism;        // every mechanism component, whatever State
 	std::vector<BodyId> UnconstrainedBodies;       // bodies every mechanism component moves
+	std::vector<StandingComponent> Components;     // per component: bodies, State, ActiveSetIterations, ReadingSlots into Readings; empty on InvalidInput (stage 1b-ii)
 	int ActiveSetIterations = 0;
 	InterfaceId InvalidInterface;                  // set when State == InvalidInput
 };
 class IStandingAuthority {
 public:
 	virtual ~IStandingAuthority() = default;
-	virtual StandingResult Solve(const Structure&, std::span<const BodyLoad> Loads, const StandingOptions&) const = 0;
+	// Only: empty solves every component; otherwise the components containing a listed body, Readings and Components covering those only (plus interfaces joining two grounded bodies); an entry that is not a live free body is InvalidInput (stage 2).
+	virtual StandingResult Solve(const Structure&, std::span<const BodyLoad> Loads, const StandingOptions&, std::span<const BodyId> Only) const = 0;
 };
 std::unique_ptr<IStandingAuthority> MakeRbsmStandingAuthority();
 ```
@@ -494,7 +496,8 @@ struct CertificateResult {
 class ICollapseCertificate {
 public:
 	virtual ~ICollapseCertificate() = default;
-	virtual CertificateResult Decide(const Structure&, std::span<const BodyLoad>, const CertificateOptions&) const = 0;
+	// Only: empty decides every component; otherwise the components containing a listed body, loads outside them without effect; an entry that is not a live free body is InvalidInput (stage 1b-ii).
+	virtual CertificateResult Decide(const Structure&, std::span<const BodyLoad>, const CertificateOptions&, std::span<const BodyId> Only) const = 0;
 };
 
 std::unique_ptr<ICollapseCertificate> MakeLimitAnalysisCertificate();
@@ -654,6 +657,8 @@ struct ComponentReport {
 	std::vector<MechanismMotion> Mechanism;       // the certificate's selected mechanism on Collapses
 	std::vector<BodyId> Release;                  // bodies the host releases: the certificate's UnconstrainedBodies on Collapses, else empty
 	std::vector<InterfaceId> Hinging;             // the certificate's HingingInterfaces on Collapses, else empty
+	std::vector<BodyLoad> Loads;                  // the loads on these bodies, as given; compared exactly for reuse (stage 2)
+	bool bReused = false;                         // copied from the previous verdict rather than solved (stage 2)
 };
 
 struct AuthorityOptions {
@@ -666,13 +671,16 @@ struct AuthorityResult {
 	std::vector<InterfaceReading> Readings;      // the elastic authority's readings, every live interface, ascending slot order
 	std::vector<ComponentReport> Components;     // ascending by lowest body slot
 	int Disagreements = 0;                       // components where the certificate overruled an elastic Mechanism
+	std::uint64_t Revision = 0;                  // Structure::Revision() when judged (stage 2)
+	AuthorityOptions Options;                    // the options judged under; a Previous under other options is unmatched (stage 2)
 	InterfaceId InvalidInterface{};
 };
 
 class IStructuralAuthority {
 public:
 	virtual ~IStructuralAuthority() = default;
-	virtual AuthorityResult Judge(const Structure&, std::span<const BodyLoad>, const AuthorityOptions&) const = 0;
+	// Previous: an earlier verdict on this structure's lineage, or nullptr; clean components (same bodies, no body touched since Previous->Revision, same loads, same options) are copied with bReused set, the rest solved through one filtered Solve (stage 2).
+	virtual AuthorityResult Judge(const Structure&, std::span<const BodyLoad>, const AuthorityOptions&, const AuthorityResult* Previous) const = 0;
 };
 
 std::unique_ptr<IStructuralAuthority> MakeCombinedAuthority(std::unique_ptr<IStandingAuthority>, std::unique_ptr<ICollapseCertificate>);
@@ -836,7 +844,8 @@ struct CascadeVerdict {
 class ICascade {
 public:
 	virtual ~ICascade() = default;
-	virtual CascadeVerdict Run(Structure&, std::span<const BodyLoad>, const CascadeOptions&) const = 0;
+	// Previous: the caller's last verdict or nullptr; each pass's verdict is the next pass's Previous (stage 2).
+	virtual CascadeVerdict Run(Structure&, std::span<const BodyLoad>, const CascadeOptions&, const AuthorityResult* Previous) const = 0;
 };
 
 std::unique_ptr<ICascade> MakeCascade(std::unique_ptr<IStructuralAuthority>);
