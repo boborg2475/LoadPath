@@ -462,6 +462,10 @@ UpdateOutcome UpdateActiveSet(const Problem& P, const Eigen::VectorXd& X, const 
 {
 	UpdateOutcome Outcome;
 	const double HeldToleranceN = HeldForceToleranceRelative * P.ForceScaleN;
+	if (!std::isfinite(P.ForceScaleN))
+	{
+		return Outcome;
+	}
 	const double NoiseFloorN = DryNoiseFloorRelative * P.ForceScaleN;
 	for (std::size_t I = 0; I < P.Joints.size(); ++I)
 	{
@@ -476,7 +480,7 @@ UpdateOutcome UpdateActiveSet(const Problem& P, const Eigen::VectorXd& X, const 
 			const bool bDry = J.bReleasesOpening && J.bReleasesSlip;
 			if (Status == CornerStatus::Open)
 			{
-				const bool bLoaded = bDry ? T.NormalN > NoiseFloorN : T.GapM <= 0.0;
+				const bool bLoaded = bDry ? T.NormalN > 2.0 * NoiseFloorN : T.GapM <= 0.0;
 				if (bLoaded && !IsGapIndeterminate(P, J, C, NeutralMotions))
 				{
 					Status = CornerStatus::Stuck;
@@ -484,7 +488,7 @@ UpdateOutcome UpdateActiveSet(const Problem& P, const Eigen::VectorXd& X, const 
 				}
 				continue;
 			}
-			if ((J.bReleasesOpening && T.NormalN < 0.0) || (bDry && std::abs(T.NormalN) <= NoiseFloorN))
+			if ((J.bReleasesOpening && T.NormalN < -NoiseFloorN) || (bDry && std::abs(T.NormalN) <= NoiseFloorN))
 			{
 				Status = CornerStatus::Open;
 				HeldN = Vec3{};

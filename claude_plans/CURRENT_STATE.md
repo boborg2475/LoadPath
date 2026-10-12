@@ -65,12 +65,19 @@ and 5 rulings.
      3e-12 reads Undecided/50 where it read Stands/1; at 1e-13 it reads Stands with the light
      body's support corners open, floating). Fails closed; untested;
    - one regression independent of the floor value: the 4 × 2 wall at λ (0.30, 0.15) went from
-     Stands/14 to Undecided/50 (probably the re-close rule; check after the hysteresis);
+     Stands/14 to Undecided/50, and still reads Undecided/50 after the hysteresis (dev
+     measurement, 2026-10-11): it belongs with the lateral non-convergence above;
+   - the non-finite force scale fails closed by freezing the active set (no corner opens, the
+     overflowed load reads through closed joints as Overstressed), which is narrower than the
+     ruling "never Stands": a non-finite scale whose load stays within capacity through closed
+     corners would still read Stands; no such case could be constructed and none is tested;
    - an unloaded component (zero gravity, no loads) has floor 0 and `<=` opens every dry corner,
      reading Stands with all corners open; `<=` → `<` survives the suite, so the boundary is
      unpinned;
-   - the floor's size is pinned only between 1e-9 (survives) and 1e-6 (three anchors fail)
-     until the scaling test lands.
+   - the floor's size is pinned from above by the end-push scaling test (floor 1e-9 reddens it)
+     and from below by nothing: a smaller floor only brings the at-rest chatter back at larger
+     sizes (noise reaches 1.5e-16 of the scale on the 14 × 10 wall, so 1e-12 keeps about four
+     orders of margin that shrink roughly linearly with size).
    Next slice: 6, scale, opening with a measurement (API.md "Slice 6" when written: a
    warehouse-like generator from the slice-5 pieces, `Slow.Scale.*` rows for the wall, shed and
    warehouse sizes through the combined authority and the cascade, the table in
