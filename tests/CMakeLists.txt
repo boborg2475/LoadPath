@@ -45,7 +45,8 @@ add_executable(loadpath_tests
 	EventRegionTest.cpp
 	CertificateIterationsTest.cpp
 	CapSiteFactorTest.cpp
-	CertificateCouplingTest.cpp)
+	CertificateCouplingTest.cpp
+	CascadeScanTest.cpp)
 target_link_libraries(loadpath_tests PRIVATE loadpath doctest)
 target_include_directories(loadpath_tests PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_include_directories(loadpath_tests SYSTEM PRIVATE ${CMAKE_SOURCE_DIR}/third_party/eigen)

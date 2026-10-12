@@ -150,3 +150,36 @@ TEST_CASE("Model.Structure.InterfacesOfTheSurvivingNeighbourDropsTheRemovedJoint
 	CHECK(F.Model.InterfacesOf(F.B2).empty());
 	CHECK(Describe(F.Model.InterfacesOf(F.Side)) == DescribeAscending(std::vector<InterfaceId>{F.J1Side}));
 }
+
+TEST_CASE("Model.Structure.InterfacesOfListsOnlyLiveJointsAscendingAfterSeverAndRemoval")
+{
+	StackWithSideBrick F = MakeStackWithSideBrick();
+	REQUIRE(F.Model.Sever(F.J01, 1));
+	CHECK(Describe(F.Model.InterfacesOf(F.B1)) == DescribeAscending(std::vector<InterfaceId>{F.J12, F.J1Side}));
+	REQUIRE(F.Model.RemoveBody(F.B2));
+	CHECK(Describe(F.Model.InterfacesOf(F.B1)) == DescribeAscending(std::vector<InterfaceId>{F.J1Side}));
+	CHECK(F.Model.InterfacesOf(F.B0).empty());
+	CHECK(F.Model.Interface(F.J01).State == InterfaceState::Severed);
+	CHECK(F.Model.LiveInterfaceCount() == 1u);
+	REQUIRE(F.Model.RemoveBody(F.B1));
+	CHECK(F.Model.Interface(F.J01).State == InterfaceState::Severed);
+	CHECK(F.Model.Interface(F.J1Side).State == InterfaceState::Removed);
+	CHECK(F.Model.InterfacesOf(F.Side).empty());
+	CHECK(F.Model.LiveInterfaceCount() == 0u);
+}
+
+TEST_CASE("Model.Structure.ACopyIsIndependentOfTheOriginal")
+{
+	StackWithSideBrick F = MakeStackWithSideBrick();
+	Structure Copy = F.Model;
+	REQUIRE(Copy.RemoveBody(F.B1));
+	REQUIRE(Copy.Sever(F.J23, 1));
+	CHECK(Copy.InterfacesOf(F.Side).empty());
+	CHECK(Copy.LiveInterfaceCount() == 0u);
+	CHECK(Describe(F.Model.InterfacesOf(F.B1)) == DescribeAscending(std::vector<InterfaceId>{F.J01, F.J12, F.J1Side}));
+	CHECK(Describe(F.Model.InterfacesOf(F.B3)) == DescribeAscending(std::vector<InterfaceId>{F.J23}));
+	CHECK(F.Model.LiveInterfaceCount() == 4u);
+	REQUIRE(F.Model.RemoveBody(F.B3));
+	CHECK(Copy.Interface(F.J23).State == InterfaceState::Severed);
+	CHECK(F.Model.Interface(F.J23).State == InterfaceState::Removed);
+}

@@ -285,3 +285,20 @@ item 1 opening"). From a copy of the Release exe, one run each, same day before 
 Everything else in those rows is unchanged (wall judge 168 ms, certificate 27 s; half
 warehouse judge 142 ms, certificate 44 s). The base-course cascade was a dense factorisation
 of a singular stiffness spent to learn what connectivity already said.
+
+## Where the base-course cascade spends its time (2026-10-12, at 685a5be)
+
+A throwaway copy of master with timers around the three phases of each cascade pass
+(`Judge`, `Release`, `CrackBand`), Release, one run each, cold (no previous result):
+
+| Structure | Bodies after | Readings | Judge | Release | CrackBand | Cascade total |
+|---|---|---|---|---|---|---|
+| Wall 40 × 32 | 1 | 3,625 | 77 ms | 32 ms | 0 | 110 ms |
+| Half warehouse | 1,242 | 5,032 | 137 ms | 25 ms | 0 | 163 ms |
+| Warehouse | 2,480 | 10,519 | 390 ms | 119 ms | 0 | 512 ms |
+| Warehouse, post removed, cold | 3,694 | 10,675 | 594 ms | 0 | 0 | 596 ms |
+
+The second pass of each costs under 1 ms. The judge is the floating remainder's finiteness
+assembly (about 65 ms per 1,250 bricks) plus the grounded components; the release is the
+quadratic scans in `Cascade.cpp` and `Structure::RemoveBody`. Items 2 and 3 carried from 6b
+take one each (DESIGN §10, their openings).

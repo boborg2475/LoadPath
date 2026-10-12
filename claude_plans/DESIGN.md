@@ -947,3 +947,38 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   as pre-existing, not from the item: a 1e308 kg mass whose weight overflows is never
   validated; the sparse and dense finiteness checks above `DenseDofLimit` sum in different
   orders and can disagree in the same band; a gravity of 1e-300 counts as non-zero.
+- *2026-10-12, orchestrator, carried from 6b, item 2 opening (the cascade's scans):* a
+  per-phase profile of the base-course cascade on master (685a5be, Release, a throwaway copy
+  with timers in `BrittleCascade::Run`): the 40 × 32 wall judges its floating remainder in
+  77 ms and spends 32 ms in `Release`; the half warehouse 137 ms and 25 ms; the warehouse
+  390 ms and 119 ms (10,519 readings, a 1,214-body cluster). `CrackBand` costs nothing on
+  these fixtures (no Overstressed component) but has the same shape. The release cost is the
+  quadratic scans: `ClustersOf` finds each interface's bodies in the release list by linear
+  search, `Release` tests every live interface against every cluster by linear search, and
+  `Structure::RemoveBody` walks every interface slot per removed body. **Ruling: index them,
+  changing no answer.** The structure keeps a per-body list of incident interface slots
+  (appended by `AddInterface`), so `RemoveBody` and `InterfacesOf` cost the body's degree;
+  the cascade builds, once per pass, a reading index by interface slot and a cluster-of-body
+  table by body slot, assigns severs in one ascending sweep of the live interfaces, and the
+  crack band tests component membership through a flag table. Cluster order, each cluster's
+  `Severed` order, the `Failures` order and every verdict stay what they are, which the
+  `Cascade.*` suite pins. The measurement is a ratio: a field of K floating pairs cascaded at
+  K and 4K reads about 16× today and about 4× indexed (the judge is linear in K), with the bar
+  halfway between in log terms (8×), in the Slow tier.
+- *2026-10-12, orchestrator, carried from 6b, item 3 opening (the shortcut's finiteness fold):*
+  the ungrounded shortcut assembles and scales a sparse stiffness only to test it finite:
+  65 ms of the 70 ms the 1,256-brick floating remainder costs, 4.5 ms before the gate. A
+  block-wise check (any non-finite block) is necessary but not sufficient: finite blocks sum
+  past DBL_MAX in the 3.6e304 to 1.45e305 Pa/m band, which is the band the second fix round
+  pinned. **Ruling: fold the blocks instead of assembling them, in the dense check's order.**
+  `ForEachStiffnessBlock` emits, per joint and per corner, the four 6 × 6 blocks of the body
+  pair; the dense check adds them entry by entry in that order. The fold keeps one 6 × 6
+  accumulator per body (its diagonal block) and one per joint body pair (the off-diagonal
+  blocks; two joints on the same pair add in joint order, as the dense sum does), adds in the
+  same callback order, then scales each accumulated entry by its two characteristic-length
+  factors and tests it finite. The per-entry addition order is the dense check's, so the
+  decision is bit-identical, which the agreement sweep (the follow-up review's
+  `Probe.SweepSmall`: the unloaded route reads InvalidInput exactly when the pushed route does,
+  swept over 1e300 to DBL_MAX on the big pair and a ×40 wall remainder at `DenseDofLimit` 600
+  and 0) now pins in place of the two absolute stiffness pins. The Slow remainder bar drops
+  from 2.0 s to 30 ms, red at 70 ms today and 3× above the expected cost.
