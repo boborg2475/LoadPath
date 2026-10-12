@@ -380,8 +380,9 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   corner on a joint with zero tension and zero cohesion whose trial normal force lies within a
   **force-noise floor** of zero is Open, carries nothing and reads N 0, S 0, utilisations 0; the
   floor is one named constant relative to the component's `ForceScaleN`, of the order of the
-  held-force tolerance (1e-12), so it is far below any real load (a perpend under λ 0.2 on the
-  1 × 3 wall carries newtons) and far above the roundoff it exists to absorb; the stuck/slipping
+  held-force tolerance (1e-12), so it is far below any real load (a perpend of the 1 × 3 wall under a 0.2 W push on the end
+  brick carries 0.2 to 1.2 N; under a uniform λ 0.2 the three bricks move together and the
+  perpends carry nothing, which the floor may open) and far above the roundoff it exists to absorb; the stuck/slipping
   comparison gets the same absolute slack so a capacity and a shear both at noise level never
   flip a corner. A genuinely loaded corner keeps the slice-2 rule unchanged, so the incline,
   bridge and wall anchors must not move. Bonded corners are untouched: cohesion carries at N 0.

@@ -222,18 +222,6 @@ TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Geometry.Anchor.SmallBondedWallStandsPastThick
 	CHECK(Far.State == CertificateState::Collapses);
 }
 
-TEST_CASE("Deferred.Slice6.SmallestDryWallThatDoesNotSettleElastically")
-{
-	const BuiltWall W = BuildDryWall(1, 3);
-	if (!RequireBuilt(W, 3u))
-	{
-		return;
-	}
-	const StandingResult Elastic = SolveWith(W.Model, StandingOptions{});
-	INFO("1 x 3 dry wall elastic " << Elastic.State << " after " << Elastic.ActiveSetIterations << " active-set iterations");
-	CHECK(Elastic.State == StandingState::Stands);
-}
-
 TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Geometry.Anchor.SmallBondedWallOverturnsAtTheBondedMonolithFactor")
 {
 	const BuiltWall W = BuildBondedWall(4, 5);

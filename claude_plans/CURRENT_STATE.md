@@ -57,9 +57,11 @@ and 5 rulings.
    SettleElastically` moves to the default tier green; the 2 × 1 wall Stands at rest with finite
    zero utilisations on the perpend; a sweep 1 × 3, 2 × 3, 3 × 4, 4 × 5 Stands elastically with
    the iteration counts recorded; the incline and bridge anchors unchanged (the floor is not a
-   blanket); a dry perpend under a real lateral load (λ 0.2 on the 1 × 3 wall) still carries
-   shear above the floor; a bonded perpend at N ≈ 0 is not opened. Mutations: floor 0 restores
-   the Undecided; floor 1e-3 of the force scale makes the loaded-perpend test red. Then check
+   blanket); a dry perpend under a real load (a 0.2 W push on the end brick of the 1 × 3 wall;
+   a uniform λ 0.2 moves the bricks together and the perpends carry nothing) still carries
+   above the floor; a bonded perpend at N ≈ 0 is not opened. Mutations: floor 0 restores
+   the Undecided; a floor large enough to swallow the end-push perpend (0.22 N against a force
+   scale of about 84 N, so above 1e-2) makes the loaded-perpend test red. Then check
    whether the 10 × 8 dry wall (Slow, Release) settles and how many iterations it takes.
    Slice 3 and 4b items still open (none host-unsafe; the unsafe one, the wedge band, is under
    Deferred):
