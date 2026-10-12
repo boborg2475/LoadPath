@@ -917,3 +917,12 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   pair's disagreement count, InvalidInput on the non-finite pair, a tilted gravity's motion,
   the zero-gravity pair as before, the corner points carried, and the sever reason of a lifted
   floating pair reading None 0 where it read Tension inf.
+- *2026-10-12, orchestrator, carried from 6b, item 1, correction of the amendment:* the
+  amendment's last pin contradicted its own rule: a lifted floating pair carries a host load,
+  so it takes the full solve and its sever reason stays what the full solve reads (Tension
+  inf, the 6a note); a sever reason of None 0 arises only when an unloaded floating
+  component's internal joint is severed, which the rigid fall never does, so there is nothing
+  to pin and that test is withdrawn. Likewise the pushed floating pair takes the full solve
+  (Mechanism after at least one iteration), not the shortcut. **A `BodyLoad` with zero force
+  is no load**: the shortcut still applies, matching the cascade's existing
+  `AZeroForceLoadDoesNotStopTheRigidFall`.
