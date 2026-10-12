@@ -18,11 +18,10 @@ namespace loadpath
 class Structure
 {
 public:
-	Structure();
-	// A copy mints a fresh lineage; a move keeps the source's.
-	Structure(const Structure& Other);
+	Structure() = default;
+	Structure(const Structure& Other) = default;
 	Structure(Structure&& Other) noexcept = default;
-	Structure& operator=(const Structure& Other);
+	Structure& operator=(const Structure& Other) = default;
 	Structure& operator=(Structure&& Other) noexcept = default;
 	~Structure() = default;
 
@@ -71,10 +70,25 @@ public:
 	std::uint64_t Revision() const;
 	// The revision of the last mutation touching this body (its AddBody, its interfaces, a removed neighbour); an unknown id reads the largest value.
 	std::uint64_t LastTouched(BodyId Id) const;
-	// Unique per constructed or copied structure in this process; mutations and moves keep it.
+	// Unique per constructed or copied structure in this process; mutations keep it, a move keeps it in the destination and the source takes a fresh one.
 	std::uint64_t Lineage() const;
 
 private:
+	class LineageToken
+	{
+	public:
+		LineageToken();
+		LineageToken(const LineageToken& Other);
+		LineageToken(LineageToken&& Other) noexcept;
+		LineageToken& operator=(const LineageToken& Other);
+		LineageToken& operator=(LineageToken&& Other) noexcept;
+		~LineageToken() = default;
+		std::uint64_t Value() const;
+
+	private:
+		std::uint64_t Token;
+	};
+
 	struct BodySlot
 	{
 		BodyDesc Desc;
@@ -99,7 +113,7 @@ private:
 	// Tracked, never recomputed from records that removal may have rewritten.
 	std::uint32_t HighestStamp = 0;
 	std::uint64_t CurrentRevision = 0;
-	std::uint64_t LineageToken = 0;
+	LineageToken Token;
 	mutable std::optional<ComponentPartition> CachedComponents;
 };
 }

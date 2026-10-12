@@ -59,40 +59,49 @@ std::uint64_t MintLineage()
 }
 }
 
-Structure::Structure()
-	: LineageToken(MintLineage())
+Structure::LineageToken::LineageToken()
+	: Token(MintLineage())
 {
 }
 
-Structure::Structure(const Structure& Other)
-	: Profiles(Other.Profiles)
-	, Bodies(Other.Bodies)
-	, Interfaces(Other.Interfaces)
-	, HighestStamp(Other.HighestStamp)
-	, CurrentRevision(Other.CurrentRevision)
-	, LineageToken(MintLineage())
-	, CachedComponents(Other.CachedComponents)
+Structure::LineageToken::LineageToken(const LineageToken&)
+	: Token(MintLineage())
 {
 }
 
-Structure& Structure::operator=(const Structure& Other)
+Structure::LineageToken::LineageToken(LineageToken&& Other) noexcept
+	: Token(Other.Token)
+{
+	Other.Token = MintLineage();
+}
+
+Structure::LineageToken& Structure::LineageToken::operator=(const LineageToken& Other)
 {
 	if (this != &Other)
 	{
-		Profiles = Other.Profiles;
-		Bodies = Other.Bodies;
-		Interfaces = Other.Interfaces;
-		HighestStamp = Other.HighestStamp;
-		CurrentRevision = Other.CurrentRevision;
-		CachedComponents = Other.CachedComponents;
-		LineageToken = MintLineage();
+		Token = MintLineage();
 	}
 	return *this;
 }
 
+Structure::LineageToken& Structure::LineageToken::operator=(LineageToken&& Other) noexcept
+{
+	if (this != &Other)
+	{
+		Token = Other.Token;
+		Other.Token = MintLineage();
+	}
+	return *this;
+}
+
+std::uint64_t Structure::LineageToken::Value() const
+{
+	return Token;
+}
+
 std::uint64_t Structure::Lineage() const
 {
-	return LineageToken;
+	return Token.Value();
 }
 
 Result<ProfileId> Structure::AddProfile(const StrengthProfile& Desc)
