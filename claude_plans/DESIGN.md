@@ -851,3 +851,15 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   `Ec6Wall(30, 24)` (735 bodies: InFactor 18.2 s, Bordered 11.3 s, ratio 0.62, bar 0.79), run
   I, B, B, I, because at 310 bodies the bar had a 2 % false-red margin against a 5 % detection
   margin (forcing InFactor reads 0.976, forcing Bordered 0.990). The `requires` stand-ins go.
+- *2026-10-12, orchestrator, slice 6b close opening:* **the three referees go**, as the stage
+  1a, 3a and 3c openings ruled: `FactorKind::Reference`, `CapSiteKind::Dense` and
+  `CouplingKind::InFactor`, each with its `enum` and its field in the options (the structured
+  bindings in the option comparisons shrink with them). What pins the behaviour afterwards:
+  the blocked factor's agreement tests become pinned-value tests measured against the
+  reference one last time (states, iteration counts, a short list of readings to 1e-10); the
+  cap-site unit tests keep their in-test dense oracle and the 12-fixture table keeps the
+  certificate; the bordered path keeps `Certificate.Sparse.AgreesWithTheDensePath` (sparse
+  against the dense normal equations below `DenseRowLimit`, two paths that both stay) plus
+  its pinned-fixture and singular-block tests; the two Slow ratio tests are retired with their
+  last measured ratios in ANCHORS and the rows in SCALE.md. The independent check the
+  referees gave the elastic factor passes to slice 7's HiGHS referee.

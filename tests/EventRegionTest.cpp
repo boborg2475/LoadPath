@@ -27,19 +27,6 @@ using namespace loadpath::test;
 
 namespace
 {
-template <class O>
-constexpr bool HasCoupling = requires(O X) { X.Coupling = O::CouplingKind::InFactor; };
-
-template <class O>
-O WithInFactorCoupling(O Options)
-{
-	if constexpr (HasCoupling<O>)
-	{
-		Options.Coupling = O::CouplingKind::InFactor;
-	}
-	return Options;
-}
-
 struct Counted
 {
 	std::vector<SolveCall> Solves;
@@ -1059,13 +1046,12 @@ TEST_CASE("Authority.Judge.DifferentOptionsReuseNothing")
 
 TEST_CASE("Authority.Judge.ADifferentCouplingReusesNothing")
 {
-	CHECK_MESSAGE(HasCoupling<CertificateOptions>, "CertificateOptions has no Coupling, so the variant equals the base options");
 	ThreeComponents F = MakeThreeComponents();
 	const auto C = MakeCounted();
 	const AuthorityOptions Base;
 	const AuthorityResult First = C->Authority->Judge(F.Model, F.Loads, Base, nullptr);
 	AuthorityOptions Options = Base;
-	Options.Certificate = WithInFactorCoupling(Base.Certificate);
+	Options.Certificate.Coupling = CertificateOptions::CouplingKind::InFactor;
 	const AuthorityResult Fresh = MakeAuthority()->Judge(F.Model, F.Loads, Options, nullptr);
 	C->Solves.clear();
 	C->Decides.clear();
