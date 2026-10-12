@@ -32,7 +32,9 @@ add_executable(loadpath_tests
 	GeometryWallTest.cpp
 	GeometryAnchorsTest.cpp
 	DryCornerNoiseFloorTest.cpp
-	CascadeFuzzTest.cpp)
+	CascadeFuzzTest.cpp
+	GeometryWarehouseTest.cpp
+	ScaleMeasurementTest.cpp)
 target_link_libraries(loadpath_tests PRIVATE loadpath doctest)
 target_compile_definitions(loadpath_tests PRIVATE LOADPATH_CATALOGUE_PATH="${CMAKE_SOURCE_DIR}/data/catalogue.json")
 

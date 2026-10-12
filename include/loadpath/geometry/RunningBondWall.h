@@ -20,6 +20,12 @@ struct WallSpec
 	// Odd courses offset by half a brick, with half bricks at the ends.
 	bool bRunningBond = true;
 	double GroundZM = 0.0;
+	// Shifts every centroid; the default wall is centred on y = 0 and starts at x = 0.
+	Vec3 OriginM = {0, 0, 0};
+	// Length along y and thickness along x.
+	bool bAlongY = false;
+	// An existing grounded body to stand on; Invalid makes a new one.
+	BodyId Ground;
 };
 
 struct Wall

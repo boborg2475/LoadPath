@@ -298,3 +298,95 @@ TEST_CASE("Geometry.Wall.AWallWithInvalidProfilesIsNotComplete")
 	INFO("valid profiles: complete " << Valid.Value.bComplete);
 	CHECK(Valid.Value.bComplete);
 }
+
+TEST_CASE("Geometry.Wall.AnOriginShiftsEveryCentroidByIt")
+{
+	const BuiltWall Plain = Build(4, 5, true);
+	BuiltWall Moved;
+	Moved.Spec = Plain.Spec;
+	Moved.Spec.Bed = AddProfileOk(Moved.Model, DryJoint(0.7));
+	Moved.Spec.Perpend = AddProfileOk(Moved.Model, DryJoint(0.6));
+	Moved.Spec.OriginM = Vec3{1.25, -0.5, 0.3};
+	Moved.Value = geometry::BuildRunningBondWall(Moved.Model, Moved.Spec);
+	ReportCounts(Moved);
+	REQUIRE(BrickCount(Moved.Value) == BrickCount(Plain.Value));
+	if (BrickCount(Moved.Value) != BrickCount(Plain.Value))
+	{
+		return;
+	}
+	for (std::size_t C = 0; C < Plain.Value.Courses.size(); ++C)
+	{
+		for (std::size_t K = 0; K < Plain.Value.Courses[C].size(); ++K)
+		{
+			INFO("course " << C << " brick " << K);
+			const Vec3 Want = Plus(Plain.Model.Body(Plain.Value.Courses[C][K]).CentroidM, Moved.Spec.OriginM);
+			CHECK(Length(Minus(Moved.Model.Body(Moved.Value.Courses[C][K]).CentroidM, Want)) <= Exact);
+		}
+	}
+}
+
+TEST_CASE("Geometry.Wall.AWallAlongYHasItsLengthAlongYAndItsThicknessAlongX")
+{
+	const BuiltWall Plain = Build(4, 5, true);
+	BuiltWall Turned;
+	Turned.Spec = Plain.Spec;
+	Turned.Spec.Bed = AddProfileOk(Turned.Model, DryJoint(0.7));
+	Turned.Spec.Perpend = AddProfileOk(Turned.Model, DryJoint(0.6));
+	Turned.Spec.bAlongY = true;
+	Turned.Spec.OriginM = Vec3{2.0, 0.0, 0.0};
+	Turned.Value = geometry::BuildRunningBondWall(Turned.Model, Turned.Spec);
+	ReportCounts(Turned);
+	REQUIRE(BrickCount(Turned.Value) == BrickCount(Plain.Value));
+	if (BrickCount(Turned.Value) != BrickCount(Plain.Value))
+	{
+		return;
+	}
+	CHECK(Turned.Value.Beds.size() == Plain.Value.Beds.size());
+	CHECK(Turned.Value.Perpends.size() == Plain.Value.Perpends.size());
+	for (std::size_t C = 0; C < Plain.Value.Courses.size(); ++C)
+	{
+		for (std::size_t K = 0; K < Plain.Value.Courses[C].size(); ++K)
+		{
+			INFO("course " << C << " brick " << K);
+			const Vec3 P = Plain.Model.Body(Plain.Value.Courses[C][K]).CentroidM;
+			const Vec3 Want{2.0 + P.Y, P.X, P.Z};
+			CHECK(Length(Minus(Turned.Model.Body(Turned.Value.Courses[C][K]).CentroidM, Want)) <= Exact);
+		}
+	}
+	for (const InterfaceId& Id : Turned.Value.Perpends)
+	{
+		const InterfaceRecord& R = Turned.Model.Interface(Id);
+		CHECK(Length(Minus(R.NormalAToB, Vec3{0, 1, 0})) <= Exact);
+		CHECK(R.AreaM2 == doctest::Approx(Turned.Spec.BrickM.Y * Turned.Spec.BrickM.Z).epsilon(Exact));
+		CHECK(R.CentreM.X == doctest::Approx(2.0).epsilon(Exact));
+	}
+	for (const InterfaceId& Id : Turned.Value.Beds)
+	{
+		const InterfaceRecord& R = Turned.Model.Interface(Id);
+		CHECK(Length(Minus(R.NormalAToB, Vec3{0, 0, 1})) <= Exact);
+		CHECK(std::abs(R.HalfExtentUM * R.HalfExtentVM * 4.0 - R.AreaM2) <= Exact);
+	}
+}
+
+TEST_CASE("Geometry.Wall.AWallGivenAGroundStandsOnItAndAddsNoGround")
+{
+	Structure Model;
+	const BodyId Shared = AddGroundPlane(Model);
+	geometry::WallSpec Spec;
+	Spec.Courses = 4;
+	Spec.BricksPerCourse = 5;
+	Spec.Bed = AddProfileOk(Model, DryJoint(0.7));
+	Spec.Perpend = AddProfileOk(Model, DryJoint(0.6));
+	Spec.Ground = Shared;
+	const geometry::Wall Value = geometry::BuildRunningBondWall(Model, Spec);
+	INFO("live bodies " << Model.LiveBodyCount() << ", bricks " << BrickCount(Value) << ", complete " << Value.bComplete);
+	CHECK(Value.bComplete);
+	CHECK(SameHandle(Value.Ground, Shared));
+	CHECK(Model.LiveBodyCount() == ClosedFormBricks(4, 5, true) + 1);
+	std::size_t OnShared = 0;
+	for (const InterfaceId& Id : Value.Beds)
+	{
+		OnShared += SameHandle(Model.Interface(Id).BodyA, Shared) ? 1u : 0u;
+	}
+	CHECK(OnShared == 5u);
+}

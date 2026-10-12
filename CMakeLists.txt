@@ -44,7 +44,8 @@ add_library(loadpath STATIC
 	src/Units.cpp
 	src/Vec3.cpp
 	src/geometry/BoxContacts.cpp
-	src/geometry/RunningBondWall.cpp)
+	src/geometry/RunningBondWall.cpp
+	src/geometry/Warehouse.cpp)
 target_include_directories(loadpath PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 # Eigen stays behind the solver interface: private, SYSTEM so /W4 /WX does not fire inside it, MPL2 only.
 target_include_directories(loadpath SYSTEM PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/third_party/eigen)
