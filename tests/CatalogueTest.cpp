@@ -18,6 +18,7 @@ namespace
 constexpr double PaPerMPa = 1e6;
 constexpr double PaPerMPerGPaPerM = 1e9;
 constexpr double NPerKN = 1e3;
+constexpr double NPerMPerMNPerM = 1e6;
 
 CatalogueResult LoadRepositoryCatalogue()
 {
@@ -39,8 +40,8 @@ struct JointFileValues
 };
 
 const JointFileValues JointValues[] = {
-	{"clay_gp_mortar_bed_ec6", 0.10, 0.30, 0.4, 8.93},
-	{"clay_gp_mortar_perpend_ec6", 0.20, 0.15, 0.4, 8.93},
+	{"clay_gp_mortar_bed_ec6", 0.0333333333333333, 0.30, 0.4, 8.93},
+	{"clay_gp_mortar_perpend_ec6", 0.0333333333333333, 0.30, 0.4, 8.93},
 	{"clay_gp_mortar_bed_gooch_mean", 0.20, 0.60, 1.05, 8.93},
 	{"lime_mortar_handmade_brick_upc_mean", 0.0, 0.16, 0.667169287134503, 8.93},
 	{"c24_bearing_perp_to_grain", 0.0, 0.0, 0.3, 3.75},
@@ -52,14 +53,14 @@ struct FastenerFileValues
 	double ShearKN;
 	double WithdrawalKN;
 	double BearingMPa;
+	double SlipModulusMNPerM;
+	double BearingNormalStiffnessGPaPerM;
 };
 
 const FastenerFileValues FastenerValues[] = {
-	{"ec5_screw_8x60_steel_to_glulam", 4.83, 1.74, 3.75},
-	{"ec5_ring_nail_4x40_steel_plate", 1.607, 0.42, 3.75},
-	{"ec5_bolt_m16_double_shear", 6.45, 0.0, 3.75},
-	{"ec5_screw_8x60_steel_to_glulam_mean", 5.18259, 1.74, 3.75},
-	{"ec5_bolt_m16_double_shear_mean", 6.9273, 0.0, 3.75},
+	{"ec5_screw_8x60_steel_to_glulam", 4.83, 5.24, 3.75, 6.20, 8.2},
+	{"ec5_ring_nail_4x40_steel_plate", 1.607, 0.42, 3.75, 1.80, 8.2},
+	{"ec5_bolt_m16_double_shear", 12.9, 0.0, 3.75, 12.4, 8.2},
 };
 
 struct CatalogueErrorCase
@@ -103,6 +104,17 @@ std::vector<CatalogueErrorCase> ErrorCases()
 		FastenerCase("negative bearing", WithField(ScrewElement("screw_two"), "bearing_mpa", "-3.75"), "bearing_mpa"),
 		FastenerCase("unknown fastener basis", WithField(ScrewElement("screw_two"), "basis", "\"nominal\""), "basis"),
 		FastenerCase("duplicate fastener name", ScrewElement("screw"), "screw", "screw"),
+		JointCase("unknown joint key", WithField(BedJointElement("bed_two"), "shear_cap_mp", "1.30"), "shear_cap_mp"),
+		JointCase("friction normal stress not finite after conversion", WithField(BedJointElement("bed_two"), "friction_normal_stress_mpa", "1e303"), "friction_normal_stress_mpa"),
+		JointCase("zero normal stiffness", WithField(BedJointElement("bed_two"), "normal_stiffness_gpa_per_m", "0"), "normal_stiffness_gpa_per_m"),
+		JointCase("zero tangential stiffness", WithField(BedJointElement("bed_two"), "tangential_stiffness_gpa_per_m", "0"), "tangential_stiffness_gpa_per_m"),
+		FastenerCase("unknown fastener key", WithField(ScrewElement("screw_two"), "withdrawl_kn", "1.74"), "withdrawl_kn"),
+		FastenerCase("shear not finite after conversion", WithField(ScrewElement("screw_two"), "shear_per_plane_kn", "1e306"), "shear_per_plane_kn"),
+		FastenerCase("missing slip modulus", WithoutField(ScrewElement("screw_two"), "slip_modulus_mn_per_m"), "slip_modulus_mn_per_m"),
+		FastenerCase("missing bearing normal stiffness", WithoutField(ScrewElement("screw_two"), "bearing_normal_stiffness_gpa_per_m"), "bearing_normal_stiffness_gpa_per_m"),
+		FastenerCase("zero slip modulus", WithField(ScrewElement("screw_two"), "slip_modulus_mn_per_m", "0"), "slip_modulus_mn_per_m"),
+		FastenerCase("zero bearing normal stiffness", WithField(ScrewElement("screw_two"), "bearing_normal_stiffness_gpa_per_m", "0"), "bearing_normal_stiffness_gpa_per_m"),
+		FastenerCase("zero bearing strength", WithField(ScrewElement("screw_two"), "bearing_mpa", "0"), "bearing_mpa"),
 	};
 }
 }
@@ -112,8 +124,7 @@ TEST_CASE("Catalogue.Loader.TheRepositoryFileLoadsEveryRowInFileOrder")
 	const CatalogueResult Result = LoadRepositoryCatalogue();
 	const std::vector<std::string> ExpectedJoints = {"clay_gp_mortar_bed_ec6", "clay_gp_mortar_perpend_ec6", "clay_gp_mortar_bed_gooch_mean",
 		"lime_mortar_handmade_brick_upc_mean", "c24_bearing_perp_to_grain"};
-	const std::vector<std::string> ExpectedFasteners = {"ec5_screw_8x60_steel_to_glulam", "ec5_ring_nail_4x40_steel_plate", "ec5_bolt_m16_double_shear",
-		"ec5_screw_8x60_steel_to_glulam_mean", "ec5_bolt_m16_double_shear_mean"};
+	const std::vector<std::string> ExpectedFasteners = {"ec5_screw_8x60_steel_to_glulam", "ec5_ring_nail_4x40_steel_plate", "ec5_bolt_m16_double_shear"};
 	REQUIRE(Result.Value.Joints.size() == ExpectedJoints.size());
 	REQUIRE(Result.Value.Fasteners.size() == ExpectedFasteners.size());
 	for (std::size_t R = 0; R < std::min(ExpectedJoints.size(), Result.Value.Joints.size()); ++R)
@@ -138,11 +149,11 @@ TEST_CASE("Catalogue.Loader.BedRowConvertsEveryFieldExactlyOnce")
 	CHECK(Bed.Basis == StrengthBasis::Characteristic);
 	CHECK(Bed.Profile.CompressiveStrengthPa == 8.93 * PaPerMPa);
 	CHECK(Bed.Profile.ShearCohesionPa == 0.30 * PaPerMPa);
-	CHECK(Bed.Profile.TensileStrengthPa == 0.10 * PaPerMPa);
+	CHECK(Bed.Profile.TensileStrengthPa == 0.0333333333333333 * PaPerMPa);
 	CHECK(Bed.Profile.FrictionCoefficient == 0.4);
 	CHECK(Bed.Profile.MaxShearStrengthPa == 1.30 * PaPerMPa);
-	CHECK(Bed.Profile.NormalStiffnessPaPerM == 893 * PaPerMPerGPaPerM);
-	CHECK(Bed.Profile.TangentialStiffnessPaPerM == 357 * PaPerMPerGPaPerM);
+	CHECK(Bed.Profile.NormalStiffnessPaPerM == 119 * PaPerMPerGPaPerM);
+	CHECK(Bed.Profile.TangentialStiffnessPaPerM == 47.6 * PaPerMPerGPaPerM);
 	CHECK(std::isnan(Bed.FrictionNormalStressPa));
 }
 
@@ -165,6 +176,8 @@ TEST_CASE("Catalogue.Loader.EveryRowConvertsItsStrengthsExactlyOnce")
 		CHECK(Row.ShearPerPlaneN == Each.ShearKN * NPerKN);
 		CHECK(Row.WithdrawalN == Each.WithdrawalKN * NPerKN);
 		CHECK(Row.BearingStrengthPa == Each.BearingMPa * PaPerMPa);
+		CHECK(Row.SlipModulusNPerM == Each.SlipModulusMNPerM * NPerMPerMNPerM);
+		CHECK(Row.BearingNormalStiffnessPaPerM == Each.BearingNormalStiffnessGPaPerM * PaPerMPerGPaPerM);
 	}
 }
 
@@ -173,7 +186,7 @@ TEST_CASE("Catalogue.Loader.MeasuredFrictionCarriesItsNormalStressAndCodeFrictio
 	const CatalogueResult Result = LoadRepositoryCatalogue();
 	const JointRow& Gooch = JointOrFail(Result.Value, "clay_gp_mortar_bed_gooch_mean");
 	CHECK(Gooch.Basis == StrengthBasis::Mean);
-	CHECK(Gooch.FrictionNormalStressPa == 0.2 * PaPerMPa);
+	CHECK(Gooch.FrictionNormalStressPa == 0.22 * PaPerMPa);
 	CHECK(std::isnan(JointOrFail(Result.Value, "clay_gp_mortar_perpend_ec6").FrictionNormalStressPa));
 	CHECK(std::isnan(JointOrFail(Result.Value, "c24_bearing_perp_to_grain").FrictionNormalStressPa));
 }
@@ -244,6 +257,8 @@ TEST_CASE("Catalogue.Fastener.ProfileIsCountTimesCapacityOverAreaWithNoFriction"
 	Row.ShearPerPlaneN = 4.83 * NPerKN;
 	Row.WithdrawalN = 1.74 * NPerKN;
 	Row.BearingStrengthPa = 3.75 * PaPerMPa;
+	Row.SlipModulusNPerM = 6.20 * NPerMPerMNPerM;
+	Row.BearingNormalStiffnessPaPerM = 8.2 * PaPerMPerGPaPerM;
 	const int Count = 2;
 	const double AreaM2 = 0.01;
 	const StrengthProfile Profile = FastenerProfile(Row, Count, AreaM2);
@@ -252,4 +267,36 @@ TEST_CASE("Catalogue.Fastener.ProfileIsCountTimesCapacityOverAreaWithNoFriction"
 	CHECK(Profile.MaxShearStrengthPa == Count * Row.ShearPerPlaneN / AreaM2);
 	CHECK(Profile.TensileStrengthPa == Count * Row.WithdrawalN / AreaM2);
 	CHECK(Profile.CompressiveStrengthPa == Row.BearingStrengthPa);
+	CHECK(Profile.TangentialStiffnessPaPerM == Count * Row.SlipModulusNPerM / AreaM2);
+	CHECK(Profile.NormalStiffnessPaPerM == Row.BearingNormalStiffnessPaPerM);
+}
+
+TEST_CASE("Catalogue.Loader.ARefusedDocumentLoadsNoRows")
+{
+	struct RawCase
+	{
+		const char* Name;
+		std::string Json;
+	};
+	std::vector<RawCase> Cases;
+	for (const CatalogueErrorCase& Case : ErrorCases())
+	{
+		Cases.push_back({Case.Name, BuildCatalogue(Case.Spec).Json});
+	}
+	const std::string Joints = "[ " + OneLineObject(BedJointElement("bed")) + " ]";
+	const std::string Fasteners = "[ " + OneLineObject(ScrewElement("screw")) + " ]";
+	Cases.push_back({"parse error after a joint row", "{ \"version\": 1, \"joints\": " + Joints + ", \"fasteners\": [ " + OneLineObject(ScrewElement("screw")) + ", }"});
+	Cases.push_back({"missing joints table", "{ \"version\": 1, \"fasteners\": " + Fasteners + " }"});
+	Cases.push_back({"missing fasteners table", "{ \"version\": 1, \"joints\": " + Joints + " }"});
+	Cases.push_back({"joint row that is not an object", "{ \"version\": 1, \"joints\": [ " + OneLineObject(BedJointElement("bed")) + ", 3 ], \"fasteners\": " + Fasteners + " }"});
+	Cases.push_back({"fastener row that is not an object", "{ \"version\": 1, \"joints\": " + Joints + ", \"fasteners\": [ " + OneLineObject(ScrewElement("screw")) + ", \"screw\" ] }"});
+	Cases.push_back({"missing version", "{ \"joints\": " + Joints + ", \"fasteners\": " + Fasteners + " }"});
+	for (const RawCase& Case : Cases)
+	{
+		const CatalogueResult Result = LoadCatalogue(Case.Json);
+		INFO(doctest::String(Case.Name) << "; line " << Result.Error.Line << ": " << Result.Error.Message << "; joints " << Result.Value.Joints.size() << ", fasteners " << Result.Value.Fasteners.size());
+		CHECK_FALSE(Result.Ok());
+		CHECK(Result.Value.Joints.empty());
+		CHECK(Result.Value.Fasteners.empty());
+	}
 }

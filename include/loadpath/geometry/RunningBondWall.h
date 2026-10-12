@@ -28,6 +28,8 @@ struct Wall
 	std::vector<InterfaceId> Beds, Perpends;
 	BodyId Ground;
 	double LengthM = 0, HeightM = 0;
+	// False when any AddBody or AddInterface was refused (an Invalid profile): the wall is then not a wall.
+	bool bComplete = false;
 };
 
 Wall BuildRunningBondWall(Structure& Model, const WallSpec& Spec);

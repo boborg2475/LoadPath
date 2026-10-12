@@ -166,7 +166,7 @@ TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Geometry.Anchor.RemovingABaseBrickArchesTheLoa
 	const AuthorityResult After = Judge(W.Model, AuthorityOptions{});
 	const double AfterMax = MaxBedUtilisationUnder(W, After, W.Value.Courses[1]);
 	MESSAGE("max bed utilisation under course 1: before " << BeforeMax << ", after " << AfterMax << ", verdict after " << std::string(VerdictName(After.Worst)));
-	CHECK((After.Worst == ComponentVerdict::Stands || After.Worst == ComponentVerdict::Overstressed));
+	CHECK(After.Worst == ComponentVerdict::Stands);
 	CHECK(AfterMax > BeforeMax);
 }
 
@@ -195,7 +195,7 @@ TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Geometry.Anchor.SmallDryWallOverturnsAtThickne
 	CHECK(TOverH == doctest::Approx(0.1025 / 0.26).epsilon(1e-12));
 	CHECK(0.7 > TOverH);
 	const auto Stands = [&](double Lambda) { return CertificateStands(W.Model, CertificateLateral(0.0, Lambda)); };
-	const ThresholdBracket Bracket = Threshold(Stands, 0.99 * TOverH, 1.01 * TOverH, 1e-3 * TOverH);
+	const ThresholdBracket Bracket = Threshold(Stands, 0.0, 2.0 * TOverH, 1e-4 * TOverH);
 	MESSAGE("4 x 5 dry wall lateral switch along y: [" << Bracket.LastStanding << ", " << Bracket.FirstFailing << "], t/H " << TOverH);
 	REQUIRE(Bracket.bBracketed);
 	if (!Bracket.bBracketed)
@@ -232,4 +232,36 @@ TEST_CASE("Deferred.Slice6.SmallestDryWallThatDoesNotSettleElastically")
 	const StandingResult Elastic = SolveWith(W.Model, StandingOptions{});
 	INFO("1 x 3 dry wall elastic " << Elastic.State << " after " << Elastic.ActiveSetIterations << " active-set iterations");
 	CHECK(Elastic.State == StandingState::Stands);
+}
+
+TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Geometry.Anchor.SmallBondedWallOverturnsAtTheBondedMonolithFactor")
+{
+	const BuiltWall W = BuildBondedWall(4, 5);
+	if (!RequireBuilt(W, 22u))
+	{
+		return;
+	}
+	const CatalogueResult Loaded = LoadCatalogue(ReadCatalogueFile());
+	REQUIRE(Loaded.Ok());
+	const double TensileStrengthPa = JointOrFail(Loaded.Value, "clay_gp_mortar_bed_ec6").Profile.TensileStrengthPa;
+	double MassKg = 0.0;
+	for (const std::vector<BodyId>& Course : W.Value.Courses)
+	{
+		for (const BodyId& Body : Course)
+		{
+			MassKg += W.Model.Body(Body).MassKg;
+		}
+	}
+	const double WeightN = MassKg * GravityMPerS2;
+	const double BaseBedAreaM2 = W.Spec.BricksPerCourse * W.Spec.BrickM.X * W.Spec.BrickM.Y;
+	const double LambdaC = MonolithLambda(W) * (1.0 + TensileStrengthPa * BaseBedAreaM2 / WeightN);
+	const CertificateResult Below = DecideWith(W.Model, CertificateLateral(0.0, 0.99 * LambdaC));
+	const CertificateResult Above = DecideWith(W.Model, CertificateLateral(0.0, 1.01 * LambdaC));
+	const AuthorityResult CombinedBelow = Judge(W.Model, AuthorityUnderGravity(GravityAcrossThickness(0.99 * LambdaC)));
+	const AuthorityResult CombinedAbove = Judge(W.Model, AuthorityUnderGravity(GravityAcrossThickness(1.01 * LambdaC)));
+	MESSAGE("4 x 5 bonded wall: ft " << TensileStrengthPa << " Pa, base bed " << BaseBedAreaM2 << " m2, W " << WeightN << " N, lambda_c " << LambdaC << "; certificate at 0.99 " << Below.State << " [" << Below.LoadFactorLower << ", " << Below.LoadFactorUpper << "], at 1.01 " << Above.State << " [" << Above.LoadFactorLower << ", " << Above.LoadFactorUpper << "]; combined at 0.99 " << std::string(VerdictName(CombinedBelow.Worst)) << ", at 1.01 " << std::string(VerdictName(CombinedAbove.Worst)));
+	CHECK(Below.State == CertificateState::Stands);
+	CHECK(Above.State == CertificateState::Collapses);
+	CHECK(CombinedBelow.Worst == ComponentVerdict::Stands);
+	CHECK(CombinedAbove.Worst == ComponentVerdict::Overstressed);
 }

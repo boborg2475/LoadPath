@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <optional>
 #include <string>
 
@@ -171,4 +172,35 @@ TEST_CASE("Geometry.Contact.ArgumentOrderSwapsBodiesAndReversesNothingElse")
 	CheckVec(R.CentreM, F.CentreM, "centre");
 	CHECK(std::min(F.HalfExtentUM, F.HalfExtentVM) == doctest::Approx(std::min(R.HalfExtentUM, R.HalfExtentVM)).epsilon(Exact));
 	CHECK(std::max(F.HalfExtentUM, F.HalfExtentVM) == doctest::Approx(std::max(R.HalfExtentUM, R.HalfExtentVM)).epsilon(Exact));
+}
+
+TEST_CASE("Geometry.Contact.NonFiniteInputsGiveNoContact")
+{
+	const double Bad[] = {std::numeric_limits<double>::quiet_NaN(), std::numeric_limits<double>::infinity(), -std::numeric_limits<double>::infinity()};
+	const char* FieldNames[] = {"centre x", "centre y", "centre z", "half x", "half y", "half z"};
+	const Pair P = MakePair(Vec3{0, 0, 0.5}, Vec3{0, 0, 1.5});
+	REQUIRE(ContactOf(P).has_value());
+	int Leaks = 0;
+	for (const double Value : Bad)
+	{
+		for (int Which = 0; Which < 2; ++Which)
+		{
+			for (int Field = 0; Field < 6; ++Field)
+			{
+				geometry::Box Boxes[2] = {P.BoxA, P.BoxB};
+				Vec3& Target = Field < 3 ? Boxes[Which].CentreM : Boxes[Which].HalfExtentsM;
+				(Field % 3 == 0 ? Target.X : (Field % 3 == 1 ? Target.Y : Target.Z)) = Value;
+				const std::optional<InterfaceDesc> Contact = geometry::FaceContact(P.A, Boxes[0], P.B, Boxes[1], P.Profile);
+				INFO("box " << std::string(Which == 0 ? "A" : "B") << " " << std::string(FieldNames[Field]) << " = " << Value << ": " << std::string(Contact.has_value() ? "a contact" : "nullopt")
+					<< ", half extents " << (Contact.has_value() ? Contact->HalfExtentUM : 0.0) << " x " << (Contact.has_value() ? Contact->HalfExtentVM : 0.0));
+				CHECK_FALSE(Contact.has_value());
+				Leaks += Contact.has_value() ? 1 : 0;
+			}
+		}
+		const std::optional<InterfaceDesc> Contact = geometry::FaceContact(P.A, P.BoxA, P.B, P.BoxB, P.Profile, Value);
+		INFO("tolerance = " << Value);
+		CHECK_FALSE(Contact.has_value());
+		Leaks += Contact.has_value() ? 1 : 0;
+	}
+	MESSAGE("non-finite inputs that returned a contact: " << Leaks << " of 39");
 }

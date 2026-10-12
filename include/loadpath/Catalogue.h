@@ -35,6 +35,10 @@ struct FastenerRow
 	double WithdrawalN = 0;
 	// The timber's f_c,90 the fastener bears on, for the crushing bound.
 	double BearingStrengthPa = 0;
+	// EN 1995-1-1 Table 7.1 K_ser per shear plane per fastener (slip_modulus_mn_per_m × 1e6).
+	double SlipModulusNPerM = 0;
+	// The bearing member's normal stiffness (bearing_normal_stiffness_gpa_per_m × 1e9).
+	double BearingNormalStiffnessPaPerM = 0;
 };
 
 struct Catalogue

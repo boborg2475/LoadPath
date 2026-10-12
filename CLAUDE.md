@@ -95,7 +95,9 @@ prints to stdout. The suite is expected to run in seconds; a test that needs mor
 second goes behind a `Slow.` prefix, which `Scripts/Test.ps1` excludes from the default run (it
 prints how many it skipped). A case that is slow only in Debug puts `LOADPATH_SLOW_IN_DEBUG`
 (`tests/SlowInDebug.h`) in front of its name: Debug skips it under `Slow.`, Release runs it under
-its real prefix, so the Release default run is part of validating any such case.
+its real prefix, so the Release default run is part of validating any such case. **The `Slow.*` tier
+runs in Release at every slice close, by the orchestrator, before the review**: that is the
+milestone that keeps an opt-in tier from rotting (TRAPS).
 
 **Deliberately red tests live under the `Deferred.` prefix.** A test that pins an answer the
 current implementation cannot yet give (owed to a later slice, named in the test's second

@@ -286,3 +286,15 @@ TEST_CASE("Geometry.Wall.OneCourseHasOnlyGroundBeds")
 	}
 	CHECK(W.Value.Perpends.size() == 4u);
 }
+
+TEST_CASE("Geometry.Wall.AWallWithInvalidProfilesIsNotComplete")
+{
+	Structure Model;
+	const geometry::WallSpec Spec;
+	const geometry::Wall Value = geometry::BuildRunningBondWall(Model, Spec);
+	INFO("default spec (Invalid profiles): beds " << Value.Beds.size() << ", perpends " << Value.Perpends.size() << ", complete " << Value.bComplete);
+	CHECK_FALSE(Value.bComplete);
+	const BuiltWall Valid = Build(4, 5, true);
+	INFO("valid profiles: complete " << Valid.Value.bComplete);
+	CHECK(Valid.Value.bComplete);
+}

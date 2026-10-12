@@ -347,3 +347,27 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   cascade's invariants, not its answers**: every released cluster is a subset of the
   certificate's own release list on the pre-pass structure, stamps match records, passes are
   contiguous, the remainder re-judges to the same verdicts, the file round-trips the end state.
+- *2026-10-11, orchestrator, slice 5 close (after the review):* five data rulings, each a
+  correction the review traced to the repo's own research notes. **`TensileStrengthPa` is
+  direct tension, uniform over the joint.** A code flexural strength (EN 1996-1-1 f_xk) is a
+  bending strength through Z = b t² / 6; the certificate's rigid-plastic hinge gives
+  M = f_t A t / 2 = 3 f_t Z, so a flexural value enters the catalogue as f_xk / 3, which makes
+  the bonded wall's overturning factor the code's exactly. Measured direct values (Gooch) enter
+  as they are. **A perpend row is the perpend joint's own bond**: EN 1996-1-1 eq. 3.6 is the
+  bed shear of a wall with unfilled perpends and f_xk2 a wall flexural strength through the
+  units, so neither describes the joint; the filled perpend carries the bed row's bond and an
+  unfilled perpend is a dry profile. **Fastener capacities are per shear plane as EN 1995-1-1
+  §8.2.3(1) defines them**, so the M16 bolt is 12.9 kN per plane (the row had halved it). **A
+  "mean" row needs a cited mean**: Blass & Colling's 1.074 is an EN 14358 characteristic ratio
+  on yield loads with the 1.05/1.15 factors removed, so the two scaled fastener rows are gone
+  until a mean is found. **A withdrawal value belongs to the screw it was computed for**: the
+  8 × 60 row carries the A1:2008 §8.7.2 value with the example's own inputs (5.24 kN), not the
+  2.5 mm screw's 1.74 kN. Two stiffness rulings with them: **a fastener row carries EN 1995-1-1
+  Table 7.1's slip modulus K_ser per shear plane per fastener** (×2 steel-to-timber, §7.1(3)),
+  and `FastenerProfile` gives the joint `Count · K_ser / Area` tangential stiffness and the
+  bearing member's normal stiffness, so a fastened joint is usable by the elastic authority
+  and the area cancels in stiffness as it does in capacity; and **a rigid-block masonry spring
+  is the masonry modulus over a course** (E / (h_unit + h_joint) = 119 GPa/m), not over the
+  mortar joint alone, because the rigid unit's share of the deformation has to live somewhere.
+  Process: the `Slow.*` Release tier runs at every slice close, by the orchestrator, before the
+  review (TRAPS: name the milestone that runs an opt-in tier).

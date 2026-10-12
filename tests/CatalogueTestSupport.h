@@ -65,7 +65,7 @@ inline JsonElement BedJointElement(const std::string& Name = "bed")
 inline JsonElement ScrewElement(const std::string& Name = "screw")
 {
 	return {{"name", "\"" + Name + "\""}, {"basis", "\"characteristic\""}, {"shear_per_plane_kn", "4.83"}, {"withdrawal_kn", "1.74"},
-		{"bearing_mpa", "3.75"}, {"source", "\"s\""}, {"note", "\"n\""}};
+		{"bearing_mpa", "3.75"}, {"slip_modulus_mn_per_m", "6.20"}, {"bearing_normal_stiffness_gpa_per_m", "8.2"}, {"source", "\"s\""}, {"note", "\"n\""}};
 }
 
 inline CatalogueSpec ValidCatalogueSpec()

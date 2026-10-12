@@ -93,18 +93,19 @@ TEST_CASE("Catalogue.Anchor.BondedBrickLiftsOffItsBedAtTensileStrengthTimesArea"
 	}
 }
 
-TEST_CASE("Catalogue.Anchor.PerpendHalvesTheBedCohesionAndCapsAtTheEc6Ratio")
+TEST_CASE("Catalogue.Anchor.TheFilledPerpendCarriesTheBedBond")
 {
 	const Catalogue Value = LoadRepositoryCatalogue();
 	const StrengthProfile& Bed = JointOrFail(Value, "clay_gp_mortar_bed_ec6").Profile;
 	const StrengthProfile& Perpend = JointOrFail(Value, "clay_gp_mortar_perpend_ec6").Profile;
-	INFO("bed c " << Bed.ShearCohesionPa << ", cap " << Bed.MaxShearStrengthPa << "; perpend c " << Perpend.ShearCohesionPa << ", cap " << Perpend.MaxShearStrengthPa);
-	CHECK(RelativeGap(Perpend.ShearCohesionPa, 0.5 * Bed.ShearCohesionPa) <= RatioRelative);
-	CHECK(RelativeGap(Perpend.MaxShearStrengthPa, (0.045 / 0.065) * Bed.MaxShearStrengthPa) <= RatioRelative);
+	INFO("bed c " << Bed.ShearCohesionPa << ", ft " << Bed.TensileStrengthPa << ", cap " << Bed.MaxShearStrengthPa << "; perpend c " << Perpend.ShearCohesionPa << ", ft " << Perpend.TensileStrengthPa << ", cap " << Perpend.MaxShearStrengthPa);
+	CHECK(Perpend.ShearCohesionPa == Bed.ShearCohesionPa);
+	CHECK(Perpend.TensileStrengthPa == Bed.TensileStrengthPa);
+	CHECK(Perpend.MaxShearStrengthPa == Bed.MaxShearStrengthPa);
 	CHECK(JointOrFail(Value, "clay_gp_mortar_perpend_ec6").Kind == "perpend");
 }
 
-TEST_CASE("Catalogue.Anchor.MeasuredBondIsTwiceTheCodeBondInTensionAndCohesion")
+TEST_CASE("Catalogue.Anchor.MeasuredBondIsSixTimesTheCodeTensionAndTwiceItsCohesion")
 {
 	const Catalogue Value = LoadRepositoryCatalogue();
 	const JointRow& Code = JointOrFail(Value, "clay_gp_mortar_bed_ec6");
@@ -113,10 +114,10 @@ TEST_CASE("Catalogue.Anchor.MeasuredBondIsTwiceTheCodeBondInTensionAndCohesion")
 	REQUIRE(Code.Profile.ShearCohesionPa > 0.0);
 	const double TensionRatio = Mean.Profile.TensileStrengthPa / Code.Profile.TensileStrengthPa;
 	const double CohesionRatio = Mean.Profile.ShearCohesionPa / Code.Profile.ShearCohesionPa;
-	INFO("tension ratio " << TensionRatio << ", cohesion ratio " << CohesionRatio);
+	INFO("tension ratio " << TensionRatio << ", cohesion ratio " << CohesionRatio << "; expected tension ratio 0.20 / (0.10 / 3.0) = " << 0.20 / (0.10 / 3.0));
 	CHECK(Code.Basis == StrengthBasis::Characteristic);
 	CHECK(Mean.Basis == StrengthBasis::Mean);
-	CHECK(RelativeGap(TensionRatio, 2.0) <= RatioRelative);
+	CHECK(RelativeGap(TensionRatio, 0.20 / (0.10 / 3.0)) <= RatioRelative);
 	CHECK(RelativeGap(CohesionRatio, 2.0) <= RatioRelative);
 }
 
@@ -166,16 +167,23 @@ TEST_CASE("Catalogue.Anchor.TwoScrewsPullOutAtTwiceTheirWithdrawalCapacityWhatev
 	}
 }
 
-TEST_CASE("Catalogue.Anchor.MeanBoltShearIsTheBlassCollingRatioTimesTheCharacteristic")
+TEST_CASE("Catalogue.Anchor.BoltRowIsTwelvePointNineKilonewtonsPerShearPlane")
 {
 	const Catalogue Value = LoadRepositoryCatalogue();
-	const FastenerRow& Characteristic = FastenerOrFail(Value, "ec5_bolt_m16_double_shear");
-	const FastenerRow& Mean = FastenerOrFail(Value, "ec5_bolt_m16_double_shear_mean");
-	INFO("characteristic " << Characteristic.ShearPerPlaneN << " N, mean " << Mean.ShearPerPlaneN << " N");
-	CHECK(Characteristic.Basis == StrengthBasis::Characteristic);
-	CHECK(Mean.Basis == StrengthBasis::Mean);
-	CHECK(RelativeGap(Mean.ShearPerPlaneN, 1.074 * Characteristic.ShearPerPlaneN) <= RatioRelative);
-	CHECK(RelativeGap(2.0 * Characteristic.ShearPerPlaneN, 12.9e3) <= RatioRelative);
+	const FastenerRow& Bolt = FastenerOrFail(Value, "ec5_bolt_m16_double_shear");
+	INFO("bolt " << Bolt.ShearPerPlaneN << " N per plane");
+	CHECK(Bolt.Basis == StrengthBasis::Characteristic);
+	CHECK(RelativeGap(Bolt.ShearPerPlaneN, 12.9e3) <= RatioRelative);
+	const double LengthM = 0.1;
+	const double WidthM = 0.1;
+	const BlockOnGround F = MakeBlockOnGround(FastenerProfile(Bolt, 1, LengthM * WidthM), LengthM, WidthM, 0.065);
+	for (const auto& [Fraction, Expected] : {std::pair{0.97, CertificateState::Stands}, std::pair{1.01, CertificateState::Collapses}})
+	{
+		const std::vector<BodyLoad> Loads = {BodyLoad{F.Block, Vec3{Fraction * 12.9e3, 0.0, 0.0}, Vec3{0.0, 0.0, 0.0}}};
+		const CertificateResult Result = DecideWith(F.Model, WeightlessCertificate(), Loads);
+		INFO("shear " << Fraction << " x 12.9 kN: " << Result.State << " [" << Result.LoadFactorLower << ", " << Result.LoadFactorUpper << "]");
+		CHECK(Result.State == Expected);
+	}
 }
 
 TEST_CASE("Catalogue.Anchor.LimeMortarFrictionIsTheTangentOfItsMeasuredAngle")
@@ -184,4 +192,39 @@ TEST_CASE("Catalogue.Anchor.LimeMortarFrictionIsTheTangentOfItsMeasuredAngle")
 	const double Friction = JointOrFail(Value, "lime_mortar_handmade_brick_upc_mean").Profile.FrictionCoefficient;
 	INFO("mu " << Friction);
 	CHECK(std::abs(Friction - std::tan(33.71 * RadPerDegree)) <= 1e-6);
+}
+
+TEST_CASE("Catalogue.Anchor.ABrickOnTwoScrewsStandsAtRestThroughTheCombinedAuthority")
+{
+	const Catalogue Value = LoadRepositoryCatalogue();
+	const FastenerRow& Screw = FastenerOrFail(Value, "ec5_screw_8x60_steel_to_glulam");
+	const double AreaM2 = 0.215 * 0.1025;
+	const StrengthProfile Profile = FastenerProfile(Screw, 2, AreaM2);
+	const BlockOnGround F = MakeBrickOnBed(Profile);
+	const AuthorityResult Result = Judge(F.Model, AuthorityUnderGravity(Vec3{0.0, 0.0, -GravityMPerS2}));
+	INFO("kn " << Profile.NormalStiffnessPaPerM << " Pa/m, kt " << Profile.TangentialStiffnessPaPerM << " Pa/m: " << DescribeAuthority(Result));
+	CHECK(Result.Worst != ComponentVerdict::InvalidInput);
+	CHECK(Result.Worst == ComponentVerdict::Stands);
+}
+
+TEST_CASE("Catalogue.Anchor.TwoScrewsAreOverstressedPastTwiceTheirShearCapacityThroughTheCombinedAuthority")
+{
+	const Catalogue Value = LoadRepositoryCatalogue();
+	const FastenerRow& Screw = FastenerOrFail(Value, "ec5_screw_8x60_steel_to_glulam");
+	const int Count = 2;
+	const double CapacityN = Count * Screw.ShearPerPlaneN;
+	REQUIRE(CapacityN > 0.0);
+	const double Footprints[][2] = {{0.215, 0.1025}, {0.1, 0.1}};
+	for (const auto& Footprint : Footprints)
+	{
+		const double AreaM2 = Footprint[0] * Footprint[1];
+		const BlockOnGround F = MakeBlockOnGround(FastenerProfile(Screw, Count, AreaM2), Footprint[0], Footprint[1], 0.065);
+		for (const auto& [Fraction, Expected] : {std::pair{0.97, ComponentVerdict::Stands}, std::pair{1.01, ComponentVerdict::Overstressed}})
+		{
+			const std::vector<BodyLoad> Loads = {BodyLoad{F.Block, Vec3{Fraction * CapacityN, 0.0, 0.0}, Vec3{0.0, 0.0, 0.0}}};
+			const AuthorityResult Result = Judge(F.Model, AuthorityUnderGravity(Vec3{0.0, 0.0, 0.0}), Loads);
+			INFO("area " << AreaM2 << " m2, shear " << Fraction << " x " << CapacityN << " N: " << DescribeAuthority(Result));
+			CHECK(Result.Worst == Expected);
+		}
+	}
 }

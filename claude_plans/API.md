@@ -931,7 +931,7 @@ Materials and connection types are data (CLAUDE.md). The catalogue is a JSON fil
 read by a loader that converts **once** (MPa → Pa, kN → N) and never again; every row cites its
 source and says whether it is a **characteristic** (5 % fractile, code) or **mean** (measured)
 value, because the mean/characteristic ratio is not uniform across axes (TRAPS "Strength data":
-tension ×3–5, cohesion ×2–3, friction ×2.5, compression ×1), so a re-anchor re-measures and
+tension ×7, cohesion ×4.5, compression ×1 in the old project; these rows give ×6 and ×2), so a re-anchor re-measures and
 never re-scales.
 
 ```cpp
@@ -950,6 +950,8 @@ struct FastenerRow {                    // a discrete fastener: nail, screw, bol
 	double ShearPerPlaneN;                  // F_v,Rk per shear plane
 	double WithdrawalN;                     // F_ax,Rk; 0 when the source gives none (a bolt)
 	double BearingStrengthPa;               // the timber's f_c,90 the fastener bears on, for the crushing bound
+	double SlipModulusNPerM;                // EN 1995-1-1 Table 7.1 K_ser per shear plane per fastener (slip_modulus_mn_per_m × 1e6)
+	double BearingNormalStiffnessPaPerM;    // the bearing member's normal stiffness (bearing_normal_stiffness_gpa_per_m × 1e9)
 };
 
 struct Catalogue {
@@ -962,7 +964,8 @@ struct Catalogue {
 struct CatalogueResult { Catalogue Value; FileError Error; bool Ok() const; };   // FileError as StructureFile.h
 CatalogueResult LoadCatalogue(std::string_view Json);
 
-// μ = 0 (independent axes, DESIGN §4): cohesion = cap = Count · ShearPerPlaneN / AreaM2, tension = Count · WithdrawalN / AreaM2, compression = BearingStrengthPa.
+// μ = 0 (independent axes, DESIGN §4): cohesion = cap = Count · ShearPerPlaneN / AreaM2, tension = Count · WithdrawalN / AreaM2, compression = BearingStrengthPa,
+// tangential stiffness = Count · SlipModulusNPerM / AreaM2, normal stiffness = BearingNormalStiffnessPaPerM (the area cancels in stiffness as in capacity).
 StrengthProfile FastenerProfile(const FastenerRow& Row, int Count, double AreaM2);
 ```
 
@@ -971,61 +974,76 @@ StrengthProfile FastenerProfile(const FastenerRow& Row, int Count, double AreaM2
 `friction`, `shear_cap_mpa` (absent = no cap), `normal_stiffness_gpa_per_m`,
 `tangential_stiffness_gpa_per_m`, `friction_normal_stress_mpa` (optional), `source`, `note`.
 A fastener row carries `name`, `basis`, `shear_per_plane_kn`, `withdrawal_kn`,
-`bearing_mpa`, `source`, `note`. The loader refuses (with the line, as `LoadStructure` does) a
-missing or mistyped field, a negative value, a duplicate name, an unknown kind or basis, and a
-profile the `Structure` would refuse (it runs `AddProfile` on a scratch structure). Conversion:
+`bearing_mpa`, `slip_modulus_mn_per_m`, `bearing_normal_stiffness_gpa_per_m`, `source`, `note`. The loader refuses (with the line, as `LoadStructure` does) a
+missing or mistyped field, an unknown key (a misspelt optional key would otherwise fail open), a
+negative value, a value that is not finite after conversion, a non-positive stiffness, a duplicate
+name, an unknown kind or basis, and a profile the `Structure` would refuse (it runs `AddProfile`
+on a scratch structure); on any refusal the result carries no rows at all. Conversion:
 `× 1e6` for MPa, `× 1e9` for GPa/m, `× 1e3` for kN, exactly once, in the loader; the tests
 assert `Profile.TensileStrengthPa == tensile_mpa × 1e6` for a row read from the file, not
 from a constant in the test.
 
 **Rows the first file carries** (every number from BENCHMARKS §8 and the research notes, with
-its URL in the row's `source`; a value with no source is omitted, never invented):
+its URL in the row's `source`; a value with no source is omitted, never invented; the slice-5
+close rulings in DESIGN §10 govern the conversions):
 - `clay_gp_mortar_bed_ec6` (bed, characteristic): EN 1996-1-1 Table 3.4 `f_vk0 = 0.30` MPa
-  (M10–M20), §3.6.3 `f_xk1 = 0.10` MPa, friction 0.4 (the `0.4 σ_d` term of eq. 3.5), cap
-  `0.065 f_b` with `f_b = 20` MPa stated in the note (1.30 MPa), compressive strength from
-  eq. 3.2 `f_k = K f_b^0.7 f_m^0.3` with `K = 0.55` (Table 3.3, clay Group 1, GP mortar),
-  `f_b = 20`, `f_m = 10` MPa (M10): `0.55 · 20^0.7 · 10^0.3 = 8.93` MPa, derived in the note;
-  stiffness `E = K_E f_k`, `K_E = 1000` (§3.7.2) over a 10 mm joint: `8.93 GPa / 0.010 m =
-  893 GPa/m` normal, `G = 0.4 E` (§3.7.3): 357 GPa/m tangential.
-- `clay_gp_mortar_perpend_ec6` (perpend, characteristic): the same row with cohesion
-  `0.5 f_vk0 = 0.15` MPa and cap `0.045 f_b = 0.90` MPa (eq. 3.6, unfilled perpends) and
-  tension `f_xk2 = 0.20` MPa (the low end of 0.20–0.40).
+  (M10–M20), friction 0.4 (the `0.4 σ_d` term of eq. 3.5), cap `0.065 f_b` with `f_b = 20` MPa
+  stated in the note (1.30 MPa), compressive strength from eq. 3.2 `f_k = K f_b^0.7 f_m^0.3`
+  with `K = 0.55` (Table 3.3, clay Group 1, GP mortar), `f_b = 20`, `f_m = 10` MPa (M10):
+  `0.55 · 20^0.7 · 10^0.3 = 8.93` MPa, derived in the note. **Tension is direct**: the code's
+  `f_xk1 = 0.10` MPa (§3.6.3) is a flexural strength through `Z = b t² / 6`, and the engine's
+  rigid-plastic hinge gives `M = f_t A t / 2 = 3 f_t Z`, so the row carries `f_xk1 / 3 =
+  0.0333` MPa, which reproduces the code moment exactly. **Stiffness is a course's**: `E = K_E
+  f_k`, `K_E = 1000` (§3.7.2) is the masonry modulus, unit and joint together, and a rigid
+  unit puts a whole course's deformation into one spring: `8.93 GPa / (0.065 + 0.010) m = 119
+  GPa/m` normal, `G = 0.4 E` (§3.7.3): 47.6 GPa/m tangential.
+- `clay_gp_mortar_perpend_ec6` (perpend, characteristic): the **filled** perpend, the same
+  unit–mortar bond as the bed, so every value is the bed row's. EN 1996-1-1 gives no strength
+  for the perpend joint itself: eq. 3.6 (`0.5 f_vk0`, cap `0.045 f_b`) is the shear strength
+  along the *bed* of a wall whose perpends are unfilled, and `f_xk2` a wall flexural strength
+  whose failure plane runs through the units. An unfilled perpend is a dry profile.
 - `clay_gp_mortar_bed_gooch_mean` (bed, mean): Gooch et al. 2023/2025: direct tension 0.20
-  MPa (the middle of 0.15–0.25), cohesion 0.60 MPa (the low end of the couplet 0.58–1.04),
-  friction 1.05 at `friction_normal_stress_mpa = 0.2`, compression and stiffness as the code
-  row (not measured there, the note says so).
+  MPa (the middle of 0.15–0.25, a direct value so no conversion), cohesion 0.60 MPa (just above
+  the low end of the couplet 0.58–1.04), friction 1.05 within the 1.04–1.16 measured at
+  `friction_normal_stress_mpa = 0.22`, compression and stiffness as the code row (not measured
+  there, the note says so).
 - `lime_mortar_handmade_brick_upc_mean` (bed, mean): Segura et al.: `c = 0.16` MPa,
   `μ = tan 33.71° = 0.667`, tension absent in the source so `0` with the note "no tension
   measured; the dry-bond floor", compression and stiffness as the code row with the note.
 - `c24_bearing_perp_to_grain` (bearing, characteristic): `f_c,90,k = 2.5` MPa × `k_c,90 =
   1.5` = 3.75 MPa compressive (Swedish Wood Vol. 3 Ex 3.2; EN 1995-1-1 §6.1.5), no tension,
-  no cohesion, friction 0.3, the low end of the Wood Handbook (FPL-GTR-190, ch. 4, Glass & Zelinka 2010)
-  range "0.3 to 0.5" for smooth dry wood against hard smooth surfaces (kinetic; the PDF host
-  was unreachable from here and the sentence was matched through a search snippet, which the
-  ANCHORS row says), stiffness
-  `E_90,mean = 0.37` GPa for C24 (EN 338) over a 45 mm bearing depth: 8.2 GPa/m normal, half
-  that tangential, derived in the note.
-- Fasteners (Swedish Wood Vol. 3 Ex 4.1–4.3, Structural Basics): `ec5_screw_8x60_steel_to_glulam`
-  characteristic 4.83 kN per plane, withdrawal 1.74 kN (the pre-2008 ETA formula, the note
-  says which); `ec5_ring_nail_4x40_steel_plate` 1.607 kN as published with the note "a
-  recomputation gives about 1.48 kN", withdrawal 0.42 kN (the 3.1 mm nail datum, noted);
-  `ec5_bolt_m16_double_shear` 12.9 kN per bolt (two planes: 6.45 kN per plane, the note says
-  so), withdrawal 0; and the mean rows `..._mean` for the screw and bolt at `× 1.073` and
-  `× 1.074` (Blass & Colling), none for the nail (its ratio is second-hand). Bearing strength
-  for every fastener row: the C24 3.75 MPa above (the member they bear on, noted).
+  no cohesion, friction 0.3 (Wood Handbook, the low end of 0.3–0.5, snippet-matched, the row's
+  caveat), stiffness over the 45 mm joist width of Ex 3.2, the one bearing dimension the example
+  gives: `E_90,mean = 0.37` GPa (EN 338 C24) / 0.045 m = 8.2 GPa/m normal, `G_mean = 0.69` GPa
+  (EN 338 C24) / 0.045 m = 15.3 GPa/m tangential; a different bearing depth re-derives both.
+- Fasteners (Swedish Wood Vol. 3 Ex 4.1–4.3; EN 1995-1-1 §8.2.3(1) defines the Johansen
+  expressions **per shear plane per fastener**): `ec5_screw_8x60_steel_to_glulam` 4.83 kN per
+  plane (mode d), withdrawal by EN 1995-1-1/A1:2008 §8.7.2 with the example's own inputs
+  (penetration 52 mm, `l_ef = 44` mm, GL30c `ρ_k = 390`): `f_ax,k = 0.52 d^-0.5 l_ef^-0.1
+  ρ_k^0.8 = 14.89` MPa, `F_ax,Rk = 14.89 · 8 · 44 = 5.24` kN (the Structural Basics 1.74 kN is
+  a 2.5 mm screw and is not this row); `ec5_ring_nail_4x40_steel_plate` 1.607 kN as published
+  with the note "a recomputation gives about 1.48 kN", withdrawal 0.42 kN (the 3.1 mm nail
+  datum, noted); `ec5_bolt_m16_double_shear` 12.9 kN **per shear plane** (mode k; 25.8 kN per
+  bolt across its two planes). No "mean" fastener row: Blass & Colling's 1.074 / 1.073 is an
+  EN 14358 *characteristic* ratio of test to the yield-model prediction with the 1.05 / 1.15
+  factors removed, so a mean fastener row waits for a cited mean. Every fastener row carries
+  EN 1995-1-1 Table 7.1's slip modulus `K_ser` per shear plane per fastener in `slip_modulus_mn_per_m`
+  (`ρ_m^1.5 d / 23` for screws and bolts, `ρ_m^1.5 d^0.8 / 30` for nails without predrilling,
+  ×2 steel-to-timber by §7.1(3), GL30c `ρ_m = 430`): screw 6.20, nail 1.80, bolt 12.4 MN/m; and
+  the bearing member's `bearing_mpa` 3.75 and `bearing_normal_stiffness_gpa_per_m` 8.2 (the
+  C24 row's, noted).
 
 **Catalogue anchors.** A brick (0.215 × 0.1025 × 0.065 m, 2000 kg/m³) on the `..._bed_ec6`
-profile: pure uplift Collapses at `ft · A` through the certificate and Stands below; the combined
-authority reads Overstressed past the bond (the elastic field certifies the overload and the
-cascade cracks it) and Stands below (B-CAT-01,
-the number written as `Row.Profile.TensileStrengthPa × AreaM2` in the test); the perpend row's
-cohesion is half the bed row's and its cap `0.045/0.065` of it; the mean row's direct
-tension and cohesion are 2.0 × the code row's (B-CAT-02: direct tension 0.20 against f_xk1
-0.10; the 3–5 × of the research note is the flexural comparison, 2.06 × 2.0); `FastenerProfile(screw, 2, A)` on a joint of
-area `A` under pure shear Collapses at `2 × 4.83` kN and under pure tension at `2 × 1.74` kN,
-whatever `A` (the area cancels: B-CAT-06/08); the bolt mean row is `1.074 ×` the characteristic
-(B-CAT-09); the loader refuses a row whose tension is negative and a duplicate name with the
-line number.
+profile: pure uplift Collapses at `ft · A` and Stands below (B-CAT-01 through the certificate,
+the number written as `Row.Profile.TensileStrengthPa × AreaM2` in the test); the perpend row
+carries the bed row's cohesion, tension and cap; the mean row's direct tension is `0.20 /
+0.0333 = 6×` the code row's and its cohesion `2×` (B-CAT-02; TRAPS "Strength data" quotes the
+old project's ×7 / ×4.5, the same order); `FastenerProfile(screw, 2, A)` on a joint of area `A`
+under pure shear Collapses at `2 × 4.83` kN and under pure tension at `2 × 5.24` kN, whatever
+`A` (the area cancels: B-CAT-06/08), **through `Judge` as well as the certificate**, so the
+elastic authority accepts the fastened joint; the bolt row is 12.9 kN per plane (B-CAT-07);
+the loader refuses a row whose tension is negative and a duplicate name with the line number,
+and leaves nothing loaded on any refusal.
 
 ### 5b. The geometry layer (`geometry/BoxContacts.h`, `geometry/RunningBondWall.h`)
 
@@ -1042,7 +1060,7 @@ struct WallSpec {
 	bool bRunningBond = true;                 // odd courses offset by half a brick, with half bricks at the ends
 	double GroundZM = 0.0;
 };
-struct Wall { std::vector<std::vector<BodyId>> Courses; std::vector<InterfaceId> Beds, Perpends; BodyId Ground; double LengthM, HeightM; };
+struct Wall { std::vector<std::vector<BodyId>> Courses; std::vector<InterfaceId> Beds, Perpends; BodyId Ground; double LengthM, HeightM; bool bComplete; };   // bComplete false when any AddBody/AddInterface was refused (an Invalid profile): the wall is then not a wall
 Wall BuildRunningBondWall(Structure& Model, const WallSpec& Spec);
 ```
 
@@ -1060,11 +1078,15 @@ shared plane with the normal +z from the lower to the upper; shifted half a cube
 0.5 × 1 rectangle at the overlap's centre; separated by `2 × Tolerance` gives nullopt;
 overlapping in volume gives nullopt; a side-by-side pair gives the normal ±x. The wall: brick
 and joint counts match the closed forms; every joint passes `AddInterface`; under gravity on the
-dry profile the wall Stands (elastic and combined); a dry wall of 10 courses under a lateral
+dry profile the wall Stands through the combined authority (the elastic authority alone reads Undecided on every dry wall with perpends from 1 × 3 up: `Deferred.Slice6.SmallestDryWallThatDoesNotSettleElastically`, the slice-2c item in CURRENT_STATE); a dry wall of 10 courses under a lateral
 load along y overturns at `λ = t / H` (B-WAL-01, through the certificate bisection on λ, the
 classical monolith value, since a running-bond wall with dry beds rocks as one block when
 `μ > t/H`); the same wall with the `..._bed_ec6` profile stands past that λ (bond adds
-tension) and reads Overstressed before it Collapses as λ rises; removing the middle brick of
+tension) and overturns at the bonded monolith factor `λ_c = (t/H)(1 + f_t A_base / W)` exactly
+(certificate Stands at 0.99 λ_c, Collapses at 1.01 λ_c; the combined authority reads Overstressed
+at 1.01 λ_c, since the elastic field is over capacity and no mechanism has formed, and Stands at
+0.99 λ_c: the four-corner lumping puts the elastic tension onset at the plastic moment, not
+below it); removing the middle brick of
 the base course leaves the wall standing with the beds above the gap reading higher
 utilisation than before (the load arches), through `RemoveBody` and a re-judge.
 
