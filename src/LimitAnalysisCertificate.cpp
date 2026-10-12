@@ -101,8 +101,17 @@ struct Program
 	Eigen::Index RowCount = 0;
 };
 
+struct SparseNormal
+{
+	Eigen::SimplicialLLT<Eigen::SparseMatrix<double>, Eigen::Lower, Eigen::AMDOrdering<int>> Factor;
+	Eigen::SparseMatrix<double> M;
+	std::vector<Eigen::Triplet<double>> Triplets;
+	bool bAnalysed = false;
+};
+
 struct Normal
 {
+	SparseNormal* Sparse = nullptr;
 	Eigen::VectorXd D;
 	std::vector<Vec3> Z;
 	std::vector<double> H;
@@ -546,6 +555,106 @@ Eigen::MatrixXd AssembleSites(const Component& C, const std::vector<Matrix3>& Si
 	return M;
 }
 
+bool HasPositiveSparsePivots(const SparseNormal& S)
+{
+	if (S.Factor.info() != Eigen::Success)
+	{
+		return false;
+	}
+	const Eigen::VectorXd Pivots = S.Factor.matrixL().nestedExpression().diagonal();
+	return std::all_of(Pivots.data(), Pivots.data() + Pivots.size(), [](double Pivot) { return Pivot > 0.0 && IsFinite(Pivot); });
+}
+
+void AddSparseSiteBlock(std::vector<Eigen::Triplet<double>>& Triplets, int OffsetRow, const Jacobian& RowSide, int OffsetColumn, const Jacobian& ColumnSide, double Sign, const Matrix3& K)
+{
+	std::array<double, 18> KG{};
+	for (std::size_t R = 0; R < 3; ++R)
+	{
+		for (std::size_t J = 0; J < 6; ++J)
+		{
+			KG[R * 6 + J] = K[R * 3 + 0] * ColumnSide[0 * 6 + J] + K[R * 3 + 1] * ColumnSide[1 * 6 + J] + K[R * 3 + 2] * ColumnSide[2 * 6 + J];
+		}
+	}
+	for (std::size_t J = 0; J < 6; ++J)
+	{
+		for (std::size_t I = 0; I < 6; ++I)
+		{
+			Triplets.emplace_back(OffsetRow + static_cast<int>(I), OffsetColumn + static_cast<int>(J), Sign * (RowSide[0 * 6 + I] * KG[0 * 6 + J] + RowSide[1 * 6 + I] * KG[1 * 6 + J] + RowSide[2 * 6 + I] * KG[2 * 6 + J]));
+		}
+	}
+}
+
+bool FactorSparse(const Component& C, double Dt, double DeltaT, const std::vector<Matrix3>& SiteMatrix, Normal& N)
+{
+	SparseNormal& S = *N.Sparse;
+	S.Triplets.clear();
+	for (int Row = 0; Row < C.Rows; ++Row)
+	{
+		S.Triplets.emplace_back(Row, Row, 0.0);
+	}
+	for (std::size_t I = 0; I < C.Sites.size(); ++I)
+	{
+		const Site& St = C.Sites[I];
+		const std::array<int, 2> Offsets{St.OffsetA, St.OffsetB};
+		const std::array<double, 2> Signs{-1.0, 1.0};
+		const std::array<Jacobian, 2> Jac{statics::CornerJacobianRows(St.ArmA), statics::CornerJacobianRows(St.ArmB)};
+		for (std::size_t A = 0; A < 2; ++A)
+		{
+			for (std::size_t B = 0; B < 2; ++B)
+			{
+				if (Offsets[A] >= 0 && Offsets[B] >= 0)
+				{
+					AddSparseSiteBlock(S.Triplets, Offsets[A], Jac[A], Offsets[B], Jac[B], Signs[A] * Signs[B], SiteMatrix[I]);
+				}
+			}
+		}
+	}
+	N.Ht = Dt + DeltaT;
+	const double Coupling = Dt * DeltaT / N.Ht;
+	const double* Demand = C.Demand.data();
+	for (int Col = 0; Col < C.Rows; ++Col)
+	{
+		if (Demand[Col] == 0.0)
+		{
+			continue;
+		}
+		for (int Row = 0; Row < C.Rows; ++Row)
+		{
+			if (Demand[Row] != 0.0)
+			{
+				S.Triplets.emplace_back(Row, Col, Coupling * Demand[Row] * Demand[Col]);
+			}
+		}
+	}
+	S.M.resize(C.Rows, C.Rows);
+	S.M.setFromTriplets(S.Triplets.begin(), S.Triplets.end());
+	if (!S.bAnalysed)
+	{
+		S.Factor.analyzePattern(S.M);
+		S.bAnalysed = true;
+	}
+	S.Factor.factorize(S.M);
+	if (HasPositiveSparsePivots(S))
+	{
+		return true;
+	}
+	double LargestDiagonal = -std::numeric_limits<double>::infinity();
+	for (int Row = 0; Row < C.Rows; ++Row)
+	{
+		LargestDiagonal = std::max(LargestDiagonal, S.M.coeff(Row, Row));
+	}
+	if (!(LargestDiagonal > 0.0))
+	{
+		return false;
+	}
+	for (int Row = 0; Row < C.Rows; ++Row)
+	{
+		S.M.coeffRef(Row, Row) += RegularisationRelative * LargestDiagonal;
+	}
+	S.Factor.factorize(S.M);
+	return HasPositiveSparsePivots(S);
+}
+
 bool FactorNormal(const Component& C, const Program& P, Normal& N)
 {
 	N.Z.resize(P.Groups.size());
@@ -637,6 +746,10 @@ bool FactorNormal(const Component& C, const Program& P, Normal& N)
 		N.H[G] = Sum;
 		N.Z[G] = Vec3{Z[0], Z[1], Z[2]};
 	}
+	if (N.Sparse != nullptr)
+	{
+		return FactorSparse(C, D[P.LoadFactor], D[P.CapSlack], SiteMatrix, N);
+	}
 	Eigen::MatrixXd M = AssembleSites(C, SiteMatrix);
 	const double Dt = D[P.LoadFactor];
 	const double DeltaT = D[P.CapSlack];
@@ -706,7 +819,14 @@ Eigen::VectorXd SolveNormal(const Component& C, const Program& P, const Normal& 
 		ApplyCornerForce(Yp, C.Sites[Cap.SiteIndex], Vec3{-Force(0), -Force(1), -Force(2)});
 	}
 	auto Equilibrium = Y.head(C.Rows);
-	N.Factor.solveInPlace(Equilibrium);
+	if (N.Sparse != nullptr)
+	{
+		Equilibrium = N.Sparse->Factor.solve(Eigen::VectorXd(Equilibrium));
+	}
+	else
+	{
+		N.Factor.solveInPlace(Equilibrium);
+	}
 	for (std::size_t Index = 0; Index < P.CapSites.size(); ++Index)
 	{
 		const CapSite& Cap = P.CapSites[Index];
@@ -1047,6 +1167,8 @@ Outcome SolveProgram(const Component& C, const Program& P, const CertificateOpti
 	const Eigen::VectorXd Bounds = RowBounds(C, P);
 	Embedding E = StartingPoint(P);
 	const double PairCount = static_cast<double>(P.Variables + 1);
+	SparseNormal Sparse;
+	const bool bSparse = C.Rows > Options.DenseRowLimit;
 	for (int Iteration = 0;; ++Iteration)
 	{
 		const Residuals R = ComputeResiduals(C, P, E, Bounds);
@@ -1069,6 +1191,7 @@ Outcome SolveProgram(const Component& C, const Program& P, const CertificateOpti
 			return Out;
 		}
 		Normal N;
+		N.Sparse = bSparse ? &Sparse : nullptr;
 		N.D = Eigen::VectorXd(P.Variables);
 		for (Eigen::Index I = 0; I < P.Variables; ++I)
 		{

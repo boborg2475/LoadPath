@@ -32,6 +32,8 @@ struct CertificateOptions
 	double FeasibilityTolerance = 1.0e-9;
 	// Interior-point iterations allowed per solve (inscribed, circumscribed, selection); a failed solve reads Undecided unless t_in >= 1.
 	int MaxIterations = 200;
+	// Components with more equilibrium rows than this factor the normal matrix sparsely; at or below it, dense.
+	int DenseRowLimit = 600;
 };
 
 struct CertificateResult
