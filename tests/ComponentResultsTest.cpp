@@ -439,3 +439,234 @@ TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Authority.Judge.MatchesSolvingEachComponentAlo
 	MESSAGE("judge per component: " << JudgeDraws << " draws, " << ComponentsSeen << " components, " << Consulted << " consulted the certificate, " << Mismatches << " differ from the component alone");
 	CHECK(Consulted >= 1);
 }
+
+namespace
+{
+CertificateResult EntryAsResult(const CertificateResult& Whole, std::size_t K)
+{
+	CertificateResult R;
+	R.State = Whole.Components[K].State;
+	R.LoadFactorLower = Whole.Components[K].LoadFactorLower;
+	R.LoadFactorUpper = Whole.Components[K].LoadFactorUpper;
+	R.Iterations = Whole.Components[K].Iterations;
+	R.Mechanism = Whole.Components[K].Mechanism;
+	R.UnconstrainedBodies = Whole.Components[K].UnconstrainedBodies;
+	R.HingingInterfaces = Whole.Components[K].HingingInterfaces;
+	return R;
+}
+
+struct StackAndPushed
+{
+	Structure Model;
+	std::vector<BodyLoad> Loads;
+	std::vector<BodyId> Stack;
+	std::vector<BodyId> Pushed;
+	BodyId Ground;
+};
+
+StackAndPushed MakeStackAndPushed()
+{
+	const ThreeComponents F = MakeThreeComponents();
+	std::vector<BodyId> Both = F.Parts[0];
+	Both.insert(Both.end(), F.Parts[1].begin(), F.Parts[1].end());
+	return StackAndPushed{KeepOnly(F.Model, Both), LoadsOn(F.Loads, Both), F.Parts[0], F.Parts[1], F.Ground};
+}
+
+struct PairsAndBrick
+{
+	Structure Model;
+	std::vector<BodyLoad> Loads;
+	std::vector<std::vector<BodyId>> Pairs;
+	std::vector<BodyId> Brick;
+};
+
+PairsAndBrick MakePairsAndBrick()
+{
+	PairsAndBrick F;
+	const ProfileId Profile = AddProfileOk(F.Model, DryJoint(0.7));
+	const BodyId Ground = AddGroundPlane(F.Model);
+	for (int I = 0; I < 3; ++I)
+	{
+		const double CentreXM = 2.0 * BrickLengthM * static_cast<double>(I);
+		const Box LowerShape = BrickShape(CentreXM, 1);
+		const Box UpperShape = BrickShape(CentreXM, 2);
+		const BodyId Lower = AddBox(F.Model, LowerShape);
+		const BodyId Upper = AddBox(F.Model, UpperShape);
+		AddInterfaceOk(F.Model, *StackedFaces(Lower, LowerShape, Upper, UpperShape, Profile));
+		F.Pairs.push_back({Lower, Upper});
+	}
+	const Box BrickBox = BrickShape(8.0 * BrickLengthM, 0);
+	const BodyId Brick = AddBox(F.Model, BrickBox);
+	AddInterfaceOk(F.Model, OnGroundPlane(Ground, Brick, BrickBox, Profile));
+	F.Brick.push_back(Brick);
+	return F;
+}
+
+std::vector<BodyId> SortedUnion(const std::vector<std::vector<BodyId>>& Parts)
+{
+	std::vector<BodyId> All;
+	for (const std::vector<BodyId>& Part : Parts)
+	{
+		All.insert(All.end(), Part.begin(), Part.end());
+	}
+	std::sort(All.begin(), All.end(), [](BodyId A, BodyId B) { return A.Index < B.Index; });
+	return All;
+}
+
+const ComponentReport* ReportFor(const AuthorityResult& Result, const std::vector<BodyId>& Bodies)
+{
+	for (const ComponentReport& Report : Result.Components)
+	{
+		if (SameIdList(Report.Bodies, Bodies))
+		{
+			return &Report;
+		}
+	}
+	return nullptr;
+}
+
+void CheckSameReport(const ComponentReport& Got, const ComponentReport& Want)
+{
+	CHECK(Got.Verdict == Want.Verdict);
+	CHECK(Got.Kinematic == Want.Kinematic);
+	CHECK(Got.bConsultedCertificate == Want.bConsultedCertificate);
+	CHECK(Near(Got.LoadFactorLower, Want.LoadFactorLower, 1.0e-9));
+	CHECK(Near(Got.LoadFactorUpper, Want.LoadFactorUpper, 1.0e-9));
+	CHECK(SameMotions(Got.Mechanism, Want.Mechanism));
+	CHECK(SameIdList(Got.Release, Want.Release));
+	CHECK(SameIdList(Got.Hinging, Want.Hinging));
+}
+}
+
+TEST_CASE("Certificate.Components.EachEntryIsTheComponentDecidedAlone")
+{
+	const StackAndPushed F = MakeStackAndPushed();
+	const std::unique_ptr<ICollapseCertificate> Certificate = MakeLimitAnalysisCertificate();
+	const CertificateOptions Options;
+	const CertificateResult Whole = Certificate->Decide(F.Model, F.Loads, Options, {});
+	INFO("whole: " << DescribeCertificate(Whole));
+	const std::vector<std::vector<BodyId>>& Partition = F.Model.Components().FreeBodies;
+	REQUIRE(Partition.size() == 2u);
+	REQUIRE(Whole.Components.size() == 2u);
+	CertificateResult Aggregate;
+	Aggregate.State = CertificateState::Stands;
+	Aggregate.LoadFactorLower = Options.LoadFactorCap;
+	Aggregate.LoadFactorUpper = Options.LoadFactorCap;
+	for (std::size_t K = 0; K < 2u; ++K)
+	{
+		INFO("component " << K << " bodies " << Describe(Partition[K]));
+		CHECK(SameIdList(Whole.Components[K].Bodies, Partition[K]));
+		const CertificateResult Want = Certificate->Decide(F.Model, F.Loads, Options, Partition[K]);
+		CheckSameCertificate(EntryAsResult(Whole, K), Want);
+		if (CertificateSeverity(Want.State) > CertificateSeverity(Aggregate.State))
+		{
+			Aggregate.State = Want.State;
+		}
+		Aggregate.LoadFactorLower = std::min(Aggregate.LoadFactorLower, Want.LoadFactorLower);
+		Aggregate.LoadFactorUpper = std::min(Aggregate.LoadFactorUpper, Want.LoadFactorUpper);
+		Aggregate.Iterations = std::max(Aggregate.Iterations, Want.Iterations);
+		Aggregate.Mechanism.insert(Aggregate.Mechanism.end(), Want.Mechanism.begin(), Want.Mechanism.end());
+		Aggregate.UnconstrainedBodies.insert(Aggregate.UnconstrainedBodies.end(), Want.UnconstrainedBodies.begin(), Want.UnconstrainedBodies.end());
+		Aggregate.HingingInterfaces.insert(Aggregate.HingingInterfaces.end(), Want.HingingInterfaces.begin(), Want.HingingInterfaces.end());
+	}
+	const std::size_t StackK = SameIdList(Partition[0], F.Stack) ? 0u : 1u;
+	const std::size_t PushedK = 1u - StackK;
+	CHECK(SameIdList(Partition[PushedK], F.Pushed));
+	const auto& Standing = Whole.Components[StackK];
+	CHECK(Standing.State == CertificateState::Stands);
+	CHECK(Near(Standing.LoadFactorLower, Options.LoadFactorCap, 1.0e-9));
+	CHECK(Standing.LoadFactorUpper == Options.LoadFactorCap);
+	CHECK(Standing.Mechanism.empty());
+	CHECK(Standing.UnconstrainedBodies.empty());
+	CHECK(Standing.HingingInterfaces.empty());
+	CHECK(Whole.Components[PushedK].State == CertificateState::Collapses);
+	CHECK(SameIdList(Whole.Components[PushedK].UnconstrainedBodies, F.Pushed));
+	INFO("aggregate of the alone-results");
+	CheckSameCertificate(Whole, Aggregate);
+}
+
+TEST_CASE("Certificate.Components.AFilterNamingOneComponentGivesOneEntry")
+{
+	const StackAndPushed F = MakeStackAndPushed();
+	const CertificateResult Got = MakeLimitAnalysisCertificate()->Decide(F.Model, F.Loads, CertificateOptions{}, F.Pushed);
+	INFO(DescribeCertificate(Got));
+	REQUIRE(Got.Components.size() == 1u);
+	CHECK(SameIdList(Got.Components[0].Bodies, F.Pushed));
+	CheckSameCertificate(EntryAsResult(Got, 0), Got);
+}
+
+TEST_CASE("Certificate.Components.InvalidInputHasNoEntries")
+{
+	StackAndPushed F = MakeStackAndPushed();
+	const std::unique_ptr<ICollapseCertificate> Certificate = MakeLimitAnalysisCertificate();
+	{
+		INFO("filter naming the ground");
+		const std::vector<BodyId> Only{F.Ground};
+		const CertificateResult Got = Certificate->Decide(F.Model, F.Loads, CertificateOptions{}, Only);
+		CHECK(Got.State == CertificateState::InvalidInput);
+		CHECK(Got.Components.empty());
+	}
+	{
+		INFO("a load on a dead body");
+		const BodyId Dead = F.Pushed[0];
+		F.Model.RemoveBody(Dead);
+		std::vector<BodyLoad> Loads = F.Loads;
+		Loads.push_back(BodyLoad{Dead, Vec3{1.0, 0.0, 0.0}, Vec3{}});
+		const CertificateResult Got = Certificate->Decide(F.Model, Loads, CertificateOptions{}, {});
+		CHECK(Got.State == CertificateState::InvalidInput);
+		CHECK(Got.Components.empty());
+	}
+}
+
+TEST_CASE("Authority.Combined.ConsultsTheCertificateOncePerJudge")
+{
+	PairsAndBrick F = MakePairsAndBrick();
+	std::vector<SolveCall> Solves;
+	std::vector<DecideCall> Decides;
+	const std::unique_ptr<IStructuralAuthority> Authority = MakeCombinedAuthority(std::make_unique<CountingStanding>(Solves), std::make_unique<CountingCertificate>(Decides));
+	const std::unique_ptr<IStructuralAuthority> Plain = MakeAuthority();
+	const AuthorityResult First = Authority->Judge(F.Model, F.Loads, AuthorityOptions{}, nullptr);
+	INFO("first: " << DescribeAuthority(First));
+	REQUIRE(First.Components.size() == 4u);
+	{
+		INFO("Decide calls:" << DescribeDecides(Decides));
+		CHECK(Decides.size() == 1u);
+		if (Decides.size() == 1u)
+		{
+			CHECK(SameIdList(Decides[0].Only, SortedUnion(F.Pairs)));
+		}
+	}
+	for (const std::vector<BodyId>& Pair : F.Pairs)
+	{
+		INFO("pair " << Describe(Pair));
+		const ComponentReport* Got = ReportFor(First, Pair);
+		REQUIRE(Got != nullptr);
+		CHECK(Got->Elastic == StandingState::Mechanism);
+		CHECK(Got->Verdict == ComponentVerdict::Collapses);
+		CHECK(SameIdList(Got->Release, Pair));
+		const Structure Alone = KeepOnly(F.Model, Pair);
+		const AuthorityResult AloneResult = Plain->Judge(Alone, LoadsOn(F.Loads, Pair), AuthorityOptions{}, nullptr);
+		REQUIRE(AloneResult.Components.size() == 1u);
+		CheckSameReport(*Got, AloneResult.Components[0]);
+	}
+	const ComponentReport* Brick = ReportFor(First, F.Brick);
+	REQUIRE(Brick != nullptr);
+	CHECK(Brick->Verdict == ComponentVerdict::Stands);
+	CHECK_FALSE(Brick->bConsultedCertificate);
+
+	SUBCASE("a previous verdict with one pair's loads changed decides that pair only")
+	{
+		std::vector<BodyLoad> Loads = F.Loads;
+		const Box Shape = BrickShape(2.0 * BrickLengthM, 2);
+		Loads.push_back(BodyLoad{F.Pairs[1][1], Vec3{1.0, 0.0, 0.0}, Shape.CentreM});
+		Decides.clear();
+		const AuthorityResult Second = Authority->Judge(F.Model, Loads, AuthorityOptions{}, &First);
+		INFO("second: " << DescribeAuthority(Second));
+		INFO("Decide calls:" << DescribeDecides(Decides));
+		CHECK(Decides.size() == 1u);
+		if (Decides.size() == 1u)
+		{
+			CHECK(SameIdList(Decides[0].Only, F.Pairs[1]));
+		}
+	}
+}

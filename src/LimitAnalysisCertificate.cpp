@@ -1902,6 +1902,7 @@ public:
 			Result.Mechanism.insert(Result.Mechanism.end(), V.Mechanism.begin(), V.Mechanism.end());
 			Result.UnconstrainedBodies.insert(Result.UnconstrainedBodies.end(), V.Moving.begin(), V.Moving.end());
 			Result.HingingInterfaces.insert(Result.HingingInterfaces.end(), V.Hinging.begin(), V.Hinging.end());
+			Result.Components.push_back(CertificateComponent{C.FreeBodies, V.State, V.Lower, V.Upper, V.Iterations, V.Mechanism, V.Moving, V.Hinging});
 		}
 		return Result;
 	}

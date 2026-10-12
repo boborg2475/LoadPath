@@ -94,7 +94,7 @@ bool IsUntouchedSince(const Structure& Model, BodyId Body, std::uint64_t Revisio
 	return Model.LastTouched(Body) <= Revision;
 }
 
-const ComponentReport* FindClean(const Structure& Model, const AuthorityResult& Previous, const std::vector<BodyId>& Bodies, const std::vector<BodyLoad>& Loads)
+const ComponentReport* FindClean(const Structure& Model, const AuthorityResult& Previous, const std::vector<int>& ReportOfFront, const std::vector<BodyId>& Bodies, const std::vector<BodyLoad>& Loads)
 {
 	for (const BodyId Body : Bodies)
 	{
@@ -103,14 +103,17 @@ const ComponentReport* FindClean(const Structure& Model, const AuthorityResult& 
 			return nullptr;
 		}
 	}
-	for (const ComponentReport& Report : Previous.Components)
+	const std::size_t Front = Bodies.front().Index;
+	if (Front >= ReportOfFront.size() || ReportOfFront[Front] < 0)
 	{
-		if (Report.Bodies == Bodies)
-		{
-			return SameLoads(Report.Loads, Loads) ? &Report : nullptr;
-		}
+		return nullptr;
 	}
-	return nullptr;
+	const ComponentReport& Report = Previous.Components[static_cast<std::size_t>(ReportOfFront[Front])];
+	if (Report.Bodies != Bodies)
+	{
+		return nullptr;
+	}
+	return SameLoads(Report.Loads, Loads) ? &Report : nullptr;
 }
 
 const InterfaceReading* FindReading(const std::vector<InterfaceReading>& Readings, InterfaceId Id)
@@ -203,12 +206,25 @@ private:
 				LoadsOf[static_cast<std::size_t>(Partition.ComponentOfSlot[Load.Body.Index])].push_back(Load);
 			}
 		}
+		std::vector<int> ReportOfFront;
+		if (Previous != nullptr)
+		{
+			for (std::size_t R = 0; R < Previous->Components.size(); ++R)
+			{
+				const std::size_t Front = Previous->Components[R].Bodies.front().Index;
+				if (Front >= ReportOfFront.size())
+				{
+					ReportOfFront.resize(Front + 1, -1);
+				}
+				ReportOfFront[Front] = static_cast<int>(R);
+			}
+		}
 		std::vector<const ComponentReport*> CleanFrom(Count, nullptr);
 		std::vector<BodyId> Only;
 		std::size_t DirtyCount = 0;
 		for (std::size_t K = 0; K < Count; ++K)
 		{
-			CleanFrom[K] = Previous != nullptr ? FindClean(Model, *Previous, Partition.FreeBodies[K], LoadsOf[K]) : nullptr;
+			CleanFrom[K] = Previous != nullptr ? FindClean(Model, *Previous, ReportOfFront, Partition.FreeBodies[K], LoadsOf[K]) : nullptr;
 			if (CleanFrom[K] == nullptr)
 			{
 				++DirtyCount;
@@ -235,21 +251,53 @@ private:
 		{
 			return std::nullopt;
 		}
-		Result.Worst = ComponentVerdict::Stands;
 		std::size_t NextSolved = 0;
+		std::vector<ComponentReport> Reports(Count);
+		std::vector<std::size_t> Pending;
+		std::vector<BodyId> Ask;
 		for (std::size_t K = 0; K < Count; ++K)
 		{
-			ComponentReport Report;
 			if (CleanFrom[K] != nullptr)
 			{
-				Report = *CleanFrom[K];
-				Report.bReused = true;
+				Reports[K] = *CleanFrom[K];
+				Reports[K].bReused = true;
+				continue;
 			}
-			else
+			Reports[K] = ReportOf(Whole.Components[NextSolved++]);
+			Reports[K].Loads = std::move(LoadsOf[K]);
+			if (!Reports[K].bConsultedCertificate)
 			{
-				Report = ReportOf(Model, Loads, Options.Certificate, Whole.Components[NextSolved++]);
-				Report.Loads = std::move(LoadsOf[K]);
+				continue;
 			}
+			Pending.push_back(K);
+			Ask.insert(Ask.end(), Reports[K].Bodies.begin(), Reports[K].Bodies.end());
+		}
+		if (!Pending.empty())
+		{
+			std::sort(Ask.begin(), Ask.end(), [](BodyId A, BodyId B) { return A.Index < B.Index; });
+			CertificateResult Kinematic = Certificate->Decide(Model, Loads, Options.Certificate, Ask);
+			std::size_t Next = 0;
+			for (const std::size_t K : Pending)
+			{
+				while (Next < Kinematic.Components.size() && Kinematic.Components[Next].Bodies != Reports[K].Bodies)
+				{
+					++Next;
+				}
+				if (Next < Kinematic.Components.size())
+				{
+					Consult(std::move(Kinematic.Components[Next++]), Reports[K]);
+				}
+				else
+				{
+					CertificateComponent Missing;
+					Missing.State = CertificateState::InvalidInput;
+					Consult(std::move(Missing), Reports[K]);
+				}
+			}
+		}
+		Result.Worst = ComponentVerdict::Stands;
+		for (ComponentReport& Report : Reports)
+		{
 			if (Report.bDisagreed)
 			{
 				++Result.Disagreements;
@@ -263,7 +311,7 @@ private:
 		return Result;
 	}
 
-	ComponentReport ReportOf(const Structure& Model, std::span<const BodyLoad> Loads, const CertificateOptions& Options, StandingComponent& Part) const
+	static ComponentReport ReportOf(StandingComponent& Part)
 	{
 		ComponentReport Report;
 		Report.Bodies = std::move(Part.Bodies);
@@ -280,15 +328,13 @@ private:
 		}
 		else
 		{
-			Consult(Model, Loads, Options, Report);
+			Report.bConsultedCertificate = true;
 		}
 		return Report;
 	}
 
-	void Consult(const Structure& Model, std::span<const BodyLoad> Loads, const CertificateOptions& Options, ComponentReport& Report) const
+	static void Consult(CertificateComponent Kinematic, ComponentReport& Report)
 	{
-		CertificateResult Kinematic = Certificate->Decide(Model, Loads, Options, Report.Bodies);
-		Report.bConsultedCertificate = true;
 		Report.Kinematic = Kinematic.State;
 		Report.LoadFactorLower = Kinematic.LoadFactorLower;
 		Report.LoadFactorUpper = Kinematic.LoadFactorUpper;

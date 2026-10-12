@@ -40,6 +40,19 @@ struct CertificateOptions
 	int DenseRowLimit = 600;
 };
 
+// One decided component's verdict; the fields mean what CertificateResult's aggregate fields mean, restricted to its bodies.
+struct CertificateComponent
+{
+	std::vector<BodyId> Bodies;
+	CertificateState State = CertificateState::Undecided;
+	double LoadFactorLower = 0.0;
+	double LoadFactorUpper = 0.0;
+	int Iterations = 0;
+	std::vector<MechanismMotion> Mechanism;
+	std::vector<BodyId> UnconstrainedBodies;
+	std::vector<InterfaceId> HingingInterfaces;
+};
+
 struct CertificateResult
 {
 	CertificateState State = CertificateState::Undecided;
@@ -55,6 +68,8 @@ struct CertificateResult
 	// Maximum over components of the cone solves' iterations; the selection solve's count is not included.
 	int Iterations = 0;
 	InterfaceId InvalidInterface{};
+	// One entry per decided component in partition order, its Bodies as the partition lists them; empty on InvalidInput.
+	std::vector<CertificateComponent> Components;
 };
 
 // Decide keeps no state between calls, never mutates the structure and is deterministic for a given structure.

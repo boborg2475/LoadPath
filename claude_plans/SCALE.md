@@ -302,3 +302,20 @@ The second pass of each costs under 1 ms. The judge is the floating remainder's 
 assembly (about 65 ms per 1,250 bricks) plus the grounded components; the release is the
 quadratic scans in `Cascade.cpp` and `Structure::RemoveBody`. Items 2 and 3 carried from 6b
 take one each (DESIGN §10, their openings).
+
+After items 2 and 3 (2026-10-12, Release, a copied exe, one run each): the cascade's scans
+indexed, the judge consulting the certificate once per judge, the shortcut's finiteness check
+a fold.
+
+| Structure | Judge, cold | Cascade: base course | Cascade: post removed, cold |
+|---|---|---|---|
+| Wall 40 × 32 | 197 ms | **16 ms** (was 110) | |
+| Half warehouse | 158 ms | **125 ms** (was 163) | 216 ms |
+| Warehouse | 553 ms | **314 ms** (was 512) | 632 ms |
+| 2,000 floating pairs | | **15 ms** (was 575) | |
+| 8,000 floating pairs | | **67 ms** (was 8,833) | |
+
+The judge on structures of five components is unchanged (its cost is the elastic solve and the
+certificate of the grounded components); what fell is everything proportional to the component
+count times the structure, and the floating remainder's finiteness check (65 ms to under 10).
+The warm judge on the 8,000-pair field after one removal: 85 ms to 19 ms (`FindClean` indexed).
