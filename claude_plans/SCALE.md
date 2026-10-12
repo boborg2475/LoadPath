@@ -15,6 +15,7 @@ Eigen 3.4 dense). Dates are the run dates.
 | Wall 10 × 8 (ec6 bonded rows; the harness's walls are bonded) | 86 | 227 | 1 | 50 ms, Stands | 878 ms, Stands | 104 ms, Stands | n/a | 2,652 ms, **0 passes, Undecided** before the rigid-fall fix; **60 ms, 1 pass, Stands** after it (HEAD of the 6a round) |
 | Shed (12 × 8 plan, 10 courses, 2 bays, door + window) | 420 | 1,090 | 5 | 282 ms, Stands | 6,877 ms, Stands | 527 ms, Stands | 579 ms, 0 passes, Stands | 1,927 ms, 1 pass, Stands |
 | Half warehouse (30 × 15 plan, 20 courses, 3 bays, two openings) | 1,822 | 5,138 | 5 | 59.3 s, Stands | 594 s, Stands | 90.8 s, Stands | 89.6 s, 0 passes, Stands | 255 s, 1 pass, Stands |
+| Half warehouse, stage 1a blocked factor (2026-10-12, HEAD 1bceee9) | 1,822 | 5,138 | 5 | 5.9 s, Stands | 572 s, Stands | 11.8 s, Stands | 12.3 s, 0 passes, Stands | 19.0 s, 1 pass, Stands |
 | Wall 40 × 32 (ec6 bonded, 1,296 bricks, 7,776 DoF, one component) | 1,297 | 3,476 | 1 | **killed after 25 min inside the first elastic solve**, peak working set 1,071 MB | not reached | not reached | n/a | not reached |
 | Warehouse (40 × 20 plan, 30 courses, 4 bays) | 3,695 | | 5 | not run at 6a: its largest wall is 1,215 bricks (7,290 DoF), the row above says the dense solve does not finish | | | | |
 
@@ -71,6 +72,13 @@ The cheap rows with the blocked factor (same machine, same day): the 10 × 8 wal
 The certificate column is unchanged (851 ms and 7.3 s): its interior point has its own dense
 factor.
 
-The `Measure.Scale.*` rows are re-run below once the round is committed. The 32 × 40 wall at
-24 s is the n³ constant brought down, not the n³ removed: stage 1b's sparse factor is what
-makes a 1,215-brick warehouse wall cheap.
+The half warehouse row re-run at HEAD 1bceee9 (the `Measure.Scale.HalfWarehouse` test from a
+copy of the Release exe): elastic 5.9 s (was 59), judge 11.8 s (was 91), the post cascade
+12.3 s with no pass, the course cascade 19.0 s with one pass; the certificate column 572 s
+(was 594), unchanged within noise because its interior point has its own dense factor. The
+whole row took 633 s, almost all of it the certificate call the row makes for the record.
+
+The 32 × 40 wall at 24 s and the half warehouse's elastic solve at 5.9 s are the n³ constant
+brought down, not the n³ removed: stage 1b's sparse factor is what makes a 1,215-brick
+warehouse wall cheap, and the judge still solving the whole structure and then every
+component again is why the judge is twice the elastic solve.

@@ -3,6 +3,7 @@
 #include "CascadeTestSupport.h"
 #include "CatalogueTestSupport.h"
 #include "StaticAdmissibilityOracle.h"
+#include "SlowInDebug.h"
 #include "StaticsTestSupport.h"
 
 #include "loadpath/Catalogue.h"
@@ -13,6 +14,8 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <cstdint>
+#include <random>
 #include <string>
 #include <vector>
 
@@ -109,6 +112,8 @@ struct Comparison
 	bool bStateClassTraded = false;
 	bool bIterationsDiffer = false;
 	bool bCertified = false;
+	int MotionMismatches = 0;
+	double WorstMotionGap = 0.0;
 	Gaps G;
 };
 
@@ -147,6 +152,34 @@ Comparison CompareKinds(const FactorCase& C, bool bAllowTrade)
 	}
 	Expect(SameIdList(Ref.UnconstrainedBodies, Blk.UnconstrainedBodies), "unconstrained bodies");
 	Expect(SameIdList(MechanismBodies(Ref), MechanismBodies(Blk)), "mechanism bodies");
+	if (Ref.State == StandingState::Mechanism)
+	{
+		for (const MechanismMotion& A : Ref.Mechanism)
+		{
+			const auto Match = std::find_if(Blk.Mechanism.begin(), Blk.Mechanism.end(), [&](const MechanismMotion& B) { return SameHandle(A.Body, B.Body); });
+			if (Match == Blk.Mechanism.end())
+			{
+				++Out.MotionMismatches;
+				Expect(false, "mechanism body missing from the blocked motion");
+				continue;
+			}
+			const double Gap = std::max({std::abs(A.TranslationM.X - Match->TranslationM.X), std::abs(A.TranslationM.Y - Match->TranslationM.Y), std::abs(A.TranslationM.Z - Match->TranslationM.Z), std::abs(A.RotationRad.X - Match->RotationRad.X), std::abs(A.RotationRad.Y - Match->RotationRad.Y), std::abs(A.RotationRad.Z - Match->RotationRad.Z)});
+			Out.WorstMotionGap = std::max(Out.WorstMotionGap, std::isnan(Gap) ? HUGE_VAL : Gap);
+			if (!(Gap <= 1e-6))
+			{
+				++Out.MotionMismatches;
+				Expect(false, "mechanism motion differs by " + std::to_string(Gap));
+			}
+		}
+		for (const MechanismMotion& B : Blk.Mechanism)
+		{
+			if (std::none_of(Ref.Mechanism.begin(), Ref.Mechanism.end(), [&](const MechanismMotion& A) { return SameHandle(A.Body, B.Body); }))
+			{
+				++Out.MotionMismatches;
+				Expect(false, "mechanism body missing from the reference motion");
+			}
+		}
+	}
 	Expect(Ref.Readings.size() == Blk.Readings.size(), "reading count");
 	auto Force = [&](double X, double Y) { return Near(X, Y, ForceFloorN, Out.G, true, WeightScale); };
 	auto Util = [&](double X, double Y) { return Near(X, Y, 1e-9, Out.G, false, WeightScale); };
@@ -230,7 +263,17 @@ std::vector<FactorCase> NamedCases()
 	return Cases;
 }
 
+std::vector<FactorCase> MultiPanelCases()
+{
+	std::vector<FactorCase> Cases;
+	Cases.push_back({"8 x 10 dry wall under lambda (0, 0.3)", RunningBondWall(DryJoint(0.7), DryJoint(0.7), 8, 10), Biaxial(0.0, 0.3), {}});
+	Cases.push_back({"8 x 10 ec6 wall under lambda (0, 0.5)", Ec6Wall(8, 10), Biaxial(0.0, 0.5), {}});
+	return Cases;
+}
+
 constexpr int FactorDrawCount = bOptimisedBuild ? 6000 : 40;
+constexpr int WallDrawCount = bOptimisedBuild ? 120 : 3;
+constexpr std::uint32_t WallSeedOffset = 1000000u;
 }
 
 TEST_CASE("Statics.Factor.BlockedAgreesWithTheReference")
@@ -250,6 +293,8 @@ TEST_CASE("Statics.Factor.BlockedAgreesWithTheReference")
 		Gaps Worst;
 		Gaps WorstCertified;
 		int CertifiedDisagreeing = 0;
+		int MotionMismatches = 0;
+		double WorstMotionGap = 0.0;
 		for (int Draw = 0; Draw < FactorDrawCount; ++Draw)
 		{
 			const SeededDraw Each = MakeSeededDraw(Draw);
@@ -260,12 +305,57 @@ TEST_CASE("Statics.Factor.BlockedAgreesWithTheReference")
 			CertifiedDisagreeing += R.bCertified && R.Mismatches > 0 ? 1 : 0;
 			Traded += R.bStateClassTraded ? 1 : 0;
 			IterationsDiffer += R.bIterationsDiffer ? 1 : 0;
+			MotionMismatches += R.MotionMismatches;
+			WorstMotionGap = std::max(WorstMotionGap, R.WorstMotionGap);
 			Into.WorstRelative = std::max(Into.WorstRelative, R.G.WorstRelative);
 			Into.WorstForceAbsoluteOverW = std::max(Into.WorstForceAbsoluteOverW, R.G.WorstForceAbsoluteOverW);
 			Into.WorstUtilisationAbsolute = std::max(Into.WorstUtilisationAbsolute, R.G.WorstUtilisationAbsolute);
 		}
 		const int TradeBudget = std::max(1, FactorDrawCount / 1000);
-		MESSAGE("over " << FactorDrawCount << " draws: " << Traded << " traded mechanism and undecided (budget " << TradeBudget << "), " << IterationsDiffer << " differ in iterations, worst relative reading gap above the absolute floor " << Worst.WorstRelative << ", worst absolute force gap " << Worst.WorstForceAbsoluteOverW << " W, worst absolute utilisation gap " << Worst.WorstUtilisationAbsolute << " on mechanism draws (not asserted); " << Disagreeing << " draws disagree, " << CertifiedDisagreeing << " of them stands or overstressed, whose worst gaps are " << WorstCertified.WorstRelative << " relative, " << WorstCertified.WorstForceAbsoluteOverW << " W, " << WorstCertified.WorstUtilisationAbsolute << " utilisation");
+		MESSAGE("over " << FactorDrawCount << " draws: " << Traded << " traded mechanism and undecided (budget " << TradeBudget << "), " << IterationsDiffer << " differ in iterations, worst relative reading gap above the absolute floor " << Worst.WorstRelative << ", worst absolute force gap " << Worst.WorstForceAbsoluteOverW << " W, worst absolute utilisation gap " << Worst.WorstUtilisationAbsolute << " on mechanism draws (not asserted); " << Disagreeing << " draws disagree, " << CertifiedDisagreeing << " of them stands or overstressed, whose worst gaps are " << WorstCertified.WorstRelative << " relative, " << WorstCertified.WorstForceAbsoluteOverW << " W, " << WorstCertified.WorstUtilisationAbsolute << " utilisation; " << MotionMismatches << " mechanism bodies move differently, worst motion gap " << WorstMotionGap);
+		CHECK(Disagreeing == 0);
+		CHECK(Traded <= TradeBudget);
+	}
+}
+
+TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Statics.Factor.BlockedAgreesWithTheReferenceAcrossPanels")
+{
+	SUBCASE("named walls")
+	{
+		for (const FactorCase& C : MultiPanelCases())
+		{
+			const Clock::time_point Start = Clock::now();
+			const Comparison R = CompareKinds(C, false);
+			MESSAGE(C.Name << ": " << R.Mismatches << " mismatches, worst motion gap " << R.WorstMotionGap << ", " << SecondsSince(Start) << " s");
+		}
+	}
+	SUBCASE("seeded walls")
+	{
+		int Disagreeing = 0;
+		int Traded = 0;
+		int MultiPanel = 0;
+		int Mechanisms = 0;
+		double WorstMotionGap = 0.0;
+		for (int Draw = 0; Draw < WallDrawCount; ++Draw)
+		{
+			const std::uint32_t Seed = MasterSeed + WallSeedOffset + static_cast<std::uint32_t>(Draw);
+			std::mt19937 Rng(Seed);
+			const int Courses = 3 + static_cast<int>(Rng() % 4u);
+			const int Bricks = 3 + static_cast<int>(Rng() % 6u);
+			const double Friction = Uniform(Rng, 0.4, 1.0);
+			const double LambdaX = Uniform(Rng, 0.0, 0.5);
+			const double LambdaY = Uniform(Rng, 0.0, 0.5);
+			const std::string Name = "master seed " + std::to_string(MasterSeed) + ", wall draw " + std::to_string(Draw) + " (seed " + std::to_string(Seed) + "): " + std::to_string(Courses) + " x " + std::to_string(Bricks) + " dry wall, mu " + std::to_string(Friction) + ", lambda (" + std::to_string(LambdaX) + ", " + std::to_string(LambdaY) + ")";
+			const FactorCase C{Name, RunningBondWall(DryJoint(Friction), DryJoint(Friction), Courses, Bricks), Biaxial(LambdaX, LambdaY), {}};
+			MultiPanel += 6 * (C.Model.LiveBodyCount() - 1) > 64 ? 1 : 0;
+			const Comparison R = CompareKinds(C, true);
+			Disagreeing += R.Mismatches > 0 ? 1 : 0;
+			Traded += R.bStateClassTraded ? 1 : 0;
+			Mechanisms += R.WorstMotionGap > 0.0 || R.MotionMismatches > 0 ? 1 : 0;
+			WorstMotionGap = std::max(WorstMotionGap, R.WorstMotionGap);
+		}
+		const int TradeBudget = std::max(1, WallDrawCount / 1000);
+		MESSAGE("over " << WallDrawCount << " wall draws (" << MultiPanel << " above one panel): " << Traded << " traded mechanism and undecided (budget " << TradeBudget << "), " << Disagreeing << " disagree, worst motion gap " << WorstMotionGap);
 		CHECK(Disagreeing == 0);
 		CHECK(Traded <= TradeBudget);
 	}

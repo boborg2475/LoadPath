@@ -519,3 +519,17 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   body lists are compared when both read Mechanism, a verdict, or a certified state; open
   flags only on certified states. The 10×-looser-tolerance mutation is caught by the trade
   budget (32 trades against 6), not by the certified states, which it leaves untouched.
+- *2026-10-12, orchestrator, stage 1b opening:* **stage 1b runs as three rounds, each with
+  its own red step, in this order: (i) the sparse factor above `DenseDofLimit`, (ii)
+  per-component results and no per-component copies, (iii) the certificate's sparse normal
+  equations.** The three touch different files and the API "6b" text already separates
+  them; one brief covering all three is the hour-long round the slice-pace note warns
+  against. Round (i) measured against: the half warehouse's elastic solve at 5.9 s after the
+  blocked factor, the 32 × 40 wall at 24 s, both n³ in a dense factor of a matrix whose rows
+  carry a dozen non-zero blocks. The sparse path's agreement property reuses the stage-1a
+  comparison rulings unchanged (certified states exact, Mechanism/Undecided trades budgeted,
+  readings only on certified states); the limit's default of 600 DoF is chosen so that no
+  default-suite anchor crosses it, and a test pins that. Round (ii) is measured against the
+  judge still costing twice the elastic solve on the half warehouse (11.8 s against 5.9 s).
+  Round (iii) against the certificate column, unchanged by 1a at 572 s, which is what every
+  release pass pays per Undecided or Mechanism component.

@@ -1219,11 +1219,16 @@ cutoff, the same `Factorisation` shape, so the rank test, the null vectors and t
 handling of slipping corners are untouched. (Eigen's own dense `LDLT` was tried and rejected:
 left-looking, it picks pivots before the Schur update and never stops, so it does not reveal
 rank; DESIGN §10.) The property `Statics.Factor.BlockedAgreesWithTheReference` runs the
-seeded structures of the oracle test and named fixtures through both kinds: `Stands` and
-`Overstressed` agree exactly, `Mechanism` and `Undecided` may trade places on at most 0.1 % of
-draws (borderline pivots), iterations within 2, forces at 1e-7 relative plus 1e-9 W absolute,
-utilisations at 1e-7 relative plus 1e-9 absolute; and the `Measure.Scale.*` rows are re-run. Expected from the review's bench: the half
-warehouse's elastic solve from 59 s to about 5 s, the 40 × 32 wall finishing.
+seeded structures of the oracle test and named multi-panel fixtures (walls above the 64-column
+panel, Stands and Mechanism) through both kinds under the DESIGN §10 rulings: `Stands`,
+`Overstressed` and `InvalidInput` agree exactly; `Mechanism` and `Undecided` may trade places
+on at most max(1, draws / 1000) of the seeded draws (borderline pivots) and never on a named
+fixture; an `Undecided` pair compares nothing beyond its class; body lists agree when both
+read `Mechanism`; the mechanism motions agree within 1e-6 when both read `Mechanism`; open
+flags, iterations (within 2) and readings (forces at 1e-7 relative plus 1e-9 W absolute,
+utilisations at 1e-7 relative plus 1e-9 absolute) are compared only when both kinds read
+`Stands` or `Overstressed`. The `Measure.Scale.*` rows are re-run (SCALE.md: the half
+warehouse's elastic solve 59 s to 5.9 s, the 32 × 40 wall finishing in 24 s).
 
 **Stage 1b, the sparse solve and no copies.**
 - `RbsmStandingAuthority`: `AssembleStiffness` builds an `Eigen::SparseMatrix<double>` from

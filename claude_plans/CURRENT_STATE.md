@@ -3,7 +3,7 @@
 **Living document.** The running TODO list, not a changelog. Finished something? Remove it here.
 Deferring something? Add it here with enough context to pick up cold.
 
-## Where the project stands (2026-10-11)
+## Where the project stands (2026-10-12)
 
 Repository scaffolded: CMake + Visual Studio 2022 generator, vendored doctest 2.4.11 and Eigen
 3.4.0, the compiler contract (no exceptions, no RTTI, `/W4 /WX`, `/fp:precise`) enforced.
@@ -32,13 +32,13 @@ stacks, Paterson–Zwick, Couplet–Heyman at Milankovitch's 0.107478 with hinge
 the certificate's associative 31.07°, the cascade on the arch below least thickness, the dry
 wall at t / H within 1 % (10 × 8 and 4 × 5), the bonded 4 × 5 wall at its monolith factor
 `(t/H)(1 + f_t A_base / W) = 2.971` to 1 %, two screws at twice their published shear and
-withdrawal whatever the joint area. Default suite 265 cases in Debug and 276 in Release (the
-arch, pile, arch-cascade, fuzz and small-wall anchors run only in Release under
-`LOADPATH_SLOW_IN_DEBUG`; three `Slow.*` wall anchors run in Release at every slice close);
-the `Deferred.Slice7` tier holds the physical wedge pin, red by design (the slice-6 pin moved
-into the default tier green with slice 2c). The design brief
-([DESIGN.md](DESIGN.md)) has every §9 question decided and §10 carries the slice-2, 3, 4a, 4b
-and 5 rulings.
+withdrawal whatever the joint area. Default suite 285 cases in Debug and 297 in Release (the
+arch, pile, arch-cascade, fuzz, small-wall and multi-panel factor anchors run only in Release
+under `LOADPATH_SLOW_IN_DEBUG`; six `Slow.*` cases run in Release at every slice close, and the
+cheap `Measure.Scale.*` rows after them); the `Deferred.*` tier holds the physical wedge pin
+(slice 7) and the two hanging-component cases (slice 6), red by design. The design brief
+([DESIGN.md](DESIGN.md)) has every §9 question decided and §10 carries the slice-2, 3, 4a, 4b,
+5, 2c and 6 rulings.
 
 ## Next
 
@@ -109,11 +109,36 @@ and 5 rulings.
    removed ids after openings (the header says so now), the spec is not validated (`Bays ≤ 0`
    gives a NaN span), `OriginM.Z` and `GroundZM` overlap, the test helper undercounts openings
    at a wall end, cascade determinism is unchecked, and the never-finishing rows moved from the
-   `Slow.` tier to `Measure.*`. Next: **6b** (API.md "6b", DESIGN §10): stage 1a the
-   factorisation (Eigen pivoted dense LDLT behind the same rank test, the old factor the
-   referee in the test tier), 1b sparse above a DoF limit plus no per-component copies, 2 the
-   event region, panels contingent; the `Measure.Scale.*` rows re-run after each stage into
-   SCALE.md.
+   `Slow.` tier to `Measure.*`. Now **6b** (API.md "6b", DESIGN §10).
+   **Stage 1a, the factorisation: green, in review (2026-10-12).** `FactorKind::Blocked`, a
+   blocked right-looking pivoted LDLᵀ (dpstrf style) behind the same rank test; the rank-1
+   factor stays as `FactorKind::Reference` for one slice as the referee and is then removed
+   (log that removal when 6b closes). Eigen's own dense LDLT was tried and rejected (it does
+   not reveal rank). The referee property compares 6,000 seeded draws under the §10 rulings:
+   certified states exact, Mechanism/Undecided may trade on ≤ 0.1 % (measured 2), readings
+   and flags compared only on certified states; the 10×-looser-tolerance mutation is caught
+   only by the trade budget (32 against 6), so the budget must not be loosened. Timings in
+   SCALE.md (the 32 × 40 wall 24 s, was unfinished; the shed judges in 136 ms, was 614).
+   The cold review (2026-10-12) confirmed the factor against the reference on every matrix the
+   Release suite factorises (40,231 factorisations, 0 rank disagreements) and found the
+   property never ran the panel code (the seeded draws are at most 30 DoF, the panel is 64
+   columns): fixed the same day by `Statics.Factor.BlockedAgreesWithTheReferenceAcrossPanels` (two
+   8 × 10 walls, Mechanism and Stands, no trade allowed, plus 120 seeded dry walls, 116 of
+   them above one panel; Slow in Debug) and a mechanism-motion comparison within 1e-6 when
+   both kinds read Mechanism, so the tolerance regression now has two detectors (32 trades
+   against 6, and 18 bodies moving differently); the skipped-trailing-update and
+   panel-limited-pivot mutants redden it (ANCHORS rows). Still open from the round: the rank landing exactly on
+   a panel boundary (64, 128) is unpinned (`LargestPivot` resets per panel; a fixture of
+   reference rank 64 would pin it); the two incidental guards of panel faults outside the
+   property are `ArchAnchorsTest.cpp` (Orduna hollow pile, catches a skipped trailing update)
+   and `StackAnchorsTest.cpp` (diamond Stands, catches a panel-limited pivot search), so
+   neither may be loosened without knowing it guards the factor; the trade count (2 of 6,000)
+   is deterministic across Release runs (Eigen single-threaded here); a Mechanism draw's
+   readings differ by up to 0.79 relative between the two factors (printed, not asserted);
+   the budget bound of 1.0 s on the 16 × 20 wall is a timing assertion on this machine.
+   **Next: stage 1b** sparse above a DoF limit plus no per-component copies, then stage 2
+   the event region, panels contingent; the `Measure.Scale.*` rows re-run after each stage
+   into SCALE.md.
  **Slice 8,
    the Unreal adapter, is on hold by owner directive (2026-10-11): do not start it.** The
    remaining slice-2 anchors (item 2) can run alongside slice 6.
