@@ -313,11 +313,13 @@ never mutates the structure. The host may call it on any thread.
   `N = −(kn A/4) g`; shear force on B `S = −(kt A/4) (δ − g n)`.
 - **Free releases in the active set** (slice 2): a corner on an interface whose profile has
   `TensileStrengthPa == 0` opens when its trial `N < 0` and then carries nothing, and (slice 2c,
-  DESIGN §10) a corner on an interface with zero tension and zero cohesion whose trial `|N|` lies
-  within the force-noise floor (one named constant relative to the component's force scale, of
-  the order of the held-force tolerance) is open as well, reading `N = 0`, `S = 0` and zero
-  utilisation, re-closing only when its full-rank trial normal rises above the floor, so a dry
-  perpend carrying nothing cannot flip the active set (the slip test itself has no slack: it
+  DESIGN §10) that opening threshold is `N < −floor`, the force-noise floor (one named constant
+  relative to the component's force scale, of the order of the held-force tolerance), so a
+  noise-level negative trial opens nothing; a corner on an interface with zero tension and zero
+  cohesion whose trial `|N|` lies within the floor is open as well, reading `N = 0`, `S = 0` and zero
+  utilisation, re-closing when its trial normal rises above twice the floor (hysteresis, so a
+  corner at the floor cannot chatter) or when the restore step finds it closing under a motion,
+  so a dry perpend carrying nothing cannot flip the active set (the slip test itself has no slack: it
   drove no test, DESIGN §10); a corner on an interface whose profile has `ShearCohesionPa == 0`
   slips when its trial `|S|` exceeds `μ N` (and the cap `MaxShearStrengthPa · A/4`), after which its shear is held at capacity
   opposite the trial slip direction with no stiffness along that direction and **no dilation**
@@ -1084,7 +1086,7 @@ shared plane with the normal +z from the lower to the upper; shifted half a cube
 0.5 × 1 rectangle at the overlap's centre; separated by `2 × Tolerance` gives nullopt;
 overlapping in volume gives nullopt; a side-by-side pair gives the normal ±x. The wall: brick
 and joint counts match the closed forms; every joint passes `AddInterface`; under gravity on the
-dry profile the wall Stands through the combined authority (the elastic authority alone reads Undecided on every dry wall with perpends from 1 × 3 up: `Deferred.Slice6.SmallestDryWallThatDoesNotSettleElastically`, the slice-2c item in CURRENT_STATE); a dry wall of 10 courses under a lateral
+dry profile the wall Stands, elastic and combined (since slice 2c the elastic authority settles every dry wall at rest in two iterations; laterally loaded dry walls can still read Undecided, CURRENT_STATE); a dry wall of 10 courses under a lateral
 load along y overturns at `λ = t / H` (B-WAL-01, through the certificate bisection on λ, the
 classical monolith value, since a running-bond wall with dry beds rocks as one block when
 `μ > t/H`); the same wall with the `..._bed_ec6` profile stands past that λ (bond adds

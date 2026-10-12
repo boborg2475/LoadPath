@@ -1,6 +1,8 @@
 #include "BrickFixtures.h"
 #include "StaticsTestSupport.h"
 
+#include "loadpath/geometry/RunningBondWall.h"
+
 #include "doctest.h"
 
 #include <array>
@@ -520,6 +522,61 @@ TEST_CASE("Statics.Solver.LoadsThatOverflowReadInfiniteUtilisationAndNeverStand"
 		return;
 	}
 	CHECK(Bed->Utilisation == Infinity);
+}
+
+TEST_CASE("Statics.Solver.LoadsWhoseForceScaleOverflowsNeverStand")
+{
+	const auto WithinCapacity = [](double U) { return std::isfinite(U) && U <= 1.0; };
+	SUBCASE("one body load whose length squared overflows")
+	{
+		const BrickOnGround F = MakeBrickOnGround(DryJoint(0.7));
+		const std::array<BodyLoad, 1> Loads{BodyLoad{F.Brick, Vec3{0.0, 0.0, -2.0e154}, BrickShape().CentreM}};
+		const StandingResult Result = SolveWith(F.Model, StandingOptions{}, Loads);
+		const InterfaceReading* Bed = RequireReading(Result, F.Bed);
+		INFO("state " << Result.State << ", bed utilisation " << (Bed ? Bed->Utilisation : -1.0));
+		CHECK(Result.State != StandingState::Stands);
+		CHECK_FALSE((Bed != nullptr && WithinCapacity(Bed->Utilisation)));
+	}
+	SUBCASE("gravity whose weight length squared overflows")
+	{
+		const BrickOnGround F = MakeBrickOnGround(DryJoint(0.7));
+		StandingOptions Options;
+		Options.Gravity = Vec3{0.0, 0.0, -2.0e154};
+		const StandingResult Result = SolveWith(F.Model, Options);
+		const InterfaceReading* Bed = RequireReading(Result, F.Bed);
+		INFO("state " << Result.State << ", bed utilisation " << (Bed ? Bed->Utilisation : -1.0));
+		CHECK(Result.State != StandingState::Stands);
+		CHECK_FALSE((Bed != nullptr && WithinCapacity(Bed->Utilisation)));
+	}
+	SUBCASE("opposed pushes whose sum overflows on a 1 x 2 wall")
+	{
+		Structure Model;
+		geometry::WallSpec Spec;
+		Spec.Bed = AddProfileOk(Model, DryJoint(0.7));
+		Spec.Perpend = AddProfileOk(Model, DryJoint(0.7));
+		Spec.Courses = 1;
+		Spec.BricksPerCourse = 2;
+		const geometry::Wall W = geometry::BuildRunningBondWall(Model, Spec);
+		REQUIRE(W.bComplete);
+		REQUIRE(W.Courses[0].size() == 2u);
+		const BodyId A = W.Courses[0][0];
+		const BodyId B = W.Courses[0][1];
+		const std::array<BodyLoad, 2> Loads{BodyLoad{A, Vec3{-1.0e308, 0.0, 0.0}, Model.Body(A).CentroidM}, BodyLoad{B, Vec3{1.0e308, 0.0, 0.0}, Model.Body(B).CentroidM}};
+		const StandingResult Result = SolveWith(Model, StandingOptions{}, Loads);
+		bool bAllBedsWithin = true;
+		for (const InterfaceId& Id : W.Beds)
+		{
+			const InterfaceReading* Bed = RequireReading(Result, Id);
+			if (Bed != nullptr)
+			{
+				MESSAGE("bed utilisation " << Bed->Utilisation);
+				bAllBedsWithin = bAllBedsWithin && WithinCapacity(Bed->Utilisation);
+			}
+		}
+		INFO("state " << Result.State);
+		CHECK(Result.State != StandingState::Stands);
+		CHECK_FALSE(bAllBedsWithin);
+	}
 }
 
 TEST_CASE("Statics.Solver.BrickOverturnedByABiaxialLoadIsAMechanismAboutItsToe")

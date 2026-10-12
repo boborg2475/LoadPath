@@ -392,9 +392,26 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   its full-rank trial normal rises above the floor (a zero gap no longer re-closes it; without
   that the flip moves to the re-close step). The slip-test slack the opening ruling asked for
   drove no test once the opening rule was in and was withdrawn under the TDD gate; the 1 × 3,
-  2 × 3, 3 × 4, 4 × 5 and 10 × 8 dry walls all settle in two iterations. Two edges recorded,
+  2 × 3, 3 × 4, 4 × 5 and 10 × 8 dry walls all settle in two iterations at rest (laterally
+  loaded dry walls can still read Undecided: the review's grid, CURRENT_STATE). Two edges recorded,
   not ruled: a NaN trial normal stays closed (`abs(N) <= floor` is false for NaN), because
   opening is the direction that hides an overflow and the overflow test reads +inf through the
   closed corner; and an overflowing component makes the force scale and the floor +inf, so
-  every dry corner in it would open if any finite load remained (fails closed today only
-  because the overflow test has no finite dry corner beside the overflow).
+  every dry corner in it would open if any finite load remained (the review showed this fails
+  OPEN from one finite input of 2e154: ruled below).
+- *2026-10-11, orchestrator, after the slice-2c review:* **a non-finite force scale fails
+  closed, and the floor has hysteresis.** A single load or weight component above about
+  1.3e154 overflows the component's force scale through `sqrt(Dot)`, the floor becomes +inf,
+  every dry corner opens and the overflowed load is classed neutral: a false Stands from one
+  finite input. Ruled: a component whose force scale is not finite never Stands (Undecided or
+  the overflow reading, never an open corner). A dry corner opens at |N| ≤ floor and re-closes
+  only above 2 × floor, because with one threshold a corner just under it reads a larger gap
+  once open, re-closes, and chatters to Undecided under a real load of 1e-12 to 1e-8 W. The
+  review also measured that laterally loaded dry walls stay Undecided at any floor (147 grid
+  points, perpend corners under real load slipping): that is a separate non-convergence of the
+  free active set, recorded as the next solver item, not a floor question. The test round then
+  showed a tensionless joint WITH cohesion chattering the same way (noise-level negative N opens
+  its corners through the plain `N < 0` rule, then the wall reads Undecided): ruled, every
+  tensionless corner opens only at N < −floor, and a dry corner is open inside ±floor as well
+  because it carries nothing either way; a cohesive tensionless corner inside the band stays
+  closed and carries its cohesion.

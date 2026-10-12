@@ -81,7 +81,7 @@ std::string DescribePerpends(const std::vector<const InterfaceReading*>& Reading
 }
 }
 
-TEST_CASE("Statics.Elastic.TheSmallestDryWallWithPerpendsSettles")
+TEST_CASE("Statics.Solver.TheSmallestDryWallWithPerpendsSettles")
 {
 	const NoiseFloorWall W = BuildDry(1, 3);
 	REQUIRE(W.Value.bComplete);
@@ -93,7 +93,7 @@ TEST_CASE("Statics.Elastic.TheSmallestDryWallWithPerpendsSettles")
 	CHECK(Elastic.State == StandingState::Stands);
 }
 
-TEST_CASE("Statics.Elastic.ADryPerpendCarryingNothingReadsZeroAtRest")
+TEST_CASE("Statics.Solver.ADryPerpendCarryingNothingReadsZeroAtRest")
 {
 	const NoiseFloorWall W = BuildDry(2, 1);
 	REQUIRE(W.Value.bComplete);
@@ -120,13 +120,13 @@ TEST_CASE("Statics.Elastic.ADryPerpendCarryingNothingReadsZeroAtRest")
 	}
 }
 
-TEST_CASE("Statics.Elastic.DryRunningBondWallsWithPerpendsSettleAtRest")
+TEST_CASE("Statics.Solver.DryRunningBondWallsWithPerpendsSettleAtRest")
 {
 	struct Size
 	{
 		int Courses, BricksPerCourse;
 	};
-	for (const Size S : {Size{2, 3}, Size{3, 4}, Size{4, 5}})
+	for (const Size S : {Size{1, 3}, Size{2, 3}, Size{3, 4}, Size{4, 5}})
 	{
 		CAPTURE(S.Courses);
 		CAPTURE(S.BricksPerCourse);
@@ -137,13 +137,11 @@ TEST_CASE("Statics.Elastic.DryRunningBondWallsWithPerpendsSettleAtRest")
 		const double Seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - Start).count();
 		MESSAGE(S.Courses << " x " << S.BricksPerCourse << " dry wall elastic " << Elastic.State << " after " << Elastic.ActiveSetIterations << " active-set iterations, " << Seconds << " s");
 		CHECK(Elastic.State == StandingState::Stands);
-#if defined(NDEBUG)
-		CHECK(Seconds < 0.2);
-#endif
+		CHECK(Elastic.ActiveSetIterations <= 2);
 	}
 }
 
-TEST_CASE("Statics.Elastic.ADryPerpendUnderAUniformLateralLoadCarriesNothing")
+TEST_CASE("Statics.Solver.ADryPerpendUnderAUniformLateralLoadCarriesNothing")
 {
 	const NoiseFloorWall W = BuildDry(1, 3);
 	REQUIRE(W.Value.bComplete);
@@ -158,7 +156,7 @@ TEST_CASE("Statics.Elastic.ADryPerpendUnderAUniformLateralLoadCarriesNothing")
 	}
 }
 
-TEST_CASE("Statics.Elastic.ADryPerpendUnderAnEndPushStillCarries")
+TEST_CASE("Statics.Solver.ADryPerpendUnderAnEndPushStillCarries")
 {
 	const NoiseFloorWall W = BuildDry(1, 3);
 	REQUIRE(W.Value.bComplete);
@@ -178,7 +176,7 @@ TEST_CASE("Statics.Elastic.ADryPerpendUnderAnEndPushStillCarries")
 	CHECK(MaxNormalN > 1e-3 * WeightN);
 }
 
-TEST_CASE("Statics.Elastic.ABondedPerpendAtZeroNormalIsNotOpened")
+TEST_CASE("Statics.Solver.ABondedPerpendAtZeroNormalIsNotOpened")
 {
 	const CatalogueResult Loaded = LoadCatalogue(ReadCatalogueFile());
 	INFO("line " << Loaded.Error.Line << ": " << Loaded.Error.Message);
@@ -200,4 +198,99 @@ TEST_CASE("Statics.Elastic.ABondedPerpendAtZeroNormalIsNotOpened")
 		bAnyCarries = bAnyCarries || Length(R->ShearForceN) > 0.0;
 	}
 	CHECK(bAnyCarries);
+}
+
+TEST_CASE("Statics.Solver.ADryWallStandsUnderAnEndPushNearTheNoiseFloor")
+{
+	const NoiseFloorWall W = BuildDry(1, 3);
+	REQUIRE(W.Value.bComplete);
+	const double WeightN = BrickWeightN(W.Spec);
+	const BodyId End = W.Value.Courses[0].front();
+	int NotStanding = 0;
+	for (int K = -260; K <= -140; ++K)
+	{
+		const double PushN = WeightN * std::pow(10.0, K / 20.0);
+		const std::vector<BodyLoad> Push = {BodyLoad{End, Vec3{PushN, 0.0, 0.0}, W.Model.Body(End).CentroidM}};
+		const StandingResult Elastic = SolveWith(W.Model, StandingOptions{}, Push);
+		if (Elastic.State != StandingState::Stands)
+		{
+			++NotStanding;
+			MESSAGE("push 10^" << K / 20.0 << " W: " << Elastic.State << " after " << Elastic.ActiveSetIterations << " iterations; perpends " << DescribePerpends(PerpendReadings(W, Elastic)));
+		}
+	}
+	CHECK(NotStanding == 0);
+}
+
+TEST_CASE("Statics.Solver.ABondedPerpendAtRestStaysClosed")
+{
+	const CatalogueResult Loaded = LoadCatalogue(ReadCatalogueFile());
+	INFO("line " << Loaded.Error.Line << ": " << Loaded.Error.Message);
+	REQUIRE(Loaded.Ok());
+	const NoiseFloorWall W = BuildNoiseFloorWall(JointOrFail(Loaded.Value, "clay_gp_mortar_bed_ec6").Profile, JointOrFail(Loaded.Value, "clay_gp_mortar_perpend_ec6").Profile, 1, 3);
+	REQUIRE(W.Value.bComplete);
+	const StandingResult Elastic = SolveWith(W.Model, StandingOptions{});
+	const std::vector<const InterfaceReading*> Perpends = PerpendReadings(W, Elastic);
+	INFO("bonded 1 x 3 wall at rest: " << Elastic.State << " after " << Elastic.ActiveSetIterations << " iterations; perpends " << DescribePerpends(Perpends));
+	CHECK(Elastic.State == StandingState::Stands);
+	for (const InterfaceReading* R : Perpends)
+	{
+		for (const CornerReading& C : R->Corners)
+		{
+			CHECK_FALSE(C.bOpen);
+		}
+	}
+}
+
+TEST_CASE("Statics.Solver.ACohesiveTensionlessPerpendAtRestStaysClosed")
+{
+	StrengthProfile Cohesive = DryJoint(0.7);
+	Cohesive.ShearCohesionPa = 1.0e5;
+	const NoiseFloorWall W = BuildNoiseFloorWall(Cohesive, Cohesive, 1, 3);
+	REQUIRE(W.Value.bComplete);
+	const StandingResult Elastic = SolveWith(W.Model, StandingOptions{});
+	const std::vector<const InterfaceReading*> Perpends = PerpendReadings(W, Elastic);
+	INFO("cohesive tensionless 1 x 3 wall at rest: " << Elastic.State << " after " << Elastic.ActiveSetIterations << " iterations; perpends " << DescribePerpends(Perpends));
+	for (const InterfaceReading* R : Perpends)
+	{
+		for (const CornerReading& C : R->Corners)
+		{
+			CHECK_FALSE(C.bOpen);
+		}
+	}
+}
+
+TEST_CASE("Statics.Solver.ADryPerpendNormalScalesWithTheEndPush")
+{
+	const NoiseFloorWall W = BuildDry(1, 3);
+	REQUIRE(W.Value.bComplete);
+	const double WeightN = BrickWeightN(W.Spec);
+	const BodyId End = W.Value.Courses[0].front();
+	const auto SolvePush = [&](double PushN) {
+		const std::vector<BodyLoad> Push = {BodyLoad{End, Vec3{PushN, 0.0, 0.0}, W.Model.Body(End).CentroidM}};
+		return SolveWith(W.Model, StandingOptions{}, Push);
+	};
+	const double LargeN = 0.2 * WeightN;
+	const double SmallN = 1.0e-7 * WeightN;
+	const StandingResult Large = SolvePush(LargeN);
+	const StandingResult Small = SolvePush(SmallN);
+	const std::vector<const InterfaceReading*> LargePerpends = PerpendReadings(W, Large);
+	const std::vector<const InterfaceReading*> SmallPerpends = PerpendReadings(W, Small);
+	INFO("0.2 W: " << Large.State << ", perpends " << DescribePerpends(LargePerpends));
+	INFO("1e-7 W: " << Small.State << ", perpends " << DescribePerpends(SmallPerpends));
+	for (const std::vector<const InterfaceReading*>* Set : {&LargePerpends, &SmallPerpends})
+	{
+		for (const InterfaceReading* R : *Set)
+		{
+			for (const CornerReading& C : R->Corners)
+			{
+				CHECK_FALSE(C.bOpen);
+			}
+		}
+	}
+	const double Ratio = SmallN / LargeN;
+	for (std::size_t I = 0; I < LargePerpends.size(); ++I)
+	{
+		CAPTURE(I);
+		CHECK(SmallPerpends[I]->NormalForceN == doctest::Approx(Ratio * LargePerpends[I]->NormalForceN).epsilon(1e-6));
+	}
 }

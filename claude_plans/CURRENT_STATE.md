@@ -32,37 +32,51 @@ stacks, Paterson–Zwick, Couplet–Heyman at Milankovitch's 0.107478 with hinge
 the certificate's associative 31.07°, the cascade on the arch below least thickness, the dry
 wall at t / H within 1 % (10 × 8 and 4 × 5), the bonded 4 × 5 wall at its monolith factor
 `(t/H)(1 + f_t A_base / W) = 2.971` to 1 %, two screws at twice their published shear and
-withdrawal whatever the joint area. Default suite 253 cases in Debug and 264 in Release (the
+withdrawal whatever the joint area. Default suite 259 cases in Debug and 270 in Release (the
 arch, pile, arch-cascade, fuzz and small-wall anchors run only in Release under
 `LOADPATH_SLOW_IN_DEBUG`; three `Slow.*` wall anchors run in Release at every slice close);
-the `Deferred.Slice7` tier holds the physical wedge pin and `Deferred.Slice6` the smallest dry
-wall the elastic authority cannot settle, both red by design. The design brief
+the `Deferred.Slice7` tier holds the physical wedge pin, red by design (the slice-6 pin moved
+into the default tier green with slice 2c). The design brief
 ([DESIGN.md](DESIGN.md)) has every §9 question decided and §10 carries the slice-2, 3, 4a, 4b
 and 5 rulings.
 
 ## Next
 
-1. Slice 2c, **dry perpends settle** (the next solver slice, before slice 6): the elastic
-   authority reads Undecided on every dry running-bond wall with perpends between full bricks
-   (1 × 3 and 5 × 1 up; 1 × 2, 3 × 1 and 4 × 1, whose perpends sit between half bricks,
-   settle) because a dry perpend at N ≈ 1e-18 stays closed (`UpdateActiveSet` opens a corner
-   only on N < 0 strictly), its slip capacity μN and its roundoff shear are the same size, and
-   the Stuck ↔ Slipping test flips every iteration; the 2 × 1 dry wall reads Overstressed at
-   rest for the same reason (shear utilisation = roundoff / 0 = +inf). Ruling to write at the
-   slice opening: a corner whose normal force is within a force-noise floor of zero, on a joint
-   with zero tension and cohesion, is Open and reads N 0, shear 0, utilisations 0; the floor is
-   relative to the component's force scale (the `ForceScaleN` the held-force tolerance uses),
-   one named constant; the stick/slip comparison gets the same absolute slack; a genuinely
-   loaded dry corner keeps today's rule. Tests: `Deferred.Slice6.SmallestDryWallThatDoesNot
-   SettleElastically` moves to the default tier green; the 2 × 1 wall Stands at rest with finite
-   zero utilisations on the perpend; a sweep 1 × 3, 2 × 3, 3 × 4, 4 × 5 Stands elastically with
-   the iteration counts recorded; the incline and bridge anchors unchanged (the floor is not a
-   blanket); a dry perpend under a real load (a 0.2 W push on the end brick of the 1 × 3 wall;
-   a uniform λ 0.2 moves the bricks together and the perpends carry nothing) still carries
-   above the floor; a bonded perpend at N ≈ 0 is not opened. Mutations: floor 0 restores
-   the Undecided; a floor large enough to swallow the end-push perpend (0.22 N against a force
-   scale of about 84 N, so above 1e-2) makes the loaded-perpend test red. Then check
-   whether the 10 × 8 dry wall (Slow, Release) settles and how many iterations it takes.
+1. Slice 2c, **dry perpends settle**: implemented (`DryNoiseFloorRelative` 1e-12 of the
+   component's force scale opens a dry corner whose trial |N| is at or below it; every dry wall
+   at rest, 1 × 3 to 10 × 8, settles in two iterations) and in its review-fix round
+   (2026-10-11): the review found that an overflowing force scale (one load component above
+   about 1.3e154) makes the floor +inf, opens every corner and reads a false Stands, and that a
+   corner just under the floor chatters open/closed to Undecided (10 of 81 end pushes between
+   1e-12 W and 1e-8 W); the fixes are a non-finite force scale failing closed and hysteresis
+   (re-close at twice the floor), with the bonded and cohesive guards given real mutation
+   proofs. Open after that round, none host-unsafe:
+   - **laterally loaded dry walls still read Undecided, and the floor has nothing to do with
+     it**: on a 5 × 5 grid of sizes × λx 0–0.3, λy 0–0.15, 147 points stay Undecided (1 × 5,
+     2 × 5, 3 × 4, 3 × 5, 5 × 4, 5 × 5 at every λ ≥ 0.05; 10 × 8 and 14 × 10 at λ 0.2) with
+     perpend corners carrying real load (3e-7 to 5e-4 of the scale) and slipping; floors from
+     1e-14 to 1e-6, slip slack, and a 2000-iteration cap change nothing; the NNLS oracle says
+     CanStand for all of them and no point reads a false Stands. This is a stick/slip
+     non-convergence of the free active set, the next solver item (2d) after slice 6 opens;
+   - the restore step (`RestoreInadmissibleReleases`) re-closes a floor-opened corner on a
+     motion gap with no floor check: a corner Open in the full-rank state returns Undecided
+     (the 3 × 1 wall at λ (0.8, 0.8) went Mechanism → Undecided), otherwise the corner re-enters
+     Slipping and is reopened in a cycle (a light body on a heavy one at mass ratio 1e-12 to
+     3e-12 reads Undecided/50 where it read Stands/1; at 1e-13 it reads Stands with the light
+     body's support corners open, floating). Fails closed; untested;
+   - one regression independent of the floor value: the 4 × 2 wall at λ (0.30, 0.15) went from
+     Stands/14 to Undecided/50 (probably the re-close rule; check after the hysteresis);
+   - an unloaded component (zero gravity, no loads) has floor 0 and `<=` opens every dry corner,
+     reading Stands with all corners open; `<=` → `<` survives the suite, so the boundary is
+     unpinned;
+   - the floor's size is pinned only between 1e-9 (survives) and 1e-6 (three anchors fail)
+     until the scaling test lands.
+   Next slice: 6, scale, opening with a measurement (API.md "Slice 6" when written: a
+   warehouse-like generator from the slice-5 pieces, `Slow.Scale.*` rows for the wall, shed and
+   warehouse sizes through the combined authority and the cascade, the table in
+   `claude_plans/SCALE.md`), and only then the sparse / event-region / panel contract. **Slice 8,
+   the Unreal adapter, is on hold by owner directive (2026-10-11): do not start it.** The
+   remaining slice-2 anchors (item 2) can run alongside slice 6.
    Slice 3 and 4b items still open (none host-unsafe; the unsafe one, the wedge band, is under
    Deferred):
    - the overflow guard (`HighestPass() == UINT32_MAX` → InvalidInput) runs only at entry; a run
@@ -267,10 +281,4 @@ and 5 rulings.
     so a multi-plane fastener with withdrawal is over-counted on withdrawal (documented in the
     header; no row today has both); the screw's A1:2008 withdrawal uses l_ef 44 mm, below the
     6 d = 48 mm minimum penetration the clause is recalled to require (noted in the row; verify
-    against the standard); the zero-`bearing_mpa` refusal has no test case of its own (only a
-    negative bearing is in the error table): add the case in the next test round.
-- **The elastic authority never settles on a dry wall with perpends between full bricks** (slice-5
-  sweep, 2026-10-11): the next solver slice, Next item 1 (slice 2c), which carries the
-  mechanism, the ruling to write and the tests. Pinned red by design meanwhile:
-  `Deferred.Slice6.SmallestDryWallThatDoesNotSettleElastically` (the 1 × 3 wall). The
-  measured sweep is in its ANCHORS row.
+    against the standard).

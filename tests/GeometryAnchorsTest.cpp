@@ -101,8 +101,7 @@ TEST_CASE("Slow.Geometry.Anchor.DryRunningBondWallStandsUnderGravity")
 	}
 	const StandingResult Elastic = SolveWith(W.Model, StandingOptions{});
 	INFO("elastic " << Elastic.State << " after " << Elastic.ActiveSetIterations << " active-set iterations");
-	CHECK(Elastic.State != StandingState::Mechanism);
-	CHECK(Elastic.State != StandingState::Overstressed);
+	CHECK(Elastic.State == StandingState::Stands);
 	const AuthorityResult Combined = Judge(W.Model, AuthorityOptions{});
 	INFO("combined " << std::string(VerdictName(Combined.Worst)));
 	CHECK(Combined.Worst == ComponentVerdict::Stands);
