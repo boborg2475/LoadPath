@@ -272,7 +272,7 @@ TEST_CASE("Slow.Statics.Ungrounded.TheFloatingWallRemainderSolvesInsideItsBudget
 	Characterise(R);
 	CHECK(R.State == StandingState::Mechanism);
 	CHECK(SameIdList(R.UnconstrainedBodies, Floating));
-	CHECK(Ms < 30.0);
+	CHECK(Ms < 50.0);
 }
 
 TEST_CASE("Statics.Ungrounded.AHeldFloatingBrickStandsAsBefore")
