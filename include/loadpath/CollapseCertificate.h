@@ -36,7 +36,7 @@ struct CertificateOptions
 	int StallWindow = 20;
 	// In (0, 1): the factor the largest relative residual must improve by within StallWindow iterations.
 	double StallImprovement = 0.5;
-	// Components with more equilibrium rows than this factor the normal matrix sparsely, with structured cap sites and the load-factor coupling as a border; at or below it, dense.
+	// Components with more equilibrium rows than this factor the normal matrix sparsely, with the load-factor coupling as a border; at or below it, densely with the coupling added into M. Both paths solve the cap sites in structured form.
 	int DenseRowLimit = 600;
 };
 

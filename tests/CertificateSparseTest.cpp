@@ -49,8 +49,10 @@ void RequireTheRowLimitExists()
 
 constexpr double LoadFactorRelative = 1.0e-7;
 constexpr double LoadFactorAbsolute = 1.0e-9;
-constexpr double MotionAbsolute = 1.0e-6;
 constexpr int IterationSlack = 2;
+constexpr double AgreementRelative = 1.0e-9;
+constexpr double AgreementAbsolute = 1.0e-12;
+constexpr double AgreementMotion = 1.0e-9;
 
 struct SparseCase
 {
@@ -87,15 +89,15 @@ bool SameInterfaces(const std::vector<InterfaceId>& A, const std::vector<Interfa
 	return true;
 }
 
-bool NearLoadFactor(double Got, double Want, SparseGaps& G)
+bool NearLoadFactor(double Got, double Want, SparseGaps& G, double Relative = LoadFactorRelative, double Absolute = LoadFactorAbsolute)
 {
 	const double Gap = std::abs(Got - Want);
 	const double Scale = std::max(std::abs(Got), std::abs(Want));
-	if (Scale > 0.0)
+	if (Scale > 0.0 && Gap > Absolute)
 	{
 		G.WorstLoadFactorRelative = std::max(G.WorstLoadFactorRelative, Gap / Scale);
 	}
-	return Gap <= LoadFactorRelative * Scale + LoadFactorAbsolute;
+	return Gap <= Relative * Scale + Absolute;
 }
 
 double MotionGap(const MechanismMotion& A, const MechanismMotion& B)
@@ -121,27 +123,35 @@ void CompareSparseWithDense(const SparseCase& C, SparseGaps& G)
 	{
 		++G.Standing;
 	}
-	bool bAgree = Dense.State == Sparse.State;
-	bAgree = NearLoadFactor(Sparse.LoadFactorLower, Dense.LoadFactorLower, G) && bAgree;
-	bAgree = NearLoadFactor(Sparse.LoadFactorUpper, Dense.LoadFactorUpper, G) && bAgree;
+	const bool bState = Dense.State == Sparse.State;
+	const bool bLower = NearLoadFactor(Sparse.LoadFactorLower, Dense.LoadFactorLower, G, AgreementRelative, AgreementAbsolute);
+	const bool bUpper = NearLoadFactor(Sparse.LoadFactorUpper, Dense.LoadFactorUpper, G, AgreementRelative, AgreementAbsolute);
 	const int IterationGap = std::abs(Sparse.Iterations - Dense.Iterations);
 	G.WorstIterations = std::max(G.WorstIterations, IterationGap);
-	bAgree = IterationGap <= IterationSlack && bAgree;
-	bAgree = SameInterfaces(Dense.HingingInterfaces, Sparse.HingingInterfaces) && bAgree;
-	bAgree = Dense.Mechanism.size() == Sparse.Mechanism.size() && bAgree;
+	const bool bHinging = SameInterfaces(Dense.HingingInterfaces, Sparse.HingingInterfaces);
+	const bool bMotionCount = Dense.Mechanism.size() == Sparse.Mechanism.size();
+	CHECK_MESSAGE(bState, C.Name << ": state");
+	CHECK_MESSAGE(bLower, C.Name << ": lower load factor");
+	CHECK_MESSAGE(bUpper, C.Name << ": upper load factor");
+	CHECK_MESSAGE(IterationGap == 0, C.Name << ": iterations");
+	CHECK_MESSAGE(bHinging, C.Name << ": hinging interfaces");
+	CHECK_MESSAGE(bMotionCount, C.Name << ": moving-body count");
+	bool bAgree = bState && bLower && bUpper && IterationGap == 0 && bHinging && bMotionCount;
+	bool bMotions = true;
 	for (const MechanismMotion& Want : Dense.Mechanism)
 	{
 		const MechanismMotion* Got = FindMotion(Sparse, Want.Body);
 		if (Got == nullptr)
 		{
-			bAgree = false;
+			bMotions = false;
 			continue;
 		}
 		const double Gap = MotionGap(*Got, Want);
 		G.WorstMotion = std::max(G.WorstMotion, Gap);
-		bAgree = Gap <= MotionAbsolute && bAgree;
+		bMotions = Gap <= AgreementMotion && bMotions;
 	}
-	CHECK(bAgree);
+	CHECK_MESSAGE(bMotions, C.Name << ": motions");
+	bAgree = bAgree && bMotions;
 	G.Mismatches += bAgree ? 0 : 1;
 	const double Seconds = SecondsSince(Start);
 	if (Seconds > G.SlowestSeconds)
@@ -218,7 +228,7 @@ TEST_CASE("Certificate.Sparse.AgreesWithTheDensePath")
 	{
 		CompareSparseWithDense(C, G);
 	}
-	MESSAGE(Cases.size() << " cases (" << G.Collapsing << " collapse, " << G.Standing << " stand), " << G.Mismatches << " disagree; worst load factor relative " << G.WorstLoadFactorRelative << ", worst motion " << G.WorstMotion << ", worst iteration gap " << G.WorstIterations << ", slowest " << G.Slowest << " at " << G.SlowestSeconds << " s, " << SecondsSince(Start) << " s");
+	MESSAGE(Cases.size() << " cases (" << G.Collapsing << " collapse, " << G.Standing << " stand), " << G.Mismatches << " disagree; worst load factor relative above the 1e-12 floor " << G.WorstLoadFactorRelative << ", worst motion " << G.WorstMotion << ", worst iteration gap " << G.WorstIterations << ", slowest " << G.Slowest << " at " << G.SlowestSeconds << " s, " << SecondsSince(Start) << " s");
 	CHECK(G.Collapsing > 0);
 	CHECK(G.Standing > 0);
 }
