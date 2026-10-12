@@ -32,7 +32,7 @@ stacks, Paterson–Zwick, Couplet–Heyman at Milankovitch's 0.107478 with hinge
 the certificate's associative 31.07°, the cascade on the arch below least thickness, the dry
 wall at t / H within 1 % (10 × 8 and 4 × 5), the bonded 4 × 5 wall at its monolith factor
 `(t/H)(1 + f_t A_base / W) = 2.971` to 1 %, two screws at twice their published shear and
-withdrawal whatever the joint area. Default suite 343 cases in Debug and 366 in Release after
+withdrawal whatever the joint area. Default suite 344 cases in Debug and 367 in Release after
 the carried 6b items 1 to 3 (325 and 347 at the 6b close) (the arch, pile, arch-cascade, fuzz, small-wall and multi-panel factor anchors
 run only in Release under `LOADPATH_SLOW_IN_DEBUG`; nine `Slow.*` cases run in Release at
 every slice close, and the
@@ -211,10 +211,12 @@ cheap `Measure.Scale.*` rows after them); the `Deferred.*` tier holds the physic
    - from the cascade-scan reviews (pre-existing, logged): the pass loop's load filter
      (`Contains(ReleasedThisRun, Load.Body)`) and `MotionOf` are linear searches, O(loads ×
      released) and O(clusters × mechanism) per pass, unmeasured; `FindClean` and the report
-     index call `front()` on a previous report's bodies, undefined for a forged empty list; the
-     sever sweep's cluster-of-body table points at the later cluster if a forged authority
-     lists one body in two components' release lists; the fuzz test could assert after each
-     pass that `InterfacesOf(b)` equals `LiveInterfaces` filtered by endpoint;
+     index call `front()` on a previous report's bodies, undefined for a forged empty list; a
+     forged body in two Overstressed components is owned by the first in the crack band (the
+     old loops let the second count it too); the indexed tables match a forged
+     stale-generation handle by slot; the capped-bounds test's power at caps 1.2 and 3.0 rests
+     on one report (seed 0x6b1b2 + 14); the fuzz test could assert after each pass that
+     `InterfacesOf(b)` equals `LiveInterfaces` filtered by endpoint;
    - the shipped certificate never returns a per-component InvalidInput entry, so that arm of
      `Consult` is reached only through the no-entries branch (pinned by
      `Authority.Combined.ACertificateWithNoEntriesReadsInvalidInput`); `std::min(Cap, NaN)`

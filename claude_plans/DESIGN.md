@@ -1043,3 +1043,19 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   exact bisection (the two orders agree to the last bit on every fixture tried, so there is
   nothing to pin); the fold test could adopt the review's exact-edge bisection with a
   twin-joint pair and a six-brick slab.
+- *2026-10-12, orchestrator, carried from 6b, items 2 and 3 re-review rulings (of 0e7fa19):*
+  the review's differential against 685a5be is byte-identical over 964 judges, 300 fuzz
+  seeds pass by pass and 36 ec6 walls (1,062 cracks, 1,202 severs). Two records corrected and
+  one ruling added. **Ruling (1)'s pin is `Authority.Judge.MatchesSolvingEachComponentAlone`
+  itself**, now comparing bounds exactly (NaN-aware, since unconsulted reports carry NaN
+  bounds) at the default cap and at 1.2, alongside the filtered-aggregate test the fix round
+  added. **A body listed in two release lists, or twice in one, severs as API.md's
+  sequential rule says**: the cluster-of-body table keeps the first cluster that claims a
+  body, as the old per-cluster loops did (685a5be's answer, restored by the one-line fix the
+  review trialled; a scripted test pins both shapes). The orchestrator made the test and the
+  line itself after confirming the red, the change being the review's own specification.
+  The crack-field ratio test times best of three at each size (its small run is 1.5 ms, so one
+  scheduling hiccup on the large run could cross the bar). Logged: the capped-bounds test's
+  power at caps 1.2 and 3.0 rests on one report (seed 0x6b1b2 + 14); a forged body in two
+  Overstressed components is owned by the first in the crack band, where 685a5be let the
+  second count it too; the indexed tables match a forged stale-generation handle by slot.

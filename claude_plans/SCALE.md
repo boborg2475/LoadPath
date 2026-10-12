@@ -314,8 +314,13 @@ a fold.
 | Warehouse | 553 ms | **314 ms** (was 512) | 632 ms |
 | 2,000 floating pairs | | **15 ms** (was 575) | |
 | 8,000 floating pairs | | **67 ms** (was 8,833) | |
+| 2,000 Overstressed bricks, one crack pass | | **under 2 ms** (was 16) | |
+| 8,000 Overstressed bricks, one crack pass | | **6 ms** (was 266) | |
 
 The judge on structures of five components is unchanged (its cost is the elastic solve and the
 certificate of the grounded components); what fell is everything proportional to the component
 count times the structure, and the floating remainder's finiteness check (65 ms to under 10).
 The warm judge on the 8,000-pair field after one removal: 85 ms to 19 ms (`FindClean` indexed).
+
+After the fix round (0e7fa19): the wall 15 ms, the half warehouse 108 ms, the warehouse 325 to
+334 ms (noise around the 305 to 331 ms the review read), the crack band bucketed by component.

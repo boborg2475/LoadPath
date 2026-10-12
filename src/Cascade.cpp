@@ -214,7 +214,10 @@ bool Release(Structure& Model, const AuthorityResult& Judged, std::uint32_t Pass
 			{
 				ClusterOfBody.resize(static_cast<std::size_t>(Body.Index) + 1, NoSlot);
 			}
-			ClusterOfBody[Body.Index] = C;
+			if (ClusterOfBody[Body.Index] == NoSlot)
+			{
+				ClusterOfBody[Body.Index] = C;
+			}
 		}
 	}
 	std::vector<std::vector<InterfaceId>> Crossing(Pending.size());
