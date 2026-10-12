@@ -16,6 +16,7 @@
 #include <algorithm>
 #include <climits>
 #include <cmath>
+#include <iomanip>
 #include <cstdlib>
 #include <string>
 #include <vector>
@@ -219,7 +220,8 @@ constexpr double ArchEtaTolerance = 1.0e-5;
 constexpr double PileLambda = 0.5005;
 constexpr double PileLambdaTolerance = 1.0e-3;
 constexpr double WedgeToleranceDeg = 0.05;
-constexpr double ShedDenseSeconds = 9.0;
+constexpr double ShedSecondsCeiling = 8.0;
+constexpr double BoundaryWallLateral = 0.8;
 }
 
 TEST_CASE("Certificate.Sparse.AgreesWithTheDensePath")
@@ -304,6 +306,54 @@ TEST_CASE("Slow.Certificate.Sparse.TheShedCertificateInsideItsBudget")
 	const double Seconds = SecondsSince(Start);
 	MESSAGE("shed certificate " << Result.State << " [" << Result.LoadFactorLower << ", " << Result.LoadFactorUpper << "] in " << Result.Iterations << " iterations, " << Seconds << " s");
 	CHECK(Result.State == CertificateState::Stands);
-	CHECK(Seconds <= ShedDenseSeconds);
+	CHECK(Seconds <= ShedSecondsCeiling);
 }
 #endif
+
+TEST_CASE("Certificate.Sparse.TheRowLimitBoundaryIsInclusive")
+{
+	RequireTheRowLimitExists();
+	const Structure Model = RunningBondWall(DryJoint(0.6), DryJoint(0.6), 8, 12);
+	REQUIRE(Model.LiveBodyCount() == 101);
+	const CertificateOptions Options = CertificateLateral(BoundaryWallLateral);
+	const CertificateResult Default = DecideWith(Model, Options);
+	const CertificateResult Dense = DecideWith(Model, WithDenseRowLimit(Options, INT_MAX));
+	const CertificateResult Sparse = DecideWith(Model, WithDenseRowLimit(Options, 599));
+	INFO(std::setprecision(17) << "default " << Default.State << " [" << Default.LoadFactorLower << ", " << Default.LoadFactorUpper << "] in " << Default.Iterations << ", dense " << Dense.State << " [" << Dense.LoadFactorLower << ", " << Dense.LoadFactorUpper << "] in " << Dense.Iterations << ", limit 599 " << Sparse.State << " [" << Sparse.LoadFactorLower << ", " << Sparse.LoadFactorUpper << "] in " << Sparse.Iterations);
+	CHECK(Dense.State == CertificateState::Collapses);
+	CHECK(Default.State == Dense.State);
+	CHECK(Default.LoadFactorLower == Dense.LoadFactorLower);
+	CHECK(Default.LoadFactorUpper == Dense.LoadFactorUpper);
+	CHECK(Default.Iterations == Dense.Iterations);
+	CHECK(SameInterfaces(Default.HingingInterfaces, Dense.HingingInterfaces));
+	CHECK(Default.Mechanism.size() == Dense.Mechanism.size());
+	for (const MechanismMotion& Want : Dense.Mechanism)
+	{
+		const MechanismMotion* Got = FindMotion(Default, Want.Body);
+		REQUIRE(Got != nullptr);
+		CHECK(MotionGap(*Got, Want) == 0.0);
+	}
+	SparseGaps G;
+	CHECK(Sparse.State == Dense.State);
+	CHECK(NearLoadFactor(Sparse.LoadFactorLower, Dense.LoadFactorLower, G));
+	CHECK(NearLoadFactor(Sparse.LoadFactorUpper, Dense.LoadFactorUpper, G));
+	const bool bPathDiffers = Sparse.LoadFactorLower != Dense.LoadFactorLower || Sparse.LoadFactorUpper != Dense.LoadFactorUpper || Sparse.Iterations != Dense.Iterations;
+	CHECK_MESSAGE(bPathDiffers, "limit 599 read bit-identical to the dense path, so it cannot show which path the default took");
+}
+
+TEST_CASE("Certificate.Sparse.ARankDeficientNormalMatrixIsRegularisedOnTheSparsePath")
+{
+	RequireTheRowLimitExists();
+	const Structure Model = RunningBondWall(DryJoint(0.0), DryJoint(0.0), 9, 12);
+	REQUIRE(Model.LiveBodyCount() == 113);
+	const CertificateOptions Options = CertificateLateral(0.0);
+	const CertificateResult Sparse = DecideWith(Model, Options);
+	const CertificateResult Dense = DecideWith(Model, WithDenseRowLimit(Options, INT_MAX));
+	INFO("sparse " << Sparse.State << " [" << Sparse.LoadFactorLower << ", " << Sparse.LoadFactorUpper << "] in " << Sparse.Iterations << ", dense " << Dense.State << " [" << Dense.LoadFactorLower << ", " << Dense.LoadFactorUpper << "] in " << Dense.Iterations);
+	SparseGaps G;
+	CHECK(Dense.State == CertificateState::Stands);
+	CHECK(Sparse.State == Dense.State);
+	CHECK(NearLoadFactor(Sparse.LoadFactorLower, Dense.LoadFactorLower, G));
+	CHECK(NearLoadFactor(Sparse.LoadFactorUpper, Dense.LoadFactorUpper, G));
+	CHECK(std::abs(Sparse.Iterations - Dense.Iterations) <= IterationSlack);
+}
