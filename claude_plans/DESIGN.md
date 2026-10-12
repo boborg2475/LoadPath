@@ -1087,7 +1087,7 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   points are not ill-posed: the oracle keeps them CanStand to 7× to 14× the test load, and
   four different update rules reach the same readings to 1e-12 with identical slipping
   counts. Consequences accepted: the generated factor pins and the sparse hidden-pivot pin
-  move (62 Undecided to Stands, 30 fewer iterations, 175 Undecided to Mechanism, 195
+  move (62 Undecided to Stands, 30 fewer iterations, 175 Undecided to Mechanism, 196
   Mechanism to Undecided of which 145 by the restore step, 7 mechanism shapes; the oracle
   refutes none of the new Stands), so they are regenerated under the pins ruling with this
   entry as the reason and an oracle audit of zero false Stands; iteration counts grow with
@@ -1098,11 +1098,15 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   along the offset; "close into Stuck" must redden it), the four points' iteration counts
   with margin, the grid with zero refutations, the 14 × 10 sparse case, the rest walls at two
   iterations, every existing anchor.
-- *2026-10-12, orchestrator, slice 2d dev notes:* the Open branch calls `ReEnterSlipping` with
-  the trial shear and normal and then zeroes the corner's transverse stiffness, as the
-  Stuck-to-Slipping branch does; without that line the pin trades read 62 / 30 / 168 / 206 / 6
-  against the probe's 62 / 30 / 175 / 196 / 7, and no test but the generated pins tells the
-  two apart (the review judges the arithmetic). The grid test now runs the NNLS oracle on
+- *2026-10-12, orchestrator, slice 2d dev notes (corrected by the cold review):* the Open
+  branch calls `ReEnterSlipping` with the trial shear and normal (which sets the transverse
+  stiffness to zero, right for the restore step, where there is a motion but no trial shear)
+  and then sets the transverse stiffness to kt·μN/|trial shear|, exactly what the
+  Stuck-to-Slipping branch sets, so re-closing means close, then apply the slip test to the
+  same trial in the same update. Without that line the stiffness stays zero and the pin
+  trades read 62 / 30 / 168 / 206 / 6 against the probe's 62 / 30 / 175 / 196 / 7; no test but
+  the generated pins tells the two apart, and neither changes a Stands state. (An earlier
+  wording of this note said the line zeroes the stiffness; it does the opposite.) The grid test now runs the NNLS oracle on
   all 160 Stands and takes 6.5 min, so it stays in the Slow tier. The warehouse's mortared
   walls under λx 0.1 Stand or read Overstressed after one iteration, the 34-body frame
   Mechanism after three: the cap of 50 is nowhere near at scale, and the dry rule barely
@@ -1110,3 +1114,28 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   Stands before and after, 26 Ambiguous and one CannotStand, pre-existing, handed to the cold
   review. The mutant applying the rule to cohesive (non-slip-releasing) corners survives the
   suite: a cohesive fixture that pins the ruling's scope follows.
+- *2026-10-12, orchestrator, slice 2d cold-review rulings (of c4a372a):* the rule sits only in
+  the Open branch, only on slip-releasing corners, the certifying consistency test is
+  unchanged, and across about 2,600 Stands (the pins, the grid, 358 random dry walls, 347
+  stacks and bridges, 281 pairs) the oracle refuted none and every dry field satisfied its own
+  equilibrium and cone checks to 1e-12 of the weight. The pins diff has no Stands lost and no
+  Stands taking more iterations. **The one pinned Stands the oracle read CannotStand is an
+  oracle artefact**: `PanelPins[1]`, the 8 × 10 ec6 wall under λ (0, 0.5), whose bond carries
+  tension and cohesion the NNLS oracle does not model (its cones are compression and friction
+  only); the authority's field is in equilibrium to 3.8e-15 W with the bond carrying −0.038 W
+  of tension and 0.0125 W of shear beyond friction, and the monolith estimate 0.88 sits above
+  0.5. Ruled: the oracle refuses any structure with a tensile or cohesive profile, so it cannot
+  be pointed at a bonded wall again. **The scope mutant** (the rule applied to cohesive corners)
+  would hide a sheared bond, since a Slipping corner holds μN and its ratio against cA/4 + μN
+  can never trip `bShearedBond`; the lime-wall test catches it, and an invariant that no corner
+  of a cohesive joint ever reads Slipping goes into the fuzz. **The slip direction at entry is
+  not pinned by the slice's tests** (a reversed held force survives everything but the pins):
+  pinned through named draws whose convergence depends on it (seeded 3329 Stands in 21 where
+  the reversed entry reads Undecided at 50; 3253 in 11 against 9), and an own-field certificate
+  property (equilibrium of every Stands from its readings, cone and no-tension checks on dry
+  joints) that implies the oracle's answer on dry fixtures in milliseconds. The grid test's
+  cost is the oracle, not the solves (under a second): the convergence half moves to the
+  default tier under `LOADPATH_SLOW_IN_DEBUG` with the own-field check, the NNLS stays on a
+  subset in Slow. The cap of 50 is close near the stability limit, not at size: random walls at
+  μ 0.99 and λ (0.38, 0.28) took 46 iterations; over the cap fails closed to Undecided and the
+  certificate referees it (logged).

@@ -32,9 +32,9 @@ stacks, Paterson–Zwick, Couplet–Heyman at Milankovitch's 0.107478 with hinge
 the certificate's associative 31.07°, the cascade on the arch below least thickness, the dry
 wall at t / H within 1 % (10 × 8 and 4 × 5), the bonded 4 × 5 wall at its monolith factor
 `(t/H)(1 + f_t A_base / W) = 2.971` to 1 %, two screws at twice their published shear and
-withdrawal whatever the joint area. Default suite 344 cases in Debug and 367 in Release after
-the carried 6b items 1 to 3 (325 and 347 at the 6b close) (the arch, pile, arch-cascade, fuzz, small-wall and multi-panel factor anchors
-run only in Release under `LOADPATH_SLOW_IN_DEBUG`; nine `Slow.*` cases run in Release at
+withdrawal whatever the joint area. Default suite 347 cases in Debug and 370 in Release after
+slice 2d (325 and 347 at the 6b close) (the arch, pile, arch-cascade, fuzz, small-wall and multi-panel factor anchors
+run only in Release under `LOADPATH_SLOW_IN_DEBUG`; fourteen `Slow.*` cases run in Release at
 every slice close, and the
 cheap `Measure.Scale.*` rows after them); the `Deferred.*` tier holds the physical wedge pin
 (it belonged to slice 7, which the owner dropped on 2026-10-12; the pin stays as the record of
@@ -56,10 +56,13 @@ the non-associative answer) and the two hanging-component cases (slice 6), red b
      above μN now enters Slipping at the cap, and the 160-point grid all Stands (mean 8.1
      iterations, worst 30) with zero oracle refutations; the pins were regenerated under the
      pins ruling. Left from the round: the grid test runs the oracle on all 160 Stands and
-     takes 6.5 min (`Slow.`); the mutant "apply the rule to cohesive corners too" survived
-     until a cohesive fixture was added (in flight); the regeneration's oracle audit found one
-     pre-existing pinned Stands the oracle reads CannotStand and 26 Ambiguous among 1,420
-     (handed to the review to identify); the restore-step Undecideds below are now more
+     takes 6.5 min (`Slow.`, the oracle, not the solves; the review's split is in the fix
+     round); the mutant "apply the rule to cohesive corners too" is caught by the lime-wall
+     scope test (e4366ec); the regeneration's oracle audit's one CannotStand among 1,420 old
+     Stands is the 8 × 10 ec6 wall under λ (0, 0.5), a bonded wall the compression-only NNLS
+     oracle cannot model (the field is sound; the oracle gains a scope guard in the fix round);
+     the 50-iteration cap is close near the stability limit, not at size (random dry walls at
+     μ 0.99 and λ (0.38, 0.28) took 46; over the cap fails closed to Undecided); the restore-step Undecideds below are now more
      visible (145 of the 196 Mechanism-to-Undecided pin trades); **the same cycle hits
      cohesive tensionless (lime-mortar) perpends**: the 4 × 5 lime wall at λx 0.8, the 5 × 5 at
      0.8 and the 10 × 8 at (0.2, 0.1), (0.5, 0.1), (0.8, 0) and (0.8, 0.1) read Undecided at
@@ -73,8 +76,6 @@ the non-associative answer) and the two hanging-component cases (slice 6), red b
      Slipping and is reopened in a cycle (a light body on a heavy one at mass ratio 1e-12 to
      3e-12 reads Undecided/50 where it read Stands/1; at 1e-13 it reads Stands with the light
      body's support corners open, floating). Fails closed; untested;
-   - the 4 × 2 wall at λ (0.30, 0.15), Stands/14 before 2c and Undecided/50 after it, Stands in
-     13 since 2d (the same re-closing cycle, on one top-course perpend);
    - an unloaded component (zero gravity, no loads) has floor 0 and `<=` opens every dry corner,
      reading Stands with all corners open; `<=` → `<` survives the suite, so the boundary is
      unpinned;
