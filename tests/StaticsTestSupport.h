@@ -215,7 +215,7 @@ ThresholdBracket Threshold(StandsAt&& Stands, double StandingEnd, double Failing
 
 inline StandingResult SolveWith(const Structure& Model, const StandingOptions& Options, std::span<const BodyLoad> Loads = {})
 {
-	return MakeRbsmStandingAuthority()->Solve(Model, Loads, Options);
+	return MakeRbsmStandingAuthority()->Solve(Model, Loads, Options, {});
 }
 
 inline const InterfaceReading* FindReading(const StandingResult& Result, InterfaceId Id)

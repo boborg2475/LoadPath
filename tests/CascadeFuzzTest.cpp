@@ -246,7 +246,7 @@ void CheckReleasesCertified(const Structure& Before, const FuzzDraw& D, const Ca
 	{
 		return;
 	}
-	const AuthorityResult Judged = MakeAuthority()->Judge(Before, {}, D.Options);
+	const AuthorityResult Judged = MakeAuthority()->Judge(Before, {}, D.Options, nullptr);
 	INFO("judge before the pass: " << DescribeAuthority(Judged));
 	for (const ReleasedCluster& Cluster : V.Clusters)
 	{
@@ -345,7 +345,7 @@ void CheckRemainderJudged(const Structure& End, const FuzzDraw& D, const Cascade
 {
 	INFO("final: " << DescribeVerdict(Last));
 	CHECK(Last.Passes == 0);
-	const AuthorityResult Fresh = MakeAuthority()->Judge(End, {}, D.Options);
+	const AuthorityResult Fresh = MakeAuthority()->Judge(End, {}, D.Options, nullptr);
 	INFO("fresh judge: " << DescribeAuthority(Fresh));
 	CHECK(Last.State == ExpectedEnd(Fresh.Worst));
 	REQUIRE(Last.Components.size() == Fresh.Components.size());
@@ -417,7 +417,7 @@ void RunDraw(std::uint64_t Seed, Coverage& Seen)
 	while (true)
 	{
 		const Structure Before = D.Model;
-		Last = Cascade->Run(D.Model, {}, FuzzOptions(D, 1));
+		Last = Cascade->Run(D.Model, {}, FuzzOptions(D, 1), nullptr);
 		INFO("pass run from " << Before.HighestPass() << ": " << DescribeVerdict(Last));
 		CheckReleasesCertified(Before, D, Last);
 		CheckStampsMatchRecords(Before, D.Model, D, Last);
@@ -438,7 +438,7 @@ void RunDraw(std::uint64_t Seed, Coverage& Seen)
 	CheckFileRoundTrip(D.Model);
 
 	FuzzDraw Again = MakeDraw(Seed);
-	const CascadeVerdict Whole = MakeCascade(MakeAuthority())->Run(Again.Model, {}, FuzzOptions(Again, FuzzMaxPasses));
+	const CascadeVerdict Whole = MakeCascade(MakeAuthority())->Run(Again.Model, {}, FuzzOptions(Again, FuzzMaxPasses), nullptr);
 	INFO("whole run: " << DescribeVerdict(Whole));
 	CHECK(Whole.State == End);
 	CHECK(Whole.Passes == Passes);

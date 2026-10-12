@@ -115,3 +115,26 @@ discover that an ungrounded component is a mechanism, which its connectivity alr
 per judge, no copies) measured on the shed from a second copy: judge 40 ms against an elastic
 solve of 39–54 ms, since no component is consulted. Stage 1b-iii puts the certificate's
 normal equations on a sparse factor above the same limit.
+
+## Stage 1b-iii of 6b: the certificate's sparse normal equations (2026-10-12, branch 0c52f6f)
+
+Components above `DenseRowLimit` (600 rows) factor `A D Aᵀ` with `SimplicialLLT` under AMD,
+the load-factor coupling assembled on the demand's support (DESIGN §10). Rows from a copy of
+the branch's Release exe, one process each, with the stage-2 dev round building alongside:
+
+| Structure | Certificate (dense, 1b-i row) | Certificate (sparse) | Interior-point iterations | Elastic | Judge | Cascade: base course |
+|---|---|---|---|---|---|---|
+| Shed | 7.7 s | 7.1 s (6.65 s alone) | 35 and 35 | 48 ms | 40 ms | 93 ms |
+| Half warehouse | 589 s | **152 s** | | 194 ms | 179 ms | 2.7 s |
+| Wall 40 × 32 | 754 s | **114 s** | | 207 ms | 225 ms | 23.6 s |
+
+What the rows say: the factor was a quarter to a sixth of the certificate's cost at scale,
+not the whole of it. The shed's components (684 and 714 rows) barely cross the limit and gain
+nothing; the half warehouse's 600-brick wall (3,600 rows) and the 1,296-brick wall (7,776
+rows) gain 4–7×, which leaves 114–152 s per structure at rest. What remains per
+interior-point iteration is unprofiled: the per-component dense `Eigen::LLT` in
+`SelectionSystem`, the cap-site loops, the dense `Demand`/`AddSiteBlock` work on the dense
+path's data structures, and the iteration count itself. The next step is a profile, not a
+guess. The base-course cascade on the large wall halves (50.7 s to 23.6 s) because the 1b-ii
+judge no longer solves the rank-deficient floating remainder twice; the one dense solve it
+still spends is the item logged in CURRENT_STATE.

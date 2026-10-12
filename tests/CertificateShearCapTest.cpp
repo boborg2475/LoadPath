@@ -117,7 +117,7 @@ TEST_CASE("Certificate.ShearCap.ZeroCapCarriesNoShear")
 	AuthorityOptions Options;
 	Options.Standing = LateralLoad(0.1);
 	Options.Certificate = CertificateLateral(0.1);
-	const AuthorityResult Combined = MakeCombinedAuthority(MakeRbsmStandingAuthority(), MakeLimitAnalysisCertificate())->Judge(F.Model, {}, Options);
+	const AuthorityResult Combined = MakeCombinedAuthority(MakeRbsmStandingAuthority(), MakeLimitAnalysisCertificate())->Judge(F.Model, {}, Options, nullptr);
 	INFO("combined worst " << static_cast<int>(Combined.Worst) << ", components " << Combined.Components.size());
 	CHECK(Combined.Worst == ComponentVerdict::Collapses);
 	CHECK(Combined.Components.size() == 1u);

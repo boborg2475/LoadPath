@@ -53,7 +53,7 @@ inline std::unique_ptr<IStructuralAuthority> MakeAuthority()
 
 inline AuthorityResult Judge(const Structure& Model, const AuthorityOptions& Options, std::span<const BodyLoad> Loads = {})
 {
-	return MakeAuthority()->Judge(Model, Loads, Options);
+	return MakeAuthority()->Judge(Model, Loads, Options, nullptr);
 }
 
 inline AuthorityOptions AuthorityUnderGravity(const Vec3& GravityMPerS2Vector)
@@ -169,7 +169,7 @@ public:
 	{
 	}
 
-	AuthorityResult Judge(const Structure&, std::span<const BodyLoad>, const AuthorityOptions&) const override
+	AuthorityResult Judge(const Structure&, std::span<const BodyLoad>, const AuthorityOptions&, const AuthorityResult*) const override
 	{
 		const std::size_t At = Calls < Script.size() ? Calls : Script.size() - 1;
 		++Calls;
@@ -238,6 +238,6 @@ inline CascadeVerdict RunScripted(Structure& Model, std::vector<AuthorityResult>
 {
 	CascadeOptions Options;
 	Options.CrackBandFraction = CrackBandFraction;
-	return MakeCascade(std::make_unique<ScriptedAuthority>(std::move(Script)))->Run(Model, {}, Options);
+	return MakeCascade(std::make_unique<ScriptedAuthority>(std::move(Script)))->Run(Model, {}, Options, nullptr);
 }
 }

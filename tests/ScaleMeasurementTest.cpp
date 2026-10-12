@@ -157,7 +157,7 @@ CascadeTiming TimeCascade(const Structure& Model, const std::vector<BodyId>& Rem
 	}
 	const std::unique_ptr<ICascade> Cascade = MakeCascade(MakeAuthority());
 	const Clock::time_point Start = Clock::now();
-	const CascadeVerdict V = Cascade->Run(Copy, {}, CascadeOptions{});
+	const CascadeVerdict V = Cascade->Run(Copy, {}, CascadeOptions{}, nullptr);
 	Out.Ms = MsSince(Start);
 	Out.Passes = V.Passes;
 	Out.State = CascadeStateName(V.State);

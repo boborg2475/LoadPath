@@ -39,7 +39,8 @@ add_executable(loadpath_tests
 	FactorTest.cpp
 	SparseTest.cpp
 	ComponentResultsTest.cpp
-	CertificateSparseTest.cpp)
+	CertificateSparseTest.cpp
+	EventRegionTest.cpp)
 target_link_libraries(loadpath_tests PRIVATE loadpath doctest)
 target_compile_definitions(loadpath_tests PRIVATE LOADPATH_CATALOGUE_PATH="${CMAKE_SOURCE_DIR}/data/catalogue.json")
 

@@ -145,7 +145,7 @@ TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Certificate.Anchor.OrdunaHollowPileCollapseFac
 	AuthorityOptions Options;
 	Options.Standing = LateralLoad(0.4);
 	Options.Certificate = CertificateLateral(0.4);
-	const AuthorityResult Combined = MakeCombinedAuthority(MakeRbsmStandingAuthority(), MakeLimitAnalysisCertificate())->Judge(Pile.Model, {}, Options);
+	const AuthorityResult Combined = MakeCombinedAuthority(MakeRbsmStandingAuthority(), MakeLimitAnalysisCertificate())->Judge(Pile.Model, {}, Options, nullptr);
 	const StandingResult Elastic = SolveWith(Pile.Model, LateralLoad(0.4));
 	INFO("lambda 0.4: elastic " << Elastic.State << ", combined worst " << static_cast<int>(Combined.Worst) << ", components " << Combined.Components.size());
 	CHECK(Combined.Components.size() == 1u);

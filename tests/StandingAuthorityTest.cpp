@@ -199,7 +199,7 @@ TEST_CASE("Statics.Authority.InvalidInputIsReportedAndNamesTheOffendingInterface
 		StandingOptions Options;
 		InterfaceId Expected = InterfaceId::Invalid();
 		Case.Arrange(S, Loads, Options, Expected);
-		const StandingResult Result = MakeRbsmStandingAuthority()->Solve(S.Model, Loads, Options);
+		const StandingResult Result = MakeRbsmStandingAuthority()->Solve(S.Model, Loads, Options, {});
 		CHECK(Result.State == StandingState::InvalidInput);
 		INFO("named " << Result.InvalidInterface << ", expected " << Expected);
 		CHECK(SameHandle(Result.InvalidInterface, Expected));
@@ -270,9 +270,9 @@ TEST_CASE("Statics.Authority.RepeatedSolvesAreBitIdentical")
 	const BrickStack S = MakeBrickStack(3, DryJoint(0.7));
 	const StandingOptions Options = LateralLoad(0.5);
 	const std::unique_ptr<IStandingAuthority> Authority = MakeRbsmStandingAuthority();
-	const StandingResult First = Authority->Solve(S.Model, {}, Options);
-	const StandingResult Second = Authority->Solve(S.Model, {}, Options);
-	const StandingResult Fresh = MakeRbsmStandingAuthority()->Solve(S.Model, {}, Options);
+	const StandingResult First = Authority->Solve(S.Model, {}, Options, {});
+	const StandingResult Second = Authority->Solve(S.Model, {}, Options, {});
+	const StandingResult Fresh = MakeRbsmStandingAuthority()->Solve(S.Model, {}, Options, {});
 	CHECK(First.State == StandingState::Stands);
 	CHECK(First.Readings.size() == 3u);
 	CheckIdenticalResults(First, Second);

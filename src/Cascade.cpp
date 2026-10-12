@@ -254,7 +254,7 @@ public:
 	{
 	}
 
-	CascadeVerdict Run(Structure& Model, std::span<const BodyLoad> Loads, const CascadeOptions& Options) const override
+	CascadeVerdict Run(Structure& Model, std::span<const BodyLoad> Loads, const CascadeOptions& Options, const AuthorityResult* Previous) const override
 	{
 		CascadeVerdict Verdict;
 		Verdict.FirstPass = Model.HighestPass() + 1;
@@ -265,6 +265,8 @@ public:
 			return Verdict;
 		}
 		std::vector<BodyId> ReleasedThisRun;
+		AuthorityResult Last;
+		const AuthorityResult* Before = Previous;
 		while (true)
 		{
 			const std::uint32_t Pass = Model.HighestPass() + 1;
@@ -276,7 +278,7 @@ public:
 					PassLoads.push_back(Load);
 				}
 			}
-			AuthorityResult Judged = Authority->Judge(Model, PassLoads, Options.Authority);
+			AuthorityResult Judged = Authority->Judge(Model, PassLoads, Options.Authority, Before);
 			if (Judged.Worst == ComponentVerdict::InvalidInput)
 			{
 				Verdict.State = CascadeState::InvalidInput;
@@ -291,8 +293,10 @@ public:
 			std::stable_sort(Verdict.Failures.begin() + static_cast<std::ptrdiff_t>(FailuresBefore), Verdict.Failures.end(),
 				[](const FailedInterface& A, const FailedInterface& B) { return A.Id.Index < B.Id.Index; });
 			const ComponentVerdict Worst = Judged.Worst;
-			Verdict.Readings = std::move(Judged.Readings);
-			Verdict.Components = std::move(Judged.Components);
+			Last = std::move(Judged);
+			Before = &Last;
+			Verdict.Readings = Last.Readings;
+			Verdict.Components = Last.Components;
 			if (!bReleased && !bCracked)
 			{
 				Verdict.State = FinalState(Worst);
@@ -312,7 +316,7 @@ public:
 						CapLoads.push_back(Load);
 					}
 				}
-				AuthorityResult Rejudged = Authority->Judge(Model, CapLoads, Options.Authority);
+				AuthorityResult Rejudged = Authority->Judge(Model, CapLoads, Options.Authority, &Last);
 				Verdict.Readings = std::move(Rejudged.Readings);
 				Verdict.Components = std::move(Rejudged.Components);
 				return Verdict;

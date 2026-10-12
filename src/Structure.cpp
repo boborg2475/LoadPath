@@ -85,7 +85,7 @@ Result<BodyId> Structure::AddBody(const BodyDesc& Desc)
 	}
 	const BodyId Id{static_cast<std::uint32_t>(Bodies.size()), FirstGeneration};
 	CachedComponents.reset();
-	Bodies.push_back(BodySlot{Desc, true});
+	Bodies.push_back(BodySlot{Desc, true, ++CurrentRevision});
 	return {Id, ModelError::None};
 }
 
@@ -166,6 +166,8 @@ Result<InterfaceId> Structure::AddInterface(const InterfaceDesc& Desc)
 	const InterfaceId Id{static_cast<std::uint32_t>(Interfaces.size()), FirstGeneration};
 	CachedComponents.reset();
 	Interfaces.push_back(InterfaceSlot{Record});
+	++CurrentRevision;
+	TouchInterface(Record);
 	return {Id, ModelError::None};
 }
 
@@ -177,10 +179,15 @@ bool Structure::RemoveBody(BodyId Id)
 	}
 	CachedComponents.reset();
 	Bodies[Id.Index].bLive = false;
+	++CurrentRevision;
 	for (InterfaceSlot& Each : Interfaces)
 	{
 		if ((Each.Record.BodyA == Id || Each.Record.BodyB == Id) && Each.Record.State != InterfaceState::Severed)
 		{
+			if (IsLiveState(Each.Record.State))
+			{
+				TouchInterface(Each.Record);
+			}
 			Each.Record.State = InterfaceState::Removed;
 		}
 	}
@@ -198,6 +205,8 @@ bool Structure::Crack(InterfaceId Id, std::uint32_t Pass)
 	Record.State = InterfaceState::Cracked;
 	Record.CrackPass = Pass;
 	HighestStamp = std::max(HighestStamp, Pass);
+	++CurrentRevision;
+	TouchInterface(Record);
 	return true;
 }
 
@@ -212,7 +221,30 @@ bool Structure::Sever(InterfaceId Id, std::uint32_t Pass)
 	Record.State = InterfaceState::Severed;
 	Record.SeverPass = Pass;
 	HighestStamp = std::max(HighestStamp, Pass);
+	++CurrentRevision;
+	TouchInterface(Record);
 	return true;
+}
+
+void Structure::TouchInterface(const InterfaceRecord& Record)
+{
+	for (const BodyId Each : {Record.BodyA, Record.BodyB})
+	{
+		if (IsLive(Each))
+		{
+			Bodies[Each.Index].Touched = CurrentRevision;
+		}
+	}
+}
+
+std::uint64_t Structure::Revision() const
+{
+	return CurrentRevision;
+}
+
+std::uint64_t Structure::LastTouched(BodyId Id) const
+{
+	return IsKnown(Id) ? Bodies[Id.Index].Touched : std::numeric_limits<std::uint64_t>::max();
 }
 
 std::uint32_t Structure::HighestPass() const

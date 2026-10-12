@@ -39,6 +39,10 @@ struct ComponentReport
 	// The certificate's UnconstrainedBodies on Collapses, else empty; the elastic lists are never released.
 	std::vector<BodyId> Release;
 	std::vector<InterfaceId> Hinging;
+	// Copied from the previous verdict rather than solved.
+	bool bReused = false;
+	// The loads on this component's bodies as judged, in the order given; a change to them dirties the component.
+	std::vector<BodyLoad> Loads;
 };
 
 struct AuthorityOptions
@@ -58,6 +62,8 @@ struct AuthorityResult
 	std::vector<ComponentReport> Components;
 	int Disagreements = 0;
 	InterfaceId InvalidInterface{};
+	// The structure's Revision() when judged.
+	std::uint64_t Revision = 0;
 };
 
 // Judge keeps no state between calls, never mutates the structure and is deterministic for a given structure.
@@ -65,7 +71,8 @@ class IStructuralAuthority
 {
 public:
 	virtual ~IStructuralAuthority() = default;
-	virtual AuthorityResult Judge(const Structure& Model, std::span<const BodyLoad> Loads, const AuthorityOptions& Options) const = 0;
+	// Previous may be any earlier verdict or nullptr; components it matches unchanged are copied, an unmatched one reuses nothing.
+	virtual AuthorityResult Judge(const Structure& Model, std::span<const BodyLoad> Loads, const AuthorityOptions& Options, const AuthorityResult* Previous) const = 0;
 };
 
 std::unique_ptr<IStructuralAuthority> MakeCombinedAuthority(std::unique_ptr<IStandingAuthority> Standing, std::unique_ptr<ICollapseCertificate> Certificate);

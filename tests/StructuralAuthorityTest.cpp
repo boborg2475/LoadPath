@@ -67,7 +67,7 @@ private:
 
 AuthorityResult JudgeWith(const Structure& Model, const AuthorityOptions& Options, std::span<const BodyLoad> Loads = {})
 {
-	return MakeCombinedAuthority(MakeRbsmStandingAuthority(), MakeLimitAnalysisCertificate())->Judge(Model, Loads, Options);
+	return MakeCombinedAuthority(MakeRbsmStandingAuthority(), MakeLimitAnalysisCertificate())->Judge(Model, Loads, Options, nullptr);
 }
 
 StandingOptions BiaxialLateralLoad(double LambdaX, double LambdaY)
@@ -179,7 +179,7 @@ TEST_CASE("Statics.Combined.PureElasticStandsNeverConsultsTheCertificate")
 	const BrickOnGround F = MakeBrickOnGround(DryJoint(0.7));
 	int Calls = 0;
 	const std::unique_ptr<IStructuralAuthority> Authority = MakeCombinedAuthority(MakeRbsmStandingAuthority(), std::make_unique<CountingCertificate>(Calls));
-	const AuthorityResult Result = Authority->Judge(F.Model, {}, AuthorityOptions{});
+	const AuthorityResult Result = Authority->Judge(F.Model, {}, AuthorityOptions{}, nullptr);
 	const StandingResult Elastic = SolveWith(F.Model, StandingOptions{});
 	INFO(DescribeResult(Result) << "; elastic " << Elastic.State << " with " << Elastic.Readings.size() << " readings, certificate calls " << Calls);
 	CHECK(Elastic.State == StandingState::Stands);

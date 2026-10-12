@@ -978,13 +978,62 @@ StandingResult SolveProblem(const Problem& P, const StandingOptions& Options)
 	return Result;
 }
 
-StandingResult SolveComponents(const std::vector<Problem>& Problems, std::size_t InterfaceCount, const StandingOptions& Options)
+bool ChooseComponents(const Structure& Model, std::span<const BodyId> Only, std::vector<bool>& Chosen)
 {
+	if (Only.empty())
+	{
+		return true;
+	}
+	const ComponentPartition& Partition = Model.Components();
+	Chosen.assign(Partition.FreeBodies.size(), false);
+	for (const BodyId Id : Only)
+	{
+		if (!Model.IsLive(Id) || Model.Body(Id).bGrounded)
+		{
+			return false;
+		}
+		Chosen[static_cast<std::size_t>(Partition.ComponentOfSlot[Id.Index])] = true;
+	}
+	return true;
+}
+
+bool IsIncluded(const std::vector<bool>& Chosen, std::size_t ProblemIndex)
+{
+	return Chosen.empty() || ProblemIndex == 0 || Chosen[ProblemIndex - 1];
+}
+
+StandingResult SolveComponents(const std::vector<Problem>& Problems, std::size_t InterfaceCount, const StandingOptions& Options, const std::vector<bool>& Chosen)
+{
+	std::vector<bool> bSlotIncluded(InterfaceCount, false);
+	for (std::size_t I = 0; I < Problems.size(); ++I)
+	{
+		if (IsIncluded(Chosen, I))
+		{
+			for (const std::size_t Slot : Problems[I].ReadingSlots)
+			{
+				bSlotIncluded[Slot] = true;
+			}
+		}
+	}
+	std::vector<std::size_t> LocalOfSlot(InterfaceCount, 0);
+	std::size_t ReadingCount = 0;
+	for (std::size_t Slot = 0; Slot < InterfaceCount; ++Slot)
+	{
+		if (bSlotIncluded[Slot])
+		{
+			LocalOfSlot[Slot] = ReadingCount++;
+		}
+	}
 	StandingResult Result;
 	Result.State = StandingState::Stands;
-	Result.Readings.resize(InterfaceCount);
-	for (const Problem& P : Problems)
+	Result.Readings.resize(ReadingCount);
+	for (std::size_t I = 0; I < Problems.size(); ++I)
 	{
+		if (!IsIncluded(Chosen, I))
+		{
+			continue;
+		}
+		const Problem& P = Problems[I];
 		const StandingResult Component = SolveProblem(P, Options);
 		if (Component.State == StandingState::InvalidInput)
 		{
@@ -996,16 +1045,18 @@ StandingResult SolveComponents(const std::vector<Problem>& Problems, std::size_t
 		{
 			Result.State = Component.State;
 		}
+		std::vector<std::size_t> Slots(P.ReadingSlots.size());
 		for (std::size_t K = 0; K < P.ReadingSlots.size(); ++K)
 		{
-			Result.Readings[P.ReadingSlots[K]] = Component.Readings[K];
+			Slots[K] = LocalOfSlot[P.ReadingSlots[K]];
+			Result.Readings[Slots[K]] = Component.Readings[K];
 		}
 		Result.Mechanism.insert(Result.Mechanism.end(), Component.Mechanism.begin(), Component.Mechanism.end());
 		Result.UnconstrainedBodies.insert(Result.UnconstrainedBodies.end(), Component.UnconstrainedBodies.begin(), Component.UnconstrainedBodies.end());
 		Result.ActiveSetIterations = std::max(Result.ActiveSetIterations, Component.ActiveSetIterations);
 		if (!P.FreeBodies.empty())
 		{
-			Result.Components.push_back(StandingComponent{P.FreeBodies, Component.State, Component.ActiveSetIterations, P.ReadingSlots});
+			Result.Components.push_back(StandingComponent{P.FreeBodies, Component.State, Component.ActiveSetIterations, std::move(Slots)});
 		}
 	}
 	return Result;
@@ -1014,17 +1065,19 @@ StandingResult SolveComponents(const std::vector<Problem>& Problems, std::size_t
 class RbsmStandingAuthority final : public IStandingAuthority
 {
 public:
-	StandingResult Solve(const Structure& Model, std::span<const BodyLoad> Loads, const StandingOptions& Options) const override
+	StandingResult Solve(const Structure& Model, std::span<const BodyLoad> Loads, const StandingOptions& Options, std::span<const BodyId> Only) const override
 	{
 		InterfaceId Offending = InterfaceId::Invalid();
-		if (FindInvalidInput(Model, Loads, Options, Offending))
+		std::vector<bool> Chosen;
+		const bool bInvalid = FindInvalidInput(Model, Loads, Options, Offending);
+		if (bInvalid || !ChooseComponents(Model, Only, Chosen))
 		{
 			StandingResult Result;
 			Result.State = StandingState::InvalidInput;
-			Result.InvalidInterface = Offending;
+			Result.InvalidInterface = bInvalid ? Offending : InterfaceId::Invalid();
 			return Result;
 		}
-		return SolveComponents(BuildProblems(Model, Loads, Options), Model.LiveInterfaces().size(), Options);
+		return SolveComponents(BuildProblems(Model, Loads, Options), Model.LiveInterfaces().size(), Options, Chosen);
 	}
 };
 }

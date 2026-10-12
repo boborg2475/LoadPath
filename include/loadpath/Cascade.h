@@ -79,7 +79,8 @@ class ICascade
 {
 public:
 	virtual ~ICascade() = default;
-	virtual CascadeVerdict Run(Structure& Model, std::span<const BodyLoad> Loads, const CascadeOptions& Options) const = 0;
+	// Previous seeds the first pass's judge; each later pass judges against the pass before it.
+	virtual CascadeVerdict Run(Structure& Model, std::span<const BodyLoad> Loads, const CascadeOptions& Options, const AuthorityResult* Previous) const = 0;
 };
 
 std::unique_ptr<ICascade> MakeCascade(std::unique_ptr<IStructuralAuthority> Authority);

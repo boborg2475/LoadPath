@@ -592,3 +592,36 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   components) is green on arrival by construction and pins that the no-copy judge reads what
   the copying judge read; its mutation record is a judge that reports the whole structure's
   state for every component.
+- *2026-10-12, orchestrator, stage 2 opening:* **cleanliness is derived from revisions, not
+  from a dirty set the judge would have to clear.** `Structure` counts a revision per
+  successful mutation and stamps the bodies a mutation touches (both bodies of an interface
+  added, cracked or severed; the surviving neighbours of a removed body); a judge records the
+  revision it saw. Given a previous verdict, a component is clean when a previous component
+  has the same body list, no body of it was touched after that revision, and its loads are
+  unchanged; clean components are copied forward with `bReused` set and their readings copied
+  by interface id, dirty ones are solved through one `Solve` call carrying a component filter
+  (the same fourth argument `Decide` took in 1b-ii), and no call at all is made when nothing
+  is dirty. A previous verdict that cannot be matched reuses nothing and is never an error,
+  so a caller can always pass what it has. The judge stays const and stateless: the only
+  state is the structure's own counters and whatever verdict the caller keeps, which is what
+  the cascade does between passes. The guard is equality with a fresh judge on a copy after
+  every pass of the seeded fuzz. The 1b-i rows set the target: one post removed from the
+  warehouse, 1.70 s today, under 200 ms when only the frame is touched.
+- *2026-10-12, orchestrator, stage 1b-iii rulings from the dev round:* **the sparse normal
+  matrix carries the load-factor coupling on the demand's support; regularisation is a
+  retry, as on the dense path.** The API text named only the site blocks, but the dense
+  `A D Aᵀ` also holds `Coupling · Demand · Demandᵀ`, dense in principle, and without it the
+  site-block part alone is singular (smallest eigenvalue 1e-17 of the largest on the shed) so
+  a Sherman–Morrison correction took the interior point from 35 to 115–126 iterations.
+  `Demand` has one non-zero per body, so the rank-one term is assembled as triplets over
+  that support (about 119² entries on a shed wall), with the dense path's per-entry
+  arithmetic, and iteration parity returned (35 and 35). If a load ever fills all six rows
+  per body, that block is dense and the ruling is revisited. The sparse factor is tried
+  without regularisation first and retried with `RegularisationRelative × LargestDiagonal`
+  only on failure, exactly as the dense `HasPositivePivots` retry; both triangles are stored.
+  Measured: the shed's certificate 6.65 s sparse against 8.2 s dense, same 35 iterations;
+  its components are 684 and 714 rows, barely above the limit, so the factor was not the
+  shed's cost; the half-warehouse and 32 × 40 rows (589 s and 754 s dense) are the
+  measurement that matters and are being re-run. What remains per iteration after the factor
+  (the per-component dense LLT in `SelectionSystem`, the cap-site loops, assembly) is to be
+  profiled before anything else is changed.

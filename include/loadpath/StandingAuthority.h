@@ -103,7 +103,7 @@ struct StandingComponent
 struct StandingResult
 {
 	StandingState State = StandingState::Undecided;
-	// Every live interface, ascending slot order.
+	// Every live interface in the solved components plus those joining two grounded bodies, ascending slot order.
 	std::vector<InterfaceReading> Readings;
 	// Every mechanism component, whatever the overall State; empty when no component is a mechanism.
 	std::vector<MechanismMotion> Mechanism;
@@ -120,7 +120,8 @@ class IStandingAuthority
 {
 public:
 	virtual ~IStandingAuthority() = default;
-	virtual StandingResult Solve(const Structure& Model, std::span<const BodyLoad> Loads, const StandingOptions& Options) const = 0;
+	// Only empty solves every component; otherwise only the components holding a listed body, and any entry that is not a live free body is InvalidInput.
+	virtual StandingResult Solve(const Structure& Model, std::span<const BodyLoad> Loads, const StandingOptions& Options, std::span<const BodyId> Only) const = 0;
 };
 
 std::unique_ptr<IStandingAuthority> MakeRbsmStandingAuthority();

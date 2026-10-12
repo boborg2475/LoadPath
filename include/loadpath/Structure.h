@@ -59,11 +59,17 @@ public:
 	// Cached until the next AddBody, AddInterface, RemoveBody, Crack or Sever; repeated calls in between return the same object.
 	const ComponentPartition& Components() const;
 
+	// Counts successful AddBody, AddInterface, RemoveBody, Crack and Sever calls; 0 on construction.
+	std::uint64_t Revision() const;
+	// The revision of the last mutation touching this body (its AddBody, its interfaces, a removed neighbour); an unknown id reads the largest value.
+	std::uint64_t LastTouched(BodyId Id) const;
+
 private:
 	struct BodySlot
 	{
 		BodyDesc Desc;
 		bool bLive = false;
+		std::uint64_t Touched = 0;
 	};
 
 	struct InterfaceSlot
@@ -74,6 +80,7 @@ private:
 	// Known means the handle was issued at some point, whether or not it is still live.
 	bool IsKnown(BodyId Id) const;
 	bool IsKnown(InterfaceId Id) const;
+	void TouchInterface(const InterfaceRecord& Record);
 	ModelError ValidateInterface(const InterfaceDesc& Desc, Vec3& UnitNormal) const;
 
 	std::vector<StrengthProfile> Profiles;
@@ -81,6 +88,7 @@ private:
 	std::vector<InterfaceSlot> Interfaces;
 	// Tracked, never recomputed from records that removal may have rewritten.
 	std::uint32_t HighestStamp = 0;
+	std::uint64_t CurrentRevision = 0;
 	mutable std::optional<ComponentPartition> CachedComponents;
 };
 }

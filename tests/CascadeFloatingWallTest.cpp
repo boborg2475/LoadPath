@@ -47,7 +47,7 @@ void CheckReleasedAsOneCluster(Structure& Model, const std::vector<BodyId>& Floa
 {
 	ReportLayers(Model);
 	const std::chrono::steady_clock::time_point Start = std::chrono::steady_clock::now();
-	const CascadeVerdict V = MakeCascade(MakeAuthority())->Run(Model, Loads, CascadeOptions{});
+	const CascadeVerdict V = MakeCascade(MakeAuthority())->Run(Model, Loads, CascadeOptions{}, nullptr);
 	const double Ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - Start).count();
 	MESSAGE("cascade " << Ms << " ms: " << DescribeVerdict(V));
 	INFO(DescribeVerdict(V));
@@ -207,7 +207,7 @@ void CheckUpperBrickLeavesAlone(const Vec3& ForceN)
 	INFO("certificate: " << doctest::String(CertificateStateName(Cert.State)) << ", t [" << Cert.LoadFactorLower << ", " << Cert.LoadFactorUpper << "], unconstrained " << Describe(Cert.UnconstrainedBodies) << ", hinging " << Describe(Cert.HingingInterfaces));
 	CHECK(Cert.State == CertificateState::Collapses);
 	CHECK(std::any_of(Cert.HingingInterfaces.begin(), Cert.HingingInterfaces.end(), [&P](const InterfaceId& Id) { return SameHandle(Id, P.Joint); }));
-	const CascadeVerdict V = MakeCascade(MakeAuthority())->Run(P.Model, Loads, CascadeOptions{});
+	const CascadeVerdict V = MakeCascade(MakeAuthority())->Run(P.Model, Loads, CascadeOptions{}, nullptr);
 	INFO(DescribeVerdict(V));
 	CHECK_FALSE(OneClusterHoldsBoth(V, P.Lower, P.Upper));
 	CHECK_FALSE(P.Model.IsLive(P.Upper));
@@ -268,7 +268,7 @@ TEST_CASE("Certificate.Floating.AFloatingPairUnderGravityFallsStraightDownWithUn
 		CHECK(M.RotationRad.Y == 0.0);
 		CHECK(M.RotationRad.Z == 0.0);
 	}
-	const CascadeVerdict V = MakeCascade(MakeAuthority())->Run(P.Model, {}, CascadeOptions{});
+	const CascadeVerdict V = MakeCascade(MakeAuthority())->Run(P.Model, {}, CascadeOptions{}, nullptr);
 	INFO(DescribeVerdict(V));
 	REQUIRE(V.Clusters.size() == 1u);
 	if (V.Clusters.size() != 1u)

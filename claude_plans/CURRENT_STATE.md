@@ -179,7 +179,15 @@ cheap `Measure.Scale.*` rows after them); the `Deferred.*` tier holds the physic
    connectivity before any factorisation; the elastic authority could read it (and its
    rigid-body null space) without factorising, as the certificate's rigid-fall rule already
    does. Not in 1b; log for stage 2 or the certificate's next item.
-   **Next: 1b-iii the certificate's sparse normal equations, then stage 2 the event region,
+   **Stage 2, the event region: red tests written (2026-10-12), dev in progress.** Owed to
+   the test-expert after the dev round: a direct contract test for `Solve`'s component filter
+   (a bad entry is InvalidInput; readings and components cover the listed components only),
+   pinned today only through the recorded filters in the event-region tests; and a test that
+   reads the initial Previous passed to `ICascade::Run` (no test needs it yet, and
+   `CascadeVerdict` carries no `AuthorityResult` to feed back).
+   **Stage 1b-iii, the certificate's sparse normal equations: red tests committed (4015bea),
+   dev in progress on the worktree branch `stage-1b-iii`.**
+   **Then: 1b-iii the certificate's sparse normal equations, then stage 2 the event region,
    panels contingent; the `Measure.Scale.*` rows re-run after each stage into SCALE.md.
  **Slice 8,
    the Unreal adapter, is on hold by owner directive (2026-10-11): do not start it.** The

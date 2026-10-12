@@ -351,7 +351,7 @@ TEST_CASE("Statics.Combined.ComponentVerdictsAreLocalAcrossSeededStructures")
 		Options.Standing.MaxActiveSetIterations = 1 + static_cast<int>(Rng() % 3u);
 		Options.Certificate = CertificateTilt(TiltRad);
 		INFO("tilt " << TiltRad / RadPerDegree << " deg, pass cap " << Options.Standing.MaxActiveSetIterations << ", bodies " << Whole.Free.size() << ", loads " << Whole.Loads.size());
-		const AuthorityResult All = Authority->Judge(Whole.Model, Whole.Loads, Options);
+		const AuthorityResult All = Authority->Judge(Whole.Model, Whole.Loads, Options, nullptr);
 		CHECK(All.Components.size() == Whole.SiteBodies.size());
 		for (const ComponentReport& Report : All.Components)
 		{
@@ -371,7 +371,7 @@ TEST_CASE("Statics.Combined.ComponentVerdictsAreLocalAcrossSeededStructures")
 					Loads.push_back(Load);
 				}
 			}
-			const AuthorityResult Single = Authority->Judge(Alone, Loads, Options);
+			const AuthorityResult Single = Authority->Judge(Alone, Loads, Options, nullptr);
 			CHECK(Single.Components.size() == 1u);
 			if (Single.Components.size() != 1u)
 			{

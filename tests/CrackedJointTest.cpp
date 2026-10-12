@@ -30,14 +30,14 @@ TEST_CASE("Statics.Cracked.BondedBrickUnderUpliftCollapsesOnceCracked")
 	BrickOnGround F = MakeBrickOnGround(BondedJoint(UpliftTensilePa, UpliftCohesionPa, UpliftFriction));
 	const std::vector<BodyLoad> Loads = UpwardAtCentroid(F.Brick);
 	{
-		const StandingResult Elastic = MakeRbsmStandingAuthority()->Solve(F.Model, Loads, StandingOptions{});
+		const StandingResult Elastic = MakeRbsmStandingAuthority()->Solve(F.Model, Loads, StandingOptions{}, {});
 		const CertificateResult Kinematic = MakeLimitAnalysisCertificate()->Decide(F.Model, Loads, CertificateOptions{}, {});
 		INFO("bonded: elastic " << doctest::String(StandingStateName(Elastic.State)) << ", certificate " << doctest::String(CertificateStateName(Kinematic.State)));
 		CHECK(Elastic.State == StandingState::Stands);
 		CHECK(Kinematic.State == CertificateState::Stands);
 	}
 	CHECK(F.Model.Crack(F.Bed, 1));
-	const StandingResult Elastic = MakeRbsmStandingAuthority()->Solve(F.Model, Loads, StandingOptions{});
+	const StandingResult Elastic = MakeRbsmStandingAuthority()->Solve(F.Model, Loads, StandingOptions{}, {});
 	const CertificateResult Kinematic = MakeLimitAnalysisCertificate()->Decide(F.Model, Loads, CertificateOptions{}, {});
 	const AuthorityResult Combined = Judge(F.Model, AuthorityOptions{}, Loads);
 	INFO("cracked: elastic " << doctest::String(StandingStateName(Elastic.State)) << ", certificate " << doctest::String(CertificateStateName(Kinematic.State)) << " t [" << Kinematic.LoadFactorLower << ", " << Kinematic.LoadFactorUpper << "], unconstrained " << Describe(Kinematic.UnconstrainedBodies) << "; combined " << DescribeAuthority(Combined));
@@ -62,7 +62,7 @@ TEST_CASE("Statics.Cracked.CrackedBedKeepsFrictionOnATwentyDegreeTilt")
 	CHECK(F.Model.Crack(F.Bed, 1));
 	CHECK(F.Model.Interface(F.Bed).State == InterfaceState::Cracked);
 	const AuthorityOptions Options = AuthorityTilted(TiltRad);
-	const StandingResult Elastic = MakeRbsmStandingAuthority()->Solve(F.Model, {}, Options.Standing);
+	const StandingResult Elastic = MakeRbsmStandingAuthority()->Solve(F.Model, {}, Options.Standing, {});
 	const CertificateResult Kinematic = MakeLimitAnalysisCertificate()->Decide(F.Model, {}, Options.Certificate, {});
 	const AuthorityResult Combined = Judge(F.Model, Options);
 	INFO("elastic " << doctest::String(StandingStateName(Elastic.State)) << ", certificate " << doctest::String(CertificateStateName(Kinematic.State)) << "; combined " << DescribeAuthority(Combined));
@@ -76,7 +76,7 @@ TEST_CASE("Statics.Cracked.CrackedBedKeepsTheCrushingBound")
 	BrickOnGround F = MakeBrickOnGround(CrushedByOwnWeight());
 	CHECK(F.Model.Crack(F.Bed, 1));
 	CHECK(F.Model.Interface(F.Bed).State == InterfaceState::Cracked);
-	const StandingResult Elastic = MakeRbsmStandingAuthority()->Solve(F.Model, {}, StandingOptions{});
+	const StandingResult Elastic = MakeRbsmStandingAuthority()->Solve(F.Model, {}, StandingOptions{}, {});
 	const CertificateResult Kinematic = MakeLimitAnalysisCertificate()->Decide(F.Model, {}, CertificateOptions{}, {});
 	const AuthorityResult Combined = Judge(F.Model, AuthorityOptions{});
 	INFO("elastic " << doctest::String(StandingStateName(Elastic.State)) << ", certificate " << doctest::String(CertificateStateName(Kinematic.State)) << "; combined " << DescribeAuthority(Combined));

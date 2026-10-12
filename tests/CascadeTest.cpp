@@ -27,7 +27,7 @@ constexpr double PierPushN = 50.0;
 
 CascadeVerdict RunCascade(Structure& Model, const CascadeOptions& Options, std::span<const BodyLoad> Loads = {})
 {
-	return MakeCascade(MakeAuthority())->Run(Model, Loads, Options);
+	return MakeCascade(MakeAuthority())->Run(Model, Loads, Options, nullptr);
 }
 
 CascadeOptions Lateral(double LambdaX)
