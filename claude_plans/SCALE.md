@@ -57,7 +57,8 @@ Mechanism and Undecided refereed by the certificate.
 
 ## Stage 1a of 6b: the blocked factor (2026-10-12)
 
-`StandingOptions::FactorKind::Blocked` is a blocked right-looking pivoted LDLᵀ in the style
+The blocked factor (`StandingOptions::FactorKind::Blocked` while the reference lived, the only
+factor since the 6b close) is a blocked right-looking pivoted LDLᵀ in the style
 of LAPACK `dpstrf` behind the same rank test (DESIGN §10; Eigen's own `LDLT` was tried and
 does not reveal rank). Elastic authority alone, at rest, Release:
 
@@ -256,3 +257,17 @@ The warehouse's warm post-removal cascade is under the 200 ms target (254 ms at 
 stage 3d (a verdict-only option) is dropped; the frame's own certificate is what remains of
 the 175 ms. The shed's certificate is unchanged (its components are below `DenseRowLimit`, so
 3c does not apply, and 3a's gain is inside the noise of a loaded run).
+
+## Rows at the 6b close (2026-10-12, branch slice-6b-close, the referees removed)
+
+From a copy of the Release exe, one run each, nothing else running:
+
+| Structure | Elastic | Certificate | Judge | Cascade: post (cold) | Cascade: base course | Warm post cascade (4 of 5 reused) |
+|---|---|---|---|---|---|---|
+| Warehouse | 473 ms | **75 s** (103 s loaded, 253 s at 3b, 1,566 s at 1b-i) | 509 ms | 619 ms | 18.9 s | **140 ms** |
+
+Slice 6b against its 6a opening: the half warehouse judged in 91 s and the warehouse was not
+attempted; the warehouse now judges in 0.51 s and re-judges after a post removal in 140 ms.
+The certificate, never on the judge's path when the elastic field decides, went from 26 min
+to 75 s on the warehouse. The Slow tier holds 9 tests (the two ratio tests retired with the
+referees); the 20 × 15 wall's dense-against-sparse ratio reads 0.37.

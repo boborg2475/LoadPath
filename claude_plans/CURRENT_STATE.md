@@ -32,14 +32,14 @@ stacks, Paterson–Zwick, Couplet–Heyman at Milankovitch's 0.107478 with hinge
 the certificate's associative 31.07°, the cascade on the arch below least thickness, the dry
 wall at t / H within 1 % (10 × 8 and 4 × 5), the bonded 4 × 5 wall at its monolith factor
 `(t/H)(1 + f_t A_base / W) = 2.971` to 1 %, two screws at twice their published shear and
-withdrawal whatever the joint area. Default suite 319 cases in Debug and 338 in Release at
-722c41b, plus the stage-3c red tests (the arch, pile, arch-cascade, fuzz, small-wall and
-multi-panel factor anchors run only in Release under `LOADPATH_SLOW_IN_DEBUG`; ten `Slow.*`
-cases run in Release at every slice close, and the
+withdrawal whatever the joint area. Default suite 325 cases in Debug and 347 in Release at
+the 6b close (the arch, pile, arch-cascade, fuzz, small-wall and multi-panel factor anchors
+run only in Release under `LOADPATH_SLOW_IN_DEBUG`; nine `Slow.*` cases run in Release at
+every slice close, and the
 cheap `Measure.Scale.*` rows after them); the `Deferred.*` tier holds the physical wedge pin
 (slice 7) and the two hanging-component cases (slice 6), red by design. The design brief
 ([DESIGN.md](DESIGN.md)) has every §9 question decided and §10 carries the slice-2, 3, 4a, 4b,
-5, 2c and 6 rulings.
+5, 2c, 6a and 6b rulings.
 
 ## Next
 
@@ -111,138 +111,69 @@ cheap `Measure.Scale.*` rows after them); the `Deferred.*` tier holds the physic
    gives a NaN span), `OriginM.Z` and `GroundZM` overlap, the test helper undercounts openings
    at a wall end, cascade determinism is unchecked, and the never-finishing rows moved from the
    `Slow.` tier to `Measure.*`. Now **6b** (API.md "6b", DESIGN §10).
-   **Stage 1a, the factorisation: green, in review (2026-10-12).** `FactorKind::Blocked`, a
-   blocked right-looking pivoted LDLᵀ (dpstrf style) behind the same rank test; the rank-1
-   factor stays as `FactorKind::Reference` for one slice as the referee and is then removed
-   (log that removal when 6b closes). Eigen's own dense LDLT was tried and rejected (it does
-   not reveal rank). The referee property compares 6,000 seeded draws under the §10 rulings:
-   certified states exact, Mechanism/Undecided may trade on ≤ 0.1 % (measured 2), readings
-   and flags compared only on certified states; the 10×-looser-tolerance mutation is caught
-   only by the trade budget (32 against 6), so the budget must not be loosened. Timings in
-   SCALE.md (the 32 × 40 wall 24 s, was unfinished; the shed judges in 136 ms, was 614).
-   The cold review (2026-10-12) confirmed the factor against the reference on every matrix the
-   Release suite factorises (40,231 factorisations, 0 rank disagreements) and found the
-   property never ran the panel code (the seeded draws are at most 30 DoF, the panel is 64
-   columns): fixed the same day by `Statics.Factor.BlockedAgreesWithTheReferenceAcrossPanels` (two
-   8 × 10 walls, Mechanism and Stands, no trade allowed, plus 120 seeded dry walls, 116 of
-   them above one panel; Slow in Debug) and a mechanism-motion comparison within 1e-6 when
-   both kinds read Mechanism, so the tolerance regression now has two detectors (32 trades
-   against 6, and 18 bodies moving differently); the skipped-trailing-update and
-   panel-limited-pivot mutants redden it (ANCHORS rows). Still open from the round: the rank landing exactly on
-   a panel boundary (64, 128) is unpinned (`LargestPivot` resets per panel; a fixture of
-   reference rank 64 would pin it); the two incidental guards of panel faults outside the
-   property are `ArchAnchorsTest.cpp` (Orduna hollow pile, catches a skipped trailing update)
-   and `StackAnchorsTest.cpp` (diamond Stands, catches a panel-limited pivot search), so
-   neither may be loosened without knowing it guards the factor; the trade count (2 of 6,000)
-   is deterministic across Release runs (Eigen single-threaded here); a Mechanism draw's
-   readings differ by up to 0.79 relative between the two factors (printed, not asserted);
-   the budget bound of 1.0 s on the 16 × 20 wall is a timing assertion on this machine.
-   **Stage 1b-i, the sparse path: green, in review (2026-10-12, HEAD 0d13a29).**
-   `StandingOptions::DenseDofLimit` (600; the largest default-suite component is 510 DoF);
-   above it a sparse `SimplicialLDLT` under AMD, accepted only when the factor succeeds, every
-   pivot is finite and above tolerance, and five inverse iterations put the Rayleigh quotient
-   above `PivotToleranceRelative × max |D|`; anything else is redone through the blocked dense
-   factor (DESIGN §10: the unpivoted pivot test alone missed five rank-17 bridges in 1,000).
-   The 32 × 40 wall solves in 0.19 s (was 24.8 s dense). Open from the round: the
-   eigenvalue-estimate mutation is caught only by the bridges at 5 trades against a budget of
-   1 (thin); the agreement property's 24 walls yield only 4 certified draws (most dry and
-   lime walls under λ up to 0.5 read Mechanism or Undecided), so the wall half does little
-   work on readings; one bridge (draw 443) still trades Mechanism/Undecided between the paths
-   by rounding drift on a 30-iteration path, inside budget; the five iterations and margin 1
-   are the smallest pair measured, nothing separated the nine pairs swept.
-   The cold review (2026-10-12) found four blocking items, all fixed the same day: the two
-   stage-1a factor timing tests ran the sparse path unknowingly (now forced dense: blocked
-   0.56 s, reference 3.3 s on the 16 × 20 wall); the agreement property cost 12.7 s with its
-   wall half idle (now 12 ec6 walls under λ and 12 dry walls at rest, 24 of 24 certified, about
-   2.5 s with the 1,000 stacks); the limit boundary and the estimate were unpinned
-   (`Statics.Sparse.TheLimitBoundaryIsInclusive`, an 8 × 12 wall of exactly 600 DoF, and
-   `HiddenPivotsAreCaughtByTheEstimate`, bridges 423, 556, 708, 715 with no trade allowed;
-   all three estimate mutants now redden it); docs behind the amendment. Still open: the pivot test is pinned by no mutant once the estimate exists (the
-   estimate alone passes the suite; a start vector orthogonal to a soft mode with visible
-   pivots is the case only the pivot test catches); the estimate's constructed adversary (a
-   soft mode orthogonal to the ±1 start with a second mode within 10³ of it accepts at λ_min
-   1e-3 of the bar; worst consequence an equilibrium residual of 1e-3 of the load, never a
-   false Stands since the unpivoted LDLᵀ is backward stable; two start vectors or an
-   eigen-residual check would close it for five extra solves); the symbolic analysis is redone
-   every active-set iteration though the pattern never changes (`analyzePattern` once per
-   `SolveProblem`); the zero-norm guard in the estimate is unreachable once the pivots pass;
-   `K * V` in the estimate relies on both triangles being stored (a lower-only assembly would
-   need `selfadjointView`). Mutant builds under %TEMP% are not recompiled by MSBuild (MSB8029):
-   build mutants outside it.
-   **Stage 1b-ii, per-component results and no copies: green (2026-10-12), awaiting the
-   stage 1b review.** One `Solve` per judge, the certificate consulted through a component
-   filter on the original structure, `Structure::Components()` cached. Open: the cache is
-   mutable state behind a const method (one `Structure` queried from two threads races; no
-   thread-safety promise exists anywhere in the library, log it when one is made).
-   Found by the 1b-i rows: the base-course cascade on the 32 × 40 wall costs 50.7 s because
-   the floating 1,215-brick remainder is rank-deficient, so the sparse factor hands it to the
-   dense blocked factor (about 24 s per solve). An ungrounded component is a mechanism by
-   connectivity before any factorisation; the elastic authority could read it (and its
-   rigid-body null space) without factorising, as the certificate's rigid-fall rule already
-   does. Not in 1b; log for stage 2 or the certificate's next item.
-   **Stage 2, the event region: green (0fc14a5), both fix rounds merged, verified in the 3c review.** Done
-   since the review: options are part of cleanliness (`AuthorityResult::Options`, exact
-   comparison, e92c4df); the direct contract test of `Solve`'s filter; the warm Measure rows.
-   The cold review (2026-10-12) sent it back on two defects, fixed and merged (6692e84): a verdict from a diverged copy of a structure
-   was matched and reused (ruled: a lineage token minted at construction and on every copy,
-   recorded in the verdict, DESIGN §10 second amendment), and invalid standing options with
-   nothing dirty returned the copied verdict (ruled: `Judge` validates options before
-   matching). The same branch pins the first-pass Previous of `Run`, the cap re-judge, a
-   moved load point, a load on a dead body with nothing dirty, a ground contact added to a
-   loose brick and `LastTouched` of an unknown id, strengthens the fuzz guard (reused
-   components exact, Mechanism and Disagreements compared, a cascade-parity variant: 32 draws,
-   251 components, 68 reused) and removes the red-phase scaffolding. Decisions from the dev
-   round ratified in the amendments (live-neighbour stamps, free-end rule for ground readings,
-   exact load tuples, fail-closed on an uncopyable reading).
-   The follow-up review (2026-10-12) found one more wrong-reuse path, a moved-from structure
-   sharing its lineage with the destination (DESIGN §10 third amendment; fixed by a
-   `LineageToken` member type, merged), six option-field comparisons and a force-only load change
-   unpinned, the certificate-option checks pinned only without a Previous, and stale API and
-   CURRENT_STATE text: all in the second fix round. The CapSite and stall-field variants of
-   the options test landed with the stage-3c red tests. Measured (SCALE.md): the
-   warehouse judges in 0.49 s; its warm post cascade (4 of 5 components reused) is 254 ms
-   against the 200 ms target, the remainder the frame's own certificate (about 225 ms),
-   which is stage 3's.
-   **Stage 1b-iii, the certificate's sparse normal equations: green and merged (b72c262);
-   the cold review (2026-10-12) found no correctness defect** (assembly bit-identical to the
-   dense matrix on 1,268 matrices) and blocked on docs and the shed ceiling, both fixed; it
-   asked for a filter test naming two components (kills a "stop after the first chosen
-   component" mutant), the cache test extended to AddBody/AddProfile/MarkPass, and a timing
-   subject of about 310 bodies instead of the shed (ratio 0.45–0.59 against the shed's 0.8). Uncaught mutants recorded: the retry's LargestDiagonal without the coupling
-   (a 1e-12 shift), the NaN-only positivity scan. `StandingComponent::ReadingSlots` is read by
-   nothing in the library. The three asked-for tests landed in f872105 (the sparse timing
-   subject is now a 310-body wall, ratio 0.42–0.47 against a 0.67 threshold).
-   **Stage 3, the certificate at scale (DESIGN §10 "stage 3 opening", API.md "6b, stage 3",
-   SCALE.md profile).** 3a, the structured cap-site factor: green and merged (2623138); the
-   cold review (DESIGN §10 "stage 3a rulings from the cold review") found the algebra exact
-   and the code sound, and sent it back on tests and docs; the fix round runs on branch
-   `stage-3a-fix` (four new kinds, corrected mutation records, the shed ratio test in the
-   order D, S, S, D), merged; the shed ratio read 0.837, 0.670, 0.781 over three runs against
-   the 0.85 bar, still noisy. Deferred from that review: the structured `SolveNormal` cap loop
-   allocates a temporary per site per solve and is slower than the dense loop (1.70 s against
-   1.05 s on the shed; `SolveInto` into a per-site scratch should recover about 1 s); `ShedSpec`
-   exists three times in the tests (CertificateSparseTest, ScaleMeasurementTest,
-   GeometryWarehouseTest) and wants a shared fixture header; an out-of-range `CapSiteKind`
-   selects Dense without validation; there is no regularised retry at the cap-site level, so
-   one site's rounding failure reads the component Undecided (pre-existing, rarer now).
-   3b, the stall rule: green (722c41b); the cold review (DESIGN §10 "stage 3b rulings from the
-   cold review") found the rule correct and sent it back on margin (default window 10 against
-   runs of 9 in converging anchors: ruled 20), two surviving mutants (the factor, the
-   off-by-one) and docs; fix round merged (default 20, both pinned, the half warehouse anchor
-   re-pinned as a convergence check since its solve converges after 3c, DESIGN §10 "the half
-   warehouse anchor after 3c"). 3c, the coupling out of the factor
-   (bordered system): green (425506a); the cold review (DESIGN §10 "stage 3c rulings from the
-   cold review") passed the code and the lineage fix and sent back the records (the pivot
-   guards are reached, not unreachable) and the Slow ratio fixture (310 bodies, 2 % false-red
-   against 5 % detection); fix round on branch `stage-3c-fix` (735-body wall, bar 0.79, order
-   I, B, B, I, stand-ins removed). The 40 × 32 wall's certificate 118 s to 34 s, the half
-   warehouse's 89 s to 59 s. Open: `Coupling`, like `CapSite`, has no range validation;
-   dropping the coupling term from the retry's LargestDiagonal is uncaught on both paths. 3d, the verdict-only option, is dropped: the warehouse's warm post-removal cascade reads
-   175 ms against the 200 ms target and its certificate 103 s (SCALE.md, DESIGN §10 "stage 3d
-   dropped"). Panels contingent; the `Measure.Scale.*` rows re-run after each stage into
-   SCALE.md. Then the 6b close: remove the three referees `FactorKind::Reference`,
-   `CapSiteKind::Dense` and `CouplingKind::InFactor`, the overview artifact, the Slow tier
-   and cheap Measure rows.
+   **Slice 6b, scale: done (2026-10-12; DESIGN §10 from "stage 1a opening" to "slice 6b close
+   opening", API.md "6b", SCALE.md).** Nine stages, each cold-reviewed, with the three
+   referee options removed at the close (branch `slice-6b-close`; its cold review blocked on
+   the generated pins fixing Undecided iteration counts, fixed under the pins ruling; the
+   follow-up review passed with nothing blocking; merged). What
+   changed: a blocked right-looking pivoted LDLᵀ (dpstrf style) behind the same rank test;
+   a sparse `SimplicialLDLT` above `DenseDofLimit` 600 accepted by pivots plus a five-step
+   inverse-iteration estimate, redone dense otherwise; one `Solve` per judge with
+   per-component results and no copies; the event region (revisions, `LastTouched`, a lineage
+   token, options as part of cleanliness, clean components copied from the previous verdict);
+   sparse certificate normal equations above `DenseRowLimit` 600 with the structured cap-site
+   factor, a stall rule (window 20, factor 0.5) and the load-factor coupling as a border
+   eliminated last. Measured at the close (SCALE.md): the warehouse (3,695 pieces) judges in
+   0.51 s (was 91 s for the half warehouse at 6a), its full certificate 75 s (was 1,566 s at
+   1b-i), its warm post-removal cascade 140 ms against the 200 ms target; the 32 × 40 wall's
+   elastic solve 0.19 s (was unfinished) and certificate 34 s; the half warehouse's
+   certificate 59 s (was 594 s). Stage 3d (a verdict-only option) was dropped as unneeded.
+   Carried from the stage reviews, none host-unsafe:
+   - elastic factor: the rank landing exactly on a panel boundary (64, 128) is unpinned
+     (`LargestPivot` resets per panel); `ArchAnchorsTest` (Orduña pile) and `StackAnchorsTest`
+     (diamond) incidentally guard panel faults, so neither may be loosened blindly; with the
+     reference gone, Mechanism-draw readings and motions are not pinned (they differed by up to
+     0.79 relative between the factors); the pins (`tests/FactorPins.h`, regenerated only by
+     `Measure.Factor.GeneratePins` with a reason in ANCHORS) catch the pivot tolerance × 10
+     only through the trade budget (30 against 6) and miss `>=` for `>` in the pivot test (no
+     pivot sits on the boundary); Mechanism iteration counts are not pinned though none of the
+     3,319 moved under three equivalent changes (they could be pinned exactly); an InvalidInput
+     pin's unconstrained count is written but never checked (no pin is in that state); a
+     null-space check of mechanism motions (‖K·v‖ small) needs the assembled stiffness, which
+     only a production seam could expose (the public corner flags allow a weaker necessary
+     check; flipping the motion sign reddens 9 Release tests meanwhile); the 1.0 s budget on
+     the 16 × 20 wall is a timing assertion on this machine;
+   - sparse elastic path: the pivot test is pinned by no mutant once the estimate exists; the
+     estimate's constructed adversary (a soft mode orthogonal to the ±1 start with a second
+     mode within 10³) accepts at λ_min 1e-3 of the bar (worst consequence a 1e-3 equilibrium
+     residual, never a false Stands; two start vectors or an eigen-residual check would close
+     it); the symbolic analysis is redone every active-set iteration (`analyzePattern` once per
+     `SolveProblem`); `K * V` relies on both triangles being stored;
+   - `Structure::Components()` is mutable state behind a const method (no thread-safety
+     promise exists anywhere; log it when one is made); `StandingComponent::ReadingSlots` is
+     read by nothing in the library;
+   - an ungrounded component is a mechanism by connectivity before any factorisation; the
+     elastic authority could read it (and its rigid-body null space) without factorising, as
+     the certificate's rigid-fall rule does (the 32 × 40 base-course cascade pays 24 s of dense
+     fallback on the floating remainder);
+   - certificate: uncaught mutants recorded in ANCHORS: the retry's `LargestDiagonal` without
+     the coupling term (dense and bordered), the bordered regularisation's size (× 100 green),
+     the NaN-only part of the positivity scan, either bordered pivot guard alone (they back
+     each other up; the suite reaches the retry ten times); the structured `SolveNormal` cap loop allocates a temporary per site per solve and
+     is slower than the dense loop was (1.70 s against 1.05 s on the shed; `SolveInto` into a
+     per-site scratch should recover about 1 s); there is no regularised retry at the cap-site
+     level, so one site's rounding failure reads the component Undecided (rare); the stall
+     rule is a safety stop that no large fixture in the suite reaches since 3c (its pins are
+     the ec6 1e-15 wall and the shear-capped brick);
+   - tests: `ShedSpec` exists twice (ScaleMeasurementTest, GeometryWarehouseTest) and wants a
+     shared fixture header; `Certificate.Sparse.AgreesWithTheDensePath` is now the only
+     two-path comparison for the certificate (13 s in Release; load factors 1e-9, iteration
+     counts equal, since the close: a border coupling off by 0.01 % reddens it, by 1.2× over
+     the 1e-12 absolute floor; near-zero load factors differ by 7e-22 at base, so a floor near
+     1e-18 would widen that margin a million-fold with no false-red risk); the Slow tier is 9
+     tests, the two ratio tests having retired with the referees; the shed's certificate
+     (8 s, below `DenseRowLimit`) gained nothing from 3c.
+   Then the overview artifact (Version 7) and this file's snapshot are the last close items.
  **Slice 8,
    the Unreal adapter, is on hold by owner directive (2026-10-11): do not start it.** The
    remaining slice-2 anchors (item 2) can run alongside slice 6.

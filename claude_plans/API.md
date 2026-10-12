@@ -1227,15 +1227,19 @@ bonded run solved as one body) are contingent: built only if stages 1 and 2 leav
 warehouse outside its budget.
 
 **Stage 1a, the factorisation itself.** `Factorise` becomes a blocked right-looking pivoted
-LDLᵀ in the style of LAPACK `dpstrf` (`StandingOptions::FactorKind::Blocked`, the default;
-`Reference` is the rank-1 factor kept for one slice as the referee): 64-column panels, the
+LDLᵀ in the style of LAPACK `dpstrf` (the only factor since the 6b close; until then
+`StandingOptions::FactorKind::Blocked` was the default and `Reference`, the rank-1 factor,
+the referee): 64-column panels, the
 largest signed updated diagonal as the pivot, the same `Pivot > PivotToleranceRelative × largest`
 cutoff, the same `Factorisation` shape, so the rank test, the null vectors and the Schur
 handling of slipping corners are untouched. (Eigen's own dense `LDLT` was tried and rejected:
 left-looking, it picks pivots before the Schur update and never stops, so it does not reveal
-rank; DESIGN §10.) The property `Statics.Factor.BlockedAgreesWithTheReference` runs the
-seeded structures of the oracle test and named multi-panel fixtures (walls above the 64-column
-panel, Stands and Mechanism) through both kinds under the DESIGN §10 rulings: `Stands`,
+rank; DESIGN §10.) Until the close the property `Statics.Factor.BlockedAgreesWithTheReference`
+ran the seeded structures of the oracle test and named multi-panel fixtures (walls above the
+64-column panel, Stands and Mechanism) through both kinds under the DESIGN §10 rulings; at the
+close it became `Statics.Factor.TheBlockedFactorReadsItsPins` (and `...AcrossPanels`) against a
+generated pins header measured against the reference one last time (worst certified reading
+gap 5.8e-14). The rulings it ran under: `Stands`,
 `Overstressed` and `InvalidInput` agree exactly; `Mechanism` and `Undecided` may trade places
 on at most max(1, draws / 1000) of the seeded draws (borderline pivots) and never on a named
 fixture; an `Undecided` pair compares nothing beyond its class; body lists agree when both
@@ -1334,8 +1338,9 @@ is a stage that is wrong.
 ### 6b, stage 3: the certificate at scale (written against the profile in SCALE.md)
 
 **3a, the structured cap-site factor (done 2026-10-12, merged at 2623138; reviewed, fix round merged at 0214d3e).**
-`CertificateOptions::CapSiteKind { Dense, Structured }` (default Structured; Dense is the
-referee for one slice and goes at the 6b close with `FactorKind::Reference`). Per cap site
+The structured block is the only cap-site factor since the 6b close (until then
+`CertificateOptions::CapSiteKind { Dense, Structured }`, default Structured, Dense the referee).
+Per cap site
 the Schur block `Mww` is factored by eliminating its diagonal group rows and factoring the
 facet block `diag(D_facet) + Facets K′ Facetsᵀ` with a 3 × 3 core formed as a sum of PSD terms
 (DESIGN §10); `Mww⁻¹Fᵀ` is cached per site; the constant geometry is cached per component and
@@ -1359,8 +1364,9 @@ kept: one within tolerance would already have ended the solve, DESIGN §10). The
 solve is untouched. Pinned by `Certificate.Stall.*`.
 
 **3c, the coupling out of the factor (done 2026-10-12, 425506a, in review).**
-`CertificateOptions::CouplingKind { InFactor, Bordered }` (default Bordered; InFactor is the
-third referee, gone at the 6b close). Above `DenseRowLimit` the normal system
+The bordered system is the only coupling since the 6b close (until then
+`CertificateOptions::CouplingKind { InFactor, Bordered }`, default Bordered, InFactor the
+referee). Above `DenseRowLimit` the normal system
 `M = M_sites + c·d dᵀ` is no longer assembled with its dense coupling block: the sparse path
 factors the bordered symmetric indefinite system `[M_sites + ρI, d; dᵀ, −1/c]` with
 `SimplicialLDLT` under an ordering that runs AMD on the site block and eliminates the border

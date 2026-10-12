@@ -863,3 +863,27 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   its pinned-fixture and singular-block tests; the two Slow ratio tests are retired with their
   last measured ratios in ANCHORS and the rows in SCALE.md. The independent check the
   referees gave the elastic factor passes to slice 7's HiGHS referee.
+- *2026-10-12, orchestrator, slice 6b close, pins ruling (from the cold review of 4928119):*
+  the review found the removal diff clean and the generated pins a real guard (seven factor
+  mutants red, including panel-update faults no analytic anchor reaches), with one defect: the
+  pins fixed exact iteration counts on Undecided draws, and a change of floating-point order
+  alone (`PanelWidth` 32 or 128) moved one from 50 to 43 or 41. **The pins pin what the
+  stage-1a ruling compared and no more**: on Stands and Overstressed the state, the exact
+  iteration count, the unconstrained-body count and the readings; on Mechanism the state and
+  the count of unconstrained bodies; on Undecided the state only; Mechanism and Undecided may
+  trade against the pin on at most max(1, draws / 1000) draws per table. **The generator is
+  committed** (`Measure.Factor.GeneratePins`, deterministic output), and regenerating the
+  header is a snapshot refresh of the code under test, allowed only with a reason recorded in
+  ANCHORS; the single comparison against the reference factor stands at 4e7fbb8 (worst
+  certified reading gap 5.8e-14). Also from the review, into the fix round: mechanism motions
+  are checked against the null space of the assembled stiffness (the reference used to compare
+  them); the dense-against-sparse certificate comparison is tightened to the retired coupling
+  test's strength (load factors 1e-9, iteration counts equal), since at 1e-7 and ±2 it passed
+  a 10 % error in the border's coupling; the bordered regularisation's size (× 100 green) and
+  the retry's `LargestDiagonal` without the coupling are recorded as uncaught.
+- *2026-10-12, orchestrator, slice 6b closed:* the follow-up review of the fix round (e310d5a)
+  found nothing blocking: equivalent changes of floating-point order leave the pins green,
+  seven real factor mutants redden them (tolerance × 2 already trips the budget, 8 against 6),
+  the generator is deterministic, a border coupling off by 0.01 % reddens the tightened
+  comparison. Merged to master. Not done from the pins ruling's list: the null-space check of
+  mechanism motions, which needs a seam to the assembled stiffness (CURRENT_STATE carries it).
