@@ -2,6 +2,7 @@
 #include "BrickFixtures.h"
 #include "CascadeTestSupport.h"
 #include "CatalogueTestSupport.h"
+#include "FactorPins.h"
 #include "FactorTestSupport.h"
 #include "StaticAdmissibilityOracle.h"
 #include "SlowInDebug.h"
@@ -17,7 +18,11 @@
 #include <climits>
 #include <cmath>
 #include <cstdint>
+#include <iomanip>
+#include <iterator>
 #include <random>
+#include <span>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -27,23 +32,13 @@ using namespace loadpath::test::oracle;
 
 namespace
 {
-using FactorKind = StandingOptions::FactorKind;
-
-StandingOptions WithFactor(StandingOptions Options, FactorKind Kind)
-{
-	Options.Factor = Kind;
-	return Options;
-}
+constexpr double PinRelative = 1.0e-10;
+constexpr double PinAbsolute = 1.0e-12;
 
 StandingOptions AllDense(StandingOptions Options)
 {
 	Options.DenseDofLimit = INT_MAX;
 	return Options;
-}
-
-Comparison CompareKinds(const FactorCase& C, bool bAllowTrade)
-{
-	return CompareOptions(C, WithFactor(C.Options, FactorKind::Reference), WithFactor(C.Options, FactorKind::Blocked), "reference", "blocked", bAllowTrade);
 }
 
 std::vector<FactorCase> NamedCases()
@@ -77,90 +72,137 @@ std::vector<FactorCase> MultiPanelCases()
 constexpr int FactorDrawCount = bOptimisedBuild ? 6000 : 40;
 constexpr int WallDrawCount = bOptimisedBuild ? 120 : 3;
 constexpr std::uint32_t WallSeedOffset = 1000000u;
+
+FactorCase SeededCase(int Draw)
+{
+	SeededDraw Each = MakeSeededDraw(Draw);
+	const std::string Name = "master seed " + std::to_string(MasterSeed) + ", draw " + std::to_string(Draw) + " (generator seed " + std::to_string(Each.Seed) + "): " + Each.Fixture + ", lambda (" + std::to_string(Each.LambdaX) + ", " + std::to_string(Each.LambdaY) + ")";
+	return FactorCase{Name, std::move(Each.Model), Biaxial(Each.LambdaX, Each.LambdaY), {}};
 }
 
-TEST_CASE("Statics.Factor.BlockedAgreesWithTheReference")
+FactorCase WallCase(int Draw)
+{
+	const std::uint32_t Seed = MasterSeed + WallSeedOffset + static_cast<std::uint32_t>(Draw);
+	std::mt19937 Rng(Seed);
+	const int Courses = 3 + static_cast<int>(Rng() % 4u);
+	const int Bricks = 3 + static_cast<int>(Rng() % 6u);
+	const double Friction = Uniform(Rng, 0.4, 1.0);
+	const double LambdaX = Uniform(Rng, 0.0, 0.5);
+	const double LambdaY = Uniform(Rng, 0.0, 0.5);
+	const std::string Name = "master seed " + std::to_string(MasterSeed) + ", wall draw " + std::to_string(Draw) + " (seed " + std::to_string(Seed) + "): " + std::to_string(Courses) + " x " + std::to_string(Bricks) + " dry wall, mu " + std::to_string(Friction) + ", lambda (" + std::to_string(LambdaX) + ", " + std::to_string(LambdaY) + ")";
+	return FactorCase{Name, RunningBondWall(DryJoint(Friction), DryJoint(Friction), Courses, Bricks), Biaxial(LambdaX, LambdaY), {}};
+}
+
+double Tangential(const InterfaceReading& R) { return std::sqrt(R.ShearForceN.X * R.ShearForceN.X + R.ShearForceN.Y * R.ShearForceN.Y + R.ShearForceN.Z * R.ShearForceN.Z); }
+
+bool PinNear(double Got, double Want)
+{
+	if (std::isnan(Got) || std::isnan(Want))
+	{
+		return std::isnan(Got) && std::isnan(Want);
+	}
+	if (Got == Want)
+	{
+		return true;
+	}
+	return std::abs(Got - Want) <= PinRelative * std::max(std::abs(Got), std::abs(Want)) + PinAbsolute;
+}
+
+struct PinCheck
+{
+	int Failed = 0;
+	int Readings = 0;
+};
+
+void CheckPin(const FactorCase& C, const FactorPin& Pin, std::span<const ReadingPin> Readings, PinCheck& Out)
+{
+	const StandingResult Got = SolveWith(C.Model, C.Options, C.Loads);
+	bool bOk = static_cast<int>(Got.State) == Pin.State && Got.ActiveSetIterations == Pin.Iterations && static_cast<int>(Got.UnconstrainedBodies.size()) == Pin.Unconstrained;
+	std::string Detail;
+	for (const ReadingPin& R : Readings.subspan(static_cast<std::size_t>(Pin.FirstReading), static_cast<std::size_t>(Pin.ReadingCount)))
+	{
+		++Out.Readings;
+		const InterfaceReading* Found = FindReading(Got, InterfaceId{R.Index, R.Generation});
+		const double Value = Found == nullptr ? NaN : (R.bTangential ? Tangential(*Found) : Found->NormalForceN);
+		if (Found == nullptr || !PinNear(Value, R.Value))
+		{
+			bOk = false;
+			std::ostringstream Line;
+			Line << std::setprecision(17) << " interface " << R.Index << (R.bTangential ? " tangential " : " normal ");
+			if (Found == nullptr)
+			{
+				Line << "missing";
+			}
+			else
+			{
+				Line << Value;
+			}
+			Line << " pinned " << R.Value << ";";
+			Detail += Line.str();
+		}
+	}
+	if (!bOk)
+	{
+		++Out.Failed;
+		FAIL_CHECK(C.Name << ": got " << Got.State << " after " << Got.ActiveSetIterations << " with " << Got.UnconstrainedBodies.size() << " unconstrained, pinned " << static_cast<StandingState>(Pin.State) << " after " << Pin.Iterations << " with " << Pin.Unconstrained << ";" << Detail);
+	}
+}
+}
+
+TEST_CASE("Statics.Factor.TheBlockedFactorReadsItsPins")
 {
 	SUBCASE("named fixtures")
 	{
-		for (const FactorCase& C : NamedCases())
+		const std::vector<FactorCase> Cases = NamedCases();
+		REQUIRE(Cases.size() == std::size(NamedPins));
+		PinCheck Out;
+		for (std::size_t I = 0; I < Cases.size(); ++I)
 		{
-			CompareKinds(C, false);
+			CheckPin(Cases[I], NamedPins[I], NamedReadingPins, Out);
 		}
+		CHECK(Out.Failed == 0);
 	}
 	SUBCASE("seeded stacks and bridges")
 	{
-		int Disagreeing = 0;
-		int Traded = 0;
-		int IterationsDiffer = 0;
-		Gaps Worst;
-		Gaps WorstCertified;
-		int CertifiedDisagreeing = 0;
-		int MotionMismatches = 0;
-		double WorstMotionGap = 0.0;
+		REQUIRE(static_cast<std::size_t>(FactorDrawCount) <= std::size(SeededPins));
+		PinCheck Out;
 		for (int Draw = 0; Draw < FactorDrawCount; ++Draw)
 		{
-			const SeededDraw Each = MakeSeededDraw(Draw);
-			const std::string Name = "master seed " + std::to_string(MasterSeed) + ", draw " + std::to_string(Draw) + " (generator seed " + std::to_string(Each.Seed) + "): " + Each.Fixture + ", lambda (" + std::to_string(Each.LambdaX) + ", " + std::to_string(Each.LambdaY) + ")";
-			const Comparison R = CompareKinds(FactorCase{Name, Each.Model, Biaxial(Each.LambdaX, Each.LambdaY), {}}, true);
-			Disagreeing += R.Mismatches > 0 ? 1 : 0;
-			Gaps& Into = R.bCertified ? WorstCertified : Worst;
-			CertifiedDisagreeing += R.bCertified && R.Mismatches > 0 ? 1 : 0;
-			Traded += R.bStateClassTraded ? 1 : 0;
-			IterationsDiffer += R.bIterationsDiffer ? 1 : 0;
-			MotionMismatches += R.MotionMismatches;
-			WorstMotionGap = std::max(WorstMotionGap, R.WorstMotionGap);
-			Into.WorstRelative = std::max(Into.WorstRelative, R.G.WorstRelative);
-			Into.WorstForceAbsoluteOverW = std::max(Into.WorstForceAbsoluteOverW, R.G.WorstForceAbsoluteOverW);
-			Into.WorstUtilisationAbsolute = std::max(Into.WorstUtilisationAbsolute, R.G.WorstUtilisationAbsolute);
+			CheckPin(SeededCase(Draw), SeededPins[Draw], SeededReadingPins, Out);
 		}
-		const int TradeBudget = std::max(1, FactorDrawCount / 1000);
-		MESSAGE("over " << FactorDrawCount << " draws: " << Traded << " traded mechanism and undecided (budget " << TradeBudget << "), " << IterationsDiffer << " differ in iterations, worst relative reading gap above the absolute floor " << Worst.WorstRelative << ", worst absolute force gap " << Worst.WorstForceAbsoluteOverW << " W, worst absolute utilisation gap " << Worst.WorstUtilisationAbsolute << " on mechanism draws (not asserted); " << Disagreeing << " draws disagree, " << CertifiedDisagreeing << " of them stands or overstressed, whose worst gaps are " << WorstCertified.WorstRelative << " relative, " << WorstCertified.WorstForceAbsoluteOverW << " W, " << WorstCertified.WorstUtilisationAbsolute << " utilisation; " << MotionMismatches << " mechanism bodies move differently, worst motion gap " << WorstMotionGap);
-		CHECK(Disagreeing == 0);
-		CHECK(Traded <= TradeBudget);
+		MESSAGE("over " << FactorDrawCount << " draws: " << Out.Failed << " differ from their pins, " << Out.Readings << " readings compared");
+		CHECK(Out.Failed == 0);
 	}
 }
 
-TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Statics.Factor.BlockedAgreesWithTheReferenceAcrossPanels")
+TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Statics.Factor.TheBlockedFactorReadsItsPinsAcrossPanels")
 {
 	SUBCASE("named walls")
 	{
-		for (const FactorCase& C : MultiPanelCases())
+		const std::vector<FactorCase> Cases = MultiPanelCases();
+		REQUIRE(Cases.size() == std::size(PanelPins));
+		PinCheck Out;
+		for (std::size_t I = 0; I < Cases.size(); ++I)
 		{
 			const Clock::time_point Start = Clock::now();
-			const Comparison R = CompareKinds(C, false);
-			MESSAGE(C.Name << ": " << R.Mismatches << " mismatches, worst motion gap " << R.WorstMotionGap << ", " << SecondsSince(Start) << " s");
+			CheckPin(Cases[I], PanelPins[I], PanelReadingPins, Out);
+			MESSAGE(Cases[I].Name << ": " << SecondsSince(Start) << " s");
 		}
+		CHECK(Out.Failed == 0);
 	}
 	SUBCASE("seeded walls")
 	{
-		int Disagreeing = 0;
-		int Traded = 0;
+		REQUIRE(static_cast<std::size_t>(WallDrawCount) <= std::size(WallPins));
+		PinCheck Out;
 		int MultiPanel = 0;
-		int Mechanisms = 0;
-		double WorstMotionGap = 0.0;
 		for (int Draw = 0; Draw < WallDrawCount; ++Draw)
 		{
-			const std::uint32_t Seed = MasterSeed + WallSeedOffset + static_cast<std::uint32_t>(Draw);
-			std::mt19937 Rng(Seed);
-			const int Courses = 3 + static_cast<int>(Rng() % 4u);
-			const int Bricks = 3 + static_cast<int>(Rng() % 6u);
-			const double Friction = Uniform(Rng, 0.4, 1.0);
-			const double LambdaX = Uniform(Rng, 0.0, 0.5);
-			const double LambdaY = Uniform(Rng, 0.0, 0.5);
-			const std::string Name = "master seed " + std::to_string(MasterSeed) + ", wall draw " + std::to_string(Draw) + " (seed " + std::to_string(Seed) + "): " + std::to_string(Courses) + " x " + std::to_string(Bricks) + " dry wall, mu " + std::to_string(Friction) + ", lambda (" + std::to_string(LambdaX) + ", " + std::to_string(LambdaY) + ")";
-			const FactorCase C{Name, RunningBondWall(DryJoint(Friction), DryJoint(Friction), Courses, Bricks), Biaxial(LambdaX, LambdaY), {}};
+			const FactorCase C = WallCase(Draw);
 			MultiPanel += 6 * (C.Model.LiveBodyCount() - 1) > 64 ? 1 : 0;
-			const Comparison R = CompareKinds(C, true);
-			Disagreeing += R.Mismatches > 0 ? 1 : 0;
-			Traded += R.bStateClassTraded ? 1 : 0;
-			Mechanisms += R.WorstMotionGap > 0.0 || R.MotionMismatches > 0 ? 1 : 0;
-			WorstMotionGap = std::max(WorstMotionGap, R.WorstMotionGap);
+			CheckPin(C, WallPins[Draw], WallReadingPins, Out);
 		}
-		const int TradeBudget = std::max(1, WallDrawCount / 1000);
-		MESSAGE("over " << WallDrawCount << " wall draws (" << MultiPanel << " above one panel): " << Traded << " traded mechanism and undecided (budget " << TradeBudget << "), " << Disagreeing << " disagree, worst motion gap " << WorstMotionGap);
-		CHECK(Disagreeing == 0);
-		CHECK(Traded <= TradeBudget);
+		MESSAGE("over " << WallDrawCount << " wall draws (" << MultiPanel << " above one panel): " << Out.Failed << " differ from their pins, " << Out.Readings << " readings compared");
+		CHECK(Out.Failed == 0);
 	}
 }
 
@@ -168,13 +210,10 @@ TEST_CASE("Slow.Statics.Factor.AMidSizeWallSolvesInsideItsBudget")
 {
 	const Structure Model = Ec6Wall(16, 20);
 	REQUIRE(Model.LiveBodyCount() == 16u * 20u + 8u + 1u);
-	Clock::time_point Start = Clock::now();
+	const Clock::time_point Start = Clock::now();
 	const StandingResult Blocked = SolveWith(Model, AllDense(StandingOptions{}));
 	const double BlockedS = SecondsSince(Start);
-	Start = Clock::now();
-	const StandingResult Reference = SolveWith(Model, AllDense(WithFactor(StandingOptions{}, FactorKind::Reference)));
-	const double ReferenceS = SecondsSince(Start);
-	MESSAGE("ec6 wall 20 x 16 (" << Model.LiveBodyCount() - 1 << " bricks): blocked " << BlockedS << " s (" << Blocked.State << " after " << Blocked.ActiveSetIterations << "), reference " << ReferenceS << " s (" << Reference.State << " after " << Reference.ActiveSetIterations << ")");
+	MESSAGE("ec6 wall 20 x 16 (" << Model.LiveBodyCount() - 1 << " bricks): blocked " << BlockedS << " s (" << Blocked.State << " after " << Blocked.ActiveSetIterations << ")");
 	CHECK(Blocked.State == StandingState::Stands);
 	CHECK(BlockedS < 1.0);
 }

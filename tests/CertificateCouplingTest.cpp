@@ -25,37 +25,19 @@ using namespace loadpath::test;
 
 namespace
 {
-using Coupling = CertificateOptions::CouplingKind;
-
-CertificateOptions Sparse(CertificateOptions Options, Coupling Kind)
+CertificateOptions Sparse(CertificateOptions Options)
 {
 	Options.DenseRowLimit = 0;
-	Options.Coupling = Kind;
 	return Options;
 }
 
 constexpr double AgreementRelative = 1.0e-9;
 constexpr double AgreementAbsolute = 1.0e-12;
-constexpr double MotionAbsolute = 1.0e-9;
 constexpr double PinnedRelative = 1.0e-10;
 constexpr double PinnedAbsolute = 1.0e-10;
 constexpr int SingularIterations = 9;
 constexpr int SingularIterationSlack = 2;
 constexpr double SingularLoadFactor = 1000.0;
-constexpr int LargeWallCourses = 20;
-constexpr int LargeWallBricks = 15;
-constexpr std::size_t LargeWallBodies = 310;
-constexpr int RatioWallCourses = 30;
-constexpr int RatioWallBricks = 24;
-constexpr std::size_t RatioWallBodies = 735;
-constexpr double RatioWallCeiling = 0.79;
-
-struct NamedCase
-{
-	std::string Name;
-	Structure Model;
-	CertificateOptions Options;
-};
 
 struct PinnedCase
 {
@@ -68,103 +50,9 @@ struct PinnedCase
 	double LoadFactorUpper;
 };
 
-struct CouplingGaps
-{
-	double WorstLoadFactorRelative = 0.0;
-	double WorstMotion = 0.0;
-	int WorstIterations = 0;
-	int Mismatches = 0;
-};
-
 bool Near(double Got, double Want, double Relative, double Absolute)
 {
 	return std::abs(Got - Want) <= Relative * std::max(std::abs(Got), std::abs(Want)) + Absolute;
-}
-
-bool NearTracked(double Got, double Want, CouplingGaps& G)
-{
-	const double Scale = std::max(std::abs(Got), std::abs(Want));
-	if (Scale > 0.0)
-	{
-		G.WorstLoadFactorRelative = std::max(G.WorstLoadFactorRelative, std::abs(Got - Want) / Scale);
-	}
-	return Near(Got, Want, AgreementRelative, AgreementAbsolute);
-}
-
-bool SameInterfaces(const std::vector<InterfaceId>& A, const std::vector<InterfaceId>& B)
-{
-	if (A.size() != B.size())
-	{
-		return false;
-	}
-	for (const InterfaceId& Id : A)
-	{
-		if (!HasInterface(B, Id))
-		{
-			return false;
-		}
-	}
-	return true;
-}
-
-double MotionGap(const MechanismMotion& A, const MechanismMotion& B)
-{
-	const Vec3& Ta = A.TranslationM;
-	const Vec3& Tb = B.TranslationM;
-	const Vec3& Ra = A.RotationRad;
-	const Vec3& Rb = B.RotationRad;
-	return std::max({std::abs(Ta.X - Tb.X), std::abs(Ta.Y - Tb.Y), std::abs(Ta.Z - Tb.Z), std::abs(Ra.X - Rb.X), std::abs(Ra.Y - Rb.Y), std::abs(Ra.Z - Rb.Z)});
-}
-
-void CompareCouplings(const NamedCase& C, CouplingGaps& G)
-{
-	const CertificateResult InFactor = DecideWith(C.Model, Sparse(C.Options, Coupling::InFactor));
-	const CertificateResult Bordered = DecideWith(C.Model, Sparse(C.Options, Coupling::Bordered));
-	INFO(std::setprecision(17) << C.Name << ": in factor " << InFactor.State << " [" << InFactor.LoadFactorLower << ", " << InFactor.LoadFactorUpper << "] in " << InFactor.Iterations << ", bordered " << Bordered.State << " [" << Bordered.LoadFactorLower << ", " << Bordered.LoadFactorUpper << "] in " << Bordered.Iterations);
-	bool bAgree = InFactor.State == Bordered.State;
-	bAgree = NearTracked(Bordered.LoadFactorLower, InFactor.LoadFactorLower, G) && bAgree;
-	bAgree = NearTracked(Bordered.LoadFactorUpper, InFactor.LoadFactorUpper, G) && bAgree;
-	G.WorstIterations = std::max(G.WorstIterations, std::abs(Bordered.Iterations - InFactor.Iterations));
-	bAgree = Bordered.Iterations == InFactor.Iterations && bAgree;
-	bAgree = SameInterfaces(InFactor.HingingInterfaces, Bordered.HingingInterfaces) && bAgree;
-	bAgree = InFactor.Mechanism.size() == Bordered.Mechanism.size() && bAgree;
-	for (const MechanismMotion& Want : InFactor.Mechanism)
-	{
-		const MechanismMotion* Got = FindMotion(Bordered, Want.Body);
-		if (Got == nullptr)
-		{
-			bAgree = false;
-			continue;
-		}
-		const double Gap = MotionGap(*Got, Want);
-		G.WorstMotion = std::max(G.WorstMotion, Gap);
-		bAgree = Gap <= MotionAbsolute && bAgree;
-	}
-	CHECK(bAgree);
-	G.Mismatches += bAgree ? 0 : 1;
-}
-
-std::vector<NamedCase> AgreementCases()
-{
-	std::vector<NamedCase> Cases;
-	const int Draws = oracle::bOptimisedBuild ? 60 : 12;
-	for (int Draw = 0; Draw < Draws; ++Draw)
-	{
-		oracle::SeededDraw D = oracle::MakeSeededDraw(Draw);
-		Cases.push_back({"seed " + std::to_string(D.Seed) + " " + D.Fixture, std::move(D.Model), CertificateUnderGravity(oracle::BiaxialGravity(D.LambdaX, D.LambdaY))});
-	}
-	const std::vector<double> Lateral = oracle::bOptimisedBuild ? std::vector<double>{0.05, 0.3, 0.8} : std::vector<double>{0.05, 0.3};
-	for (const double Lambda : Lateral)
-	{
-		Cases.push_back({"dry 6 x 5 wall at lateral " + std::to_string(Lambda), RunningBondWall(DryJoint(0.6), DryJoint(0.6), 6, 5), CertificateLateral(Lambda)});
-	}
-	Cases.push_back({"dry 8 x 12 boundary wall at lateral 0.8", RunningBondWall(DryJoint(0.6), DryJoint(0.6), 8, 12), CertificateLateral(0.8)});
-	if (oracle::bOptimisedBuild)
-	{
-		Cases.push_back({"ec6 4 x 4 wall at lateral 0.4", Ec6Wall(4, 4), CertificateLateral(0.4)});
-		Cases.push_back({"ec6 20 x 15 wall at rest", Ec6Wall(LargeWallCourses, LargeWallBricks), CertificateOptions{}});
-	}
-	return Cases;
 }
 
 StrengthProfile CappedDryJoint()
@@ -221,26 +109,12 @@ std::vector<PinnedCase> PinnedCases()
 }
 }
 
-TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Certificate.Coupling.BorderedAgreesWithTheCouplingInTheFactor")
-{
-	CHECK(CertificateOptions{}.Coupling == Coupling::Bordered);
-	const Clock::time_point Start = Clock::now();
-	CouplingGaps G;
-	const std::vector<NamedCase> Cases = AgreementCases();
-	for (const NamedCase& C : Cases)
-	{
-		CompareCouplings(C, G);
-	}
-	MESSAGE(Cases.size() << " cases, " << G.Mismatches << " disagree; worst load factor relative " << G.WorstLoadFactorRelative << ", worst motion " << G.WorstMotion << ", worst iteration gap " << G.WorstIterations << ", " << SecondsSince(Start) << " s");
-	CHECK(G.Mismatches == 0);
-}
-
 TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Certificate.Coupling.ThePinnedFixturesReadTheSame")
 {
 	int Mismatches = 0;
 	for (const PinnedCase& C : PinnedCases())
 	{
-		const CertificateResult Got = DecideWith(C.Model, Sparse(C.Options, Coupling::Bordered));
+		const CertificateResult Got = DecideWith(C.Model, Sparse(C.Options));
 		const bool bSame = Got.State == C.State && Got.Iterations == C.Iterations && Near(Got.LoadFactorLower, C.LoadFactorLower, PinnedRelative, PinnedAbsolute) && Near(Got.LoadFactorUpper, C.LoadFactorUpper, PinnedRelative, PinnedAbsolute);
 		INFO(std::setprecision(17) << C.Name << ": got " << Got.State << " in " << Got.Iterations << " [" << Got.LoadFactorLower << ", " << Got.LoadFactorUpper << "], pinned " << C.State << " in " << C.Iterations << " [" << C.LoadFactorLower << ", " << C.LoadFactorUpper << "]");
 		CHECK(bSame);
@@ -249,48 +123,14 @@ TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Certificate.Coupling.ThePinnedFixturesReadTheS
 	CHECK(Mismatches == 0);
 }
 
-TEST_CASE("Certificate.Coupling.ASingularSiteBlockIsRegularisedOnTheBorderedPath")
+TEST_CASE("Certificate.Coupling.ASingularSiteBlockIsRegularised")
 {
 	const Structure Model = RunningBondWall(DryJoint(0.0), DryJoint(0.0), 9, 12);
 	REQUIRE(Model.LiveBodyCount() == 113);
-	const CertificateResult Got = DecideWith(Model, Sparse(CertificateLateral(0.0), Coupling::Bordered));
-	INFO(std::setprecision(17) << "frictionless 9 x 12 wall, bordered: " << Got.State << " [" << Got.LoadFactorLower << ", " << Got.LoadFactorUpper << "] in " << Got.Iterations);
+	const CertificateResult Got = DecideWith(Model, Sparse(CertificateLateral(0.0)));
+	INFO(std::setprecision(17) << "frictionless 9 x 12 wall: " << Got.State << " [" << Got.LoadFactorLower << ", " << Got.LoadFactorUpper << "] in " << Got.Iterations);
 	CHECK(Got.State == CertificateState::Stands);
 	CHECK(Near(Got.LoadFactorLower, SingularLoadFactor, AgreementRelative, AgreementAbsolute));
 	CHECK(Near(Got.LoadFactorUpper, SingularLoadFactor, AgreementRelative, AgreementAbsolute));
 	CHECK(std::abs(Got.Iterations - SingularIterations) <= SingularIterationSlack);
 }
-
-#if defined(NDEBUG)
-TEST_CASE("Slow.Certificate.Coupling.IsFasterThanTheCouplingInTheFactorOnALargeComponent")
-{
-	const Structure Model = Ec6Wall(RatioWallCourses, RatioWallBricks);
-	REQUIRE(Model.Components().FreeBodies.size() == 1u);
-	REQUIRE(Model.Components().FreeBodies[0].size() == RatioWallBodies);
-	const CertificateOptions InFactorOptions = Sparse(CertificateOptions{}, Coupling::InFactor);
-	const CertificateOptions BorderedOptions = Sparse(CertificateOptions{}, Coupling::Bordered);
-	double InFactorMin = 1.0e300;
-	double BorderedMin = 1.0e300;
-	CertificateResult InFactor;
-	CertificateResult Bordered;
-	const Coupling Order[] = {Coupling::InFactor, Coupling::Bordered, Coupling::Bordered, Coupling::InFactor};
-	for (const Coupling Kind : Order)
-	{
-		const bool bBordered = Kind == Coupling::Bordered;
-		const Clock::time_point Start = Clock::now();
-		const CertificateResult Got = DecideWith(Model, bBordered ? BorderedOptions : InFactorOptions);
-		const double Seconds = SecondsSince(Start);
-		MESSAGE(std::setprecision(10) << (bBordered ? "bordered " : "in factor ") << Seconds << " s");
-		double& Min = bBordered ? BorderedMin : InFactorMin;
-		Min = std::min(Min, Seconds);
-		(bBordered ? Bordered : InFactor) = Got;
-	}
-	const double Ratio = BorderedMin / InFactorMin;
-	MESSAGE(std::setprecision(10) << "ec6 30 x 24 wall: in factor " << InFactor.State << " [" << InFactor.LoadFactorLower << ", " << InFactor.LoadFactorUpper << "] in " << InFactor.Iterations << " iterations, min " << InFactorMin << " s; bordered " << Bordered.State << " [" << Bordered.LoadFactorLower << ", " << Bordered.LoadFactorUpper << "] in " << Bordered.Iterations << " iterations, min " << BorderedMin << " s; ratio " << Ratio);
-	CHECK(InFactor.State == CertificateState::Stands);
-	CHECK(Bordered.State == InFactor.State);
-	CHECK(Near(Bordered.LoadFactorLower, InFactor.LoadFactorLower, AgreementRelative, AgreementAbsolute));
-	CHECK(Near(Bordered.LoadFactorUpper, InFactor.LoadFactorUpper, AgreementRelative, AgreementAbsolute));
-	CHECK(Ratio < RatioWallCeiling);
-}
-#endif

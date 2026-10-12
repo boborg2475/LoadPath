@@ -1018,14 +1018,11 @@ TEST_CASE("Authority.Judge.DifferentOptionsReuseNothing")
 		Variants.emplace_back(Name, Options);
 	};
 	Add("Standing.MaxActiveSetIterations 49", [](AuthorityOptions& O) { O.Standing.MaxActiveSetIterations = 49; });
-	Add("Standing.Factor Reference", [](AuthorityOptions& O) { O.Standing.Factor = StandingOptions::FactorKind::Reference; });
 	Add("Certificate.FeasibilityTolerance 1e-8", [](AuthorityOptions& O) { O.Certificate.FeasibilityTolerance = 1.0e-8; });
 	Add("Certificate.MaxIterations 199", [](AuthorityOptions& O) { O.Certificate.MaxIterations = 199; });
 	Add("Certificate.DenseRowLimit 6", [](AuthorityOptions& O) { O.Certificate.DenseRowLimit = 6; });
-	Add("Certificate.CapSite Dense", [](AuthorityOptions& O) { O.Certificate.CapSite = CertificateOptions::CapSiteKind::Dense; });
 	Add("Certificate.StallWindow 11", [](AuthorityOptions& O) { O.Certificate.StallWindow = 11; });
 	Add("Certificate.StallImprovement 0.4", [](AuthorityOptions& O) { O.Certificate.StallImprovement = 0.4; });
-	Add("Certificate.Coupling InFactor", [](AuthorityOptions& O) { O.Certificate.Coupling = CertificateOptions::CouplingKind::InFactor; });
 	for (const auto& [Name, Options] : Variants)
 	{
 		INFO("options differing in " << std::string(Name));
@@ -1042,28 +1039,6 @@ TEST_CASE("Authority.Judge.DifferentOptionsReuseNothing")
 		}
 		CheckSameVerdict(Got, Fresh, F.Model, 0.0, 0.0);
 	}
-}
-
-TEST_CASE("Authority.Judge.ADifferentCouplingReusesNothing")
-{
-	ThreeComponents F = MakeThreeComponents();
-	const auto C = MakeCounted();
-	const AuthorityOptions Base;
-	const AuthorityResult First = C->Authority->Judge(F.Model, F.Loads, Base, nullptr);
-	AuthorityOptions Options = Base;
-	Options.Certificate.Coupling = CertificateOptions::CouplingKind::InFactor;
-	const AuthorityResult Fresh = MakeAuthority()->Judge(F.Model, F.Loads, Options, nullptr);
-	C->Solves.clear();
-	C->Decides.clear();
-	const AuthorityResult Got = C->Authority->Judge(F.Model, F.Loads, Options, &First);
-	INFO("got: " << DescribeAuthority(Got));
-	CheckSolvedOnly(C->Solves, {});
-	CHECK(Got.Components.size() == 3u);
-	for (const std::vector<BodyId>& Part : F.Parts)
-	{
-		CheckFresh(Got, Part);
-	}
-	CheckSameVerdict(Got, Fresh, F.Model, 0.0, 0.0);
 }
 
 TEST_CASE("Structure.Lineage.AMovedFromStructureTakesAFreshLineage")
