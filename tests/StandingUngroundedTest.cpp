@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <cstddef>
 #include <span>
 #include <vector>
@@ -133,6 +134,42 @@ void CheckUncertifiedReadings(const StandingResult& R, std::size_t Expected)
 		}
 	}
 }
+
+void CheckCornerPointsMatchAGroundedSolve(const StandingResult& R, InterfaceId Joint)
+{
+	Structure Grounded;
+	const ProfileId Profile = AddProfileOk(Grounded, DryJoint(0.7));
+	const BodyId Ground = AddGroundPlane(Grounded);
+	const BodyId Base = AddBox(Grounded, BrickShape(0.0, 0));
+	AddInterfaceOk(Grounded, OnGroundPlane(Ground, Base, BrickShape(0.0, 0), Profile));
+	const BodyId Lower = AddBox(Grounded, BrickShape(0.0, 1));
+	const BodyId Upper = AddBox(Grounded, BrickShape(0.0, 2));
+	AddInterfaceOk(Grounded, *StackedFaces(Base, BrickShape(0.0, 0), Lower, BrickShape(0.0, 1), Profile));
+	const InterfaceId GroundedJoint = AddInterfaceOk(Grounded, *StackedFaces(Lower, BrickShape(0.0, 1), Upper, BrickShape(0.0, 2), Profile));
+	const StandingResult G = SolveWith(Grounded, StandingOptions{});
+	REQUIRE(G.State == StandingState::Stands);
+	const InterfaceReading* Floating = FindReading(R, Joint);
+	const InterfaceReading* Reference = FindReading(G, GroundedJoint);
+	REQUIRE(Floating != nullptr);
+	REQUIRE(Reference != nullptr);
+	for (std::size_t K = 0; K < Floating->Corners.size(); ++K)
+	{
+		INFO("corner " << K << ": " << Floating->Corners[K].PointM << " against " << Reference->Corners[K].PointM);
+		CHECK(NearVec(Floating->Corners[K].PointM, Reference->Corners[K].PointM, 0.0, 0.0));
+	}
+}
+
+AuthorityResult JudgeWith(const Structure& Model, const AuthorityOptions& Options, std::span<const BodyLoad> Loads = {})
+{
+	return MakeAuthority()->Judge(Model, Loads, Options, nullptr);
+}
+
+CascadeVerdict CascadeWith(Structure& Model, const AuthorityOptions& Options, std::span<const BodyLoad> Loads = {})
+{
+	CascadeOptions C;
+	C.Authority = Options;
+	return MakeCascade(MakeAuthority())->Run(Model, Loads, C, nullptr);
+}
 }
 
 TEST_CASE("Statics.Ungrounded.AFloatingPairIsAMechanismWithoutIterating")
@@ -147,6 +184,7 @@ TEST_CASE("Statics.Ungrounded.AFloatingPairIsAMechanismWithoutIterating")
 		Characterise(R);
 		CheckRigidFall(R, {P.Lower, P.Upper}, Vec3{0.0, 0.0, -1.0});
 		CheckUncertifiedReadings(R, 1);
+		CheckCornerPointsMatchAGroundedSolve(R, P.Joint);
 	}
 	SUBCASE("a sideways push on the upper brick")
 	{
@@ -224,4 +262,111 @@ TEST_CASE("Slow.Statics.Ungrounded.TheFloatingWallRemainderSolvesInsideItsBudget
 	CHECK(R.State == StandingState::Mechanism);
 	CHECK(SameIdList(R.UnconstrainedBodies, Floating));
 	CHECK(Ms < 2000.0);
+}
+
+TEST_CASE("Statics.Ungrounded.AHeldFloatingBrickStandsAsBefore")
+{
+	SUBCASE("a lone brick held at its centroid")
+	{
+		Structure Model;
+		AddGroundPlane(Model);
+		const BodyId Brick = AddBox(Model, BrickShape(0.0, 3));
+		const double Weight = Model.Body(Brick).MassKg * GravityMPerS2;
+		const BodyLoad Hold[] = {BodyLoad{Brick, Vec3{0.0, 0.0, Weight}, BrickShape(0.0, 3).CentreM}};
+		const StandingResult R = SolveWith(Model, StandingOptions{}, Hold);
+		Characterise(R);
+		CHECK(R.State == StandingState::Stands);
+		const AuthorityResult A = JudgeWith(Model, AuthorityOptions{}, Hold);
+		CHECK(A.Worst == ComponentVerdict::Stands);
+		CHECK(A.Disagreements == 0u);
+	}
+	SUBCASE("a dry pair held at the lower brick")
+	{
+		Structure Model;
+		const ProfileId Profile = AddProfileOk(Model, DryJoint(0.7));
+		AddGroundPlane(Model);
+		const FloatingPair P = AddFloatingPair(Model, Profile, 0.0);
+		const double LowerWeight = Model.Body(P.Lower).MassKg * GravityMPerS2;
+		const double UpperWeight = Model.Body(P.Upper).MassKg * GravityMPerS2;
+		const BodyLoad Hold[] = {BodyLoad{P.Lower, Vec3{0.0, 0.0, LowerWeight + UpperWeight}, BrickShape(0.0, 1).CentreM}};
+		const StandingResult R = SolveWith(Model, StandingOptions{}, Hold);
+		Characterise(R);
+		CHECK(R.State == StandingState::Stands);
+		const InterfaceReading* Reading = FindReading(R, P.Joint);
+		REQUIRE(Reading != nullptr);
+		INFO("normal " << Reading->NormalForceN << " against the upper weight " << UpperWeight);
+		CHECK(Reading->Axis == GoverningAxis::Compression);
+		CHECK(std::abs(Reading->NormalForceN - UpperWeight) <= 1.0e-9);
+		const AuthorityResult A = JudgeWith(Model, AuthorityOptions{}, Hold);
+		CHECK(A.Worst == ComponentVerdict::Stands);
+		CHECK(A.Disagreements == 0u);
+	}
+}
+
+TEST_CASE("Statics.Ungrounded.ANonFiniteFloatingPairIsInvalidInput")
+{
+	Structure Model;
+	StrengthProfile Stiff = DryJoint(0.7);
+	Stiff.NormalStiffnessPaPerM = 1.0e308;
+	Stiff.TangentialStiffnessPaPerM = 1.0e308;
+	const ProfileId Profile = AddProfileOk(Model, Stiff);
+	AddGroundPlane(Model);
+	const Box LowerShape = BoxOfDensity(Vec3{0.0, 0.0, 15.0}, Vec3{5.0, 5.0, 5.0}, 2000.0);
+	const Box UpperShape = BoxOfDensity(Vec3{0.0, 0.0, 25.0}, Vec3{5.0, 5.0, 5.0}, 2000.0);
+	const BodyId Lower = AddBox(Model, LowerShape);
+	const BodyId Upper = AddBox(Model, UpperShape);
+	AddInterfaceOk(Model, *StackedFaces(Lower, LowerShape, Upper, UpperShape, Profile));
+	const StandingResult R = SolveWith(Model, StandingOptions{});
+	Characterise(R);
+	CHECK(R.State == StandingState::InvalidInput);
+	CHECK(JudgeWith(Model, AuthorityOptions{}).Worst == ComponentVerdict::InvalidInput);
+	const CascadeVerdict V = CascadeWith(Model, AuthorityOptions{});
+	CHECK(V.State == CascadeState::InvalidInput);
+	CHECK(V.Clusters.empty());
+}
+
+TEST_CASE("Statics.Ungrounded.AWeightlessFloatingPairSolvesAsBefore")
+{
+	Structure Model;
+	const ProfileId Profile = AddProfileOk(Model, DryJoint(0.7));
+	AddGroundPlane(Model);
+	AddFloatingPair(Model, Profile, 0.0);
+	const AuthorityOptions Weightless = AuthorityUnderGravity(Vec3{0.0, 0.0, 0.0});
+	const StandingResult R = SolveWith(Model, Weightless.Standing);
+	Characterise(R);
+	CHECK(R.State == StandingState::Stands);
+	CHECK(R.ActiveSetIterations == 2);
+	CHECK(R.Mechanism.empty());
+	const AuthorityResult A = JudgeWith(Model, Weightless);
+	CHECK(A.Worst == ComponentVerdict::Stands);
+	CHECK(A.Disagreements == 0u);
+}
+
+TEST_CASE("Statics.Ungrounded.TheFallFollowsATiltedGravity")
+{
+	Structure Model;
+	const ProfileId Profile = AddProfileOk(Model, DryJoint(0.7));
+	AddGroundPlane(Model);
+	const FloatingPair P = AddFloatingPair(Model, Profile, 0.0);
+	const StandingResult R = SolveWith(Model, AuthorityTilted(0.5).Standing);
+	Characterise(R);
+	CheckRigidFall(R, {P.Lower, P.Upper}, Vec3{std::tan(0.5), 0.0, -1.0});
+}
+
+TEST_CASE("Cascade.Ungrounded.ALiftedFloatingPairSeversWithNoReason")
+{
+	Structure Model;
+	const ProfileId Profile = AddProfileOk(Model, DryJoint(0.7));
+	AddGroundPlane(Model);
+	const FloatingPair P = AddFloatingPair(Model, Profile, 0.0);
+	const BodyLoad Lift[] = {BodyLoad{P.Upper, Vec3{0.0, 0.0, 100.0}, BrickShape(0.0, 2).CentreM}};
+	const CascadeVerdict V = CascadeWith(Model, AuthorityOptions{}, Lift);
+	MESSAGE("cascade " << static_cast<int>(V.State) << ", passes " << V.Passes << ", clusters " << V.Clusters.size() << ", failures " << V.Failures.size());
+	REQUIRE(V.Failures.size() == 1u);
+	const FailedInterface& F = V.Failures[0];
+	INFO("failure " << F.Id.Index << ": axis " << F.Axis << ", ratio " << F.Ratio << ", severed " << F.bSevered);
+	CHECK(SameHandle(F.Id, P.Joint));
+	CHECK(F.bSevered);
+	CHECK(F.Axis == GoverningAxis::None);
+	CHECK(F.Ratio == 0.0);
 }
