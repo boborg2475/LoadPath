@@ -217,14 +217,20 @@ cheap `Measure.Scale.*` rows after them); the `Deferred.*` tier holds the physic
    cold review (DESIGN §10 "stage 3a rulings from the cold review") found the algebra exact
    and the code sound, and sent it back on tests and docs; the fix round runs on branch
    `stage-3a-fix` (four new kinds, corrected mutation records, the shed ratio test in the
-   order D, S, S, D). Deferred from that review: the structured `SolveNormal` cap loop
+   order D, S, S, D), merged; the shed ratio read 0.837, 0.670, 0.781 over three runs against
+   the 0.85 bar, still noisy. Deferred from that review: the structured `SolveNormal` cap loop
    allocates a temporary per site per solve and is slower than the dense loop (1.70 s against
    1.05 s on the shed; `SolveInto` into a per-site scratch should recover about 1 s); `ShedSpec`
    exists three times in the tests (CertificateSparseTest, ScaleMeasurementTest,
    GeometryWarehouseTest) and wants a shared fixture header; an out-of-range `CapSiteKind`
    selects Dense without validation; there is no regularised retry at the cap-site level, so
    one site's rounding failure reads the component Undecided (pre-existing, rarer now).
-   3b, the stall rule: green (722c41b), in cold review. 3c, the coupling out of the factor
+   3b, the stall rule: green (722c41b); the cold review (DESIGN §10 "stage 3b rulings from the
+   cold review") found the rule correct and sent it back on margin (default window 10 against
+   runs of 9 in converging anchors: ruled 20), two surviving mutants (the factor, the
+   off-by-one) and docs; fix round on branch `stage-3b-fix` (tests in progress, then the
+   default change). Deferred from it: the header sentence should name the tracked quantity
+   as the largest of the three relative residuals (goes with the fix). 3c, the coupling out of the factor
    (bordered system): green, in cold review (DESIGN §10 "stage 3c rulings from the dev
    round"); the 40 × 32 wall's certificate 118 s to 34 s, the half warehouse's 89 s to 59 s.
    Open from it: the Slow ratio test's bar (0.93) is thin over its worst run (0.911) because

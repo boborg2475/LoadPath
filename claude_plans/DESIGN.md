@@ -809,3 +809,14 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   moved-from structure keeps its count, which the rebuilt-source test relies on). The merge
   kept the fix round's eight-variant `Add` table in the options-reuse test over the 3c
   branch's three and added the `Coupling` variant to it.
+- *2026-10-12, orchestrator, stage 3b rulings from the cold review (722c41b):* the rule is correct
+  (it returns exactly the cap's outcome; across the default and Slow suites it fired five times,
+  each on a solve that fails at the cap with the rule off; the tracked quantity is the
+  convergence test itself). **The default `StallWindow` becomes 20.** Converging anchors contain
+  runs of 9 iterations without halving the best residual (the harmonic stack converging at 18,
+  the Couplet–Heyman arch at 20–21), one short of the window of 10, and stage 3c moved the
+  iterates; a cut there is a silent false Undecided or a looser bound. The half warehouse's
+  stalled solve (window start 62) still stops at 82. The factor and the off-by-one of the rule
+  survive mutation, so the fix round pins both (Undecided under `StallImprovement` 1e-6 with
+  window 3; the firing iteration exactly WindowStart + W), renames the never-converging test to
+  what it asserts, and tightens the Slow anchor's iteration bar to the measured count.
