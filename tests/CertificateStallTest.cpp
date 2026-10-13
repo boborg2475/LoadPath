@@ -210,7 +210,7 @@ constexpr double HalfWarehouseWallUpper = 350.4239;
 constexpr double HalfWarehouseWallRelative = 1.0e-6;
 constexpr int HalfWarehouseWallIterationCeiling = 69;
 constexpr double UnreachableTolerance = 1.0e-15;
-constexpr int StalledWallFiringIteration = 45;
+constexpr int StalledWallFiringIteration = 69;
 }
 
 TEST_CASE("Slow.Certificate.Stall.TheHalfWarehouseWallConvergesUnderTheRule")
@@ -336,16 +336,17 @@ TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Certificate.Stall.TheWindowFiresExactlyItsLeng
 	CHECK(TwentyOne.Iterations == StalledWallFiringIteration + 1);
 }
 
-TEST_CASE("Certificate.Stall.ImprovementMustBeByTheFactor")
+TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Certificate.Stall.ImprovementMustBeByTheFactor")
 {
 	RequireTheStallRuleExists();
-	const Structure Model = MakeBrickOnGround(CappedDryJoint()).Model;
-	const CertificateOptions Options = CertificateLateral(0.29);
-	const CertificateResult Default = DecideWith(Model, Options);
+	CertificateOptions Options = CertificateLateral(0.4);
+	Options.FeasibilityTolerance = UnreachableTolerance;
+	const Structure Model = Ec6Wall(4, 4);
+	const CertificateResult Default = DecideWith(Model, WithStallWindow(Options, 3));
 	const CertificateResult Strict = DecideWith(Model, WithStall(Options, 3, 1.0e-6));
-	INFO("shear-capped brick at lateral 0.29: defaults " << Default.State << " in " << Default.Iterations << ", window 3 factor 1e-6 " << Strict.State << " in " << Strict.Iterations);
-	CHECK(Default.State == CertificateState::Stands);
-	CHECK(Default.Iterations == 8);
+	INFO("ec6 4 x 4 wall at lateral 0.4, tolerance 1e-15: window 3 factor 0.5 " << Default.State << " in " << Default.Iterations << ", window 3 factor 1e-6 " << Strict.State << " in " << Strict.Iterations);
+	CHECK(Default.State == CertificateState::Undecided);
+	CHECK(Default.Iterations == 7);
 	CHECK(Strict.State == CertificateState::Undecided);
-	CHECK(Strict.Iterations == 3);
+	CHECK(Strict.Iterations == 6);
 }

@@ -578,9 +578,11 @@ length, so verdicts are local and scale-invariant (pinned at s = 1/16 … 16).
 **Solver.** The homogeneous self-dual embedding with Mehrotra predictor-corrector on the normal
 equations, `6 × free bodies` square after Schur-eliminating the diagonal bound rows and the
 rank-one cap row (the plain infeasible-start method stalls when `t* = 0`, where the feasible set
-has no interior); Eigen LLT with one regularised refactor (`1e-12 ×` the largest diagonal) on a
-failed pivot and a second failure reading Undecided; one iterative-refinement pass on the
-corrector; step 0.995 to the boundary; a feasible deterministic start (`α = min(1, bound/2G)`,
+has no interior); Eigen LLT; on a failed pivot the diagonal is shifted by `1e-16`, then `1e-14`, then `1e-12 ×`
+the largest diagonal (coupling term included, dense and bordered alike) until the pivots are
+positive, a failure at `1e-12` reading Undecided; one iterative-refinement pass on the corrector,
+or 20 on both the predictor and the corrector in an iteration whose factor was shifted (DESIGN
+§10, the interior-optimum defect); step 0.995 to the boundary; a feasible deterministic start (`α = min(1, bound/2G)`,
 `t = min(1, cap/2)`, complementarity products 1, duals 0, `τ = κ = 1`); termination when the
 primal residual (per block, term-size scaled), the dual residual (relative to
 `1 + max(1, |s|, |Aᵀy|)`) and the gap `xᵀs/τ²` are all under `FeasibilityTolerance`. Any
@@ -1402,7 +1404,9 @@ the structured minimum at most 0.85 of the dense minimum (measured 0.67–0.84).
 becomes 20, DESIGN §10).** `CertificateOptions::StallWindow` (10 today, 20 after the fix; 0
 disables) and `StallImprovement` (0.5): a cone solve tracks its best largest relative
 residual and stops when a window of iterations has not brought it below `StallImprovement`
-times the best at the window's start, returning the iteration cap's outcome (no iterate is
+times the best at the window's start, the window also restarting whenever the complementarity
+`(xᵀs + τκ)/(n + 1)` falls below half its value at the window's start (DESIGN §10, the stall
+defect), returning the iteration cap's outcome (no iterate is
 kept: one within tolerance would already have ended the solve, DESIGN §10). The selection
 solve is untouched. Pinned by `Certificate.Stall.*`.
 

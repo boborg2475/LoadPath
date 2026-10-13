@@ -165,6 +165,55 @@ BlockWall MakeForaboschiWall(double CompressiveStrengthPa)
 	return Wall;
 }
 
+BlockWall MakeForaboschiBondWall(double LengthM, int Courses, double CompressiveStrengthPa)
+{
+	BlockWall Wall;
+	StartWall(Wall, LengthM, ForDepthM);
+	for (int Course = 0; Course < Courses; ++Course)
+	{
+		AddCourse(Wall, CourseEdges(LengthM, ForBlockM, Course % 2 == 1), ForCourseM * Course, ForCourseM * (Course + 1), ForDepthM, ForMasonryKgPerM3);
+	}
+	const double TopM = ForCourseM * Courses;
+	AddBlock(Wall, 0.0, LengthM, TopM, TopM + ForBeamM, ForDepthM, ForBeamKgPerM3);
+	Wall.Beam = Wall.Blocks.back();
+	Wall.BeamCentreM = Wall.Shapes.back().CentreM;
+	StrengthProfile Profile = DryJoint(0.6);
+	Profile.CompressiveStrengthPa = CompressiveStrengthPa;
+	ConnectAll(Wall, AddProfileOk(Wall.Model, Profile), LengthM, ForDepthM);
+	return Wall;
+}
+
+constexpr double MinhoLengthM = 1.0;
+constexpr double MinhoDepthM = 0.2;
+constexpr double MinhoBlockM = 0.2;
+constexpr double MinhoCourseM = 0.1;
+constexpr int MinhoCourses = 10;
+constexpr double MinhoBeamM = 0.1;
+constexpr double MinhoKgPerM3 = 25000.0 / GravityMPerS2;
+constexpr double MinhoFriction = 0.66;
+constexpr double MinhoVerticalN = 30000.0;
+
+BlockWall MakeMinhoWall(double BeamKgPerM3)
+{
+	BlockWall Wall;
+	StartWall(Wall, MinhoLengthM, MinhoDepthM);
+	for (int Course = 0; Course < MinhoCourses; ++Course)
+	{
+		AddCourse(Wall, CourseEdges(MinhoLengthM, MinhoBlockM, Course % 2 == 1), MinhoCourseM * Course, MinhoCourseM * (Course + 1), MinhoDepthM, MinhoKgPerM3);
+	}
+	const double TopM = MinhoCourseM * MinhoCourses;
+	AddBlock(Wall, 0.0, MinhoLengthM, TopM, TopM + MinhoBeamM, MinhoDepthM, BeamKgPerM3);
+	Wall.Beam = Wall.Blocks.back();
+	Wall.BeamCentreM = Wall.Shapes.back().CentreM;
+	ConnectAll(Wall, AddProfileOk(Wall.Model, DryJoint(MinhoFriction)), MinhoLengthM, MinhoDepthM);
+	return Wall;
+}
+
+std::vector<BodyLoad> MinhoLoads(const BlockWall& Wall, double HorizontalN, double PushHeightM)
+{
+	return {BodyLoad{Wall.Beam, Vec3{0.0, 0.0, -MinhoVerticalN}, Wall.BeamCentreM}, BodyLoad{Wall.Beam, Vec3{HorizontalN, 0.0, 0.0}, Vec3{Wall.BeamCentreM.X, 0.0, PushHeightM}}};
+}
+
 std::vector<BodyLoad> BeamLoads(const BlockWall& Wall, double VerticalN, double HorizontalN)
 {
 	return {BodyLoad{Wall.Beam, Vec3{HorizontalN, 0.0, -VerticalN}, Wall.BeamCentreM}};
@@ -235,4 +284,74 @@ TEST_CASE("Slow.Certificate.Anchor.ForaboschiWallAtFortyKilonewtonsStandsAtTheMo
 	MESSAGE("Foraboschi 40 kN: elastic " << ElasticBelow.State << "/" << ElasticAbove.State << ", combined " << static_cast<int>(Below.Worst) << "/" << static_cast<int>(Above.Worst) << ", " << Seconds << " s");
 	CHECK(Below.Worst != ComponentVerdict::Collapses);
 	CHECK(Above.Worst == ComponentVerdict::Collapses);
+}
+
+TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Certificate.Solver.AFiniteLoadFactorBelowTheCapStandsOnTheTwentyThreeBlockWall")
+{
+	struct Case
+	{
+		double CompressivePa;
+		double VerticalN;
+		double HorizontalN;
+	};
+	const Case Cases[] = {{1.0e8, 80000.0, 43860.0}, {1.0e8, 80000.0, 44880.0}, {1.0e8, 80000.0, 46750.0}, {3.0e7, 40000.0, 24120.0}, {1.0e7, 80000.0, 46920.0}};
+	const double BeamWeightN = 25000.0 * 1.04 * ForBeamM * ForDepthM;
+	CHECK(std::abs(BeamWeightN - 1261.0) < 1.0e-9);
+	const auto Start = std::chrono::steady_clock::now();
+	for (const Case& K : Cases)
+	{
+		const BlockWall Wall = MakeForaboschiBondWall(1.04, 5, K.CompressivePa);
+		REQUIRE(Wall.Blocks.size() == 23u);
+		REQUIRE(Wall.Contacts == 57);
+		CHECK(std::abs(Wall.Model.Body(Wall.Beam).MassKg * GravityMPerS2 - BeamWeightN) < 1.0e-9);
+		const double LimitN = 0.6 * (K.VerticalN + BeamWeightN);
+		const CertificateResult Below = DecideWith(Wall.Model, CertificateOptions{}, BeamLoads(Wall, K.VerticalN, K.HorizontalN));
+		const CertificateResult Past = DecideWith(Wall.Model, CertificateOptions{}, BeamLoads(Wall, K.VerticalN, 1.02 * LimitN));
+		INFO("fc " << K.CompressivePa << " V " << K.VerticalN << " H " << K.HorizontalN << ": " << Below.State << " [" << Below.LoadFactorLower << ", " << Below.LoadFactorUpper << "] in " << Below.Iterations << "; at 1.02 H* = " << 1.02 * LimitN << ": " << Past.State << " [" << Past.LoadFactorLower << ", " << Past.LoadFactorUpper << "]");
+		CHECK(K.HorizontalN < LimitN);
+		CHECK(Below.State == CertificateState::Stands);
+		CHECK(Below.LoadFactorUpper < CertificateOptions{}.LoadFactorCap);
+		CHECK(Past.State == CertificateState::Collapses);
+	}
+	MESSAGE("23-block wall: " << SecondsSince(Start) << " s");
+}
+
+TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Certificate.Anchor.TheMinhoWallCollapsesJustPastItsAssociativeLimit")
+{
+	const auto Start = std::chrono::steady_clock::now();
+	const BlockWall Wall = MakeMinhoWall(MinhoKgPerM3);
+	CHECK(Wall.Blocks.size() == 56u);
+	CHECK(Wall.Contacts == 146);
+	const double BeamWeightN = Wall.Model.Body(Wall.Beam).MassKg * GravityMPerS2;
+	CHECK(std::abs(BeamWeightN - 500.0) < 1.0e-9);
+	const double HeightM = 1.0;
+	const double DilatancyLift = 0.2 * MinhoFriction / HeightM / (1.0 + MinhoFriction * MinhoFriction);
+	const double LimitN = ((MinhoVerticalN + BeamWeightN) * 0.5 * MinhoLengthM + 1210.0) / HeightM + 1800.0 * MinhoFriction * DilatancyLift;
+	CHECK(std::abs(LimitN - 16569.2) < 0.05);
+	for (const double H : {16560.0, 16575.0, 16600.0, 16700.0})
+	{
+		const CertificateResult Got = DecideWith(Wall.Model, CertificateOptions{}, MinhoLoads(Wall, H, HeightM));
+		INFO("H " << H << ": " << Got.State << " [" << Got.LoadFactorLower << ", " << Got.LoadFactorUpper << "] in " << Got.Iterations << ", limit " << LimitN);
+		CHECK(Got.State == (H < LimitN ? CertificateState::Stands : CertificateState::Collapses));
+	}
+	const std::vector<BodyLoad> AtBelow = MinhoLoads(Wall, 16560.0, HeightM);
+	const std::vector<BodyLoad> AtAbove = MinhoLoads(Wall, 16700.0, HeightM);
+	const AuthorityResult Below = MakeCombinedAuthority(MakeRbsmStandingAuthority(), MakeLimitAnalysisCertificate())->Judge(Wall.Model, AtBelow, AuthorityOptions{}, nullptr);
+	const AuthorityResult Above = MakeCombinedAuthority(MakeRbsmStandingAuthority(), MakeLimitAnalysisCertificate())->Judge(Wall.Model, AtAbove, AuthorityOptions{}, nullptr);
+	const StandingResult ElasticBelow = SolveWith(Wall.Model, StandingOptions{}, AtBelow);
+	const StandingResult ElasticAbove = SolveWith(Wall.Model, StandingOptions{}, AtAbove);
+	MESSAGE("Minho: blocks " << Wall.Blocks.size() << ", contacts " << Wall.Contacts << ", elastic " << ElasticBelow.State << "/" << ElasticAbove.State << ", combined " << static_cast<int>(Below.Worst) << "/" << static_cast<int>(Above.Worst) << ", disagreements " << Below.Disagreements << "/" << Above.Disagreements << ", " << SecondsSince(Start) << " s");
+	CHECK(Below.Worst == ComponentVerdict::Stands);
+	CHECK(Above.Worst == ComponentVerdict::Collapses);
+
+	const BlockWall Control = MakeMinhoWall(0.0);
+	const double ControlHeightM = Control.BeamCentreM.Z;
+	const double ControlLift = 0.2 * MinhoFriction / ControlHeightM / (1.0 + MinhoFriction * MinhoFriction);
+	const double ControlLimitN = (MinhoVerticalN * 0.5 * MinhoLengthM + 1210.0) / ControlHeightM + 1800.0 * MinhoFriction * ControlLift;
+	CHECK(std::abs(ControlLimitN - 15542.1) < 0.05);
+	const CertificateResult ControlBelow = DecideWith(Control.Model, CertificateOptions{}, MinhoLoads(Control, 15540.0, ControlHeightM));
+	const CertificateResult ControlPast = DecideWith(Control.Model, CertificateOptions{}, MinhoLoads(Control, 15545.0, ControlHeightM));
+	INFO("centroid-push control, limit " << ControlLimitN << ": 15540 " << ControlBelow.State << " [" << ControlBelow.LoadFactorLower << ", " << ControlBelow.LoadFactorUpper << "], 15545 " << ControlPast.State << " [" << ControlPast.LoadFactorLower << ", " << ControlPast.LoadFactorUpper << "]");
+	CHECK(ControlBelow.State == CertificateState::Stands);
+	CHECK(ControlPast.State == CertificateState::Collapses);
 }

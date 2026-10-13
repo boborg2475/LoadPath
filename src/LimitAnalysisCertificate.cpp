@@ -24,6 +24,9 @@ using statics::Sub;
 constexpr double Pi = 3.14159265358979323846;
 constexpr double StepToBoundary = 0.995;
 constexpr int RefinementPasses = 1;
+constexpr int ShiftedRefinementPasses = 20;
+constexpr std::array<double, 3> RetryShifts{1.0e-16, 1.0e-14, 1.0e-12};
+constexpr double ComplementarityRestart = 0.5;
 constexpr double RegularisationRelative = 1.0e-12;
 constexpr double UnconstrainedComponent = 1.0e-3;
 constexpr double ObjectiveNorm = 1.0;
@@ -155,6 +158,7 @@ struct Normal
 	std::vector<Eigen::MatrixXd> CapSolvedF;
 	std::vector<CapScratch> CapScratchD;
 	Eigen::LLT<Eigen::MatrixXd> Factor;
+	bool bShifted = false;
 	mutable std::vector<Eigen::MatrixXd> CapRhs;
 	mutable std::vector<Eigen::MatrixXd> CapSolved;
 	mutable std::vector<Eigen::VectorXd> CapCorrection;
@@ -651,7 +655,7 @@ bool HasBorderedPivots(const SparseNormal& S)
 	return Pivots(Last) < 0.0 && IsFinite(Pivots(Last));
 }
 
-bool FactorBordered(const Component& C, double Coupling, SparseNormal& S)
+bool FactorBordered(const Component& C, double Coupling, SparseNormal& S, bool& bShifted)
 {
 	const int Border = C.Rows;
 	const double* Demand = C.Demand.data();
@@ -686,12 +690,22 @@ bool FactorBordered(const Component& C, double Coupling, SparseNormal& S)
 	{
 		return false;
 	}
-	for (int Row = 0; Row < C.Rows; ++Row)
+	bShifted = true;
+	double Applied = 0.0;
+	for (const double Shift : RetryShifts)
 	{
-		S.Bordered.coeffRef(Row, Row) += RegularisationRelative * LargestDiagonal;
+		for (int Row = 0; Row < C.Rows; ++Row)
+		{
+			S.Bordered.coeffRef(Row, Row) += (Shift - Applied) * LargestDiagonal;
+		}
+		Applied = Shift;
+		S.BorderedFactor.factorize(S.Bordered);
+		if (HasBorderedPivots(S))
+		{
+			return true;
+		}
 	}
-	S.BorderedFactor.factorize(S.Bordered);
-	return HasBorderedPivots(S);
+	return false;
 }
 
 bool FactorSparse(const Component& C, double Dt, double DeltaT, const std::vector<Matrix3>& SiteMatrix, Normal& N)
@@ -721,7 +735,7 @@ bool FactorSparse(const Component& C, double Dt, double DeltaT, const std::vecto
 	}
 	N.Ht = Dt + DeltaT;
 	const double Coupling = Dt * DeltaT / N.Ht;
-	return FactorBordered(C, Coupling, S);
+	return FactorBordered(C, Coupling, S, N.bShifted);
 }
 
 bool FactorCapStructured(const Program& P, const CapSite& Cap, const double* D, CapScratch& S, CapSiteFactor& Factor, Eigen::MatrixXd& F, Eigen::MatrixXd& SolvedF, Matrix3& K)
@@ -849,9 +863,19 @@ bool FactorNormal(const Component& C, const Program& P, Normal& N)
 	{
 		return false;
 	}
-	M.diagonal().array() += RegularisationRelative * LargestDiagonal;
-	N.Factor.compute(M);
-	return HasPositivePivots(N.Factor);
+	N.bShifted = true;
+	double Applied = 0.0;
+	for (const double Shift : RetryShifts)
+	{
+		M.diagonal().array() += (Shift - Applied) * LargestDiagonal;
+		Applied = Shift;
+		N.Factor.compute(M);
+		if (HasPositivePivots(N.Factor))
+		{
+			return true;
+		}
+	}
+	return false;
 }
 
 Eigen::VectorXd SolveNormal(const Component& C, const Program& P, const Normal& N, const Eigen::VectorXd& R)
@@ -1252,6 +1276,7 @@ Outcome SolveProgram(const Component& C, const Program& P, const CertificateOpti
 	const bool bSparse = C.Rows > Options.DenseRowLimit;
 	Normal N;
 	double WindowBest = 0.0;
+	double WindowMu = 0.0;
 	int WindowStart = 0;
 	for (int Iteration = 0;; ++Iteration)
 	{
@@ -1275,9 +1300,11 @@ Outcome SolveProgram(const Component& C, const Program& P, const CertificateOpti
 		{
 			return Out;
 		}
-		if (Iteration == 0 || Largest < Options.StallImprovement * WindowBest)
+		const double Mu = Complementarity(E) / PairCount;
+		if (Iteration == 0 || Largest < Options.StallImprovement * WindowBest || Mu < ComplementarityRestart * WindowMu)
 		{
 			WindowBest = Largest;
+			WindowMu = Mu;
 			WindowStart = Iteration;
 		}
 		else if (Options.StallWindow > 0 && Iteration - WindowStart >= Options.StallWindow)
@@ -1285,7 +1312,8 @@ Outcome SolveProgram(const Component& C, const Program& P, const CertificateOpti
 			return Out;
 		}
 		N.Sparse = bSparse ? &Sparse : nullptr;
-		N.D = Eigen::VectorXd(P.Variables);
+		N.bShifted = false;
+		N.D =Eigen::VectorXd(P.Variables);
 		for (Eigen::Index I = 0; I < P.Variables; ++I)
 		{
 			N.D.data()[I] = E.X.data()[I] / E.S.data()[I];
@@ -1300,13 +1328,12 @@ Outcome SolveProgram(const Component& C, const Program& P, const CertificateOpti
 		Ctx.N = &N;
 		Ctx.Bounds = &Bounds;
 		PrepareContext(C, P, E, Ctx);
-		const double Mu = Complementarity(E) / PairCount;
 		Eigen::VectorXd R4(P.Variables);
 		for (Eigen::Index I = 0; I < P.Variables; ++I)
 		{
 			R4.data()[I] = -E.X.data()[I] * E.S.data()[I];
 		}
-		const Direction Affine = SolveNewton(Ctx, E, R, 1.0, R4, -E.Tau * E.Kappa, 0);
+		const Direction Affine = SolveNewton(Ctx, E, R, 1.0, R4, -E.Tau * E.Kappa, N.bShifted ? ShiftedRefinementPasses : 0);
 		const double AffineMu = ComplementarityAfter(E, Affine, std::min(1.0, MaxStep(E, Affine))) / PairCount;
 		const double Ratio = AffineMu / Mu;
 		const double Centring = Ratio * Ratio * Ratio;
@@ -1315,7 +1342,7 @@ Outcome SolveProgram(const Component& C, const Program& P, const CertificateOpti
 			R4.data()[I] += Centring * Mu - Affine.X.data()[I] * Affine.S.data()[I];
 		}
 		const double R5 = Centring * Mu - E.Tau * E.Kappa - Affine.Tau * Affine.Kappa;
-		const Direction Dir = SolveNewton(Ctx, E, R, 1.0 - Centring, R4, R5, RefinementPasses);
+		const Direction Dir = SolveNewton(Ctx, E, R, 1.0 - Centring, R4, R5, N.bShifted ? ShiftedRefinementPasses : RefinementPasses);
 		const double Step = std::min(1.0, StepToBoundary * MaxStep(E, Dir));
 		Advance(E, Dir, Step);
 	}

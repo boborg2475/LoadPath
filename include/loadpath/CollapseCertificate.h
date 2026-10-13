@@ -32,7 +32,7 @@ struct CertificateOptions
 	double FeasibilityTolerance = 1.0e-9;
 	// Interior-point iterations allowed per solve (inscribed, circumscribed, selection); a failed solve reads Undecided unless t_in >= 1.
 	int MaxIterations = 200;
-	// A cone solve stops as at the cap once this many iterations pass without the largest of its three relative residuals (primal, dual, gap) falling below StallImprovement times that largest residual's best at the window's start; 0 disables.
+	// A cone solve stops as at the cap once this many iterations pass without the largest of its three relative residuals (primal, dual, gap) falling below StallImprovement times that largest residual's best at the window's start, or the complementarity halving; 0 disables.
 	int StallWindow = 20;
 	// In (0, 1): the factor the largest relative residual must improve by within StallWindow iterations.
 	double StallImprovement = 0.5;
