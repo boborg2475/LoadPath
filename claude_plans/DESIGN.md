@@ -1431,3 +1431,48 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   component reports the last full-rank readings, which differ from the Mechanism path's; in the
   hunt 358 of 1,579 refused components go from a finite maximum utilisation to +inf (168 on
   Collapses components, where the cascade copies the axis and ratio into `FailedInterface`).
+- *2026-10-13, orchestrator, the 5-diamond with friction and the false-Stands class (opening):*
+  a high-effort probe answered the slice 2b question with independent methods: an explicit 3-D
+  rigid-block DEM on the library's own interfaces (corner springs, Cundall–Strack Coulomb
+  friction, no tension, fixed topology; controls: the 4-diamond stands, the frictionless
+  5-diamond falls, a brick on an incline slides at atan μ to 0.5°, 80 of 80 certificate
+  Collapses fall), the exact planar associative LP, and the Gilbert–Casapulla–Ahmed iterative LP.
+  **The 5-diamond at μ 0.5 stands:** in 15 DEM variants (release, damping, kt/kn, stiffness,
+  tilt, friction scatter), with the DEM's critical friction in [0.420, 0.425] against the LP's
+  0.421995 and its critical tilt matching the LP to the third decimal at μ 0.5, 0.6 and 0.8; the
+  wings' friction sits on bed joints loaded by gravity, so no dilatancy is needed and the
+  non-associative gap is nil here. The combined Stands is right; the certificate switches between
+  0.42 (Undecided) and 0.45 (Stands). The elastic authority reads Undecided at every μ above 0
+  (here the restore step's refusal at iteration 12; no iterate was ever admissible). **The probe
+  found the real false-Stands class instead.** (1) Elastic Mechanism, certificate Stands: the
+  suite's `Statics.Combined.ThreeBrickBridgeStandsWhereAnAdmissibleFieldExists` (μ 5, λ (2.5,
+  0.875) and two siblings) falls in every DEM variant, the right base brick rocking and the top
+  brick following, and the elastic Mechanism tracks the DEM's boundary (λy 0.79 to 0.80 against
+  0.78 to 0.80) while the certificate stands to about 0.9; in the dry random families 4 of the 5
+  such cases fall (the fifth only under sudden release). The theorem ruling's premise, that a
+  Mechanism under a certificate Stands is a slice-2 defect, is refuted for this class: under
+  Coulomb friction the certificate's field can rely on associative dilatancy (a worked wall: ground
+  friction clamping a perpend that then carries a push by friction). (2) Elastic Undecided,
+  certificate Stands: 36 of 152 gap cases in the dry wall family and 4 of 135 in a dry stack family
+  fall in the DEM (26 of the 36 also under staged loading); no cheap discriminator separates them
+  (a friction margin, the elastic exit kind, frictionless perpends: each loses many cases that
+  stand or flips the diamond). No robust DEM fall ever had an admissible elastic iterate; 51 gap
+  cases had one and all 51 stand. **Ruling.** (1) Where the elastic authority reads Mechanism and
+  the certificate Stands, the combined authority reports **Undecided**, not Stands: nothing
+  released (the release set stays the certificate's), the disagreement still counted. This
+  amends the theorem ruling for that one case: static admissibility stays the standing criterion
+  where the elastic authority found no mechanism, and an elastic mechanism the certificate cannot
+  refute by a kinematic bound is no longer overruled into a Stands. Measured cost: one suite
+  test (the bridge, re-pinned to Undecided), the Slow tier green; in the families it catches 4 of
+  the 5 DEM falls and loses one quasi-static stand. Host effect: Undecided and Stands both
+  release nothing, so the bridge does not fall in the host either way; the label stops claiming
+  it stands. (2) The Undecided-over-Stands residual is logged as a known unsafe gap, like the
+  wedge band, with its measured rate. (3) Logged candidates, not ruled: releasing the elastic
+  mechanism where the certificate stands (the evidence supports it on the bridge, but it breaks
+  the one-release-set ruling and rests on one probe DEM; it would need the DEM, or another
+  non-associative referee, as a test-tier referee first); a load-stepped elastic path (what the
+  DEM does, and it tracked every boundary measured); accepting an admissible iterate as Stands
+  (the lower-bound theorem allows it, and it would settle 51 gap cases that all stand). Pins:
+  the bridge reads Undecided with one disagreement; the 5-diamond's certificate switch two-sided
+  around μ 0.422 and its combined Stands at μ 0.5 with the DEM's evidence recorded; the probe's
+  sources and data are in the session scratchpad, not the repository.

@@ -309,14 +309,15 @@ the non-associative answer) and the two hanging-component cases (slice 6), red b
    [0.107478, 0.107479], the friction switch to [21.5947°, 21.5957°], Undecided below, never a
    false Mechanism). **Moved to slice 4:** B-ORD-01's two-sided bracket in the elastic field (it
    Stands to λ 0.3874 and reads Undecided from 0.3875, below the published lower bound 0.427;
-   pinned one-sided). **Open, a possible false Stands:** the 5-diamond at μ 0.5 reads elastic
-   Undecided after 12 (no longer the cap) and certificate and combined Stands at [1000, 1000],
-   where the paper says it falls; the paper's model has vertical forces only, so friction may
-   genuinely hold it, but an associative certificate's Stands is not a proof under Coulomb
-   friction (the non-associative gap slice 7 would have refereed). The friction sweep: μ 0
-   Mechanism / Collapses; μ 0.01 to 0.3 elastic Undecided, certificate Collapses; μ 0.5
-   certificate Stands. Needs a ruling on what the physical answer is at μ 0.5 (a physical test
-   or a non-associative analysis of the diamond), measured before anything changes. Rows with inputs
+   pinned one-sided). The 5-diamond at μ 0.5 stands (DESIGN §10 "the 5-diamond with friction and the
+   false-Stands class": a probe DEM and the exact LP agree on the switch at μ 0.422); its pins
+   and the false-Stands ruling are **in progress**. **Known unsafe gap, logged 2026-10-13:**
+   where the elastic authority reads Undecided and the certificate Stands, the structure can
+   still fall under Coulomb friction (36 of 152 such dry random walls and 4 of 135 dry random
+   stacks fall in the probe DEM); no cheap discriminator was found; candidates are a load-stepped
+   elastic path and accepting an admissible elastic iterate as Stands (51 gap cases had one, all
+   stand). Candidate, not ruled: releasing the elastic mechanism where the certificate stands
+   (needs a non-associative test-tier referee first). Rows with inputs
    still to retrieve: B-COR-01 corner geometry, F-PSY-01 friction angle, F-FOR-01 and F-STR-01
    pier geometry (Portioli 2012), B-DER-01 wall geometry, B-SW-01 exact limit load (graphical
    only), F-RON-01 panel thickness, B-FTL-01 layout. B-BUR-01 needs a soil-pressure driver;
