@@ -319,9 +319,14 @@ the non-associative answer) and the two hanging-component cases (slice 6), red b
    the DEM). **Known unsafe gap, logged 2026-10-13:**
    where the elastic authority reads Undecided and the certificate Stands, the structure can
    still fall under Coulomb friction (36 of 152 such dry random walls and 4 of 135 dry random
-   stacks fall in the probe DEM); no cheap discriminator was found; candidates are a load-stepped
-   elastic path and accepting an admissible elastic iterate as Stands (51 gap cases had one, all
-   stand). Candidate, not ruled: releasing the elastic mechanism where the certificate stands
+   stacks fall in the probe DEM); no cheap discriminator was found. A load-stepped elastic path was
+   probed and not adopted (DESIGN §10 2026-10-13 "the load-stepped elastic path"): a proportional
+   ramp equals the one-shot solve; gravity first, then the lateral loads, catches all 25 robust
+   staged DEM falls among the dry gap walls and loses 15 of 122 stands, but does nothing on stacks,
+   costs about 77 ms per gap component, changes only the label, and breaks sparse/dense
+   determinism; it waits on a referee with geometry-following contacts, a load-history ruling,
+   cohesive scope and determinism. Accepting an admissible elastic iterate as Stands (51 gap cases
+   had one, all stand) is still a candidate. Candidate, not ruled: releasing the elastic mechanism where the certificate stands
    (needs a non-associative test-tier referee first). Inputs retrieved
    2026-10-13 (BENCHMARKS "Inputs retrieved 2026-10-13"): B-FTL-01, F-FOR-01 (thickness
    inferred) and B-SW-01 (±0.2 kN band) are buildable; F-PSY-01 has its friction (37°) but no drum

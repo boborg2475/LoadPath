@@ -1518,3 +1518,36 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   for its elastic and kinematic pair, `bDisagreed` exactly on Mechanism over Stands, lists empty
   unless Collapses; hunt draws 559 and 636 hit the case); a Collapses with an empty release set is
   caught only by the new pins, not by any cascade test.
+- *2026-10-13, orchestrator, the load-stepped elastic path on the unsafe gap (probe ruling):* a
+  high-effort probe built a stepped path on an instrumented copy (corner statuses, held forces,
+  transverse tangents and a plastic-slip reference on every dry corner carried between steps,
+  backward-Euler return mapping within a step, halving on a failed step down to 1/640) and
+  measured it on the 287 gap cases against a staged DEM battery (5 variants per case). Findings.
+  **A proportional ramp is the one-shot solve:** dry Coulomb joints without tension are
+  homogeneous in the load, so the ramp's first step is the whole problem (Undecided persists to
+  λ 0.0016; on 1,202 one-shot Stands it read 12 Mechanism and 8 Undecided). Only a history
+  (vertical gravity first, then the lateral and host loads in steps) carries information. **On
+  dry walls that history separates falls from stands on its own path:** of 25 robust staged DEM
+  falls it reads 5 Mechanism and 20 Undecided-with-a-failed-step, none Stands; of 122 robust
+  staged stands it keeps 107 Stands (15 lost); step counts 5 to 40 are stable; against the
+  ramp-loaded DEM classes it catches 28 of 36 falls (the 8 it stands do not fall robustly on its
+  path; the DEM is itself path-dependent, 7 ramp falls are staged stands). **On stacks and any
+  gravity-only loading it does nothing** (122 of 135 gap stacks fail in phase 0, the one-shot
+  problem; 0 of 22 falls caught, 10 stands lost); the 5-diamond is unchanged. **Scope and cost:**
+  it never stands a certificate Collapses; switched on everywhere it reddens 36 suite tests
+  (path-dependent readings, the factor pins, phase-0 artefacts, cohesive Mechanisms turning
+  Overstressed) and costs 17× the one-shot on dry walls (the shed 59 to 583 ms, the warehouse
+  0.8 to 8.4 s); run only where the one-shot reads Undecided under a certificate Stands it costs
+  about 77 ms per gap component (6× the certificate) and nothing on any Stands; it turns
+  sparse-against-dense rounding into different Mechanism body lists on 6 draws. **Ruling: not
+  adopted now.** Its benefit is a label (Undecided and Stands both release nothing; the
+  Mechanisms it finds sit under a certificate Stands, which the false-Stands rule already turns
+  into Undecided without a release), its referee is a DEM with fixed contact pairs, its load
+  history (gravity first) is a modelling decision the host has not made, it reaches only dry
+  walls (cohesive gap cases have no referee, and there it turns Undecided into Overstressed,
+  which would change the cascade), and it breaks determinism between the sparse and dense paths.
+  It stays the leading candidate for the dry-wall part of the gap, with these four
+  prerequisites. Also confirmed: accepting an admissible iterate as Stands loses nothing on the
+  dry gap (saves one stand), and 8 knife-edge stacks the certificate stands with zero friction
+  fall robustly in the staged DEM: geometric instability, which no friction path addresses. The
+  probe's sources and data are in the session scratchpad (`stepped\`), not the repository.
