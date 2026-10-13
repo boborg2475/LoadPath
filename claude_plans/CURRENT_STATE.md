@@ -32,7 +32,7 @@ stacks, Paterson–Zwick, Couplet–Heyman at Milankovitch's 0.107478 with hinge
 the certificate's associative 31.07°, the cascade on the arch below least thickness, the dry
 wall at t / H within 1 % (10 × 8 and 4 × 5), the bonded 4 × 5 wall at its monolith factor
 `(t/H)(1 + f_t A_base / W) = 2.971` to 1 %, two screws at twice their published shear and
-withdrawal whatever the joint area. Default suite 388 cases in Debug and 424 in Release after
+withdrawal whatever the joint area. Default suite 388 cases in Debug and 425 in Release after
 slice 2b and the cohesive-wedge check (325 and 347 at the 6b close) (the arch, pile, arch-cascade, fuzz, small-wall and multi-panel factor anchors
 run only in Release under `LOADPATH_SLOW_IN_DEBUG`; eighteen `Slow.*` cases run in Release at
 every slice close, and the
@@ -359,12 +359,19 @@ the non-associative answer) and the two hanging-component cases (slice 6), red b
   joint, and the Minho test is `Slow.`. Left from it: no fixture reaches the escalation's 1e-12 rung, which
   on coupling-dominated components would be 1e-8 to 1e-6 of the site diagonal; the selection LP's single 1e-12 retry failed rocking walls past their limit, fixed (DESIGN §10
   "the selection LP's retry"; `Certificate.Selection.ARockingWallPastItsLimitNamesItsMechanism`);
-  left from it (and from its cold review): the selection still fails at isolated loads on the
-  test's own wall (the 57-body wall at 80 kN, H 32,957.75 and 32,958.0 N: Undecided with empty
-  lists after 200 selection iterations, 137 of them on factors accepted after the 1e-16 shift; 1 in
-  301 loads on a 2 N grid from 32,600 to 33,200 N, against 7 in 81 on a 7.5 N grid before the fix):
-  the positivity test accepts near-singular factors and the selection has no stall rule, both under
-  the stall investigation; the dense selection takes 20 to 27 s on the full wall; the hinging list
+  the selection's isolated failures on that wall (32,957.75 and 32,958.0 N) are fixed by 5
+  refinement passes on its corrector, and the dense cone factor is a modified Cholesky (pivots at or
+  below 1e-16 of the largest diagonal removed; DESIGN §10 "the certificate's remaining isolated
+  stalls"; a floor of 1e-14 already reads four anchors not-Stands inside their limits, so the floor
+  has a margin of only 100×); left: the selection has no stall rule; **the next certificate item:
+  the sparse bordered path loses conditioning near an interior optimum** (t* strictly inside (0,
+  cap)), so a few percent of loads there stall and read Undecided [0, cap] (5 in 101 on a 1 N grid
+  at 40 kN, 13 in 261 at 80 kN on the Foraboschi wall with f_c 1.21 MPa; the 137-block bond wall
+  2.08 m by 16 courses at 80 kN / 43,000 N is a sparse fixture whose dense answer is Stands
+  [2.71462858, 2.72715935]); a designed fix is a stable treatment of the dense load-factor column
+  (a product-form factor or an explicit deflation of the collapse mechanism); measured and not
+  adopted: a primal clean-up at the stall with a dense re-solve (decides all 24, about 30 s each);
+  the dense selection takes 20 to 27 s on the full wall; the hinging list
   wanders between 17 and 33 joints on the 57-body wall; `FactorSelection`'s local `bShifted` is
   unused and `FactorBordered` keeps a third copy of the escalation loop. The Foraboschi fixture's limits at 80 and 140 kN with infinite
   crushing (50.3 and 83.6 kN) sat 25 to 47 % above Portioli's model; with the paper's f_c 1.21 MPa
@@ -375,7 +382,8 @@ the non-associative answer) and the two hanging-component cases (slice 6), red b
   an isolated repeatable stall, Undecided [0, 1000] in 114 iterations at exactly 23,900 N (load
   factor about 1.27; 23,875, 23,901 and 23,925 N stand in about 60), with more at 25,046 N
   (40 kN) and a pocket at 48,125 to 48,350 N (80 kN, about 20 % past the limit, neighbours
-  Collapses): under investigation; the 80 kN Stands point has only 0.5 % margin; the Ferris & Tin-Loi
+  Collapses): sparse-path stalls, still red after the modified Cholesky (it waits on the sparse
+  conditioning item above); the 80 kN Stands point has only 0.5 % margin; the Ferris & Tin-Loi
   wall at G = 64 reads Undecided within about 1e-6 of its threshold (written into API.md as a
   resolution limit, fail closed); the shed's certificate is about 10 % slower (4.6 to 5.0 s).
 - B-WDG-01, the 3DEC tetrahedral wedge: the certificate pins its own associative switch at

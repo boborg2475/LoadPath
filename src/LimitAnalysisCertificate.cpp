@@ -2,6 +2,7 @@
 
 #include "CapSiteFactor.h"
 #include "EigenInclude.h"
+#include "ModifiedCholesky.h"
 #include "StaticsCommon.h"
 
 #include <algorithm>
@@ -24,6 +25,8 @@ using statics::Sub;
 constexpr double Pi = 3.14159265358979323846;
 constexpr double StepToBoundary = 0.995;
 constexpr int RefinementPasses = 1;
+constexpr int SelectionRefinementPasses = 5;
+constexpr double RemovedPivotFloor = 1.0e-16;
 constexpr int ShiftedRefinementPasses = 20;
 constexpr std::array<double, 3> RetryShifts{1.0e-16, 1.0e-14, 1.0e-12};
 constexpr double ComplementarityRestart = 0.5;
@@ -156,7 +159,7 @@ struct Normal
 	std::vector<CapSiteFactor> CapStructured;
 	std::vector<Eigen::MatrixXd> CapSolvedF;
 	std::vector<CapScratch> CapScratchD;
-	Eigen::LLT<Eigen::MatrixXd> Factor;
+	ModifiedLlt Factor;
 	bool bShifted = false;
 	mutable std::vector<Eigen::MatrixXd> CapRhs;
 	mutable std::vector<Eigen::MatrixXd> CapSolved;
@@ -874,7 +877,7 @@ bool FactorNormal(const Component& C, const Program& P, Normal& N)
 			Mp[static_cast<std::size_t>(Col) * static_cast<std::size_t>(C.Rows) + static_cast<std::size_t>(Row)] += Coupling * Demand[Row] * Demand[Col];
 		}
 	}
-	N.Factor.compute(M);
+	N.Factor.ComputeModified(M, RemovedPivotFloor);
 	if (HasPositivePivots(N.Factor))
 	{
 		return true;
@@ -1772,7 +1775,7 @@ bool SolveSelection(const Selection& Sel, const CertificateOptions& Options, Eig
 		Eigen::VectorXd Rc = -Product - Affine.S.cwiseProduct(Affine.L);
 		Rc.array() += Centring * Mu;
 		const double Rk = -X.Tau * X.Kappa - Affine.Tau * Affine.Kappa + Centring * Mu;
-		const SelectionState Dir = SolveSelectionNewton(Sys, Pr, X, R, 1.0 - Centring, Rc, Rk, TauColumn, TauDenominatorBase, RefinementPasses);
+		const SelectionState Dir = SolveSelectionNewton(Sys, Pr, X, R, 1.0 - Centring, Rc, Rk, TauColumn, TauDenominatorBase, SelectionRefinementPasses);
 		const double Step = std::min(1.0, StepToBoundary * SelectionMaxStep(X, Dir));
 		X.Z += Step * Dir.Z;
 		X.S += Step * Dir.S;

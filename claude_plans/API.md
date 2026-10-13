@@ -578,7 +578,7 @@ length, so verdicts are local and scale-invariant (pinned at s = 1/16 … 16).
 **Solver.** The homogeneous self-dual embedding with Mehrotra predictor-corrector on the normal
 equations, `6 × free bodies` square after Schur-eliminating the diagonal bound rows and the
 rank-one cap row (the plain infeasible-start method stalls when `t* = 0`, where the feasible set
-has no interior); Eigen LLT; on a failed pivot the diagonal is shifted by `1e-16`, then `1e-14`, then `1e-12 ×`
+has no interior); Eigen LLT, except that the dense factor is a modified Cholesky (a pivot at or below `1e-16 ×` the largest diagonal is treated as removed, set to `1e128`; the sparse bordered factor is unmodified because its elimination needs the tiny pivots); on a failed pivot the diagonal is shifted by `1e-16`, then `1e-14`, then `1e-12 ×`
 the largest diagonal (coupling term included, dense and bordered alike) until the pivots are
 positive, a failure at `1e-12` reading Undecided; one iterative-refinement pass on the corrector,
 or 20 on both the predictor and the corrector in an iteration whose factor was shifted (DESIGN
@@ -626,7 +626,7 @@ bound-group dual variables are omitted: per corner the minimum dissipation is th
 function of a strength region containing the origin, hence non-negative, and zero exactly for
 dilatant opening on a dry corner or zero relative motion where `T > 0`, which the rows above
 express. The selected mechanism is reported; `UnconstrainedBodies` and `HingingInterfaces`
-follow the listing threshold below. The selection factor's retry escalates like the cone solves' (`1e-16`, `1e-14`, `1e-12` of the largest diagonal, coupling and opening terms included), with its single refinement pass unchanged. "Minimal" means highest work per unit
+follow the listing threshold below. The selection factor's retry escalates like the cone solves' (`1e-16`, `1e-14`, `1e-12` of the largest diagonal, coupling and opening terms included), and 5 iterative-refinement passes on the selection corrector (DESIGN §10, the remaining isolated stalls). "Minimal" means highest work per unit
 motion, not fewest bodies: a cap on an exactly critical end brick is reported with that brick
 (TRAPS: a cluster released as one body must be a certified mechanism; two bricks whose joint
 centroid is past a pillar's edge are named together with one rigid rotation). **If the selection
@@ -641,6 +641,9 @@ the tests pin only that the top block is named. The cone solves have a **thresho
 limit** too: within about 1e-6 relative of a load factor where the admissible set empties, the
 inscribed solve can stall with its primal residual near 1e-4 and the component reads Undecided
 [0, cap] (the Ferris & Tin-Loi wall at G = 64, λ 9/14 + 1e-6, while G = 16 stands); fail closed.
+On the sparse path, near an interior optimum (`t*` strictly inside `(0, cap)`), a few percent of
+loads stall and read Undecided [0, cap] (the normal matrix loses conditioning along the collapse
+mechanism; DESIGN §10); fail closed.
 **Listing
 threshold (ruled 2026-10-11 after the third review):** a body is unconstrained when the largest
 of its six scaled components exceeds 1e-3 of the component's largest, and an interface hinges

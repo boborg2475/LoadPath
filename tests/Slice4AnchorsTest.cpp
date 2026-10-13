@@ -343,6 +343,29 @@ TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Certificate.Solver.AFiniteLoadFactorBelowTheCa
 	MESSAGE("23-block wall: " << SecondsSince(Start) << " s");
 }
 
+TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Certificate.Solver.TheFortySixBlockWallDecidesAtAnIsolatedStallLoad")
+{
+	const auto Start = std::chrono::steady_clock::now();
+	const BlockWall Wall = MakeForaboschiBondWall(1.04, 10, 1.21e6);
+	REQUIRE(Wall.Blocks.size() == 46u);
+	REQUIRE(Wall.Contacts == 116);
+	CHECK(6 * static_cast<int>(Wall.Blocks.size()) <= CertificateOptions{}.DenseRowLimit);
+	const double VerticalN = 80000.0;
+	for (const double HorizontalN : {47149.0, 47151.0, 47150.0})
+	{
+		const CertificateResult Got = DecideWith(Wall.Model, CertificateOptions{}, BeamLoads(Wall, VerticalN, HorizontalN));
+		INFO("H " << HorizontalN << ": " << Got.State << " [" << Got.LoadFactorLower << ", " << Got.LoadFactorUpper << "] in " << Got.Iterations);
+		CHECK(Got.State == CertificateState::Collapses);
+		CHECK(Got.LoadFactorUpper < 1.0);
+		if (HorizontalN == 47150.0)
+		{
+			CHECK(Got.LoadFactorLower >= 0.55301);
+			CHECK(Got.LoadFactorLower <= 0.55307);
+		}
+	}
+	MESSAGE("46-block wall: " << SecondsSince(Start) << " s");
+}
+
 TEST_CASE("Slow.Certificate.Anchor.TheMinhoWallCollapsesJustPastItsAssociativeLimit")
 {
 	const auto Start = std::chrono::steady_clock::now();
@@ -393,7 +416,7 @@ TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Certificate.Selection.ARockingWallPastItsLimit
 	const CertificateResult Control = DecideWith(Wall.Model, CertificateOptions{}, BeamLoads(Wall, VerticalN, 25000.0));
 	INFO("at 25000 N: " << Control.State << " [" << Control.LoadFactorLower << ", " << Control.LoadFactorUpper << "]");
 	CHECK(Control.State != CertificateState::Collapses);
-	for (const double HorizontalN : {32782.75, 32897.66, 32832.5})
+	for (const double HorizontalN : {32782.75, 32897.66, 32832.5, 32957.75, 32958.0})
 	{
 		const CertificateResult Past = DecideWith(Wall.Model, CertificateOptions{}, BeamLoads(Wall, VerticalN, HorizontalN));
 		INFO("H " << HorizontalN << ": " << Past.State << " [" << Past.LoadFactorLower << ", " << Past.LoadFactorUpper << "], moving " << Past.UnconstrainedBodies.size() << ", hinging " << Past.HingingInterfaces.size());
