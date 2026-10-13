@@ -1406,3 +1406,28 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   only difference is a dissipation-free zero-power motion, which the neutral-load test already
   removes); dropping the slip-holding filter survives as the equivalent mutant (a dry corner's
   capacity is zero).
+- *2026-10-13, orchestrator, the cohesive-wedge Mechanism (cold-review rulings):* the review
+  confirmed the physics (the certificate charges at least c·A/4·|slip| at an opening sliding
+  cohesive corner and much more if it opens by less than μ times the slip, so the elastic check
+  is a necessary condition strictly weaker than the certificate on the same motion, and a
+  refusal only ever sends the component to the certificate), the code (held friction's work on a
+  slipping corner that reaches the check is never positive, cracked joints are skipped through
+  their zero effective cohesion, bonded joints never open), and the ruling's central claim: over
+  127,009 fixtures old against new, 0 combined verdicts change, every elastic change is
+  Mechanism → Undecided on a structure with a cohesive joint, iteration counts are identical and
+  unchanged fixtures' readings bit-identical; the hunt's Disagreements 856 → 195, cracked walls
+  191 → 93, mixed 76 → 34, dry and bonded unchanged. Blocks, all fixed: the held-friction term
+  and the shear-cap minimum had no test (`HeldFrictionOnACrackedJointCountsAgainstTheLoadPower`,
+  `ACappedCohesiveJointChargesItsShearCapNotItsCohesionForAnOpenSlide`, both killing their
+  mutants), API.md said nothing about the check (now in the Mechanism and Undecided bullets),
+  and an ANCHORS row was stale. Also added: `ACrackedCohesiveStackOverturnsLikeADryOne` (a
+  cracked joint dissipates nothing). Equivalent clauses kept and recorded: the slide tolerance
+  and the open-only filter (no fixture distinguishes them; they guard against null-vector
+  residue). The dev notes' reason for the surviving `>=` mutant was wrong: the difference is any
+  motion with P exactly equal to Dc, not only a zero-power one; on the 5 × 5 lime wall at λx 1.3
+  P is independent of c and Dc linear in it, and a ±200-ulp scan around the crossing at
+  c ≈ 612.92 Pa never lands on equality, so a pin would need two inputs tuned to the last ulp
+  and would break on a harmless reordering of the sums: not pinned. Logged: every refused
+  component reports the last full-rank readings, which differ from the Mechanism path's; in the
+  hunt 358 of 1,579 refused components go from a finite maximum utilisation to +inf (168 on
+  Collapses components, where the cascade copies the axis and ratio into `FailedInterface`).

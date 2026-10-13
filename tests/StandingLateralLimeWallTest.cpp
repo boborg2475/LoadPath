@@ -427,3 +427,38 @@ TEST_CASE("Statics.Lime.AWedgeThatMustBreakCohesionToMoveIsUndecided")
 		CHECK(Combined.Disagreements == 0);
 	}
 }
+
+TEST_CASE("Statics.Lime.HeldFrictionOnACrackedJointCountsAgainstTheLoadPower")
+{
+	StrengthProfile Bed = LoadLime();
+	StrengthProfile Perpend = Bed;
+	Bed.ShearCohesionPa = 10000.0;
+	Bed.FrictionCoefficient = 0.80552722047890346;
+	Perpend.ShearCohesionPa = 10000.0;
+	Perpend.FrictionCoefficient = 0.85269965012059812;
+	LimeWall W;
+	geometry::WallSpec Spec;
+	Spec.Bed = AddProfileOk(W.Model, Bed);
+	Spec.Perpend = AddProfileOk(W.Model, Perpend);
+	Spec.Courses = 1;
+	Spec.BricksPerCourse = 3;
+	W.Value = geometry::BuildRunningBondWall(W.Model, Spec);
+	REQUIRE(W.Value.bComplete);
+	const std::vector<InterfaceId> Live = W.Model.LiveInterfaces();
+	REQUIRE(Live.size() >= 4);
+	REQUIRE(W.Model.Crack(Live[0], 1));
+	REQUIRE(W.Model.Crack(Live[2], 1));
+	REQUIRE(W.Model.Crack(Live[3], 1));
+	StandingOptions Options;
+	Options.Gravity = Vec3{10.215301967988525, 1.8382094692879178, -9.80665};
+	const StandingResult Result = SolveWith(W.Model, Options);
+	AuthorityOptions Judge;
+	Judge.Standing = Options;
+	Judge.Certificate.Gravity = Options.Gravity;
+	const AuthorityResult Combined = MakeCombinedAuthority(MakeRbsmStandingAuthority(), MakeLimitAnalysisCertificate())->Judge(W.Model, {}, Judge, nullptr);
+	INFO("1 x 3 lime wall, three joints cracked: elastic " << Result.State << " after " << Result.ActiveSetIterations << ", combined worst " << static_cast<int>(Combined.Worst) << ", disagreements " << Combined.Disagreements);
+	CHECK(Result.State == StandingState::Undecided);
+	CHECK(Result.ActiveSetIterations == 3);
+	CHECK(Combined.Worst == ComponentVerdict::Stands);
+	CHECK(Combined.Disagreements == 0);
+}

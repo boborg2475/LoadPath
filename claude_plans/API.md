@@ -285,7 +285,12 @@ never mutates the structure. The host may call it on any thread.
   bonded joint). Slice 3's crack round acts on it. In slice 2 the readings are the answer.
 - **Mechanism**: the factorisation met a pivot under tolerance and the null-space motion the
   load drives is admissible against the open and slipping corners as they stand, so some set
-  of bodies is free to move; `Mechanism` holds the null vector. This is the slice-2 collapse
+  of bodies is free to move; `Mechanism` holds the null vector. The motion must also be paid
+  for: its load power (held friction on slipping corners included) must strictly exceed the
+  cohesion it breaks, `min(c, shear cap) · A/4` times the slide of every open corner of a joint
+  that holds slip (`c > 0`, uncracked); otherwise the component reads Undecided (DESIGN §10,
+  the cohesive-wedge Mechanism), since an open cohesive corner keeps its cohesion intercept
+  until a crack removes it. This is the slice-2 collapse
   answer: a block pushed past its toe, a frictionless block on a slope, a body resting on a
   single point. **It is a verdict, not a certificate** (third review, 2026-10-11): the elastic
   path can reach a singular admissible set on a structure for which a statically admissible
@@ -295,9 +300,11 @@ never mutates the structure. The host may call it on any thread.
   physical is open; the slice-4 kinematic certificate referees Mechanism verdicts as well as
   Undecided ones, and a host treats Mechanism as a release. A neutral singular set (zero load
   projection) reads Stands, so Stands does not require a non-singular stiffness.
-- **Undecided**: the active set did not converge within the cap, or a restoration needed a
-  value the last full-rank solve does not supply (the fail-closed clause below). Never Stands,
-  never a release.
+- **Undecided**: the active set did not converge within the cap, a restoration needed a
+  value the last full-rank solve does not supply (the fail-closed clause below), or a
+  null-space motion's load power did not exceed the cohesion it would break (the readings are
+  then the last full-rank solve's, and an interface's utilisation can read +inf there where the
+  Mechanism path read a finite value). Never Stands, never a release.
 - **InvalidInput**: a live interface whose profile has a stiffness that is not finite and `> 0`;
   a load on a dead body; a non-finite load or gravity. `InvalidInterface` names the first.
 

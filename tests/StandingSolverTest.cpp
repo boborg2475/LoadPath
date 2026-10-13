@@ -527,6 +527,44 @@ TEST_CASE("Statics.Solver.ALightlyCohesiveTwoBrickStackOverturnedByABiaxialLoadI
 	CHECK(Result.State == StandingState::Mechanism);
 }
 
+TEST_CASE("Statics.Solver.ACappedCohesiveJointChargesItsShearCapNotItsCohesionForAnOpenSlide")
+{
+	StrengthProfile Profile = Bonded(0.0, 1.0e7, 0.7);
+	Profile.MaxShearStrengthPa = 100.0;
+	const TwoBrickStack S = MakeTwoBrickStack(Profile, 0.03);
+	const StandingResult Result = SolveWith(S.Model, BiaxialLateralLoad(1.5, 0.875));
+	INFO("elastic state " << Result.State << " after " << Result.ActiveSetIterations << " passes");
+	CHECK(Result.State == StandingState::Mechanism);
+	CHECK(Result.ActiveSetIterations == 3);
+	AuthorityOptions Options;
+	Options.Standing = BiaxialLateralLoad(1.5, 0.875);
+	Options.Certificate.Gravity = Options.Standing.Gravity;
+	const AuthorityResult Combined = MakeCombinedAuthority(MakeRbsmStandingAuthority(), MakeLimitAnalysisCertificate())->Judge(S.Model, {}, Options, nullptr);
+	INFO("combined worst " << static_cast<int>(Combined.Worst) << ", disagreements " << Combined.Disagreements);
+	CHECK(Combined.Disagreements == 0);
+}
+
+TEST_CASE("Statics.Solver.ACrackedCohesiveStackOverturnsLikeADryOne")
+{
+	TwoBrickStack S = MakeTwoBrickStack(Bonded(0.0, 1.0e7, 0.7), 0.03);
+	REQUIRE(S.Model.Crack(S.Bed, 1));
+	REQUIRE(S.Model.Crack(S.Joint, 1));
+	const StandingResult Result = SolveWith(S.Model, BiaxialLateralLoad(1.5, 0.875));
+	const TwoBrickStack Dry = MakeTwoBrickStack(DryJoint(0.7), 0.03);
+	const StandingResult DryResult = SolveWith(Dry.Model, BiaxialLateralLoad(1.5, 0.875));
+	INFO("cracked " << Result.State << " after " << Result.ActiveSetIterations << ", dry " << DryResult.State << " after " << DryResult.ActiveSetIterations);
+	CHECK(Result.State == StandingState::Mechanism);
+	CHECK(Result.State == DryResult.State);
+	CHECK(Result.ActiveSetIterations == DryResult.ActiveSetIterations);
+	AuthorityOptions Options;
+	Options.Standing = BiaxialLateralLoad(1.5, 0.875);
+	Options.Certificate.Gravity = Options.Standing.Gravity;
+	const AuthorityResult Combined = MakeCombinedAuthority(MakeRbsmStandingAuthority(), MakeLimitAnalysisCertificate())->Judge(S.Model, {}, Options, nullptr);
+	INFO("combined worst " << static_cast<int>(Combined.Worst) << ", disagreements " << Combined.Disagreements);
+	CHECK(Combined.Worst == ComponentVerdict::Collapses);
+	CHECK(Combined.Disagreements == 0);
+}
+
 TEST_CASE("Statics.Solver.LoadsThatOverflowReadInfiniteUtilisationAndNeverStand")
 {
 	const BrickOnGround F = MakeBrickOnGround(DryJoint(0.7));
