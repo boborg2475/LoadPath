@@ -1607,3 +1607,18 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   the arch below least thickness read Tension. Mutants caught: the separation's sign, a zero
   threshold, Tension and Shear swapped, NaN motion outside the mechanism, and dropping the dilatancy
   term (the sliding guard reads Tension).
+- *2026-10-13, orchestrator, the certificate's interior-optimum and stall defects (amendment):* the
+  dev round implemented ruling (1) as written (the shift scaled by the largest site diagonal,
+  excluding the coupling term c·d²) and it broke two existing Collapses: the catalogue bolt row at
+  1.01 × 12.9 kN and the zero-cap shear-cap fixture read Undecided [0, 1000], because there the
+  coupling dominates the diagonal and 1e-12 of the site part cannot restore positive pivots
+  (escalating site-only to 1e-8 fixed the bolt row, not the zero cap). The probe's measured fix had in
+  fact scaled by the full diagonal, coupling included; with that, every test passes, both reds
+  included. **Amended ruling (1):** the escalation 1e-16, 1e-14, 1e-12 is relative to the largest
+  full diagonal (coupling included), with up to 20 refinement passes after a shifted factor. **Ruling
+  (2) and `Certificate.Stall.ImprovementMustBeByTheFactor`:** the complementarity restart keeps the
+  window alive on its window-3, factor-1e-6 case (Stands in 8 where it pinned Undecided in 3); the
+  test's subject is the improvement factor, so it is re-pinned on a solve whose complementarity
+  stalls, where the factor still decides when the window fires; the window's new rule (it fires only
+  when neither the largest residual improves by the factor nor the complementarity halves) is what
+  the stall tests now pin.
