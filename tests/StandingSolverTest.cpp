@@ -1,6 +1,8 @@
 #include "BrickFixtures.h"
 #include "StaticsTestSupport.h"
 
+#include "loadpath/CollapseCertificate.h"
+#include "loadpath/StructuralAuthority.h"
 #include "loadpath/geometry/RunningBondWall.h"
 
 #include "doctest.h"
@@ -494,13 +496,32 @@ TEST_CASE("Statics.Solver.BiaxialLoadOpensOnlyTheWindwardCornerAndThreeCarryTheB
 	}
 }
 
-TEST_CASE("Statics.Solver.TwoBrickStackOverturnedByABiaxialLoadIsAMechanism")
+TEST_CASE("Statics.Solver.TwoBrickStackOverturnedByABiaxialLoadCollapses")
 {
 	const double ShiftXM = 0.03;
 	const double LambdaX = 1.5;
 	const double LambdaY = 0.875;
 	CHECK(LambdaY * BrickHeightM > BrickWidthM / 2.0);
 	const TwoBrickStack S = MakeTwoBrickStack(Bonded(0.0, 1.0e7, 0.7), ShiftXM);
+	const StandingResult Result = SolveWith(S.Model, BiaxialLateralLoad(LambdaX, LambdaY));
+	INFO("elastic state " << Result.State << " after " << Result.ActiveSetIterations << " passes");
+	CHECK(Result.State == StandingState::Undecided);
+	AuthorityOptions Options;
+	Options.Standing = BiaxialLateralLoad(LambdaX, LambdaY);
+	Options.Certificate.Gravity = Options.Standing.Gravity;
+	const AuthorityResult Combined = MakeCombinedAuthority(MakeRbsmStandingAuthority(), MakeLimitAnalysisCertificate())->Judge(S.Model, {}, Options, nullptr);
+	INFO("combined worst " << static_cast<int>(Combined.Worst) << ", disagreements " << Combined.Disagreements);
+	CHECK(Combined.Worst == ComponentVerdict::Collapses);
+	CHECK(Combined.Disagreements == 0);
+}
+
+TEST_CASE("Statics.Solver.ALightlyCohesiveTwoBrickStackOverturnedByABiaxialLoadIsAMechanism")
+{
+	const double ShiftXM = 0.03;
+	const double LambdaX = 1.5;
+	const double LambdaY = 0.875;
+	CHECK(LambdaY * BrickHeightM > BrickWidthM / 2.0);
+	const TwoBrickStack S = MakeTwoBrickStack(Bonded(0.0, 100.0, 0.7), ShiftXM);
 	const StandingResult Result = SolveWith(S.Model, BiaxialLateralLoad(LambdaX, LambdaY));
 	INFO("state " << Result.State << " after " << Result.ActiveSetIterations << " passes");
 	CHECK(Result.State == StandingState::Mechanism);

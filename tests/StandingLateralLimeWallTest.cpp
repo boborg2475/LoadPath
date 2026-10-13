@@ -6,6 +6,8 @@
 #include "StaticsTestSupport.h"
 
 #include "loadpath/Catalogue.h"
+#include "loadpath/CollapseCertificate.h"
+#include "loadpath/StructuralAuthority.h"
 #include "loadpath/geometry/RunningBondWall.h"
 
 #include "doctest.h"
@@ -148,6 +150,13 @@ TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Statics.Lime.TheLateralGridStandsInItsOwnField
 	{
 		int Courses, BricksPerCourse;
 	};
+	struct GridPoint
+	{
+		int Courses, BricksPerCourse;
+		double LambdaX, LambdaY;
+	};
+	const std::vector<GridPoint> KnownUndecided{{10, 8, 1.0, 0.15}, {10, 8, 1.2, 0.0}, {10, 8, 1.2, 0.05}, {10, 8, 1.2, 0.1}, {10, 8, 1.2, 0.15}, {5, 5, 1.2, 0.05}, {5, 5, 1.2, 0.1}, {5, 5, 1.2, 0.15}, {6, 8, 1.2, 0.0}, {6, 8, 1.2, 0.05}, {6, 8, 1.2, 0.1}, {6, 8, 1.2, 0.15}};
+	CHECK(KnownUndecided.size() == 12);
 	const auto Start = std::chrono::steady_clock::now();
 	const StrengthProfile Lime = LoadLime();
 	int Points = 0, Standing = 0, Undecided = 0, Mechanisms = 0, UnexpectedUndecided = 0, FieldFailures = 0;
@@ -166,8 +175,8 @@ TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Statics.Lime.TheLateralGridStandsInItsOwnField
 				if (Result.State == StandingState::Undecided)
 				{
 					++Undecided;
-					const bool bKnownException = S.Courses == 10 && S.BricksPerCourse == 8 && LambdaX >= 1.0;
-					CHECK_MESSAGE(bKnownException, "Undecided outside the known exceptions (10 x 8 at lambda x >= 1.0)");
+					const bool bKnownException = std::any_of(KnownUndecided.begin(), KnownUndecided.end(), [&](const GridPoint& K) { return K.Courses == S.Courses && K.BricksPerCourse == S.BricksPerCourse && K.LambdaX == LambdaX && K.LambdaY == LambdaY; });
+					CHECK_MESSAGE(bKnownException, "Undecided outside the twelve known points");
 					UnexpectedUndecided += bKnownException ? 0 : 1;
 					continue;
 				}
@@ -187,9 +196,9 @@ TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Statics.Lime.TheLateralGridStandsInItsOwnField
 	const double Seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - Start).count();
 	MESSAGE("lateral lime grid: " << Points << " points, " << Standing << " Stand, " << Mechanisms << " Mechanism, " << Undecided << " Undecided (" << UnexpectedUndecided << " outside the known exceptions), " << FieldFailures << " fail their own field, " << Seconds << " s");
 	CHECK(Points == 140);
-	CHECK(Undecided <= 5);
+	CHECK(Undecided == 12);
 	CHECK(Standing == 128);
-	CHECK(Mechanisms == 7);
+	CHECK(Mechanisms == 0);
 	CHECK(UnexpectedUndecided == 0);
 }
 
@@ -387,6 +396,34 @@ TEST_CASE("Statics.Lime.ARestoreStepReclosureNeitherCountsNorResets")
 		 {1, 1, Vec3{2.7416680132160907, -3.8504440158373101, -2.6771397979574099}, Vec3{0.21949657397784628, -0.0077664640969666299, 0.12663048397739793}}}};
 	const StandingResult Kept = SolveHunt(KeepsReference);
 	INFO("5 x 2 lime wall with two held loads: " << Kept.State << " after " << Kept.ActiveSetIterations);
-	CHECK(Kept.State == StandingState::Mechanism);
+	CHECK(Kept.State == StandingState::Undecided);
 	CHECK(Kept.ActiveSetIterations == 13);
+}
+
+TEST_CASE("Statics.Lime.AWedgeThatMustBreakCohesionToMoveIsUndecided")
+{
+	struct Case
+	{
+		double CohesionPa;
+		StandingState Elastic;
+		ComponentVerdict Combined;
+	};
+	const double LambdaX = 1.3;
+	for (const Case C : {Case{300.0, StandingState::Mechanism, ComponentVerdict::Collapses}, Case{1000.0, StandingState::Undecided, ComponentVerdict::Collapses}, Case{10000.0, StandingState::Undecided, ComponentVerdict::Stands}})
+	{
+		StrengthProfile Profile = LoadLime();
+		Profile.ShearCohesionPa = C.CohesionPa;
+		const LimeWall W = BuildWall(Profile, 5, 5);
+		REQUIRE(W.Value.bComplete);
+		const StandingOptions Options = Biaxial(LambdaX, 0.0);
+		const StandingResult Result = SolveWith(W.Model, Options);
+		AuthorityOptions Judged;
+		Judged.Standing = Options;
+		Judged.Certificate.Gravity = Options.Gravity;
+		const AuthorityResult Combined = MakeCombinedAuthority(MakeRbsmStandingAuthority(), MakeLimitAnalysisCertificate())->Judge(W.Model, {}, Judged, nullptr);
+		INFO("5 x 5 lime wall, c " << C.CohesionPa << " Pa, at (" << LambdaX << ", 0): elastic " << Result.State << " after " << Result.ActiveSetIterations << ", combined worst " << static_cast<int>(Combined.Worst) << ", disagreements " << Combined.Disagreements);
+		CHECK(Result.State == C.Elastic);
+		CHECK(Combined.Worst == C.Combined);
+		CHECK(Combined.Disagreements == 0);
+	}
 }
