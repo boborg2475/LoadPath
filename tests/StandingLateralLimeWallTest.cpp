@@ -1,3 +1,4 @@
+#include "BrickFixtures.h"
 #include "CatalogueTestSupport.h"
 #include "OwnFieldTestSupport.h"
 #include "SlowInDebug.h"
@@ -12,6 +13,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <iomanip>
 #include <vector>
 
 using namespace loadpath;
@@ -148,7 +150,7 @@ TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Statics.Lime.TheLateralGridStandsInItsOwnField
 	};
 	const auto Start = std::chrono::steady_clock::now();
 	const StrengthProfile Lime = LoadLime();
-	int Points = 0, Standing = 0, Undecided = 0, UnexpectedUndecided = 0, FieldFailures = 0;
+	int Points = 0, Standing = 0, Undecided = 0, Mechanisms = 0, UnexpectedUndecided = 0, FieldFailures = 0;
 	for (const Size S : {Size{3, 4}, Size{4, 5}, Size{5, 5}, Size{6, 8}, Size{10, 8}})
 	{
 		const LimeWall W = BuildWall(Lime, S.Courses, S.BricksPerCourse);
@@ -171,6 +173,7 @@ TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Statics.Lime.TheLateralGridStandsInItsOwnField
 				}
 				if (Result.State != StandingState::Stands)
 				{
+					Mechanisms += Result.State == StandingState::Mechanism ? 1 : 0;
 					continue;
 				}
 				++Standing;
@@ -182,13 +185,15 @@ TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Statics.Lime.TheLateralGridStandsInItsOwnField
 		}
 	}
 	const double Seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - Start).count();
-	MESSAGE("lateral lime grid: " << Points << " points, " << Standing << " Stand, " << Undecided << " Undecided (" << UnexpectedUndecided << " outside the known exceptions), " << FieldFailures << " fail their own field, " << Seconds << " s");
+	MESSAGE("lateral lime grid: " << Points << " points, " << Standing << " Stand, " << Mechanisms << " Mechanism, " << Undecided << " Undecided (" << UnexpectedUndecided << " outside the known exceptions), " << FieldFailures << " fail their own field, " << Seconds << " s");
 	CHECK(Points == 140);
 	CHECK(Undecided <= 5);
+	CHECK(Standing == 128);
+	CHECK(Mechanisms == 7);
 	CHECK(UnexpectedUndecided == 0);
 }
 
-TEST_CASE("Statics.Lime.AWallWhoseForgottenShearWouldExceedTheCohesiveCapacityDoesNotStand")
+TEST_CASE("Statics.Lime.AWallWhoseForgottenShearWouldExceedTheCohesiveCapacityReadsOverstressed")
 {
 	const StrengthProfile Lime = LoadLime();
 	StrengthProfile WeakPerpend = Lime;
@@ -206,6 +211,119 @@ TEST_CASE("Statics.Lime.AWallWhoseForgottenShearWouldExceedTheCohesiveCapacityDo
 		const StandingOptions Options = Biaxial(LambdaX, 0.0);
 		const StandingResult Result = SolveWith(W.Model, Options);
 		INFO("2 x 5 wall, lime beds, perpend c 100 Pa, at lambda x " << LambdaX << ": " << Result.State << " after " << Result.ActiveSetIterations << " iterations");
-		CHECK(Result.State != StandingState::Stands);
+		CHECK(Result.State == StandingState::Overstressed);
+		CHECK(Result.ActiveSetIterations <= 8);
 	}
+}
+
+TEST_CASE("Statics.Lime.WallsTheGuardKeptFromStandingStand")
+{
+	struct GuardWall
+	{
+		int Courses, BricksPerCourse;
+		double BedCohesionPa, PerpendCohesionPa;
+		double LambdaX, LambdaY;
+		int IterationBar;
+	};
+	const StrengthProfile Lime = LoadLime();
+	const GuardWall Walls[] = {{4, 3, 3000.0, Lime.ShearCohesionPa, 0.7, 0.1, 10}, {6, 3, 10000.0, 10000.0, 0.8, 0.1, 15}};
+	for (const GuardWall& G : Walls)
+	{
+		StrengthProfile Bed = Lime;
+		Bed.ShearCohesionPa = G.BedCohesionPa;
+		StrengthProfile Perpend = Lime;
+		Perpend.ShearCohesionPa = G.PerpendCohesionPa;
+		LimeWall W;
+		geometry::WallSpec Spec;
+		Spec.Bed = AddProfileOk(W.Model, Bed);
+		Spec.Perpend = AddProfileOk(W.Model, Perpend);
+		Spec.Courses = G.Courses;
+		Spec.BricksPerCourse = G.BricksPerCourse;
+		W.Value = geometry::BuildRunningBondWall(W.Model, Spec);
+		REQUIRE(W.Value.bComplete);
+		const StandingOptions Options = Biaxial(G.LambdaX, G.LambdaY);
+		const StandingResult Result = SolveWith(W.Model, Options);
+		INFO(G.Courses << " x " << G.BricksPerCourse << " wall, bed c " << G.BedCohesionPa << " Pa, perpend c " << G.PerpendCohesionPa << " Pa, at (" << G.LambdaX << ", " << G.LambdaY << "): " << Result.State << " after " << Result.ActiveSetIterations << " iterations");
+		CHECK(Result.State == StandingState::Stands);
+		CHECK(Result.ActiveSetIterations <= G.IterationBar);
+		if (Result.State == StandingState::Stands)
+		{
+			CheckCohesiveField(W, Result, Options);
+		}
+	}
+}
+
+TEST_CASE("Statics.Lime.ACornerThatNeverResetsKeepsItsSignedZeroShear")
+{
+	const BrickOnGround F = MakeBrickOnGround(LoadLime());
+	const StandingResult Result = SolveWith(F.Model, StandingOptions{});
+	REQUIRE(Result.State == StandingState::Stands);
+	const auto Bed = std::find_if(Result.Readings.begin(), Result.Readings.end(), [&](const InterfaceReading& R) { return R.Id == F.Bed; });
+	REQUIRE(Bed != Result.Readings.end());
+	const CornerReading& Corner = Bed->Corners[0];
+	INFO("bed corner 0: shear " << Corner.ShearForceN << ", sign bits " << std::signbit(Corner.ShearForceN.X) << std::signbit(Corner.ShearForceN.Y) << std::signbit(Corner.ShearForceN.Z) << ", open " << Corner.bOpen);
+	REQUIRE_FALSE(Corner.bOpen);
+	CHECK(Corner.ShearForceN.Z == 0.0);
+	CHECK(std::signbit(Corner.ShearForceN.Z));
+}
+
+TEST_CASE("Statics.Lime.FormerlyConvergedPointsReadTheirNewFields")
+{
+	const StrengthProfile Lime = LoadLime();
+	const PinnedPoint Points[] = {
+		{3, 4, 1.2, 0.15, 6, 49.816631363081264, 29.556976095207304},
+		{5, 5, 0.9, 0.1, 9, 87.497747722552006, 34.819311436076617},
+		{5, 5, 0.9, 0.15, 8, 94.248653300064646, 40.088168321761252},
+		{6, 8, 0.6, 0.1, 6, 93.213701071544406, 27.790229597248331},
+		{6, 8, 0.6, 0.15, 6, 101.32347046905915, 27.561923758931908},
+		{6, 8, 0.7, 0.05, 8, 91.018702837705661, 32.592493302271812},
+		{6, 8, 0.9, 0.1, 8, 111.78183582127048, 40.55068787161828},
+		{6, 8, 1.0, 0.1, 14, 121.22622444645363, 60.059450615264957},
+		{10, 8, 0.6, 0.05, 5, 173.78145638393102, 45.935027704957143},
+		{10, 8, 0.6, 0.15, 10, 271.91934861802361, 94.691299028027757},
+		{10, 8, 0.7, 0.05, 9, 189.1186667858608, 65.611734306910918},
+		{10, 8, 0.9, 0.1, 14, 278.83572634465452, 100.73764135296223}};
+	for (const PinnedPoint& P : Points)
+	{
+		const LimeWall W = BuildWall(Lime, P.Courses, P.BricksPerCourse);
+		REQUIRE(W.Value.bComplete);
+		const StandingResult Result = SolveWith(W.Model, Biaxial(P.LambdaX, P.LambdaY));
+		const Extremes E = ReadExtremes(Result);
+		INFO(P.Courses << " x " << P.BricksPerCourse << " lime wall at (" << P.LambdaX << ", " << P.LambdaY << "): " << Result.State << " after " << Result.ActiveSetIterations << " iterations, max |N| " << std::setprecision(17) << E.MaxNormalN << " N, max |S| " << E.MaxShearN << " N");
+		CHECK(Result.State == StandingState::Stands);
+		CHECK(Result.ActiveSetIterations == P.Iterations);
+		CHECK(E.MaxNormalN == doctest::Approx(P.MaxNormalN).epsilon(1e-12));
+		CHECK(E.MaxShearN == doctest::Approx(P.MaxShearN).epsilon(1e-12));
+	}
+}
+
+TEST_CASE("Statics.Lime.SolvingTwiceReadsTheSameField")
+{
+	const StrengthProfile Lime = LoadLime();
+	const LimeWall Tall = BuildWall(Lime, 10, 8);
+	const LimeWall Other = BuildWall(Lime, 4, 5);
+	REQUIRE(Tall.Value.bComplete);
+	REQUIRE(Other.Value.bComplete);
+	const StandingOptions Options = Biaxial(0.8, 0.0);
+	const StandingResult First = SolveWith(Tall.Model, Options);
+	const StandingResult Between = SolveWith(Other.Model, Options);
+	const StandingResult Second = SolveWith(Tall.Model, Options);
+	INFO("10 x 8 at (0.8, 0): " << First.State << " after " << First.ActiveSetIterations << ", then " << Second.State << " after " << Second.ActiveSetIterations << "; 4 x 5 between: " << Between.State << " after " << Between.ActiveSetIterations);
+	CHECK(First.State == Second.State);
+	CHECK(First.ActiveSetIterations == Second.ActiveSetIterations);
+	REQUIRE(First.Readings.size() == Second.Readings.size());
+	int Differing = 0;
+	for (std::size_t I = 0; I < First.Readings.size(); ++I)
+	{
+		for (std::size_t C = 0; C < First.Readings[I].Corners.size(); ++C)
+		{
+			const CornerReading& A = First.Readings[I].Corners[C];
+			const CornerReading& B = Second.Readings[I].Corners[C];
+			const bool bSameStatus = A.bOpen == B.bOpen && A.bSlipping == B.bSlipping;
+			const bool bSameNormal = A.NormalForceN == B.NormalForceN && std::signbit(A.NormalForceN) == std::signbit(B.NormalForceN);
+			const bool bSameShear = A.ShearForceN.X == B.ShearForceN.X && A.ShearForceN.Y == B.ShearForceN.Y && A.ShearForceN.Z == B.ShearForceN.Z && std::signbit(A.ShearForceN.X) == std::signbit(B.ShearForceN.X) && std::signbit(A.ShearForceN.Y) == std::signbit(B.ShearForceN.Y) && std::signbit(A.ShearForceN.Z) == std::signbit(B.ShearForceN.Z);
+			Differing += bSameStatus && bSameNormal && bSameShear ? 0 : 1;
+		}
+	}
+	CHECK(Differing == 0);
 }
