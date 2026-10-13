@@ -1338,4 +1338,57 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   overrules each (no host harm) and counts a Disagreement. The candidate is to make the
   restore step's admissibility test for a Mechanism ask whether the motion's power exceeds the
   cohesive dissipation on the open corners it slides (an upper-bound check the certificate
-  already does), measured first.
+  already does), measured first. (Corrected by the next entry: the seven are two wedges, and
+  the check is a necessary condition on one motion, not the certificate's upper bound.)
+- *2026-10-12, orchestrator, the cohesive-wedge Mechanism (opening):* a high-effort probe
+  measured every elastic Mechanism on a structure with a cohesive joint: the lime grid (7), HUNT
+  96643, a rebuilt 984-fixture sweep (24), the follow-up review's 100,000-wall random hunt (3,743)
+  and dry, mixed and bonded families of about 3,300 each. **Physics:** with cohesion credited as
+  the intercept at N = 0, an open corner that slides costs c·A/4·|slip| under either flow rule
+  (associative: the cone apex; non-associative: an open corner at N = 0 can absorb up to cA/4
+  per unit slip); only the reading in which cohesion breaks at the tension cut-off (3DEC and
+  softening models) makes it free. The project ruled the intercept reading (slice 2c: a cohesive
+  tensionless corner carries its cohesion; 2e: up to cA/4 + μN at any normal force; slice 3:
+  cohesion is lost only by the cascade's crack; slice 4a's inscribed region; the restore-step
+  entry's acceptance of EC6's fvk0), so a Mechanism whose motion slides open cohesive corners
+  against more dissipation than the load supplies is a false label, and the certificate's Stands
+  there is right. The strict reading would rock the end wedge free at λx ≈ 0.96 but would also
+  void the elastic Stands and the certificate: a model change, not this fix. **Scale, corrected:**
+  the grid's seven are two wedges (the three 5 × 5 points slide 28 open corners at 387× the load
+  power, the four 6 × 8 points 36 at 272×), HUNT 96643 slides 16 at 240× with t 22.7, and the
+  hunt has 856 certificate-refuted Mechanisms per 100,000 random lime walls, not eight. Of the
+  hunt's Mechanisms: with no cohesive dissipation (Dc = 0) 583 Collapses and none refuted; with
+  Dc below the load power P, 1,378 Collapses and 195 refuted, every one sliding an open cohesive
+  corner with less opening than μ times the slip, the non-associative gap the theorem ruling
+  already gives the certificate (there the elastic motion may be the physical answer); with
+  Dc ≥ P, 909 Collapses and 661 refuted. No closed corner moves in any of them. **Candidates:**
+  (a) refuse to Undecided when P ≤ Dc; (b) re-close the sliding open cohesive corners Stuck and
+  continue (three variants); (c) open cohesive corners keep their tangential stiffness; (d) hold
+  them tangentially and continue; (e) (a) after searching the null space for a cohesion-free
+  motion. Only (a) and (e) change no host verdict (the combined authority consults the
+  certificate for Undecided as for Mechanism); (b) to (d) turn 97 to 5,918 hunt verdicts into
+  elastic Overstressed and new crack rounds, sometimes where the certificate says Stands; (c)
+  churns the lime pins. (a) and (e) move no dry or bonded result (by construction: an open dry
+  corner's capacity is zero; and by measurement over about 125,000 fixtures), cost nothing
+  measurable (hunt elastic 76 to 79 s against 74 to 78 s), and take the hunt's refuted
+  Mechanisms from 856 to 195, so after them a Disagreement means the non-associative gap and
+  nothing else. (e) recovers 25 hunt and 15 mixed Mechanism labels for about 40 more lines and
+  an extra factorisation per refusal, and adds 3 refuted Mechanisms in the mixed family.
+  **Ruling: (a).** When the restore step finds nothing to restore, the elastic authority
+  compares the load power on the null-space motion (`AssembleLoad · motion`, held friction
+  included) with the cohesive dissipation on the open corners of joints that do not release
+  slip that the motion slides beyond the admissibility tolerance (min(c, shear cap)·A/4 times
+  the tangential slip per corner); unless the power strictly exceeds it the component reads
+  Undecided with the full-rank readings (a NaN fails closed). It is a necessary condition
+  checked on one motion, not the certificate's upper bound: 909 refused hunt motions are
+  certified Collapses, and the combined authority gets them right. Pins: the lime grid reads
+  128 Stand, 0 Mechanism, 12 Undecided (the 5 known plus the 5 × 5 at λx 1.2 with λy 0.05,
+  0.1, 0.15 and the 6 × 8 at λx 1.2, all λy); HUNT 96643 reads Undecided after 13; the
+  two-brick stack overturned by a biaxial load (c 10 MPa, ft 0) reads Undecided from the
+  elastic authority (its projected motion spins three open corners at 3.3e4× the power) and
+  Collapses from the combined, and a twin at c 100 Pa keeps the elastic Mechanism label
+  (Dc/P 0.33); a 5 × 5 lime-friction wall at λx 1.3 reads Mechanism at c 300 Pa (Dc/P 0.49),
+  Undecided at 1 kPa (1.63; certificate Collapses) and Undecided at 10 kPa with the combined
+  Stands and no disagreement. Logged, not ruled: 5 of 458 dry random-wall Mechanisms carry a
+  Stuck corner moving 2e-6 to 2.4e-5 of the motion scale (null-vector residue near the pivot
+  tolerance).

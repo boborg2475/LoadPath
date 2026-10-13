@@ -94,16 +94,14 @@ the non-associative answer) and the two hanging-component cases (slice 6), red b
      §10 "the restore step's refusal on cohesive corners"): the certificate certifies all six
      as Stands and the combined authority already returns Stands, while every candidate rule
      traded fast refusals for 50-iteration solves or certificate-refuted Mechanisms;
-   - **the elastic authority's Mechanism on cohesive tensionless walls is refuted by the
-     certificate** (found by the restore-step investigation, 2026-10-12): the lime grid's 7
-     pinned Mechanisms (5 × 5 and 6 × 8 at λx 1.2) and HUNT 96643's are one stepped wedge
-     sliding on open cohesive corners with dissipation 239× to 272× the load power, all
-     certified Stands; the RBSM's Stands credits cohesion at N ≥ 0 but its Mechanism treats an
-     open cohesive corner as free. The combined authority overrules each (host verdicts right)
-     and counts a Disagreement. Candidate: the restore step's admissibility test also refuses a
-     motion whose load power does not exceed the cohesive dissipation on the open corners it
-     slides; measure first (which existing Mechanisms move, whether any dry one does: it must
-     not, dry corners dissipate nothing when open), then rule. **Next item.**
+   - **the cohesive-wedge Mechanism, ruled 2026-10-12 and in its red step (DESIGN §10 "the
+     cohesive-wedge Mechanism (opening)")**: an elastic Mechanism whose null-space motion slides
+     open cohesive corners against at least as much cohesive dissipation as the load supplies
+     reads Undecided (the certificate then answers, as for any Mechanism); no host verdict
+     changes, the hunt's refuted Mechanisms go from 856 to 195 per 100,000 (the remaining ones are
+     the non-associative gap); worked in the worktree C:\Users\bobby\Documents\LoadPath-wedge on
+     branch `cohesive-wedge`; also logged from the probe: 5 of 458 dry random-wall Mechanisms
+     carry a Stuck corner moving up to 2.4e-5 of the motion scale;
      readings at the iteration cap on a corner reset in the last pass are out of equilibrium
      (the `HeldN` pattern, untested); restore-step re-closures neither count nor reset by
      ruling, pinned on two random-hunt walls (`ARestoreStepReclosureNeitherCountsNorResets`); the
