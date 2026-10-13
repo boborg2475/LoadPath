@@ -201,13 +201,9 @@ the non-associative answer) and the two hanging-component cases (slice 6), red b
      `DenseDofLimit` they disagree in a stiffness band of 3.6e304 to 1.45e305 Pa/m; a body
      weight that overflows to infinity (a 1e308 kg mass) is never validated and read Mechanism
      with a NaN normal; a gravity of 1e-300 counts as non-zero and takes the shortcut; the
-     certificate's own `FallRigid` (src/LimitAnalysisCertificate.cpp) takes `Length(Net)` by
-     summing squares, which underflows to 0 below a summed weight of about 1.5e-162 N, so a
-     floating component under a gravity below about 1e-162 reads Stands at [1000, 1000] with
-     one disagreement against the elastic Mechanism (the verdict flips between 1e-162 and
-     1e-163; the fix is the same division by the largest component before the length, and
-     `Statics.Ungrounded.ATinyGravityStillFallsAlongIt` then wants its judge pinned to
-     Collapses); an association-order mutant in the shortcut's finiteness fold, `d_i·(K·d_j)`
+     certificate's rigid fall now also fires on a floating component whose net load's sum of
+     squares would overflow (components from about 1e155; it was skipped before and the LP ran),
+     untested; an association-order mutant in the shortcut's finiteness fold, `d_i·(K·d_j)`
      for `(d_i·K)·d_j`, survives the agreement sweep and the review's exact bisection (the
      two orders agreed to the last bit on every fixture tried); the fold test could adopt that
      bisection with a twin-joint pair and a six-brick slab (the review's `ProbeFoldTest`);

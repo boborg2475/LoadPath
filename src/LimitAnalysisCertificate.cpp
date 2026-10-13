@@ -1767,12 +1767,12 @@ bool FallRigid(const Component& C, ComponentVerdict& V)
 	{
 		Net = statics::Add(Net, Vec3{-C.Demand(Offset + 0), -C.Demand(Offset + 1), -C.Demand(Offset + 2)});
 	}
-	const double Magnitude = Length(Net);
-	if (!(Magnitude > 0.0) || !IsFinite(Magnitude))
+	const double Largest = std::max({std::abs(Net.X), std::abs(Net.Y), std::abs(Net.Z)});
+	if (!(Largest > 0.0) || !IsFinite(Net))
 	{
 		return false;
 	}
-	const Vec3 Direction = Scale(1.0 / Magnitude, Net);
+	const Vec3 Direction{Net.X / Largest, Net.Y / Largest, Net.Z / Largest};
 	V.State = CertificateState::Collapses;
 	V.Lower = 0.0;
 	V.Upper = 0.0;

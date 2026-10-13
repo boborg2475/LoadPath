@@ -540,5 +540,12 @@ TEST_CASE("Statics.Ungrounded.ATinyGravityStillFallsAlongIt")
 		MESSAGE("judge worst " << static_cast<int>(A.Worst) << ", disagreements " << A.Disagreements);
 		CHECK(A.Worst == ComponentVerdict::Collapses);
 		CHECK(A.Disagreements == 0);
+		const CertificateResult Certificate = MakeLimitAnalysisCertificate()->Decide(Model, {}, Tiny.Certificate, {});
+		REQUIRE(Certificate.Mechanism.size() == 2);
+		for (const MechanismMotion& M : Certificate.Mechanism)
+		{
+			INFO("certificate motion (" << M.TranslationM.X << ", " << M.TranslationM.Y << ", " << M.TranslationM.Z << ")");
+			CHECK(NearVec(M.TranslationM, C.Fall, 0.0, 1e-12));
+		}
 	}
 }
