@@ -337,8 +337,8 @@ the non-associative answer) and the two hanging-component cases (slice 6), red b
    listed there). All except F-PSY-01 are slice-4 rows. B-BUR-01 needs a soil-pressure driver;
    F-PYR-01 needs a zero-extent contact; group 9 runs only in the host adapter's suite.
 3. `Scripts/Test.ps1` excludes `Slow.*`, `Deferred.*` and `Measure.*` from the default run (2026-10-11; the
-   arch and pile anchors carry `LOADPATH_SLOW_IN_DEBUG`, Slow. in Debug only). Still open: any
-   caller `-tc` or `-tce` is passed straight through and drops all three exclusions.
+   arch and pile anchors carry `LOADPATH_SLOW_IN_DEBUG`, Slow. in Debug only). A caller `-tc` drops the exclusions (it names what to run); a caller
+   `-tce` alone adds to them (2026-10-13).
 
 ## Deferred
 
