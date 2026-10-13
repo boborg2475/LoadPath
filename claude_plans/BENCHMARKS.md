@@ -210,6 +210,53 @@ Every one asserts a mechanism or a collapse fraction over a bin, never a single 
 | F-DYN-04 | Slope drop and stable-block regressions | SimReady: 45° slope, μs = 0.5, μd = 0.4; 3DEC stable run of B-INC-02 | SimReady: stays within 0.02 m of the ramp and moves ≥ 0.01 m downhill, a = g(sin 45° − 0.4 cos 45°) = 4.16 m/s² (derived); fails on separation > 0.05 m for 0.1 s, 0.02 m below the ramp, or 0.1 m tunnelling. 3DEC stable centroid moves < 1 mm | RB CF | host motion agrees with LoadPath's static verdict (slides; stable) | — | [SimReady FET003](https://nvidia.github.io/simready-foundation/2026.08.0/guides/benchmark/tests/fet003/slope-drop.html); [3DEC Sliding and Toppling Blocks](https://docs.itascacg.com/itasca930/3dec/docproject/source/examples/SlidingBlock.html) |
 | F-DYN-05 | Box2D stacking samples | 12-row stack of 0.9 m boxes, friction 0.3, 0.01 m row offset; 10 × 10 tilted stack; ~40-card house, 2 mm cards at ±25°, friction 0.7; 17-voussoir arch, friction 0.6, four boxes on the keystone | all stand; lateral drift under a hundredth of a box over 10 s; energy monotone after settling | RB CF | no jitter, creep or energy creation | — | [Box2D sample_stacking.cpp](https://raw.githubusercontent.com/erincatto/box2d/main/samples/sample_stacking.cpp); [Solver2D](https://box2d.org/posts/2024/02/solver2d/) |
 
+## Inputs retrieved 2026-10-13
+
+A research pass for the rows whose inputs were missing. Values are summarised from open sources;
+"inferred" marks a value the source does not state. A row is buildable only where this section
+says so.
+
+- **B-FTL-01, Ferris & Tin-Loi Example 1 layout: buildable.** H. M. Ahmed's Sheffield PhD thesis
+  redraws it (Fig. 5.11(a), p. 149; White Rose eTheses 14871): six courses on a base, 20 × 10.5
+  units overall; courses 1, 3 and 5 are a half block, four full blocks and a half block; courses
+  2, 4 and 6 are five full blocks; 33 blocks and 83 contacts (one per interface), matching the
+  published table. Ahmed also notes that the published Example 3 figure probably belongs to a
+  different wall from the one drawn, which matters for B-FTL-03.
+- **F-FOR-01, Foraboschi wall: buildable, thickness inferred.** Portioli et al. 2012, Fig. 3a:
+  masonry 3120 × 2574 mm under a 194 mm concrete beam; a centred 1040 × 1210 mm opening (piers 1040
+  mm wide); bottom spandrel 378 mm, about 978 mm of masonry above the opening; blocks 260 × 75.6
+  mm, lintel blocks 226.8 × 65 mm; f_c 1.21 MPa, 18 kN/m³, μ 0.6; vertical loads 40, 80 and
+  140 kN with test against model horizontal capacity 23.6/23.9, 38.8/39.8 and 61.3/55.8 kN.
+  Thickness is not stated; 250 mm is inferred from double-width 125 mm brick. The paper's Fig. 9
+  shows the associative/non-associative ratio trend at μ 0.6 only, not over the whole friction
+  range the row implies.
+- **B-SW-01, Minho SW30 limit load: buildable with a ±0.2 kN band.** No source tabulates it;
+  Orduña & Lourenço 2005 Part II, Fig. 4(b), p. 5167, levels at about 16.5 to 16.6 kN for infinite
+  compressive strength (read from the plot), with the load acting at the 100 mm top beam (Fig.
+  4(a)). Whole-wall overturning gives 16.67 kN, just above, as an upper value should.
+- **F-PSY-01, Psycharis drum column: friction found, drum heights not.** Friction angle 37°,
+  joint stiffness 1 GPa/m (Table I, arXiv 1312.4484). No open source gives the drum heights;
+  equal drums of 0.78 m would be an assumption and must be labelled so.
+- **B-DER-01, Derakhshan one-way walls: three of six.** The 2009 Canadian Masonry Symposium paper
+  C8-4 gives the three two-leaf walls (1150 mm wide, 220 mm thick, 3500, 2000 and 4100 mm tall)
+  and six tests with 0 to 75 kPa overburden and their peak loads. The three three-leaf (350 mm)
+  walls are only in a paywalled 2013 paper, and the row's 83 % covers all six, so a two-leaf
+  subset needs its own pinned figure from the 2009 data.
+- **F-RON-01, Ronan Point flank panel: a simplified bearing model only.** The BRE report BR63
+  (1985) gives a loadbearing leaf of about 150 mm, 38 mm dry-pack, a floor overlap of 10 to 15 %
+  of the wall width, and 5.0 to 5.5 MN dead load on the flank wall at the lowest joint, with an
+  undimensioned joint section; slab thickness and a dimensioned joint were not found. The only
+  open copy found is a licensed copy hosted by a third party, so its provenance needs checking
+  before it is cited here.
+- **F-STR-01, squat pier: not found.** Portioli et al. 2012 models only the Foraboschi wall
+  (1.21 MPa is that wall's strength); the other cited source has no open copy. Substitutes: the
+  Foraboschi pier at 140 kN with infinite against 1.21 MPa compressive strength, or the TU
+  Eindhoven squat walls (to be verified from a source before use).
+- **B-COR-01, Casapulla–Maione tuff corner: not found.** The geometry is in a paywalled 2020 paper
+  (Int. J. Architectural Heritage) with no repository copy; the only clue is a 50 mm wall
+  thickness inferred from a later mesh. Options: obtain the paper, ask the authors, or substitute
+  the Colombo et al. 2022 calcium-silicate corners, whose open paper gives the geometry.
+
 ## Not adopted
 
 Excluded by the reports themselves.

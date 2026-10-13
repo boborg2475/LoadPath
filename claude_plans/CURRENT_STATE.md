@@ -317,10 +317,12 @@ the non-associative answer) and the two hanging-component cases (slice 6), red b
    stacks fall in the probe DEM); no cheap discriminator was found; candidates are a load-stepped
    elastic path and accepting an admissible elastic iterate as Stands (51 gap cases had one, all
    stand). Candidate, not ruled: releasing the elastic mechanism where the certificate stands
-   (needs a non-associative test-tier referee first). Rows with inputs
-   still to retrieve: B-COR-01 corner geometry, F-PSY-01 friction angle, F-FOR-01 and F-STR-01
-   pier geometry (Portioli 2012), B-DER-01 wall geometry, B-SW-01 exact limit load (graphical
-   only), F-RON-01 panel thickness, B-FTL-01 layout. B-BUR-01 needs a soil-pressure driver;
+   (needs a non-associative test-tier referee first). Inputs retrieved
+   2026-10-13 (BENCHMARKS "Inputs retrieved 2026-10-13"): B-FTL-01, F-FOR-01 (thickness
+   inferred) and B-SW-01 (±0.2 kN band) are buildable; F-PSY-01 has its friction (37°) but no drum
+   heights; B-DER-01 has three of its six walls; F-RON-01 supports only a simplified bearing model
+   and its source's provenance needs checking; F-STR-01 and B-COR-01 were not found (substitutes
+   listed there). All except F-PSY-01 are slice-4 rows. B-BUR-01 needs a soil-pressure driver;
    F-PYR-01 needs a zero-extent contact; group 9 runs only in the host adapter's suite.
 3. `Scripts/Test.ps1` excludes `Slow.*`, `Deferred.*` and `Measure.*` from the default run (2026-10-11; the
    arch and pile anchors carry `LOADPATH_SLOW_IN_DEBUG`, Slow. in Debug only). Still open: any
