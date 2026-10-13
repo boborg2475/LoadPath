@@ -1676,3 +1676,16 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   sparse selection is the cost fix); the hinging list on the 57-body wall wanders between 17 and 33
   joints across neighbouring loads while the moving count stays 57 (a listing-threshold matter). The
   probe's sources are in the session scratchpad (`selection\`).
+- *2026-10-13, orchestrator, the selection LP's retry (cold-review rulings):* the review confirmed the
+  refactor bit-identical (3,658 default-suite and 12,046 Slow-tier component verdicts, bounds, lists
+  and mechanism hashes byte for byte) and the change (on the default suite only the three new-test
+  verdicts move, Undecided to Collapses; on a 160-wall seeded family and the band, 23 changes, all
+  Undecided to Collapses, none the other way, no list changed where both decided). It sent back two
+  points. **The first rung is load-bearing:** an escalation starting at 1e-14 passes every tier but
+  re-breaks the originating case (the full wall at 140 kN / 85 kN reads Undecided after 200
+  selection iterations) and opens a pocket at 32,832 N on the 57-body wall; ruling: pin it, with
+  32,832.5 N replacing the test's rounding-dependent third load and a `Slow.` row on the full wall at
+  140 kN / 85 kN. **"Fixes all 18" overstated the band:** master still fails at isolated loads on the
+  test's own wall (32,957.75 and 32,958.0 N, 1 in 301 on a 2 N grid), the selection running its 200
+  iterations mostly on factors accepted after the 1e-16 shift; recorded in CURRENT_STATE and handed
+  to the stall investigation with the positivity test and the missing stall rule.

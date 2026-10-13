@@ -393,7 +393,7 @@ TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Certificate.Selection.ARockingWallPastItsLimit
 	const CertificateResult Control = DecideWith(Wall.Model, CertificateOptions{}, BeamLoads(Wall, VerticalN, 25000.0));
 	INFO("at 25000 N: " << Control.State << " [" << Control.LoadFactorLower << ", " << Control.LoadFactorUpper << "]");
 	CHECK(Control.State != CertificateState::Collapses);
-	for (const double HorizontalN : {32782.75, 32897.66, 32979.74})
+	for (const double HorizontalN : {32782.75, 32897.66, 32832.5})
 	{
 		const CertificateResult Past = DecideWith(Wall.Model, CertificateOptions{}, BeamLoads(Wall, VerticalN, HorizontalN));
 		INFO("H " << HorizontalN << ": " << Past.State << " [" << Past.LoadFactorLower << ", " << Past.LoadFactorUpper << "], moving " << Past.UnconstrainedBodies.size() << ", hinging " << Past.HingingInterfaces.size());
@@ -403,6 +403,20 @@ TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Certificate.Selection.ARockingWallPastItsLimit
 		CHECK(!Past.HingingInterfaces.empty());
 	}
 	MESSAGE("rocking wall selection: " << SecondsSince(Start) << " s");
+}
+TEST_CASE("Slow.Certificate.Selection.TheForaboschiWallPastItsLimitNamesItsMechanism")
+{
+	const auto Start = std::chrono::steady_clock::now();
+	const BlockWall Wall = MakeForaboschiWall(1.0e9);
+	REQUIRE(Wall.Blocks.size() == 376u);
+	REQUIRE(Wall.Contacts == 1000);
+	const CertificateResult Past = DecideWith(Wall.Model, CertificateOptions{}, BeamLoads(Wall, 140000.0, 85000.0));
+	const double Seconds = SecondsSince(Start);
+	INFO("V 140000 H 85000: " << Past.State << " [" << Past.LoadFactorLower << ", " << Past.LoadFactorUpper << "] in " << Past.Iterations << ", moving " << Past.UnconstrainedBodies.size() << ", hinging " << Past.HingingInterfaces.size() << ", " << Seconds << " s");
+	MESSAGE("Foraboschi selection: " << Past.State << " [" << Past.LoadFactorLower << ", " << Past.LoadFactorUpper << "], moving " << Past.UnconstrainedBodies.size() << ", hinging " << Past.HingingInterfaces.size() << ", " << Seconds << " s");
+	CHECK(Past.State == CertificateState::Collapses);
+	CHECK(HasBody(Past.UnconstrainedBodies, Wall.Beam));
+	CHECK(!Past.HingingInterfaces.empty());
 }
 TEST_CASE("Deferred.Certificate.Anchor.ForaboschiWallWithCrushingBracketsThePaperModel")
 {
