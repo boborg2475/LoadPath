@@ -1065,15 +1065,15 @@ TEST_CASE("Cascade.AJointThatOpensWhileItSlidesSeversInTension")
 
 TEST_CASE("Cascade.ALiftJustAboveTheDilatancyReadsTension")
 {
-	const double Lift = LiftForMargin(PastFriction, 0.005);
-	CHECK(std::abs(Lift - PastFriction - 0.005 * std::sqrt(1.0 + Lift * Lift)) < 1.0e-14);
+	const double Lift = LiftForMargin(PastFriction, 2.0e-3);
+	CHECK(std::abs(Lift - PastFriction - 2.0e-3 * std::sqrt(1.0 + Lift * Lift)) < 1.0e-14);
 	CheckSeveredAxis(SeverUnderMotion(DryJoint(PastFriction), Vec3{1.0, 0.0, Lift}, Vec3{}, GoverningAxis::Shear), GoverningAxis::Tension);
 }
 
 TEST_CASE("Cascade.ALiftJustBelowTheThresholdReadsShear")
 {
-	const double Lift = LiftForMargin(PastFriction, 1.0e-4);
-	CHECK(std::abs(Lift - PastFriction - 1.0e-4 * std::sqrt(1.0 + Lift * Lift)) < 1.0e-14);
+	const double Lift = LiftForMargin(PastFriction, 5.0e-4);
+	CHECK(std::abs(Lift - PastFriction - 5.0e-4 * std::sqrt(1.0 + Lift * Lift)) < 1.0e-14);
 	CheckSeveredAxis(SeverUnderMotion(DryJoint(PastFriction), Vec3{1.0, 0.0, Lift}, Vec3{}, GoverningAxis::Tension), GoverningAxis::Shear);
 }
 
@@ -1091,4 +1091,29 @@ TEST_CASE("Cascade.AZeroCapJointSubtractsNoFrictionLift")
 	StrengthProfile Profile = DryJoint(0.7);
 	Profile.MaxShearStrengthPa = 0.0;
 	CheckSeveredAxis(SeverUnderMotion(Profile, Vec3{1.0, 0.0, 0.5}, Vec3{}, GoverningAxis::Shear), GoverningAxis::Tension);
+}
+
+TEST_CASE("Cascade.AJointRockingAboutItsCentreLineSeversInTension")
+{
+	const double SpinRad = 1.0 / BrickLengthM;
+	const Vec3 Rotation{0.0, SpinRad, 0.0};
+	const Vec3 Translation{0.5 * BrickHeightM * SpinRad, 0.0, 0.0};
+	for (const double YM : {-0.5 * BrickWidthM, 0.5 * BrickWidthM})
+	{
+		const Vec3 Toe = BedCornerVelocity(Translation, Rotation, 0.5 * BrickLengthM, YM);
+		const Vec3 Heel = BedCornerVelocity(Translation, Rotation, -0.5 * BrickLengthM, YM);
+		INFO("toe (" << Toe.X << ", " << Toe.Y << ", " << Toe.Z << "), heel (" << Heel.X << ", " << Heel.Y << ", " << Heel.Z << ")");
+		CHECK(std::abs(Toe.X) < 1.0e-12);
+		CHECK(std::abs(Toe.Y) < 1.0e-12);
+		CHECK(std::abs(Toe.Z + 0.5) < 1.0e-12);
+		CHECK(std::abs(Heel.X) < 1.0e-12);
+		CHECK(std::abs(Heel.Y) < 1.0e-12);
+		CHECK(std::abs(Heel.Z - 0.5) < 1.0e-12);
+	}
+	CheckSeveredAxis(SeverUnderMotion(DryJoint(PastFriction), Translation, Rotation, GoverningAxis::Shear), GoverningAxis::Tension);
+}
+
+TEST_CASE("Cascade.AJointThatClosesWhileItSlidesSeversInCompression")
+{
+	CheckSeveredAxis(SeverUnderMotion(DryJoint(PastFriction), Vec3{1.0, 0.0, -1.0}, Vec3{}, GoverningAxis::Shear), GoverningAxis::Compression);
 }

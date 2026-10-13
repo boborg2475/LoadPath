@@ -32,7 +32,7 @@ stacks, Paterson–Zwick, Couplet–Heyman at Milankovitch's 0.107478 with hinge
 the certificate's associative 31.07°, the cascade on the arch below least thickness, the dry
 wall at t / H within 1 % (10 × 8 and 4 × 5), the bonded 4 × 5 wall at its monolith factor
 `(t/H)(1 + f_t A_base / W) = 2.971` to 1 %, two screws at twice their published shear and
-withdrawal whatever the joint area. Default suite 386 cases in Debug and 422 in Release after
+withdrawal whatever the joint area. Default suite 388 cases in Debug and 424 in Release after
 slice 2b and the cohesive-wedge check (325 and 347 at the 6b close) (the arch, pile, arch-cascade, fuzz, small-wall and multi-panel factor anchors
 run only in Release under `LOADPATH_SLOW_IN_DEBUG`; seventeen `Slow.*` cases run in Release at
 every slice close, and the
@@ -252,9 +252,16 @@ the non-associative answer) and the two hanging-component cases (slice 6), red b
    - the file reader's own `crack_pass ≤ sever_pass` check is now masked by `Sever` refusing
      the same (defence in depth, no test fails without it);
    - a severed joint's axis now comes from the mechanism (2026-10-13, DESIGN §10 "a severed
-     joint's axis"); its `Ratio` is still the elastic reading's utilisation, which on a
-     mechanism means little; the 1e-3 threshold is written out in Cascade.cpp, not shared with
-     the certificate's `UnconstrainedComponent`;
+     joint's axis" and the two reviews' rulings; closed after the follow-up review, whose order
+     and threshold pins were added); its `Ratio` is still the elastic reading's utilisation, which
+     on a mechanism means little; the 1e-3 threshold is written out in Cascade.cpp, not shared with
+     the certificate's `UnconstrainedComponent`; no test drives a closing (Compression) mechanism
+     through the real certificate end to end (the follow-up review found 10 such joints in seeded
+     cascade draws with weakened crushing, 4 in `Cascade.Fuzz.SeededStructuresKeepTheCascadeInvariants`
+     and 6 in `Cascade.EventRegion.ReusedComponentsEqualAFreshJudge`, none asserting the axis); a
+     joint with `CompressiveStrengthPa == 0` gets no friction group in the certificate, so no
+     dilatancy, but `MechanismAxis` still subtracts μ (degenerate: it carries nothing); the
+     separator test's `HorizontalN < LpLimitN` check compares two constants;
    - the arch's two 0.484° slivers are released as single-voussoir clusters; whether a hinge
      needs a minimum rotation is still open, and this is the measurement against it;
    - the mechanism selection ignores finite positive shear caps (harmless at `t* = 0`; for
