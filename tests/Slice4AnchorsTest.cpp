@@ -382,3 +382,25 @@ TEST_CASE("Slow.Certificate.Anchor.TheMinhoWallCollapsesJustPastItsAssociativeLi
 	CHECK(ControlBelow.State == CertificateState::Stands);
 	CHECK(ControlPast.State == CertificateState::Collapses);
 }
+
+TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Certificate.Selection.ARockingWallPastItsLimitNamesItsMechanism")
+{
+	const auto Start = std::chrono::steady_clock::now();
+	const BlockWall Wall = MakeForaboschiBondWall(0.78, 16, DryJoint(0.6).CompressiveStrengthPa);
+	REQUIRE(Wall.Blocks.size() == 57u);
+	REQUIRE(Wall.Contacts == 137);
+	const double VerticalN = 80000.0;
+	const CertificateResult Control = DecideWith(Wall.Model, CertificateOptions{}, BeamLoads(Wall, VerticalN, 25000.0));
+	INFO("at 25000 N: " << Control.State << " [" << Control.LoadFactorLower << ", " << Control.LoadFactorUpper << "]");
+	CHECK(Control.State != CertificateState::Collapses);
+	for (const double HorizontalN : {32782.75, 32897.66, 32979.74})
+	{
+		const CertificateResult Past = DecideWith(Wall.Model, CertificateOptions{}, BeamLoads(Wall, VerticalN, HorizontalN));
+		INFO("H " << HorizontalN << ": " << Past.State << " [" << Past.LoadFactorLower << ", " << Past.LoadFactorUpper << "], moving " << Past.UnconstrainedBodies.size() << ", hinging " << Past.HingingInterfaces.size());
+		CHECK(Past.LoadFactorUpper < 1.0);
+		CHECK(Past.State == CertificateState::Collapses);
+		CHECK(HasBody(Past.UnconstrainedBodies, Wall.Beam));
+		CHECK(!Past.HingingInterfaces.empty());
+	}
+	MESSAGE("rocking wall selection: " << SecondsSince(Start) << " s");
+}

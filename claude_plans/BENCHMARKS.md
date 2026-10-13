@@ -238,7 +238,7 @@ says so.
   Orduña & Lourenço 2005 Part II, Fig. 4(b), p. 5167, levels at about 16.5 to 16.6 kN for infinite
   compressive strength (read from the plot), with the load acting at the 100 mm top beam (Fig.
   4(a)). Whole-wall overturning gives 16.67 kN, just above, as an upper value should. **Pinned
-  2026-10-13** (`Certificate.Anchor.TheMinhoWallCollapsesJustPastItsAssociativeLimit`) in the set-up
+  2026-10-13** (`Slow.Certificate.Anchor.TheMinhoWallCollapsesJustPastItsAssociativeLimit`) in the set-up
   that matches the paper: the push at the masonry top (z 1.0 m) with the 500 N beam's weight, the
   beam free to rotate, the bottom course five full blocks; hand value 16,569.2 N (a stepped wedge
   rotating about the toe with 20 heel blocks sliding up at the dilatancy angle; the non-associative

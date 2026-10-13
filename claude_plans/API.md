@@ -626,7 +626,7 @@ bound-group dual variables are omitted: per corner the minimum dissipation is th
 function of a strength region containing the origin, hence non-negative, and zero exactly for
 dilatant opening on a dry corner or zero relative motion where `T > 0`, which the rows above
 express. The selected mechanism is reported; `UnconstrainedBodies` and `HingingInterfaces`
-follow the listing threshold below. "Minimal" means highest work per unit
+follow the listing threshold below. The selection factor's retry escalates like the cone solves' (`1e-16`, `1e-14`, `1e-12` of the largest diagonal, coupling and opening terms included), with its single refinement pass unchanged. "Minimal" means highest work per unit
 motion, not fewest bodies: a cap on an exactly critical end brick is reported with that brick
 (TRAPS: a cluster released as one body must be a certified mechanism; two bricks whose joint
 centroid is past a pillar's edge are named together with one rigid rotation). **If the selection
@@ -1404,8 +1404,8 @@ factor itself, with `StructuredSolveMatchesOnTheCapSiteShape` building the site 
 the structured minimum at most 0.85 of the dense minimum (measured 0.67–0.84). Measured: shed 6.65 s to 4.4 s; the
 32 × 40 wall 106.8 s to 92.4 s.
 
-**3b, the stall rule (done 2026-10-12; reviewed, fix round in progress: the default window
-becomes 20, DESIGN §10).** `CertificateOptions::StallWindow` (10 today, 20 after the fix; 0
+**3b, the stall rule (done 2026-10-12, the default window 20 after its review; the
+complementarity restart 2026-10-13; DESIGN §10).** `CertificateOptions::StallWindow` (20; 0
 disables) and `StallImprovement` (0.5): a cone solve tracks its best largest relative
 residual and stops when a window of iterations has not brought it below `StallImprovement`
 times the best at the window's start, the window also restarting whenever the complementarity

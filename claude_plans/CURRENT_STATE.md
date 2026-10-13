@@ -32,7 +32,7 @@ stacks, Paterson–Zwick, Couplet–Heyman at Milankovitch's 0.107478 with hinge
 the certificate's associative 31.07°, the cascade on the arch below least thickness, the dry
 wall at t / H within 1 % (10 × 8 and 4 × 5), the bonded 4 × 5 wall at its monolith factor
 `(t/H)(1 + f_t A_base / W) = 2.971` to 1 %, two screws at twice their published shear and
-withdrawal whatever the joint area. Default suite 386 cases in Debug and 421 in Release after
+withdrawal whatever the joint area. Default suite 386 cases in Debug and 422 in Release after
 slice 2b and the cohesive-wedge check (325 and 347 at the 6b close) (the arch, pile, arch-cascade, fuzz, small-wall and multi-panel factor anchors
 run only in Release under `LOADPATH_SLOW_IN_DEBUG`; seventeen `Slow.*` cases run in Release at
 every slice close, and the
@@ -350,8 +350,9 @@ the non-associative answer) and the two hanging-component cases (slice 6), red b
   1e-12 shift or one refinement pass reads Undecided), the severed axis has scripted tests, reads
   Compression where the mechanism closes the joint and subtracts no friction lift on a zero-cap
   joint, and the Minho test is `Slow.`. Left from it: no fixture reaches the escalation's 1e-12 rung, which
-  on coupling-dominated components would be 1e-8 to 1e-6 of the site diagonal; the selection LP's single 1e-12 retry failed rocking walls past their limit (DESIGN §10
-  "the selection LP's retry", in a red-green round; left from it: no stall rule in the selection,
+  on coupling-dominated components would be 1e-8 to 1e-6 of the site diagonal; the selection LP's single 1e-12 retry failed rocking walls past their limit, fixed (DESIGN §10
+  "the selection LP's retry"; `Certificate.Selection.ARockingWallPastItsLimitNamesItsMechanism`);
+  left from it: the selection's first shift step (1e-16 against 1e-14) is pinned by no test, no stall rule in the selection,
   the positivity test accepting near-singular factors, the dense selection's 20 to 27 s on the full
   wall, the hinging list's noise on the 57-body wall); the Foraboschi fixture's limits at 80 and 140 kN (50.3 and
   83.6 kN) are 25 to 47 % above what Portioli's associative-to-non-associative ratio implies, so

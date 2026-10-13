@@ -27,7 +27,6 @@ constexpr int RefinementPasses = 1;
 constexpr int ShiftedRefinementPasses = 20;
 constexpr std::array<double, 3> RetryShifts{1.0e-16, 1.0e-14, 1.0e-12};
 constexpr double ComplementarityRestart = 0.5;
-constexpr double RegularisationRelative = 1.0e-12;
 constexpr double UnconstrainedComponent = 1.0e-3;
 constexpr double ObjectiveNorm = 1.0;
 constexpr double Unbounded = std::numeric_limits<double>::infinity();
@@ -572,6 +571,28 @@ bool HasPositivePivots(const Eigen::LLT<Eigen::MatrixXd>& Factor)
 	return std::all_of(Pivots.data(), Pivots.data() + Pivots.size(), [](double Pivot) { return Pivot > 0.0 && IsFinite(Pivot); });
 }
 
+bool FactorWithRetryShifts(Eigen::MatrixXd& M, Eigen::LLT<Eigen::MatrixXd>& Factor, bool& bShifted)
+{
+	const double LargestDiagonal = M.diagonal().maxCoeff();
+	if (!(LargestDiagonal > 0.0))
+	{
+		return false;
+	}
+	bShifted = true;
+	double Applied = 0.0;
+	for (const double Shift : RetryShifts)
+	{
+		M.diagonal().array() += (Shift - Applied) * LargestDiagonal;
+		Applied = Shift;
+		Factor.compute(M);
+		if (HasPositivePivots(Factor))
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
 using Matrix3 = std::array<double, 9>;
 using Jacobian = std::array<double, 18>;
 
@@ -858,24 +879,7 @@ bool FactorNormal(const Component& C, const Program& P, Normal& N)
 	{
 		return true;
 	}
-	const double LargestDiagonal = M.diagonal().maxCoeff();
-	if (!(LargestDiagonal > 0.0))
-	{
-		return false;
-	}
-	N.bShifted = true;
-	double Applied = 0.0;
-	for (const double Shift : RetryShifts)
-	{
-		M.diagonal().array() += (Shift - Applied) * LargestDiagonal;
-		Applied = Shift;
-		N.Factor.compute(M);
-		if (HasPositivePivots(N.Factor))
-		{
-			return true;
-		}
-	}
-	return false;
+	return FactorWithRetryShifts(M, N.Factor, N.bShifted);
 }
 
 Eigen::VectorXd SolveNormal(const Component& C, const Program& P, const Normal& N, const Eigen::VectorXd& R)
@@ -1545,19 +1549,10 @@ bool FactorSelection(SelectionSystem& Sys)
 		M.noalias() += D[Sel.RowCount - 1] * P.Offset * P.Offset.transpose();
 	}
 	Sys.Factor.compute(M);
-	if (!HasPositivePivots(Sys.Factor))
+	bool bShifted = false;
+	if (!HasPositivePivots(Sys.Factor) && !FactorWithRetryShifts(M, Sys.Factor, bShifted))
 	{
-		const double LargestDiagonal = M.diagonal().maxCoeff();
-		if (!(LargestDiagonal > 0.0))
-		{
-			return false;
-		}
-		M.diagonal().array() += RegularisationRelative * LargestDiagonal;
-		Sys.Factor.compute(M);
-		if (!HasPositivePivots(Sys.Factor))
-		{
-			return false;
-		}
+		return false;
 	}
 	return true;
 }
