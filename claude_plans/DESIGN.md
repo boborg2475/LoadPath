@@ -1725,3 +1725,29 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   (0, cap)), a few percent of loads stall and read Undecided [0, cap]; fail closed.
   `Deferred.Certificate.Anchor.ForaboschiWallWithCrushingBracketsThePaperModel` stays deferred (its
   red point is a sparse-path stall). The probe's sources are in the session scratchpad (`stall2\`).
+- *2026-10-13, orchestrator, the modified Cholesky (cold-review rulings: reverted):* the review found
+  the dense floor unsafe across scales. Removed pivots are mostly well-determined rows of light
+  bodies, not cancellation (in the default suite 2,209 of 10,794 removals had a pivot of at least a
+  tenth of their own diagonal): a 2.4 g pebble on the 23-block wall's beam turns decided Stands into
+  Undecided, and on the 46-block wall undoes the fix's own target; a light block on a 1000 kg cube
+  reads Undecided from mass ratios of 1e5 to 1e7 by size, and a wrong Stands [1000, 1000] at 1e11 to
+  1e12 where plain LLT gives the analytic Collapses (the deleted rows' equilibrium residual is never
+  driven down, and the termination test measures it against the component's load scale). A floor
+  relative to each row's own diagonal keeps every contrast answer but cures the target only from
+  1e-13, where four anchors fail: nothing in the normal matrix separates a stall direction from a
+  light body. The floor's margin was under 10×, not 100× (1,742 accepted suite pivots lie in
+  [1e-16, 1e-15) of the largest diagonal). It also left the dense shift escalation dead without a
+  ruling. Separately, 5 selection refinement passes lose a decided cascade (the lime fuzz seed
+  300281591 ends Undecided; 1, 2, 3, 4, 6 and 8 passes end Stands). **Rulings.** (1) The modified
+  Cholesky is reverted; the dense stalls (2 in 14,402 loads on the 46-block wall) return, fail closed,
+  and its test moves to `Deferred.`; the dense and sparse stalls near an interior optimum wait on the
+  designed fix logged before (a deflation of the collapse mechanism or a stable treatment of the
+  load-factor column). (2) The selection corrector takes 3 refinement passes (the smallest the probe
+  found to cure the rocking wall; the review found 3 green). (3) Guards, red against the committed
+  floor: the pebble on the 23-block wall stands at three loads and the pebble on the 46-block wall
+  collapses at 47,149 N; an analytic light-block table (a 1000 kg cube carrying a 1 cm or 1 m block
+  at mass ratios 1 to 1e10, cohesive with an analytic t*, and the dry pair) reads its analytic answers;
+  the lime fuzz seed 300281591 ends Stands. (4) API.md gains a light-body resolution limit, a
+  pre-existing one: plain LLT reads a wrong Stands for a light block at mass ratios of about 1e11 and
+  more (a body under about 1e-10 of its component's load scale passes the equilibrium tolerance
+  unsolved); logged as a fail-open limit at scales no physical debris reaches.
