@@ -1689,3 +1689,39 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   test's own wall (32,957.75 and 32,958.0 N, 1 in 301 on a 2 N grid), the selection running its 200
   iterations mostly on factors accepted after the 1e-16 shift; recorded in CURRENT_STATE and handed
   to the stall investigation with the positivity test and the missing stall rule.
+- *2026-10-13, orchestrator, the certificate's remaining isolated stalls (probe ruling):* with f_c
+  1.21 MPa the Foraboschi wall still stalled at isolated loads (40 kN / 23,900 N: the inscribed
+  solve stops on the stall rule after 114 iterations with the primal residual floored at 4.5e-8).
+  A high-effort probe over 36,399 decisions found: no rung above 1e-16 is ever reached; both cone
+  solves fail, about equally; the Newton direction is inaccurate even on unshifted factors with
+  positive pivots (one corrector's relative residual spikes to 2.5e3 at a pivot ratio of 7e-12 on
+  the sparse bordered path, where the dense path reads 1e-11), after which the primal lags μ by
+  about 200× and floors; neighbouring loads carry the same spikes, smaller, so a failure is the tail
+  of a spike-size distribution (5 in 101 loads on a 1 N grid at 40 kN, 13 in 261 at 80 kN). Root
+  cause: near an interior optimum the normal matrix becomes singular along the collapse mechanism,
+  and in the sparse bordered form the site block alone is singular there, so its conditioning is far
+  worse than the dense matrix's. The dense path is not immune: smallest fixture the 46-block bond
+  wall (1.04 m by 10 courses, f_c 1.21 MPa, dense path) at 80 kN / 47,150 N reads Undecided [0, 1000]
+  while 47,149 and 47,151 N collapse at t 0.5531. Measured fixes: refinement, CG preconditioned by
+  the factor, a pivoted sparse LU, restarts and perturbations each fail or move the failures; a
+  **modified Cholesky** on the dense cone factor (a pivot at or below 1e-16 of the largest diagonal
+  treated as removed) cures the 46-block wall (2 in 14,402 loads to 0, same states, iterations and
+  time) and changes nothing in the suite or the pin tables, but on the sparse bordered path makes it
+  worse (the elimination needs the tiny pivots); a primal clean-up at the stall plus a dense re-solve
+  for sparse components decides all 24 sparse failures (about 30 s for a re-solved point) but turns
+  the stall tests' unreachable fixture into a converging one. For the selection reproducer (the
+  57-body wall at 32,958 N): neither the cone fix nor a stricter pivot test cures it; 3 or more
+  refinement passes on the selection corrector do (0 in 301, mean iterations unchanged). **Rulings.**
+  (1) Adopt the modified Cholesky (δ 1e-16 of the largest diagonal) on the dense cone factor,
+  implemented in project code (no change to the vendored Eigen, which the probe patched for
+  convenience). (2) The selection corrector takes 5 refinement passes. (3) Red tests: the 46-block
+  wall at 80 kN / 47,150 N collapses with t_in in [0.55301, 0.55307] and t_out below 1; the 57-body
+  wall at 32,957.75 and 32,958.0 N collapses with the beam listed and a hinging list. (4) **Not
+  adopted:** the clean-up and dense re-solve, a third numerical patch stacked on the cone solves in one
+  day whose fallback costs about 30 s; the sparse path's loss of conditioning near an interior
+  optimum deserves a designed fix (a stable treatment of the dense load-factor column: a product-form
+  factor or an explicit deflation of the collapse mechanism), logged as the next certificate item.
+  Until then API.md states it: on the sparse path, near an interior optimum (t* strictly inside
+  (0, cap)), a few percent of loads stall and read Undecided [0, cap]; fail closed.
+  `Deferred.Certificate.Anchor.ForaboschiWallWithCrushingBracketsThePaperModel` stays deferred (its
+  red point is a sparse-path stall). The probe's sources are in the session scratchpad (`stall2\`).
