@@ -656,9 +656,11 @@ reason). **Ruling:** static admissibility is the standing criterion for the host
 authority found no mechanism. **Amended 2026-10-13** (DESIGN §10, the 5-diamond with friction and
 the false-Stands class): where slice 2 reports Mechanism and the certificate says `Stands`, the
 combined authority reports `Undecided`, releases nothing, and counts the disagreement. A probe
-DEM showed that case falling under Coulomb friction (the three-brick bridge at μ 5, and 4 of 5
-such random dry walls): the certificate's field can rest on associative dilatancy that a sliding
-joint does not supply. A red on the oracle property's never-Mechanism direction is therefore not
+DEM showed that case can fall under Coulomb friction (the three-brick bridge at μ 5 and λ (2.5,
+0.875) in every variant, and 3 of 5 such random dry walls robustly): the certificate's field can
+rest on associative dilatancy that a sliding joint does not supply. Undecided is a ceiling, not a
+collapse claim: some of these cases stand or fall on damping, and 71 of the 80 such verdicts in
+the random families are on cohesive structures that the probe DEM cannot model. A red on the oracle property's never-Mechanism direction is therefore not
 automatically a slice-2 defect. Where the elastic authority reads Undecided and the certificate
 Stands, the combined answer stays Stands; that residual is a known unsafe gap (about a fifth of
 such dry random walls fall in the probe DEM), logged in CURRENT_STATE.

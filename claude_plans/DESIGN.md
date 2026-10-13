@@ -1464,7 +1464,8 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   where the elastic authority found no mechanism, and an elastic mechanism the certificate cannot
   refute by a kinematic bound is no longer overruled into a Stands. Measured cost: one suite
   test (the bridge, re-pinned to Undecided), the Slow tier green; in the families it catches 4 of
-  the 5 DEM falls and loses one quasi-static stand. Host effect: Undecided and Stands both
+  the 5 DEM falls and loses one quasi-static stand (corrected by the cold-review rulings below:
+  3 robust falls, 1 damping-dependent, 1 sudden-only). Host effect: Undecided and Stands both
   release nothing, so the bridge does not fall in the host either way; the label stops claiming
   it stands. (2) The Undecided-over-Stands residual is logged as a known unsafe gap, like the
   wedge band, with its measured rate. (3) Logged candidates, not ruled: releasing the elastic
@@ -1486,3 +1487,34 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   tests (the bridge's no-mechanism sibling, the 5-diamond at μ 0.5, the bridge's provable points,
   the refereed-Undecided test, the Orduña bracket, two lime tests); dropping `bDisagreed` reddens
   the bridge and the dry wall.
+- *2026-10-13, orchestrator, the false-Stands rule (cold-review rulings):* the review confirmed the
+  code (the line does what API.md says; every non-equivalent mutant is caught; the cascade's
+  `Release` acts only on Collapses and `CrackBand` only on Overstressed, `FindClean` reuses a report
+  verbatim, so the new Undecided changes only the final `CascadeState`), the diamond (an
+  independent planar LP gives the 5-diamond's critical friction 0.4219954 and the 6-diamond's
+  0.8093690; the DEM's controls reproduce; 80 of 80 certificate Collapses fall) and the rule's
+  scope (34,300 judgements old against new: 80 changes, every one a single Mechanism-over-Stands
+  component going Stands → Undecided with nothing released either way). It refuted three of the
+  ruling's evidential claims, all corrected here and in API.md and ANCHORS: **the bridge** falls in
+  every DEM variant only at (2.5, 0.875); its siblings at λx 2.375 and 2.25 fall only under light
+  damping and stand at the catalogue's own kt/kn 0.4, arrested at about 2 mm, and the DEM's
+  boundary moves from λy 0.78 to 0.84 with damping, so "the elastic Mechanism tracks the DEM
+  boundary" holds only at ζ 0.05; **the dry walls**: 3 of the 5 fall robustly (the pinned 2592 in 16
+  of 16 variants), one only under light damping or sudden release, one only under sudden release;
+  **the scope**: 71 of the 80 changed verdicts are on cohesive structures (37 hunt, 34 mixed), which
+  the probe DEM cannot judge (it reads but never applies cohesion or tension), so most of the rule's
+  reach has no referee. The rule stands as a ceiling: where the elastic authority finds a mechanism
+  and the certificate's Stands may rest on dilatancy, the honest answer is that the library does
+  not know, which is Undecided. The review notes the DEM's fixed contact pairs carry a gap error
+  of the order of displacement × rotation, comparable to the elastic penetration at the
+  siblings' 2 mm arrest, so the DEM cannot settle them either way. **Consequence for the logged
+  candidate "release the elastic mechanism":** argued against for now; the evidence does not
+  support releasing where the DEM itself is split, and a DEM used as a test-tier referee would
+  need contact pairs that follow the geometry. Also from the review: a both-Stands knife-edge
+  stack (blocks resting with a centroid exactly over a support edge) falls in the DEM by
+  exponential growth from 3e-6 m; the ruling's "no robust DEM fall had an admissible elastic
+  iterate" covers the gap cases only, and a Stands carries no geometric-margin signal. Logged: a
+  seeded composition-table property (every consulted component's verdict follows API.md's table
+  for its elastic and kinematic pair, `bDisagreed` exactly on Mechanism over Stands, lists empty
+  unless Collapses; hunt draws 559 and 636 hit the case); a Collapses with an empty release set is
+  caught only by the new pins, not by any cascade test.

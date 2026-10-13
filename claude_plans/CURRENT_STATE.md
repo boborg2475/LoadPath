@@ -312,8 +312,16 @@ the non-associative answer) and the two hanging-component cases (slice 6), red b
    pinned one-sided). The 5-diamond at μ 0.5 stands (DESIGN §10 "the 5-diamond with friction and the
    false-Stands class": a probe DEM and the exact LP agree on the switch at μ 0.422); it is pinned
    (`Statics.Anchor.FiveDiamondStandsWithFrictionAboveTheCriticalValue`), and an elastic Mechanism
-   under a certificate Stands now reads Undecided (2026-10-13, in cold review; the bridge at μ 5
-   and a rebuilt random dry wall pin it). **Known unsafe gap, logged 2026-10-13:**
+   under a certificate Stands now reads Undecided (2026-10-13, done after a cold review; the
+   bridge at μ 5 and a rebuilt random dry wall pin it). Left from the review: 71 of the rule's 80
+   verdict changes in the random families are on cohesive structures that no referee can judge
+   (the probe DEM has no cohesion), and the DEM's fixed contact pairs cannot settle cases that
+   arrest at millimetres (the bridge's siblings), so releasing the elastic mechanism stays
+   unsupported until a referee with geometry-following contacts exists; a seeded
+   composition-table property over the combined authority is owed (hunt draws 559 and 636 hit the
+   disagreement case); a Collapses with an empty release set is caught by no cascade test; a
+   Stands carries no geometric-margin signal (a knife-edge stack both authorities stand falls in
+   the DEM). **Known unsafe gap, logged 2026-10-13:**
    where the elastic authority reads Undecided and the certificate Stands, the structure can
    still fall under Coulomb friction (36 of 152 such dry random walls and 4 of 135 dry random
    stacks fall in the probe DEM); no cheap discriminator was found; candidates are a load-stepped
