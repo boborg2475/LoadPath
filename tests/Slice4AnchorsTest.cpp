@@ -404,3 +404,27 @@ TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Certificate.Selection.ARockingWallPastItsLimit
 	}
 	MESSAGE("rocking wall selection: " << SecondsSince(Start) << " s");
 }
+TEST_CASE("Deferred.Certificate.Anchor.ForaboschiWallWithCrushingBracketsThePaperModel")
+{
+	struct Case
+	{
+		double VerticalN;
+		double ModelCapacityN;
+		double CollapsedN;
+	};
+	const Case Cases[] = {{40000.0, 23900.0, 27000.0}, {80000.0, 39800.0, 44000.0}, {140000.0, 55800.0, 62000.0}};
+	const auto Start = std::chrono::steady_clock::now();
+	const BlockWall Wall = MakeForaboschiWall(1.21e6);
+	REQUIRE(Wall.Blocks.size() == 376u);
+	REQUIRE(Wall.Contacts == 1000);
+	for (const Case& K : Cases)
+	{
+		const CertificateResult Holds = DecideWith(Wall.Model, CertificateOptions{}, BeamLoads(Wall, K.VerticalN, K.ModelCapacityN));
+		const CertificateResult Falls = DecideWith(Wall.Model, CertificateOptions{}, BeamLoads(Wall, K.VerticalN, K.CollapsedN));
+		INFO("V " << K.VerticalN << ": at " << K.ModelCapacityN << " N " << Holds.State << " [" << Holds.LoadFactorLower << ", " << Holds.LoadFactorUpper << "], at " << K.CollapsedN << " N " << Falls.State << " [" << Falls.LoadFactorLower << ", " << Falls.LoadFactorUpper << "]");
+		MESSAGE("V " << K.VerticalN << ": " << Holds.State << " [" << Holds.LoadFactorLower << ", " << Holds.LoadFactorUpper << "] / " << Falls.State << " [" << Falls.LoadFactorLower << ", " << Falls.LoadFactorUpper << "]");
+		CHECK(Holds.State == CertificateState::Stands);
+		CHECK(Falls.State == CertificateState::Collapses);
+	}
+	MESSAGE("Foraboschi with crushing: " << SecondsSince(Start) << " s");
+}

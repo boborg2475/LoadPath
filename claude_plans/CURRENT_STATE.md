@@ -361,9 +361,16 @@ the non-associative answer) and the two hanging-component cases (slice 6), red b
   "the selection LP's retry"; `Certificate.Selection.ARockingWallPastItsLimitNamesItsMechanism`);
   left from it: the selection's first shift step (1e-16 against 1e-14) is pinned by no test, no stall rule in the selection,
   the positivity test accepting near-singular factors, the dense selection's 20 to 27 s on the full
-  wall, the hinging list's noise on the 57-body wall); the Foraboschi fixture's limits at 80 and 140 kN (50.3 and
-  83.6 kN) are 25 to 47 % above what Portioli's associative-to-non-associative ratio implies, so
-  those loads stay unpinned (the rigid beam with a point load is suspect); the Ferris & Tin-Loi
+  wall, the hinging list's noise on the 57-body wall); the Foraboschi fixture's limits at 80 and 140 kN with infinite
+  crushing (50.3 and 83.6 kN) sat 25 to 47 % above Portioli's model; with the paper's f_c 1.21 MPa
+  the certificate's limits are about 25.0, 40.0 and 57.1 kN at 40, 80 and 140 kN, 4.6, 0.5 and
+  2.3 % above the model's 23.9, 39.8 and 55.8 kN (2026-10-13), so the gap was the missing crushing
+  cap, not the fixture; `Deferred.Certificate.Anchor.ForaboschiWallWithCrushingBracketsThePaperModel`
+  pins Stands at the model values and Collapses about 8 % past each limit, and is RED at 40 kN only:
+  an isolated repeatable stall, Undecided [0, 1000] in 114 iterations at exactly 23,900 N (load
+  factor about 1.27; 23,875, 23,901 and 23,925 N stand in about 60), with more at 25,046 N
+  (40 kN) and a pocket at 48,125 to 48,350 N (80 kN, about 20 % past the limit, neighbours
+  Collapses): under investigation; the 80 kN Stands point has only 0.5 % margin; the Ferris & Tin-Loi
   wall at G = 64 reads Undecided within about 1e-6 of its threshold (written into API.md as a
   resolution limit, fail closed); the shed's certificate is about 10 % slower (4.6 to 5.0 s).
 - B-WDG-01, the 3DEC tetrahedral wedge: the certificate pins its own associative switch at
