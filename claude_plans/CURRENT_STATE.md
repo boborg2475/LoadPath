@@ -32,7 +32,7 @@ stacks, Paterson–Zwick, Couplet–Heyman at Milankovitch's 0.107478 with hinge
 the certificate's associative 31.07°, the cascade on the arch below least thickness, the dry
 wall at t / H within 1 % (10 × 8 and 4 × 5), the bonded 4 × 5 wall at its monolith factor
 `(t/H)(1 + f_t A_base / W) = 2.971` to 1 %, two screws at twice their published shear and
-withdrawal whatever the joint area. Default suite 377 cases in Debug and 407 in Release after
+withdrawal whatever the joint area. Default suite 377 cases in Debug and 408 in Release after
 slice 2b and the cohesive-wedge check (325 and 347 at the 6b close) (the arch, pile, arch-cascade, fuzz, small-wall and multi-panel factor anchors
 run only in Release under `LOADPATH_SLOW_IN_DEBUG`; fourteen `Slow.*` cases run in Release at
 every slice close, and the
@@ -317,9 +317,11 @@ the non-associative answer) and the two hanging-component cases (slice 6), red b
    verdict changes in the random families are on cohesive structures that no referee can judge
    (the probe DEM has no cohesion), and the DEM's fixed contact pairs cannot settle cases that
    arrest at millimetres (the bridge's siblings), so releasing the elastic mechanism stays
-   unsupported until a referee with geometry-following contacts exists; a seeded
-   composition-table property over the combined authority is owed (hunt draws 559 and 636 hit the
-   disagreement case); a Collapses with an empty release set is caught by no cascade test; a
+   unsupported until a referee with geometry-following contacts exists; the seeded
+   composition-table property is done (`Statics.Combined.EveryConsultedComponentFollowsTheCompositionTable`,
+   which also catches a Collapses with an empty release set), but no generated structure reaches a
+   certificate Undecided, so that row is pinned only by
+   `Statics.Combined.ElasticMechanismWithCertificateUndecidedReleasesNothing`; a
    Stands carries no geometric-margin signal (a knife-edge stack both authorities stand falls in
    the DEM). **Known unsafe gap, logged 2026-10-13:**
    where the elastic authority reads Undecided and the certificate Stands, the structure can
