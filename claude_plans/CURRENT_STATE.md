@@ -32,7 +32,7 @@ stacks, Paterson–Zwick, Couplet–Heyman at Milankovitch's 0.107478 with hinge
 the certificate's associative 31.07°, the cascade on the arch below least thickness, the dry
 wall at t / H within 1 % (10 × 8 and 4 × 5), the bonded 4 × 5 wall at its monolith factor
 `(t/H)(1 + f_t A_base / W) = 2.971` to 1 %, two screws at twice their published shear and
-withdrawal whatever the joint area. Default suite 352 cases in Debug and 379 in Release after
+withdrawal whatever the joint area. Default suite 356 cases in Debug and 383 in Release after
 slice 2e (325 and 347 at the 6b close) (the arch, pile, arch-cascade, fuzz, small-wall and multi-panel factor anchors
 run only in Release under `LOADPATH_SLOW_IN_DEBUG`; fourteen `Slow.*` cases run in Release at
 every slice close, and the
@@ -74,8 +74,9 @@ the non-associative answer) and the two hanging-component cases (slice 6), red b
      50, and all Stand in 5 to 9 iterations if the dry rule is applied to them, which the
      scope ruling forbids (`Statics.Lime.AReclosingCohesiveCornerStaysOutOfSlipping`); a
      re-closing cohesive corner got its own ruling in slice 2e;
-   - **slice 2e, in its cold-review fix round 2026-10-12 (red step d089f5a, rule 8db9af3;
-     DESIGN §10 "slice 2e opening", "dev notes", "cold-review rulings")**: a cohesive
+   - **slice 2e, fix round green and in follow-up review 2026-10-12 (red step d089f5a, rule
+     8db9af3, fix red step 9da89f8; DESIGN §10 "slice 2e opening", "dev notes", "cold-review
+     rulings", "fix-round dev notes")**: a cohesive
      tensionless corner that re-closes for the second or later time in one solve resets its
      tangential reference to the current offset (carried as a held pre-force kt·Ref in the
      load); the seven lime points Stand in 8 to 16 iterations, the 140-point lime grid goes
@@ -92,7 +93,8 @@ the non-associative answer) and the two hanging-component cases (slice 6), red b
      slip, so re-closing them Stuck is the candidate fix (**the next item after 2e closes**);
      readings at the iteration cap on a corner reset in the last pass are out of equilibrium
      (the `HeldN` pattern, untested); restore-step re-closures neither count nor reset by
-     ruling, and the mutant making them count survives the suite; readings at formerly cycling
+     ruling, and the mutant making them count survives the suite; the zero-reference skip in
+     `AssembleLoad` survives its mutant (no reading moves); readings at formerly cycling
      points are path-dependent between equally admissible rules (accepted);
    - the restore step (`RestoreInadmissibleReleases`) re-closes a floor-opened corner on a
      motion gap with no floor check: a corner Open in the full-rank state returns Undecided

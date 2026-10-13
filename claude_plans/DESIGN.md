@@ -1265,3 +1265,17 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   reset in the last pass are out of equilibrium (the advanced reference against the previous
   field, the `HeldN` pattern); the grid test pins its Stand and Mechanism counts as well as
   its Undecided; API.md gains the tangential reference, the 2d slip re-entry and this rule.
+- *2026-10-12, orchestrator, slice 2e fix-round dev notes:* the guard is removed from
+  `ResetReferenceOnReclosure` (from the second re-closure the reference is always −T.ShearN / kt);
+  `IsExactlyZero` (exact `==`, no tolerance) gates the pre-force in `AssembleLoad` and the add in
+  `ReadJoint`, so a corner whose reference is zero reads exactly what it read before the slice,
+  −0.0 included. Measured: the 4 × 3 and 6 × 3 walls Stand in 6 and 10, the weak-perpend 2 × 5
+  reads Overstressed after 5 at λx 0.3, 0.5, 0.7, the twelve moved points and the seven converged
+  ones do not move, 383 Release / 356 Debug green, `Slow.*` 14 green, no pin moved. Mutants: the
+  guard put back reddens the two walls and the Overstressed fixture; the `ReadJoint` skip removed
+  reddens the signed-zero test; the count kept across solves reddens `SolvingTwiceReadsTheSameField`
+  when run alone, and in the full run (where earlier tests have already polluted the shared count)
+  reddens the converged pins and the grid instead, so it is caught either way; the reference
+  cleared on opening leaves the suite green, as ruled. Survives: the `AssembleLoad` skip removed
+  (adding a +0.0 pre-force to the load changes no reading in the suite; the skip there is for
+  symmetry with the reading, not for a measured difference).

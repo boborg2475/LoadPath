@@ -114,6 +114,11 @@ struct CornerRatios
 	double Shear = 0;
 };
 
+bool IsExactlyZero(const Vec3& V)
+{
+	return V.X == 0.0 && V.Y == 0.0 && V.Z == 0.0;
+}
+
 double PositivePart(double X)
 {
 	return X < 0.0 ? 0.0 : X;
@@ -355,7 +360,7 @@ Eigen::VectorXd AssembleLoad(const Problem& P, const std::vector<JointState>& St
 		const Joint& J = P.Joints[I];
 		for (std::size_t C = 0; C < CornerCount; ++C)
 		{
-			if (States[I].Status[C] == CornerStatus::Stuck)
+			if (States[I].Status[C] == CornerStatus::Stuck && !IsExactlyZero(States[I].ReferenceM[C]))
 			{
 				const Vec3 PreForceN = Scale(J.TangentialStiffnessNPerM, States[I].ReferenceM[C]);
 				AddForceAt(Load, J.OffsetB, J.CentroidBM, J.CornerM[C], PreForceN);
@@ -577,13 +582,7 @@ void ResetReferenceOnReclosure(const Joint& J, std::size_t C, const TrialForces&
 	{
 		return;
 	}
-	const Vec3 OffsetM = Scale(-1.0 / J.TangentialStiffnessNPerM, T.ShearN);
-	const double ForgottenN = J.TangentialStiffnessNPerM * Length(Sub(OffsetM, State.ReferenceM[C]));
-	if (!(ForgottenN <= J.CohesionCapacityN + J.Friction * PositivePart(T.NormalN)))
-	{
-		return;
-	}
-	State.ReferenceM[C] = OffsetM;
+	State.ReferenceM[C] = Scale(-1.0 / J.TangentialStiffnessNPerM, T.ShearN);
 }
 
 UpdateOutcome UpdateActiveSet(const Problem& P, const Eigen::VectorXd& X, const std::vector<Eigen::VectorXd>& NeutralMotions, std::vector<JointState>& States)
@@ -780,7 +779,7 @@ InterfaceReading ReadJoint(const Joint& J, const JointState& State, const Eigen:
 			const TrialForces T = Trial(J, C, X);
 			const bool bNoiseTension = J.bReleasesOpening && T.NormalN < 0.0 && T.NormalN >= -NoiseFloorN;
 			Corner.NormalForceN = bNoiseTension ? 0.0 : T.NormalN;
-			Corner.ShearForceN = Corner.bSlipping ? State.HeldN[C] : Add(T.ShearN, Scale(J.TangentialStiffnessNPerM, State.ReferenceM[C]));
+			Corner.ShearForceN = Corner.bSlipping ? State.HeldN[C] : IsExactlyZero(State.ReferenceM[C]) ? T.ShearN : Add(T.ShearN, Scale(J.TangentialStiffnessNPerM, State.ReferenceM[C]));
 		}
 		const Vec3 ForceN = Add(Scale(Corner.NormalForceN, J.Normal), Corner.ShearForceN);
 		Reading.NormalForceN += Corner.NormalForceN;
