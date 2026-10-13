@@ -1476,3 +1476,13 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   the bridge reads Undecided with one disagreement; the 5-diamond's certificate switch two-sided
   around μ 0.422 and its combined Stands at μ 0.5 with the DEM's evidence recorded; the probe's
   sources and data are in the session scratchpad, not the repository.
+- *2026-10-13, orchestrator, the false-Stands rule (dev notes):* one line in `Consult`: on a
+  certificate `Stands`, `bDisagreed` is the elastic Mechanism test and the verdict is Undecided
+  when it holds, Stands otherwise; `Kinematic` and the load factors are reported as before and
+  nothing is released. `StructuralAuthority.h`'s `bDisagreed` comment and API.md (the theorem
+  ruling, the composition table, the Mechanism bullet, the `Disagreements` comment) say so.
+  Measured: 407 Release / 377 Debug, `Cascade.*` 38 green (no cascade test assumed a Stands
+  there), `Slow.*` 14 green. Mutants: Undecided also over an elastic Undecided reddens seven
+  tests (the bridge's no-mechanism sibling, the 5-diamond at μ 0.5, the bridge's provable points,
+  the refereed-Undecided test, the Orduña bracket, two lime tests); dropping `bDisagreed` reddens
+  the bridge and the dry wall.

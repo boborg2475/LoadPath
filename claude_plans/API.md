@@ -296,9 +296,11 @@ never mutates the structure. The host may call it on any thread.
   path can reach a singular admissible set on a structure for which a statically admissible
   field exists (the three-brick bridge at μ 5, λ = (2.5, 0.875), reads Mechanism after 5
   passes while an NNLS search finds an admissible field at 0.7 μ and 1.02 × the load). Under
-  non-associative friction the lower-bound theorem is not sufficient, so which answer is
-  physical is open; the slice-4 kinematic certificate referees Mechanism verdicts as well as
-  Undecided ones, and a host treats Mechanism as a release. A neutral singular set (zero load
+  non-associative friction the lower-bound theorem is not sufficient; a probe DEM (2026-10-13)
+  showed this bridge falling, so the elastic Mechanism was the physical answer there, and the
+  combined authority now reports Undecided rather than the certificate's Stands in that case.
+  The slice-4 kinematic certificate referees Mechanism verdicts as well as Undecided ones, and a
+  host treats a combined Collapses as a release. A neutral singular set (zero load
   projection) reads Stands, so Stands does not require a non-singular stiffness.
 - **Undecided**: the active set did not converge within the cap, a restoration needed a
   value the last full-rank solve does not supply (the fail-closed clause below), or a
@@ -650,10 +652,16 @@ that none exists for the associative problem, and since the non-associative coll
 exceeds the associative one, `Collapses` holds for the physical joint too. The gap is the other
 direction: under non-associative friction a structure with an admissible field can still fail
 along a sliding path (Ferris & Tin-Loi; Orduña's pile reads [0.427, 0.553] for exactly this
-reason). **Ruling:** static admissibility is the standing criterion for the host. Where slice 2
-reports Mechanism and the certificate says `Stands`, the certificate wins, nothing is released,
-and the disagreement is counted by the combined authority (slice 4b). A future red on the
-oracle property's never-Mechanism direction is therefore a defect in slice 2, not a known limit.
+reason). **Ruling:** static admissibility is the standing criterion for the host where the elastic
+authority found no mechanism. **Amended 2026-10-13** (DESIGN §10, the 5-diamond with friction and
+the false-Stands class): where slice 2 reports Mechanism and the certificate says `Stands`, the
+combined authority reports `Undecided`, releases nothing, and counts the disagreement. A probe
+DEM showed that case falling under Coulomb friction (the three-brick bridge at μ 5, and 4 of 5
+such random dry walls): the certificate's field can rest on associative dilatancy that a sliding
+joint does not supply. A red on the oracle property's never-Mechanism direction is therefore not
+automatically a slice-2 defect. Where the elastic authority reads Undecided and the certificate
+Stands, the combined answer stays Stands; that residual is a known unsafe gap (about a fifth of
+such dry random walls fall in the probe DEM), logged in CURRENT_STATE.
 The pile's non-associative factor is pinned as a bracket on `[t_in, t_out]` containing the
 associative value, not as the certificate's answer.
 
@@ -706,7 +714,7 @@ struct AuthorityResult {
 	ComponentVerdict Worst = ComponentVerdict::Undecided;  // InvalidInput > Undecided > Collapses > Overstressed > Stands
 	std::vector<InterfaceReading> Readings;      // the elastic authority's readings, every live interface, ascending slot order
 	std::vector<ComponentReport> Components;     // ascending by lowest body slot
-	int Disagreements = 0;                       // components where the certificate overruled an elastic Mechanism
+	int Disagreements = 0;                       // components where the elastic said Mechanism and the certificate Stands (reported Undecided)
 	std::uint64_t Revision = 0;                  // Structure::Revision() when judged (stage 2)
 	std::uint64_t Lineage = 0;                   // Structure::Lineage() of the judged structure; a Previous from another lineage is unmatched (stage 2 fix)
 	AuthorityOptions Options;                    // the options judged under; a Previous under other options is unmatched (stage 2)
@@ -740,7 +748,9 @@ shared partition code, so the mapping of bodies to components is one definition)
   certificate is not consulted, its crushing bound would only restate the same joint);
 - elastic `Mechanism` or `Undecided` → the certificate is consulted on that component alone (a
   structure holding only that component's bodies, grounded bodies kept, loads filtered):
-  `Stands` → `Stands`, and `bDisagreed` with `Disagreements + 1` when the elastic said Mechanism;
+  `Stands` → `Stands` when the elastic said Undecided, and `Undecided` with `bDisagreed` and
+  `Disagreements + 1` when the elastic said Mechanism (nothing released; the certificate's
+  `Stands` stays in `Kinematic`);
   `Collapses` → `Collapses` with the certificate's lists as `Release`, `Mechanism` and `Hinging`;
   `Undecided` → `Undecided`, nothing released;
 - elastic `InvalidInput` → the whole result is `InvalidInput` with the elastic's interface.

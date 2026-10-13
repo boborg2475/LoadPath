@@ -30,7 +30,7 @@ struct ComponentReport
 	// Undecided when the certificate was not consulted.
 	CertificateState Kinematic = CertificateState::Undecided;
 	bool bConsultedCertificate = false;
-	// Elastic Mechanism overruled by a certificate Stands.
+	// Elastic Mechanism against a certificate Stands; the component then reads Undecided, not Stands.
 	bool bDisagreed = false;
 	// From the certificate when consulted, else NaN.
 	double LoadFactorLower = 0.0;

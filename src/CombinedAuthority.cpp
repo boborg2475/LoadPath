@@ -341,8 +341,8 @@ private:
 		switch (Kinematic.State)
 		{
 		case CertificateState::Stands:
-			Report.Verdict = ComponentVerdict::Stands;
 			Report.bDisagreed = Report.Elastic == StandingState::Mechanism;
+			Report.Verdict = Report.bDisagreed ? ComponentVerdict::Undecided : ComponentVerdict::Stands;
 			break;
 		case CertificateState::Collapses:
 			Report.Verdict = ComponentVerdict::Collapses;
