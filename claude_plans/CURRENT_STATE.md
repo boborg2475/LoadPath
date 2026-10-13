@@ -34,7 +34,7 @@ wall at t / H within 1 % (10 × 8 and 4 × 5), the bonded 4 × 5 wall at its mon
 `(t/H)(1 + f_t A_base / W) = 2.971` to 1 %, two screws at twice their published shear and
 withdrawal whatever the joint area. Default suite 379 cases in Debug and 411 in Release after
 slice 2b and the cohesive-wedge check (325 and 347 at the 6b close) (the arch, pile, arch-cascade, fuzz, small-wall and multi-panel factor anchors
-run only in Release under `LOADPATH_SLOW_IN_DEBUG`; fourteen `Slow.*` cases run in Release at
+run only in Release under `LOADPATH_SLOW_IN_DEBUG`; fifteen `Slow.*` cases run in Release at
 every slice close, and the
 cheap `Measure.Scale.*` rows after them); the `Deferred.*` tier holds the physical wedge pin
 (it belonged to slice 7, which the owner dropped on 2026-10-12; the pin stays as the record of
@@ -313,8 +313,10 @@ the non-associative answer) and the two hanging-component cases (slice 6), red b
    unsupported until a referee with geometry-following contacts exists; the seeded
    composition-table property is done (`Statics.Combined.EveryConsultedComponentFollowsTheCompositionTable`,
    which also catches a Collapses with an empty release set), but no generated structure reaches a
-   certificate Undecided, so that row is pinned only by
-   `Statics.Combined.ElasticMechanismWithCertificateUndecidedReleasesNothing`; a
+   certificate Undecided: `Statics.Combined.ElasticMechanismWithCertificateUndecidedReleasesNothing`
+   pins (Mechanism, Undecided), and (Undecided, Undecided) is pinned by nothing (the cold review's
+   mutant releasing the bodies there passes every tier; a fixture: the same brick with
+   `MaxActiveSetIterations = 1`); a
    Stands carries no geometric-margin signal (a knife-edge stack both authorities stand falls in
    the DEM). **Known unsafe gap, logged 2026-10-13:**
    where the elastic authority reads Undecided and the certificate Stands, the structure can
@@ -349,7 +351,10 @@ the non-associative answer) and the two hanging-component cases (slice 6), red b
   55, 58, 59.5, 62.5, 64, 67 to 70 kN (paper model 55.77, test 61.3). With f_c 1.21 MPa the
   certificate reads Undecided even at 40 kN vertical and no push (with 1e9 Pa it Stands). Only
   the 40 kN case is pinned; the other two need the interior-point failure on this wall
-  diagnosed first.
+  diagnosed first. The 40 kN pin's upper side (Collapses at 28 kN) is the certificate's own
+  boundary with almost no margin (27 kN collapses only at 1000 iterations): if the B-SW-01
+  shortfall is in the certificate, a fix could move it to 29 to 30 kN and redden the pin; the test
+  does not assert the fixture's counts (376 blocks, 1000 contacts).
 - B-SW-01, the Minho SW30 wall (1.0 x 1.0 x 0.2 m, 0.2 x 0.1 x 0.2 m blocks, bottom course five
   full, 30 kN on a 100 mm top beam, push at the beam centroid, mu 0.66): the certificate's limit
   is 15.54 kN (15.51 at G = 64, same pushing +x or -x), below the 16.55 +- 0.2 kN read from

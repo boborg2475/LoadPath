@@ -12,12 +12,12 @@ $Root = Split-Path -Parent $PSScriptRoot
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 $Exe = "$Root\build\msvc\tests\$Config\loadpath_tests.exe"
 if ($null -eq $DoctestArgs) { $DoctestArgs = @() }
-$CallerIncludes = @($DoctestArgs | Where-Object { $_ -match '^--?(dt-)?(tc|test-case)(=|$)' })
+$CallerIncludes = @($DoctestArgs | Where-Object { $_ -match '^-+(dt-)?(tc|test-case)(=|$)' })
 if ($CallerIncludes.Count -gt 0) {
     & $Exe @DoctestArgs
     exit $LASTEXITCODE
 }
-$ExcludePattern = '^--?(dt-)?(tce|test-case-exclude)=(.*)$'
+$ExcludePattern = '^-+(dt-)?(tce|test-case-exclude)=(.*)$'
 $CallerExcludes = @($DoctestArgs | Where-Object { $_ -match $ExcludePattern } | ForEach-Object { $_ -replace $ExcludePattern, '$3' })
 $Excludes = (@($CallerExcludes) + "Deferred.*,Slow.*,Measure.*") -join ','
 $Passed = @($DoctestArgs | Where-Object { $_ -notmatch $ExcludePattern })

@@ -221,7 +221,7 @@ says so.
   units overall; courses 1, 3 and 5 are a half block, four full blocks and a half block; courses
   2, 4 and 6 are five full blocks; 33 blocks and 83 contacts (one per interface), matching the
   published table. **Pinned 2026-10-13** (`Certificate.Anchor.FerrisTinLoiWallStandsToTheAssociativeLoadFactor`):
-  the certificate stands to 0.642859 against the LP's 0.64286 (9/14), above the MPEC 0.63898.
+  the certificate stands to 0.642859 against the LP's 0.64286, above the MPEC 0.63898.
   Ahmed also notes that the published Example 3 figure probably belongs to a
   different wall from the one drawn, which matters for B-FTL-03.
 - **F-FOR-01, Foraboschi wall: buildable, thickness inferred.** Portioli et al. 2012, Fig. 3a:
