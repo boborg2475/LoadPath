@@ -219,9 +219,11 @@ the non-associative answer) and the two hanging-component cases (slice 6), red b
    - certificate: uncaught mutants recorded in ANCHORS: the retry's `LargestDiagonal` without
      the coupling term (dense and bordered), the bordered regularisation's size (× 100 green),
      the NaN-only part of the positivity scan, either bordered pivot guard alone (they back
-     each other up; the suite reaches the retry ten times); the structured `SolveNormal` cap loop allocates a temporary per site per solve and
-     is slower than the dense loop was (1.70 s against 1.05 s on the shed; `SolveInto` into a
-     per-site scratch should recover about 1 s); there is no regularised retry at the cap-site
+     each other up; the suite reaches the retry ten times); the structured `SolveNormal` cap loops solve into per-site scratch on the `Normal`
+     (2026-10-12; `mutable`, reused across solves, no answer depends on it), bit-identical,
+     shed certificate 5.17 to 4.37 s and half warehouse 47.2 to 44.0 s on a loaded machine (the
+     earlier 1.70 s / 1.05 s figures were the loop's own share, not the certificate); `Y` and the
+     sparse path's bordered solve still allocate per call; there is no regularised retry at the cap-site
      level, so one site's rounding failure reads the component Undecided (rare); the stall
      rule is a safety stop that no large fixture in the suite reaches since 3c (its pins are
      the ec6 1e-15 wall and the shear-capped brick);

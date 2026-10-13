@@ -324,3 +324,16 @@ The warm judge on the 8,000-pair field after one removal: 85 ms to 19 ms (`FindC
 
 After the fix round (0e7fa19): the wall 15 ms, the half warehouse 108 ms, the warehouse 325 to
 334 ms (noise around the 305 to 331 ms the review read), the crack band bucketed by component.
+
+The certificate's cap-site loops solving into per-site scratch (2026-10-12, Release, copied
+exes from before and after, alternated, best of three `DecideWith` calls per process; every bound
+and iteration count bit-identical in hexfloat on the shed, the half warehouse and the 10 × 8 wall):
+
+| Structure | Certificate before | After | Ratio |
+|---|---|---|---|
+| Shed | 5,174 ms | 4,370 ms | 0.84 |
+| Half warehouse | 47.2 s | 44.0 s | 0.93 |
+| Wall 10 × 8 | 619 ms | 512 ms | noise |
+
+Run-to-run noise is about ±0.5 s on the shed. The absolute times are below the 7.1 s and 73.6 s
+the profile table records for the shed and half warehouse; that table predates 3c.

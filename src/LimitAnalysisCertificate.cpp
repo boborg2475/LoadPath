@@ -155,6 +155,9 @@ struct Normal
 	std::vector<Eigen::MatrixXd> CapSolvedF;
 	std::vector<CapScratch> CapScratchD;
 	Eigen::LLT<Eigen::MatrixXd> Factor;
+	mutable std::vector<Eigen::MatrixXd> CapRhs;
+	mutable std::vector<Eigen::MatrixXd> CapSolved;
+	mutable std::vector<Eigen::VectorXd> CapCorrection;
 };
 
 struct Embedding
@@ -773,6 +776,9 @@ bool FactorNormal(const Component& C, const Program& P, Normal& N)
 	N.CapStructured.resize(P.CapSites.size());
 	N.CapSolvedF.resize(P.CapSites.size());
 	N.CapScratchD.resize(P.CapSites.size());
+	N.CapRhs.resize(P.CapSites.size());
+	N.CapSolved.resize(P.CapSites.size());
+	N.CapCorrection.resize(P.CapSites.size());
 	for (std::size_t Index = 0; Index < P.CapSites.size(); ++Index)
 	{
 		const CapSite& Cap = P.CapSites[Index];
@@ -869,13 +875,12 @@ Eigen::VectorXd SolveNormal(const Component& C, const Program& P, const Normal& 
 		const double Share = Rp[P.FirstGroupRow + static_cast<Eigen::Index>(G)] / N.H[G];
 		ApplyCornerForce(Yp, C.Sites[P.Groups[G].SiteIndex], Scale(-Share, N.Z[G]));
 	}
-	std::vector<Eigen::VectorXd> CapRhs(P.CapSites.size());
 	for (std::size_t Index = 0; Index < P.CapSites.size(); ++Index)
 	{
 		const CapSite& Cap = P.CapSites[Index];
 		const Eigen::Index GroupRows = static_cast<Eigen::Index>(Cap.Groups.size());
-		Eigen::VectorXd& Rw = CapRhs[Index];
-		Rw.resize(GroupRows + static_cast<Eigen::Index>(Cap.Facets.size()));
+		Eigen::MatrixXd& Rw = N.CapRhs[Index];
+		Rw.resize(GroupRows + static_cast<Eigen::Index>(Cap.Facets.size()), 1);
 		for (Eigen::Index W = 0; W < GroupRows; ++W)
 		{
 			Rw(W) = Rp[P.FirstGroupRow + static_cast<Eigen::Index>(Cap.Groups[static_cast<std::size_t>(W)])];
@@ -884,8 +889,8 @@ Eigen::VectorXd SolveNormal(const Component& C, const Program& P, const Normal& 
 		{
 			Rw(GroupRows + static_cast<Eigen::Index>(K)) = Rp[Cap.FirstRow + static_cast<Eigen::Index>(K)];
 		}
-		Rw = N.CapStructured[Index].Solve(Rw);
-		const Eigen::Vector3d Force = N.CapF[Index] * Rw;
+		N.CapStructured[Index].SolveInto(Rw, N.CapSolved[Index]);
+		const Eigen::Vector3d Force = N.CapF[Index] * N.CapSolved[Index].col(0);
 		ApplyCornerForce(Yp, C.Sites[Cap.SiteIndex], Vec3{-Force(0), -Force(1), -Force(2)});
 	}
 	auto Equilibrium = Y.head(C.Rows);
@@ -905,7 +910,9 @@ Eigen::VectorXd SolveNormal(const Component& C, const Program& P, const Normal& 
 		const Eigen::Index GroupRows = static_cast<Eigen::Index>(Cap.Groups.size());
 		const Vec3 V = RelativeVelocity(C.Sites[Cap.SiteIndex], Yp);
 		const Eigen::Vector3d Velocity(V.X, V.Y, V.Z);
-		const Eigen::VectorXd Yw = CapRhs[Index] - N.CapSolvedF[Index] * Velocity;
+		Eigen::VectorXd& Yw = N.CapCorrection[Index];
+		Yw.noalias() = N.CapSolvedF[Index] * Velocity;
+		Yw = N.CapSolved[Index].col(0) - Yw;
 		for (Eigen::Index W = 0; W < GroupRows; ++W)
 		{
 			Yp[P.FirstGroupRow + static_cast<Eigen::Index>(Cap.Groups[static_cast<std::size_t>(W)])] = Yw(W);
