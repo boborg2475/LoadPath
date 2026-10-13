@@ -32,7 +32,7 @@ stacks, Paterson–Zwick, Couplet–Heyman at Milankovitch's 0.107478 with hinge
 the certificate's associative 31.07°, the cascade on the arch below least thickness, the dry
 wall at t / H within 1 % (10 × 8 and 4 × 5), the bonded 4 × 5 wall at its monolith factor
 `(t/H)(1 + f_t A_base / W) = 2.971` to 1 %, two screws at twice their published shear and
-withdrawal whatever the joint area. Default suite 358 cases in Debug and 385 in Release after
+withdrawal whatever the joint area. Default suite 365 cases in Debug and 392 in Release after
 slice 2e (325 and 347 at the 6b close) (the arch, pile, arch-cascade, fuzz, small-wall and multi-panel factor anchors
 run only in Release under `LOADPATH_SLOW_IN_DEBUG`; fourteen `Slow.*` cases run in Release at
 every slice close, and the
@@ -289,8 +289,14 @@ the non-associative answer) and the two hanging-component cases (slice 6), red b
      directive (2026-10-12), so no independent LP referee is coming: the NNLS oracle, the pins and
      the dense-against-sparse comparison are the certificate's referees.
    The remaining slice-2 anchors (item 2) can run alongside slice 2c.
-2. Slice 2b, the remaining slice-2 anchors (BENCHMARKS groups 2 and 3): B-WAL-03 (wall slides at
-   λ = μ), B-STK-04 (constant-step stack), B-WDG-02, B-ROK-02, F-CHC-01, F-LIB-01/02, F-EMI-01,
+2. Slice 2b, the remaining slice-2 anchors (BENCHMARKS groups 2 and 3). Group A is pinned
+   (2026-10-12, `tests/Slice2bAnchorsTest.cpp`, all green on arrival, two-sided at 1 %): B-WAL-03,
+   B-STK-04, F-EMI-01, F-CHC-01 (except "a braced parapet stands": the fixtures make only bed
+   contacts, so a vertical bracing contact needs a fixture first), F-LIB-01/02 (the upper joints
+   bonded by fixture choice, the base dry), B-ROK-02 (the static threshold b/h only; the measured
+   α is dynamic). On the two sliding anchors the combined authority reads Undecided between μ and
+   μ/cos(π/16) (the certificate's G = 16 polygon band; documented fail-closed, but the host gets no
+   slide signal there). Group B (in progress on branch `slice-2b-b`): B-WDG-02,
    the 5-diamond (hits the 50-pass cap today, logged below), and the arch and pile rows that
    API.md "Anchors slice 2 must pin" lists but BENCHMARKS marks slice 4 (B-ARC-01/06 Couplet–
    Heyman, B-ORD-01 Orduña): attempt them with the elastic no-tension field in 2b and move the
