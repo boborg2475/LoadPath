@@ -38,7 +38,6 @@ add_library(loadpath STATIC
 	src/CombinedAuthority.cpp
 	src/Handles.cpp
 	src/LimitAnalysisCertificate.cpp
-	src/ModifiedCholesky.cpp
 	src/RbsmStandingAuthority.cpp
 	src/StaticsCommon.cpp
 	src/Structure.cpp

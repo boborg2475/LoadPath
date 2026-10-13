@@ -343,7 +343,7 @@ TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Certificate.Solver.AFiniteLoadFactorBelowTheCa
 	MESSAGE("23-block wall: " << SecondsSince(Start) << " s");
 }
 
-TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Certificate.Solver.TheFortySixBlockWallDecidesAtAnIsolatedStallLoad")
+TEST_CASE("Deferred.Certificate.Solver.TheFortySixBlockWallDecidesAtAnIsolatedStallLoad")
 {
 	const auto Start = std::chrono::steady_clock::now();
 	const BlockWall Wall = MakeForaboschiBondWall(1.04, 10, 1.21e6);
@@ -364,6 +364,102 @@ TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Certificate.Solver.TheFortySixBlockWallDecides
 		}
 	}
 	MESSAGE("46-block wall: " << SecondsSince(Start) << " s");
+}
+
+namespace
+{
+BodyId AddPebbleOnBeam(BlockWall& Wall)
+{
+	const geometry::Box& BeamShape = Wall.Shapes.back();
+	const Box BeamBox{BeamShape.CentreM, BeamShape.HalfExtentsM, Wall.Model.Body(Wall.Beam).MassKg};
+	const double HalfM = 0.005;
+	const Box Pebble = BoxOfDensity(Vec3{Wall.BeamCentreM.X + 0.2, 0.0, BeamShape.CentreM.Z + BeamShape.HalfExtentsM.Z + HalfM}, Vec3{HalfM, HalfM, HalfM}, 2400.0);
+	const BodyId Body = AddBox(Wall.Model, Pebble);
+	const std::optional<InterfaceDesc> Contact = StackedFaces(Wall.Beam, BeamBox, Body, Pebble, AddProfileOk(Wall.Model, DryJoint(0.6)));
+	REQUIRE(Contact.has_value());
+	AddInterfaceOk(Wall.Model, *Contact);
+	return Body;
+}
+}
+
+TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Certificate.Solver.APebbleOnTheBeamChangesNoVerdict")
+{
+	const auto Start = std::chrono::steady_clock::now();
+	BlockWall Small = MakeForaboschiBondWall(1.04, 5, 1.0e8);
+	REQUIRE(Small.Blocks.size() == 23u);
+	const BodyId SmallPebble = AddPebbleOnBeam(Small);
+	CHECK(std::abs(Small.Model.Body(SmallPebble).MassKg - 0.0024) < 1.0e-12);
+	for (const double HorizontalN : {43860.0, 46750.0, 30000.0})
+	{
+		const CertificateResult Got = DecideWith(Small.Model, CertificateOptions{}, BeamLoads(Small, 80000.0, HorizontalN));
+		INFO("23 blocks and a pebble, H " << HorizontalN << ": " << Got.State << " [" << Got.LoadFactorLower << ", " << Got.LoadFactorUpper << "] in " << Got.Iterations);
+		CHECK(Got.State == CertificateState::Stands);
+		CHECK(Got.LoadFactorUpper < CertificateOptions{}.LoadFactorCap);
+	}
+	BlockWall Large = MakeForaboschiBondWall(1.04, 10, 1.21e6);
+	REQUIRE(Large.Blocks.size() == 46u);
+	AddPebbleOnBeam(Large);
+	const CertificateResult Got = DecideWith(Large.Model, CertificateOptions{}, BeamLoads(Large, 80000.0, 47149.0));
+	INFO("46 blocks and a pebble, H 47149: " << Got.State << " [" << Got.LoadFactorLower << ", " << Got.LoadFactorUpper << "] in " << Got.Iterations);
+	CHECK(Got.State == CertificateState::Collapses);
+	CHECK(Got.LoadFactorUpper < 1.0);
+	MESSAGE("pebble walls: " << SecondsSince(Start) << " s");
+}
+
+TEST_CASE("Certificate.Solver.ALightBlockOnAHeavyOneReadsItsAnalyticLimit")
+{
+	const double Lambda = 0.5;
+	const double Mu = 0.3;
+	const double HeavyKg = 1000.0;
+	const double Rho = CircumscribedOverInscribed(16);
+	const double Tolerance = 1.0e-3;
+	const auto Start = std::chrono::steady_clock::now();
+	int Rows = 0;
+	for (const double HalfM : {0.005, 0.5})
+	{
+		const double OverlapFraction = HalfM < 0.1 ? 1.0 : 0.9;
+		for (const double Ratio : {1.0, 1.0e2, 1.0e4, 1.0e5, 1.0e6, 1.0e7, 1.0e8, 1.0e10})
+		{
+			const double LightKg = HeavyKg / Ratio;
+			const double LightWeightN = LightKg * GravityMPerS2;
+			const auto Build = [&](const StrengthProfile& Joint)
+			{
+				Structure Model;
+				const BodyId Ground = AddGroundPlane(Model);
+				const Box Heavy{Vec3{0.0, 0.0, 0.5}, Vec3{0.5, 0.5, 0.5}, HeavyKg};
+				const BodyId HeavyBody = AddBox(Model, Heavy);
+				AddInterfaceOk(Model, OnGroundPlane(Ground, HeavyBody, Heavy, AddProfileOk(Model, DryJoint(0.8))));
+				const Box Light{Vec3{-0.1, 0.0, 1.0 + HalfM}, Vec3{HalfM, HalfM, HalfM}, LightKg};
+				const BodyId LightBody = AddBox(Model, Light);
+				const std::optional<InterfaceDesc> Contact = StackedFaces(HeavyBody, Heavy, LightBody, Light, AddProfileOk(Model, Joint));
+				REQUIRE(Contact.has_value());
+				AddInterfaceOk(Model, *Contact);
+				return Model;
+			};
+			for (const double Target : {2.0, 0.5})
+			{
+				StrengthProfile Joint = DryJoint(Mu);
+				Joint.ShearCohesionPa = Target * LightWeightN * (Lambda - Mu) / (4.0 * HalfM * HalfM);
+				const CertificateResult Got = DecideWith(Build(Joint), CertificateLateral(Lambda));
+				const double WantIn = OverlapFraction * Target;
+				const double WantOut = WantIn * Rho * (Lambda - Mu) / (Lambda - Mu * Rho);
+				INFO("half " << HalfM << " m, ratio " << Ratio << ", target " << Target << ": " << Got.State << " [" << Got.LoadFactorLower << ", " << Got.LoadFactorUpper << "] in " << Got.Iterations << "; want [" << WantIn << ", " << WantOut << "]");
+				CHECK(Got.State == (Target > 1.0 ? CertificateState::Stands : CertificateState::Collapses));
+				CHECK(std::abs(Got.LoadFactorLower - WantIn) <= Tolerance * WantIn);
+				CHECK(std::abs(Got.LoadFactorUpper - WantOut) <= Tolerance * WantOut);
+				++Rows;
+			}
+			for (const double Friction : {0.6, 0.4})
+			{
+				const CertificateResult Got = DecideWith(Build(DryJoint(Friction)), CertificateLateral(Lambda));
+				INFO("half " << HalfM << " m, ratio " << Ratio << ", dry mu " << Friction << ": " << Got.State << " [" << Got.LoadFactorLower << ", " << Got.LoadFactorUpper << "]");
+				CHECK(Got.State == (Friction > Lambda ? CertificateState::Stands : CertificateState::Collapses));
+				++Rows;
+			}
+		}
+	}
+	CHECK(Rows == 64);
+	MESSAGE("light block table: " << SecondsSince(Start) << " s");
 }
 
 TEST_CASE("Slow.Certificate.Anchor.TheMinhoWallCollapsesJustPastItsAssociativeLimit")

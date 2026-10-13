@@ -2,7 +2,6 @@
 
 #include "CapSiteFactor.h"
 #include "EigenInclude.h"
-#include "ModifiedCholesky.h"
 #include "StaticsCommon.h"
 
 #include <algorithm>
@@ -25,8 +24,7 @@ using statics::Sub;
 constexpr double Pi = 3.14159265358979323846;
 constexpr double StepToBoundary = 0.995;
 constexpr int RefinementPasses = 1;
-constexpr int SelectionRefinementPasses = 5;
-constexpr double RemovedPivotFloor = 1.0e-16;
+constexpr int SelectionRefinementPasses = 3;
 constexpr int ShiftedRefinementPasses = 20;
 constexpr std::array<double, 3> RetryShifts{1.0e-16, 1.0e-14, 1.0e-12};
 constexpr double ComplementarityRestart = 0.5;
@@ -159,7 +157,7 @@ struct Normal
 	std::vector<CapSiteFactor> CapStructured;
 	std::vector<Eigen::MatrixXd> CapSolvedF;
 	std::vector<CapScratch> CapScratchD;
-	ModifiedLlt Factor;
+	Eigen::LLT<Eigen::MatrixXd> Factor;
 	bool bShifted = false;
 	mutable std::vector<Eigen::MatrixXd> CapRhs;
 	mutable std::vector<Eigen::MatrixXd> CapSolved;
@@ -877,7 +875,7 @@ bool FactorNormal(const Component& C, const Program& P, Normal& N)
 			Mp[static_cast<std::size_t>(Col) * static_cast<std::size_t>(C.Rows) + static_cast<std::size_t>(Row)] += Coupling * Demand[Row] * Demand[Col];
 		}
 	}
-	N.Factor.ComputeModified(M, RemovedPivotFloor);
+	N.Factor.compute(M);
 	if (HasPositivePivots(N.Factor))
 	{
 		return true;

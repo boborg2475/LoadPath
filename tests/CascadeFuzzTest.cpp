@@ -536,3 +536,14 @@ TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Cascade.Fuzz.LimeStructuresKeepTheCascadeInvar
 	MESSAGE("lime cascade fuzz: " << LimeFuzzDraws << " draws, " << LimeDraws << " with lime joints; ends Stands " << Seen.Stands << ", Overstressed " << Seen.Overstressed << ", Undecided " << Seen.Undecided << ", PassCapReached " << Seen.Capped);
 	CHECK(LimeDraws >= 1);
 }
+
+TEST_CASE("Statics.Lime.TheSeedThatFiveSelectionPassesLoseEndsStands")
+{
+	const std::uint64_t Seed = LimeFuzzSeedBase + 34u;
+	CHECK(Seed == 300281591u);
+	FuzzDraw D = MakeDraw(Seed, true);
+	INFO("seed " << Seed << ": " << D.Description);
+	const CascadeVerdict Whole = MakeCascade(MakeAuthority())->Run(D.Model, {}, FuzzOptions(D, FuzzMaxPasses), nullptr);
+	INFO("whole run: " << DescribeVerdict(Whole));
+	CHECK(Whole.State == CascadeState::Stands);
+}

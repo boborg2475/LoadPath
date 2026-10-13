@@ -32,7 +32,7 @@ stacks, Paterson–Zwick, Couplet–Heyman at Milankovitch's 0.107478 with hinge
 the certificate's associative 31.07°, the cascade on the arch below least thickness, the dry
 wall at t / H within 1 % (10 × 8 and 4 × 5), the bonded 4 × 5 wall at its monolith factor
 `(t/H)(1 + f_t A_base / W) = 2.971` to 1 %, two screws at twice their published shear and
-withdrawal whatever the joint area. Default suite 388 cases in Debug and 425 in Release after
+withdrawal whatever the joint area. Default suite 390 cases in Debug and 427 in Release after
 slice 2b and the cohesive-wedge check (325 and 347 at the 6b close) (the arch, pile, arch-cascade, fuzz, small-wall and multi-panel factor anchors
 run only in Release under `LOADPATH_SLOW_IN_DEBUG`; eighteen `Slow.*` cases run in Release at
 every slice close, and the
@@ -359,18 +359,25 @@ the non-associative answer) and the two hanging-component cases (slice 6), red b
   joint, and the Minho test is `Slow.`. Left from it: no fixture reaches the escalation's 1e-12 rung, which
   on coupling-dominated components would be 1e-8 to 1e-6 of the site diagonal; the selection LP's single 1e-12 retry failed rocking walls past their limit, fixed (DESIGN §10
   "the selection LP's retry"; `Certificate.Selection.ARockingWallPastItsLimitNamesItsMechanism`);
-  the selection's isolated failures on that wall (32,957.75 and 32,958.0 N) are fixed by 5
-  refinement passes on its corrector, and the dense cone factor is a modified Cholesky (pivots at or
-  below 1e-16 of the largest diagonal removed; DESIGN §10 "the certificate's remaining isolated
-  stalls"; a floor of 1e-14 already reads four anchors not-Stands inside their limits, so the floor
-  has a margin of only 100×); left: the selection has no stall rule; **the next certificate item:
-  the sparse bordered path loses conditioning near an interior optimum** (t* strictly inside (0,
-  cap)), so a few percent of loads there stall and read Undecided [0, cap] (5 in 101 on a 1 N grid
+  the selection corrector takes 3 refinement passes (DESIGN §10 "the modified Cholesky
+  (cold-review rulings: reverted)"); left: the selection has no stall rule; a body under about
+  1e-10 of its component's load scale passes the equilibrium tolerance unsolved (a light block on
+  a heavy one reads a wrong Stands from mass ratios of about 1e11; written into API.md, fail open
+  at scales no debris reaches); **the next certificate item: the normal matrix loses conditioning
+  near an interior optimum** (t* strictly inside (0, cap)): on the dense path a few loads in
+  thousands stall (the 46-block bond wall at 80 kN / 47,150 N,
+  `Deferred.Certificate.Solver.TheFortySixBlockWallDecidesAtAnIsolatedStallLoad`), and on the sparse
+  bordered path, whose site block alone is singular along the mechanism, a few percent of loads
+  stall and read Undecided [0, cap] (5 in 101 on a 1 N grid
   at 40 kN, 13 in 261 at 80 kN on the Foraboschi wall with f_c 1.21 MPa; the 137-block bond wall
   2.08 m by 16 courses at 80 kN / 43,000 N is a sparse fixture whose dense answer is Stands
   [2.71462858, 2.72715935]); a designed fix is a stable treatment of the dense load-factor column
   (a product-form factor or an explicit deflation of the collapse mechanism); measured and not
-  adopted: a primal clean-up at the stall with a dense re-solve (decides all 24, about 30 s each);
+  adopted: a primal clean-up at the stall with a dense re-solve (decides all 24, about 30 s each),
+  and a modified Cholesky on the dense factor (reverted: it cannot tell a stall direction from a
+  light body's rows, so a 2.4 g pebble undid decided verdicts and a light block read a wrong Stands;
+  the guards `Certificate.Solver.APebbleOnTheBeamChangesNoVerdict` and
+  `Certificate.Solver.ALightBlockOnAHeavyOneReadsItsAnalyticLimit` now pin plain behaviour);
   the dense selection takes 20 to 27 s on the full wall; the hinging list
   wanders between 17 and 33 joints on the 57-body wall; `FactorSelection`'s local `bShifted` is
   unused and `FactorBordered` keeps a third copy of the escalation loop. The Foraboschi fixture's limits at 80 and 140 kN with infinite
