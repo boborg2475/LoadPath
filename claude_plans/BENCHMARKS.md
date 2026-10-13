@@ -220,7 +220,9 @@ says so.
   redraws it (Fig. 5.11(a), p. 149; White Rose eTheses 14871): six courses on a base, 20 × 10.5
   units overall; courses 1, 3 and 5 are a half block, four full blocks and a half block; courses
   2, 4 and 6 are five full blocks; 33 blocks and 83 contacts (one per interface), matching the
-  published table. Ahmed also notes that the published Example 3 figure probably belongs to a
+  published table. **Pinned 2026-10-13** (`Certificate.Anchor.FerrisTinLoiWallStandsToTheAssociativeLoadFactor`):
+  the certificate stands to 0.642859 against the LP's 0.64286 (9/14), above the MPEC 0.63898.
+  Ahmed also notes that the published Example 3 figure probably belongs to a
   different wall from the one drawn, which matters for B-FTL-03.
 - **F-FOR-01, Foraboschi wall: buildable, thickness inferred.** Portioli et al. 2012, Fig. 3a:
   masonry 3120 × 2574 mm under a 194 mm concrete beam; a centred 1040 × 1210 mm opening (piers 1040
@@ -229,11 +231,15 @@ says so.
   140 kN with test against model horizontal capacity 23.6/23.9, 38.8/39.8 and 61.3/55.8 kN.
   Thickness is not stated; 250 mm is inferred from double-width 125 mm brick. The paper's Fig. 9
   shows the associative/non-associative ratio trend at μ 0.6 only, not over the whole friction
-  range the row implies.
+  range the row implies. **Pinned at 40 kN only, 2026-10-13** (a bracket: the certificate stands at
+  the model's 23.9 kN and collapses at 28 kN); 80 and 140 kN and f_c 1.21 MPa are left out while the
+  certificate's Undecided bands on this wall are investigated (CURRENT_STATE Deferred).
 - **B-SW-01, Minho SW30 limit load: buildable with a ±0.2 kN band.** No source tabulates it;
   Orduña & Lourenço 2005 Part II, Fig. 4(b), p. 5167, levels at about 16.5 to 16.6 kN for infinite
   compressive strength (read from the plot), with the load acting at the 100 mm top beam (Fig.
-  4(a)). Whole-wall overturning gives 16.67 kN, just above, as an upper value should.
+  4(a)). Whole-wall overturning gives 16.67 kN, just above, as an upper value should. **Not pinned
+  (2026-10-13):** the first fixture's certificate limit is 15.54 kN, below the published value, which
+  is the wrong side for an associative bound; under investigation (CURRENT_STATE Deferred).
 - **F-PSY-01, Psycharis drum column: friction found, drum heights not.** Friction angle 37°,
   joint stiffness 1 GPa/m (Table I, arXiv 1312.4484). No open source gives the drum heights;
   equal drums of 0.78 m would be an assumption and must be labelled so.
