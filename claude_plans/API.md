@@ -866,7 +866,7 @@ enum class CascadeState : uint8_t { Stands, Overstressed, Undecided, InvalidInpu
 struct FailedInterface {
 	InterfaceId Id;
 	std::uint32_t Pass;
-	GoverningAxis Axis;        // the crack: the larger of tension and shear; the sever: Tension if the mechanism opens it beyond friction dilatancy, else Shear if it slides, else the reading's axis (None when unread)
+	GoverningAxis Axis;        // the crack: the larger of tension and shear; the sever: Tension if the mechanism opens it beyond friction dilatancy (none on a zero-cap joint), else Compression if it closes, else Shear if it slides, else the reading's axis (None when unread)
 	double Ratio;              // the crack ratio, or the elastic reading's utilisation at release
 	bool bSevered;             // false: cracked (bond lost, friction kept); true: severed with its cluster
 };
@@ -920,7 +920,7 @@ entry is `InvalidInput` (the authority's rule). Then, with `Pass = HighestPass()
    certified rigid motion; TRAPS: a cluster released as one body must be a certified mechanism,
    and this one is the certificate's). For each cluster, ascending by lowest body slot: sever
    every live interface between a cluster body and a body outside it (stamped `Pass`, recorded
-   as a `FailedInterface` with `bSevered`, the elastic reading's utilisation as `Ratio`, and an `Axis` from the mechanism: relative velocity B minus A at the joint's four corners, a body outside the mechanism still; `Tension` if some corner's normal opening less μ times its tangential speed exceeds 1e-3 of the fastest corner's relative speed, else `Shear` if a tangential speed exceeds that, else the reading's axis; never `Compression` from the mechanism, since associative sliding lifts by μ times its slip), then
+   as a `FailedInterface` with `bSevered`, the elastic reading's utilisation as `Ratio`, and an `Axis` from the mechanism: relative velocity B minus A at the joint's four corners, a body outside the mechanism still; `Tension` if some corner's normal opening less μ times its tangential speed exceeds 1e-3 of the fastest corner's relative speed, else `Compression` if some corner closes faster than that threshold, else `Shear` if a tangential speed exceeds it, else the reading's axis; a zero-cap joint (`MaxShearStrengthPa = 0`, NormalOnly in the certificate) subtracts no friction lift), then
    `RemoveBody` every cluster body (its internal joints go with it, `Removed`, no stamp). The
    cluster's `Motion` is the certificate's motion of its lowest-slot body.
 3. **Crack.** For every component with Verdict `Overstressed`: the eligible joints are its live
@@ -1411,7 +1411,9 @@ residual and stops when a window of iterations has not brought it below `StallIm
 times the best at the window's start, the window also restarting whenever the complementarity
 `(xᵀs + τκ)/(n + 1)` falls below half its value at the window's start (DESIGN §10, the stall
 defect), returning the iteration cap's outcome (no iterate is
-kept: one within tolerance would already have ended the solve, DESIGN §10). The selection
+kept: one within tolerance would already have ended the solve, DESIGN §10). The complementarity
+restart resets the window's best residual to the current one, which raises iterations on stuck
+solves (45 to 96 on the Ferris & Tin-Loi G = 64 near-threshold case, none at the cap). The selection
 solve is untouched. Pinned by `Certificate.Stall.*`.
 
 **3c, the coupling out of the factor (done 2026-10-12, 425506a, in review).**

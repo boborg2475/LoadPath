@@ -995,3 +995,100 @@ TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Cascade.ArchBelowLeastThicknessOpensEveryHinge
 		CHECK(Failure.Axis == GoverningAxis::Tension);
 	}
 }
+
+namespace
+{
+struct ScriptedSever
+{
+	CascadeVerdict Verdict;
+	InterfaceId Bed;
+};
+
+ScriptedSever SeverUnderMotion(const StrengthProfile& Profile, const Vec3& TranslationM, const Vec3& RotationRad, GoverningAxis ReadingAxis)
+{
+	BrickOnGround F = MakeBrickOnGround(Profile);
+	AuthorityResult Script = CollapsesScript(F.Model, {F.Brick});
+	Script.Components[0].Mechanism = {MechanismMotion{F.Brick, TranslationM, RotationRad}};
+	for (InterfaceReading& Reading : Script.Readings)
+	{
+		Reading.Axis = ReadingAxis;
+	}
+	ScriptedSever Result{RunScripted(F.Model, {Script, StandsScript()}), F.Bed};
+	return Result;
+}
+
+Vec3 BedCornerVelocity(const Vec3& TranslationM, const Vec3& RotationRad, double XM, double YM)
+{
+	const Vec3 Arm{XM, YM, -0.5 * BrickHeightM};
+	return Vec3{TranslationM.X + RotationRad.Y * Arm.Z - RotationRad.Z * Arm.Y, TranslationM.Y + RotationRad.Z * Arm.X - RotationRad.X * Arm.Z,
+		TranslationM.Z + RotationRad.X * Arm.Y - RotationRad.Y * Arm.X};
+}
+
+void CheckSeveredAxis(const ScriptedSever& Got, GoverningAxis Want)
+{
+	INFO(DescribeVerdict(Got.Verdict));
+	INFO("want " << doctest::String(GoverningAxisName(Want)));
+	REQUIRE(Got.Verdict.Failures.size() == 1u);
+	CHECK(SameHandle(Got.Verdict.Failures[0].Id, Got.Bed));
+	CHECK(Got.Verdict.Failures[0].bSevered);
+	CHECK(Got.Verdict.Failures[0].Axis == Want);
+}
+
+double LiftForMargin(double Friction, double Margin)
+{
+	double Lift = Friction;
+	for (int I = 0; I < 50; ++I)
+	{
+		Lift = Friction + Margin * std::sqrt(1.0 + Lift * Lift);
+	}
+	return Lift;
+}
+}
+
+TEST_CASE("Cascade.AJointThatOpensWhileItSlidesSeversInTension")
+{
+	const double SpinRad = 0.1 / BrickLengthM;
+	const Vec3 Rotation{0.0, SpinRad, 0.0};
+	const Vec3 Translation{1.0 + 0.5 * BrickHeightM * SpinRad, 0.0, 0.6 + 0.05};
+	for (const double YM : {-0.5 * BrickWidthM, 0.5 * BrickWidthM})
+	{
+		const Vec3 Toe = BedCornerVelocity(Translation, Rotation, 0.5 * BrickLengthM, YM);
+		const Vec3 Heel = BedCornerVelocity(Translation, Rotation, -0.5 * BrickLengthM, YM);
+		INFO("toe (" << Toe.X << ", " << Toe.Y << ", " << Toe.Z << "), heel (" << Heel.X << ", " << Heel.Y << ", " << Heel.Z << ")");
+		CHECK(std::abs(Toe.X - 1.0) < 1.0e-12);
+		CHECK(std::abs(Toe.Z - 0.6) < 1.0e-12);
+		CHECK(std::abs(Heel.X - 1.0) < 1.0e-12);
+		CHECK(std::abs(Heel.Z - 0.7) < 1.0e-12);
+	}
+	CheckSeveredAxis(SeverUnderMotion(DryJoint(PastFriction), Translation, Rotation, GoverningAxis::Shear), GoverningAxis::Tension);
+}
+
+TEST_CASE("Cascade.ALiftJustAboveTheDilatancyReadsTension")
+{
+	const double Lift = LiftForMargin(PastFriction, 0.005);
+	CHECK(std::abs(Lift - PastFriction - 0.005 * std::sqrt(1.0 + Lift * Lift)) < 1.0e-14);
+	CheckSeveredAxis(SeverUnderMotion(DryJoint(PastFriction), Vec3{1.0, 0.0, Lift}, Vec3{}, GoverningAxis::Shear), GoverningAxis::Tension);
+}
+
+TEST_CASE("Cascade.ALiftJustBelowTheThresholdReadsShear")
+{
+	const double Lift = LiftForMargin(PastFriction, 1.0e-4);
+	CHECK(std::abs(Lift - PastFriction - 1.0e-4 * std::sqrt(1.0 + Lift * Lift)) < 1.0e-14);
+	CheckSeveredAxis(SeverUnderMotion(DryJoint(PastFriction), Vec3{1.0, 0.0, Lift}, Vec3{}, GoverningAxis::Tension), GoverningAxis::Shear);
+}
+
+TEST_CASE("Cascade.AJointTheMechanismClosesSeversInCompression")
+{
+	for (const GoverningAxis ReadingAxis : {GoverningAxis::Shear, GoverningAxis::None})
+	{
+		INFO("reading axis " << doctest::String(GoverningAxisName(ReadingAxis)));
+		CheckSeveredAxis(SeverUnderMotion(DryJoint(PastFriction), Vec3{0.0, 0.0, -1.0}, Vec3{}, ReadingAxis), GoverningAxis::Compression);
+	}
+}
+
+TEST_CASE("Cascade.AZeroCapJointSubtractsNoFrictionLift")
+{
+	StrengthProfile Profile = DryJoint(0.7);
+	Profile.MaxShearStrengthPa = 0.0;
+	CheckSeveredAxis(SeverUnderMotion(Profile, Vec3{1.0, 0.0, 0.5}, Vec3{}, GoverningAxis::Shear), GoverningAxis::Tension);
+}

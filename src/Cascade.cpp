@@ -1,6 +1,7 @@
 #include "loadpath/Cascade.h"
 
 #include "loadpath/Units.h"
+#include "StaticsCommon.h"
 
 #include <algorithm>
 #include <cmath>
@@ -188,32 +189,30 @@ Vec3 PointVelocity(const MechanismMotion& Motion, const Vec3& CentroidM, const V
 	return Vec3{Motion.TranslationM.X + Spin.X, Motion.TranslationM.Y + Spin.Y, Motion.TranslationM.Z + Spin.Z};
 }
 
-GoverningAxis MechanismAxis(const Structure& Model, const ComponentReport& Component, const InterfaceRecord& Record, GoverningAxis Fallback)
+GoverningAxis MechanismAxis(const Structure& Model, const ComponentReport& Component, InterfaceId Id, GoverningAxis Fallback)
 {
+	const InterfaceRecord& Record = Model.Interface(Id);
 	const MechanismMotion MotionA = StillUnlessMoving(Component, Record.BodyA);
 	const MechanismMotion MotionB = StillUnlessMoving(Component, Record.BodyB);
 	const Vec3 CentroidA = Model.Body(Record.BodyA).CentroidM;
 	const Vec3 CentroidB = Model.Body(Record.BodyB).CentroidM;
+	const StrengthProfile Profile = Model.EffectiveProfile(Id);
+	const double Lift = Profile.MaxShearStrengthPa * (Record.AreaM2 / 4.0) > 0.0 ? Profile.FrictionCoefficient : 0.0;
 	double Fastest = 0.0;
 	double Opening = -Infinity;
+	double Closing = Infinity;
 	double Sliding = 0.0;
-	for (const double SignU : {-1.0, 1.0})
+	for (const Vec3& Corner : statics::CornerPoints(Record))
 	{
-		for (const double SignV : {-1.0, 1.0})
-		{
-			const double U = SignU * Record.HalfExtentUM;
-			const double V = SignV * Record.HalfExtentVM;
-			const Vec3 Corner{Record.CentreM.X + U * Record.AxisU.X + V * Record.AxisV.X, Record.CentreM.Y + U * Record.AxisU.Y + V * Record.AxisV.Y,
-				Record.CentreM.Z + U * Record.AxisU.Z + V * Record.AxisV.Z};
-			const Vec3 VelocityA = PointVelocity(MotionA, CentroidA, Corner);
-			const Vec3 VelocityB = PointVelocity(MotionB, CentroidB, Corner);
-			const Vec3 Relative{VelocityB.X - VelocityA.X, VelocityB.Y - VelocityA.Y, VelocityB.Z - VelocityA.Z};
-			const double Normal = Dot(Relative, Record.NormalAToB);
-			const Vec3 Tangential{Relative.X - Normal * Record.NormalAToB.X, Relative.Y - Normal * Record.NormalAToB.Y, Relative.Z - Normal * Record.NormalAToB.Z};
-			Fastest = std::max(Fastest, Length(Relative));
-			Opening = std::max(Opening, Normal - Model.Profile(Record.Profile).FrictionCoefficient * Length(Tangential));
-			Sliding = std::max(Sliding, Length(Tangential));
-		}
+		const Vec3 VelocityA = PointVelocity(MotionA, CentroidA, Corner);
+		const Vec3 VelocityB = PointVelocity(MotionB, CentroidB, Corner);
+		const Vec3 Relative{VelocityB.X - VelocityA.X, VelocityB.Y - VelocityA.Y, VelocityB.Z - VelocityA.Z};
+		const double Normal = Dot(Relative, Record.NormalAToB);
+		const Vec3 Tangential{Relative.X - Normal * Record.NormalAToB.X, Relative.Y - Normal * Record.NormalAToB.Y, Relative.Z - Normal * Record.NormalAToB.Z};
+		Fastest = std::max(Fastest, Length(Relative));
+		Opening = std::max(Opening, Normal - Lift * Length(Tangential));
+		Closing = std::min(Closing, Normal);
+		Sliding = std::max(Sliding, Length(Tangential));
 	}
 	const double Threshold = 1.0e-3 * Fastest;
 	if (!(Fastest > 0.0))
@@ -223,6 +222,10 @@ GoverningAxis MechanismAxis(const Structure& Model, const ComponentReport& Compo
 	if (Opening > Threshold)
 	{
 		return GoverningAxis::Tension;
+	}
+	if (Closing < -Threshold)
+	{
+		return GoverningAxis::Compression;
 	}
 	if (Sliding > Threshold)
 	{
@@ -313,7 +316,7 @@ bool Release(Structure& Model, const AuthorityResult& Judged, std::uint32_t Pass
 			FailedInterface Failure;
 			Failure.Id = Id;
 			Failure.Pass = Pass;
-			Failure.Axis = MechanismAxis(Model, *Cluster.Component, Model.Interface(Id), Reading != nullptr ? Reading->Axis : GoverningAxis::None);
+			Failure.Axis = MechanismAxis(Model, *Cluster.Component, Id, Reading != nullptr ? Reading->Axis : GoverningAxis::None);
 			Failure.Ratio = Reading != nullptr ? Reading->Utilisation : NaN;
 			Failure.bSevered = true;
 			Verdict.Failures.push_back(Failure);

@@ -1313,7 +1313,7 @@ Outcome SolveProgram(const Component& C, const Program& P, const CertificateOpti
 		}
 		N.Sparse = bSparse ? &Sparse : nullptr;
 		N.bShifted = false;
-		N.D =Eigen::VectorXd(P.Variables);
+		N.D = Eigen::VectorXd(P.Variables);
 		for (Eigen::Index I = 0; I < P.Variables; ++I)
 		{
 			N.D.data()[I] = E.X.data()[I] / E.S.data()[I];

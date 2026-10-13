@@ -32,9 +32,9 @@ stacks, Paterson–Zwick, Couplet–Heyman at Milankovitch's 0.107478 with hinge
 the certificate's associative 31.07°, the cascade on the arch below least thickness, the dry
 wall at t / H within 1 % (10 × 8 and 4 × 5), the bonded 4 × 5 wall at its monolith factor
 `(t/H)(1 + f_t A_base / W) = 2.971` to 1 %, two screws at twice their published shear and
-withdrawal whatever the joint area. Default suite 381 cases in Debug and 417 in Release after
+withdrawal whatever the joint area. Default suite 386 cases in Debug and 421 in Release after
 slice 2b and the cohesive-wedge check (325 and 347 at the 6b close) (the arch, pile, arch-cascade, fuzz, small-wall and multi-panel factor anchors
-run only in Release under `LOADPATH_SLOW_IN_DEBUG`; fifteen `Slow.*` cases run in Release at
+run only in Release under `LOADPATH_SLOW_IN_DEBUG`; seventeen `Slow.*` cases run in Release at
 every slice close, and the
 cheap `Measure.Scale.*` rows after them); the `Deferred.*` tier holds the physical wedge pin
 (it belonged to slice 7, which the owner dropped on 2026-10-12; the pin stays as the record of
@@ -344,11 +344,12 @@ the non-associative answer) and the two hanging-component cases (slice 6), red b
 - The certificate's interior-optimum and stall defects are fixed (2026-10-13, DESIGN §10 opening
   and amendment; the retry shift escalates 1e-16 to 1e-12 of the full diagonal with 20 refinement
   passes after a shifted factor, and the stall window restarts when the complementarity halves);
-  B-SW-01 is pinned in the paper's set-up. The cold review's three send-backs are in a fix round
-  (DESIGN §10 "cold-review rulings"): a `Slow.` separator for the two halves of the retry fix on
-  the Foraboschi wall, scripted tests and two amendments for the severed axis, the Minho test to
-  `Slow.`. Left from it: the restart raises iterations on stuck solves and resets the window's best
-  residual (API.md's cost note owes a line); no fixture reaches the escalation's 1e-12 rung, which
+  B-SW-01 is pinned in the paper's set-up. The cold review's three send-backs are done (DESIGN §10
+  "cold-review rulings"): `Slow.Certificate.Solver.TheForaboschiWallStandsInsideItsAssociativeLimit`
+  separates the two halves of the retry fix (80 kN / 42 kN and 140 kN / 80 kN Stand; a straight
+  1e-12 shift or one refinement pass reads Undecided), the severed axis has scripted tests, reads
+  Compression where the mechanism closes the joint and subtracts no friction lift on a zero-cap
+  joint, and the Minho test is `Slow.`. Left from it: no fixture reaches the escalation's 1e-12 rung, which
   on coupling-dominated components would be 1e-8 to 1e-6 of the site diagonal; `FactorSelection` keeps its single 1e-12 retry;
   the selection LP fails on the Foraboschi wall at 140 kN / 85 kN after both cone solves converge
   (reads Undecided with t_out 6e-12); the Foraboschi fixture's limits at 80 and 140 kN (50.3 and

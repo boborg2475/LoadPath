@@ -264,6 +264,8 @@ TEST_CASE("Slow.Certificate.Anchor.ForaboschiWallAtFortyKilonewtonsStandsAtTheMo
 {
 	const auto Start = std::chrono::steady_clock::now();
 	const BlockWall Wall = MakeForaboschiWall(DryJoint(0.6).CompressiveStrengthPa);
+	CHECK(Wall.Blocks.size() == 376u);
+	CHECK(Wall.Contacts == 1000);
 	const double VerticalN = 40000.0;
 	const double ModelCapacityN = 23900.0;
 	const double CollapsedN = 28000.0;
@@ -284,6 +286,31 @@ TEST_CASE("Slow.Certificate.Anchor.ForaboschiWallAtFortyKilonewtonsStandsAtTheMo
 	MESSAGE("Foraboschi 40 kN: elastic " << ElasticBelow.State << "/" << ElasticAbove.State << ", combined " << static_cast<int>(Below.Worst) << "/" << static_cast<int>(Above.Worst) << ", " << Seconds << " s");
 	CHECK(Below.Worst != ComponentVerdict::Collapses);
 	CHECK(Above.Worst == ComponentVerdict::Collapses);
+}
+
+TEST_CASE("Slow.Certificate.Solver.TheForaboschiWallStandsInsideItsAssociativeLimit")
+{
+	struct Case
+	{
+		double VerticalN;
+		double HorizontalN;
+		double LpLimitN;
+	};
+	const Case Cases[] = {{80000.0, 42000.0, 50280.0}, {140000.0, 80000.0, 83610.0}};
+	const BlockWall Wall = MakeForaboschiWall(1.0e9);
+	REQUIRE(Wall.Blocks.size() == 376u);
+	REQUIRE(Wall.Contacts == 1000);
+	for (const Case& K : Cases)
+	{
+		const auto Start = std::chrono::steady_clock::now();
+		const CertificateResult Got = DecideWith(Wall.Model, CertificateOptions{}, BeamLoads(Wall, K.VerticalN, K.HorizontalN));
+		const double Seconds = SecondsSince(Start);
+		INFO("V " << K.VerticalN << " H " << K.HorizontalN << " (2-D LP limit " << K.LpLimitN << "): " << Got.State << " [" << Got.LoadFactorLower << ", " << Got.LoadFactorUpper << "] in " << Got.Iterations << ", " << Seconds << " s");
+		MESSAGE("Foraboschi V " << K.VerticalN << " H " << K.HorizontalN << ": " << Got.State << " [" << Got.LoadFactorLower << ", " << Got.LoadFactorUpper << "] in " << Got.Iterations << ", " << Seconds << " s");
+		CHECK(K.HorizontalN < K.LpLimitN);
+		CHECK(Got.State == CertificateState::Stands);
+		CHECK(Got.LoadFactorUpper < CertificateOptions{}.LoadFactorCap);
+	}
 }
 
 TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Certificate.Solver.AFiniteLoadFactorBelowTheCapStandsOnTheTwentyThreeBlockWall")
@@ -316,7 +343,7 @@ TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Certificate.Solver.AFiniteLoadFactorBelowTheCa
 	MESSAGE("23-block wall: " << SecondsSince(Start) << " s");
 }
 
-TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Certificate.Anchor.TheMinhoWallCollapsesJustPastItsAssociativeLimit")
+TEST_CASE("Slow.Certificate.Anchor.TheMinhoWallCollapsesJustPastItsAssociativeLimit")
 {
 	const auto Start = std::chrono::steady_clock::now();
 	const BlockWall Wall = MakeMinhoWall(MinhoKgPerM3);
