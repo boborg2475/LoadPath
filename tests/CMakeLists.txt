@@ -15,6 +15,7 @@ add_executable(loadpath_tests
 	StandingAuthorityTest.cpp
 	SingleBlockAnchorsTest.cpp
 	StackAnchorsTest.cpp
+	Slice2bWedgeArchAnchorsTest.cpp
 	StandingSolverTest.cpp
 	StandingLocalityTest.cpp
 	StandingUngroundedTest.cpp
