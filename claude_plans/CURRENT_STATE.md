@@ -32,8 +32,8 @@ stacks, Paterson–Zwick, Couplet–Heyman at Milankovitch's 0.107478 with hinge
 the certificate's associative 31.07°, the cascade on the arch below least thickness, the dry
 wall at t / H within 1 % (10 × 8 and 4 × 5), the bonded 4 × 5 wall at its monolith factor
 `(t/H)(1 + f_t A_base / W) = 2.971` to 1 %, two screws at twice their published shear and
-withdrawal whatever the joint area. Default suite 365 cases in Debug and 392 in Release after
-slice 2e (325 and 347 at the 6b close) (the arch, pile, arch-cascade, fuzz, small-wall and multi-panel factor anchors
+withdrawal whatever the joint area. Default suite 369 cases in Debug and 399 in Release after
+slice 2b (325 and 347 at the 6b close) (the arch, pile, arch-cascade, fuzz, small-wall and multi-panel factor anchors
 run only in Release under `LOADPATH_SLOW_IN_DEBUG`; fourteen `Slow.*` cases run in Release at
 every slice close, and the
 cheap `Measure.Scale.*` rows after them); the `Deferred.*` tier holds the physical wedge pin
@@ -296,11 +296,23 @@ the non-associative answer) and the two hanging-component cases (slice 6), red b
    bonded by fixture choice, the base dry), B-ROK-02 (the static threshold b/h only; the measured
    α is dynamic). On the two sliding anchors the combined authority reads Undecided between μ and
    μ/cos(π/16) (the certificate's G = 16 polygon band; documented fail-closed, but the host gets no
-   slide signal there). Group B (in progress on branch `slice-2b-b`): B-WDG-02,
-   the 5-diamond (hits the 50-pass cap today, logged below), and the arch and pile rows that
-   API.md "Anchors slice 2 must pin" lists but BENCHMARKS marks slice 4 (B-ARC-01/06 Couplet–
-   Heyman, B-ORD-01 Orduña): attempt them with the elastic no-tension field in 2b and move the
-   ones it cannot reach to slice 4 with the reason recorded, as the wedge was. Rows with inputs
+   slide signal there). Group B is pinned too (2026-10-12, `tests/Slice2bWedgeArchAnchorsTest.cpp`, green on arrival):
+   the frictionless 5-diamond falls and the 4-diamond stands (the paper's vertical-force model,
+   μ 0); B-WDG-02's no-push slip at μ 0.20, self-locking at 0.25 and the raise force 0.935 W
+   two-sided; the hold force 0.0436 W only as a fail-closed band (the elastic solve hits the
+   50-pass cap from 0.92 to 1.15 × hold, and the certificate reads Undecided just over the
+   raise force); the Couplet–Heyman arch in the elastic field (least thickness bisected to
+   [0.107478, 0.107479], the friction switch to [21.5947°, 21.5957°], Undecided below, never a
+   false Mechanism). **Moved to slice 4:** B-ORD-01's two-sided bracket in the elastic field (it
+   Stands to λ 0.3874 and reads Undecided from 0.3875, below the published lower bound 0.427;
+   pinned one-sided). **Open, a possible false Stands:** the 5-diamond at μ 0.5 reads elastic
+   Undecided after 12 (no longer the cap) and certificate and combined Stands at [1000, 1000],
+   where the paper says it falls; the paper's model has vertical forces only, so friction may
+   genuinely hold it, but an associative certificate's Stands is not a proof under Coulomb
+   friction (the non-associative gap slice 7 would have refereed). The friction sweep: μ 0
+   Mechanism / Collapses; μ 0.01 to 0.3 elastic Undecided, certificate Collapses; μ 0.5
+   certificate Stands. Needs a ruling on what the physical answer is at μ 0.5 (a physical test
+   or a non-associative analysis of the diamond), measured before anything changes. Rows with inputs
    still to retrieve: B-COR-01 corner geometry, F-PSY-01 friction angle, F-FOR-01 and F-STR-01
    pier geometry (Portioli 2012), B-DER-01 wall geometry, B-SW-01 exact limit load (graphical
    only), F-RON-01 panel thickness, B-FTL-01 layout. B-BUR-01 needs a soil-pressure driver;
