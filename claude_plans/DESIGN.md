@@ -1551,3 +1551,45 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   dry gap (saves one stand), and 8 knife-edge stacks the certificate stands with zero friction
   fall robustly in the staged DEM: geometric instability, which no friction path addresses. The
   probe's sources and data are in the session scratchpad (`stepped\`), not the repository.
+- *2026-10-13, orchestrator, the certificate's interior-optimum and stall defects (opening):* a
+  high-effort probe of the slice-4 walls found that the Foraboschi wall's Undecided bands (t_in 0,
+  t_out at the cap, non-monotone at 140 kN, Undecided at f_c 1.21 MPa with no push) are inscribed
+  solve failures, not the polygon band or the contract. **Defect A:** when the inscribed optimum is
+  finite and strictly inside (1, cap) (a finite crushing strength makes it so: the dry profile's
+  1e9 Pa on this wall gives t* 212 to 827), the normal matrix loses positive pivots near
+  convergence, the regularised retry adds 1e-12 of the largest diagonal, one refinement pass cannot
+  undo it, and the primal residual floors near 1e-3 while the dual and gap converge; the stall rule
+  ends the solve. Moving t* to the cap or above (cap 100, or f_c 1e12) removes it. Both the dense
+  and sparse paths fail the same way. **Defect B:** past a threshold the stall rule fires while a
+  t* = 0 solve still progresses (τ falling, the gap measure rising, then t drops to 0 and the solve
+  converges in 5 more iterations; the Minho wall at 16.6 kN converges at 44 with no stall rule).
+  **Independent check:** a 2-D associative LP with exact cones, optional crushing and its own
+  simplex (certified by primal and dual objectives, sharing no code) gives the full Foraboschi wall's
+  associative limits 26.28, 50.28 and 83.61 kN at 40, 80 and 140 kN; the probe's two fixes together
+  make the certificate stand to within the G = 16 band (under 0.5 kN) of each and collapse past it,
+  sparse and dense identical, every one of 31 sub-threshold points converged. **The Minho wall:**
+  the certificate is exact for the anchor agent's fixture (massless beam, push at the beam centroid
+  z 1.05 m: 15,542.1 N by hand, 15,542.13 by the 2-D LP); the paper's value 16.55 kN cannot exceed
+  the associative limit of its own model, which rules that set-up out; the push at the masonry top
+  (z 1.0 m) with the 500 N beam's weight, the bottom course five full blocks and the beam free to
+  rotate gives 16,569.2 N by hand (stepped wedge rotating about the toe, 18 heel blocks sliding up at
+  the dilatancy angle; pure separation, so non-associative equals associative), inside 16.55 ± 0.2.
+  **Rulings.** (1) Fix defect A: escalate the retry shift through 1e-16, 1e-14 and 1e-12 of the
+  largest site diagonal (excluding the coupling term c·d²), taking the first that gives positive
+  pivots, and run up to 20 iterative-refinement passes on the predictor and corrector in an
+  iteration that used a shifted factor (measured: 1e-12 with 20 passes fixes none of the points,
+  1e-16 with 20 fixes all). (2) Fix defect B: the stall window also restarts when the
+  complementarity (xᵀs + τκ)/(n + 1) halves. (3) Red tests on analytic values, no LP referee in the
+  suite (slice 7 stays dropped): the 23-block wall (the Foraboschi bond, 1.04 m by 5 courses, no
+  opening, the beam, 80 kN vertical, f_c 1e8 Pa) at the loads that read Undecided today must stand,
+  its exact limit being the beam sliding on the top course, H* = μ(V + W_beam); and the Minho wall in
+  the paper's set-up stands at 16.56 kN and collapses from 16.575 kN. (4) B-SW-01 is pinned on that
+  set-up. (5) The stall pins in `CertificateStallTest` are re-measured under the ruling (the ec6
+  1e-15 wall still stalls, at 69/70 instead of 45/46). **Not in this slice:** the Ferris & Tin-Loi
+  wall at G = 64 reads Undecided within about 1e-6 relative of its threshold (the admissible set
+  nearly empty, t* at the cap; neither fix cures it): a resolution limit written into API.md, fail
+  closed; the selection LP failing on the Foraboschi wall at 140 kN / 85 kN after both cone solves
+  converge; and the Foraboschi fixture's associative limits at 80 and 140 kN sitting 25 to 47 % above
+  Portioli's associative-to-non-associative ratio, so those loads are not pinned (the fixture's rigid
+  beam with a point load is suspect). The probe's sources (the 2-D LP, the harness, the patch) are in
+  the session scratchpad (`certwalls\`).
