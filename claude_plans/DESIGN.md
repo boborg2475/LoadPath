@@ -1652,3 +1652,27 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   1e-12 rung of the escalation (1,454 shifted factors in the suite: 1,389 at 1e-16, 65 at 1e-14), and
   on coupling-dominated components (the bolt row, full/site up to 6e4; rank-one cases where the site
   part is zero) that rung would be 1e-8 to 1e-6 of the site diagonal, untested.
+- *2026-10-13, orchestrator, the selection LP's retry (probe ruling):* on the Foraboschi wall at
+  140 kN / 85 kN both cone solves converge and the selection LP ran to its 200-iteration cap (112 s),
+  so a true collapse read Undecided with empty lists. A high-effort probe found the same disease as
+  the cone solves' defect A: near the optimum the selection's normal matrix becomes numerically
+  singular (pivot ratio about 1e-16 as μ goes to 0), its single 1e-12 retry is far too large for one
+  corrector pass to undo, and the dual residual floors at 1e-6 to 4e-5 against a 1e-9 tolerance.
+  Smallest fixture: the Foraboschi bond wall 0.78 m by 16 courses with the beam (57 bodies, 137
+  contacts) at 80 kN vertical and about 32.8 kN horizontal (1.3 × its threshold; the whole wall rocks),
+  6 of 13 loads failing in a 200 N band. Rates: 1 in 896 tiny walls, 2 in 432 slender walls, 3 of 7
+  loads past the full wall's limit at 140 kN, none on the shed, the half warehouse or any beam-only
+  slide; the risk grows with the number of bodies the mechanism moves. Fixes measured on 18 failing
+  cases: the cone solves' escalation (1e-16, 1e-14, 1e-12 of M's largest diagonal) fixes all 18 and
+  the full wall (66 iterations, 32 s), with every previously converging case reaching the same state
+  and objective (432 rows compared); adding 20 refinement passes changes nothing; a single 1e-12 shift
+  with 20 passes fixes 15; refining the predictor under the large shift breaks the Liberton anchor.
+  **Ruling:** `FactorSelection` takes the escalation, refinement unchanged. Red test on the 57-body
+  wall: three loads in the band read Collapses with the beam listed and a hinging list, and a control
+  below the threshold does not collapse (`LOADPATH_SLOW_IN_DEBUG`; about 0.6 s Release once green).
+  **Logged, not in this item:** the selection has no stall rule, so any remaining failure costs all 200
+  iterations; the positivity test accepts factors with a pivot ratio near 1e-16 (on the 57-body wall
+  the first bad step was unshifted); the full wall's dense selection takes 20 to 27 s when healthy (a
+  sparse selection is the cost fix); the hinging list on the 57-body wall wanders between 17 and 33
+  joints across neighbouring loads while the moving count stays 57 (a listing-threshold matter). The
+  probe's sources are in the session scratchpad (`selection\`).
