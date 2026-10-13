@@ -717,6 +717,34 @@ Restoration RestoreInadmissibleReleases(const Problem& P, const Eigen::VectorXd&
 	return Outcome;
 }
 
+double CohesiveDissipationW(const Problem& P, const std::vector<JointState>& States, const Eigen::VectorXd& Motion)
+{
+	const double ToleranceM = AdmissibilityToleranceRelative * MotionScaleM(P, Motion);
+	double DissipationW = 0.0;
+	for (std::size_t I = 0; I < P.Joints.size(); ++I)
+	{
+		const Joint& J = P.Joints[I];
+		if (J.bReleasesSlip)
+		{
+			continue;
+		}
+		for (std::size_t C = 0; C < CornerCount; ++C)
+		{
+			if (States[I].Status[C] != CornerStatus::Open)
+			{
+				continue;
+			}
+			const Vec3 Delta = RelativeDisplacement(J, C, Motion);
+			const double SlideM = Length(Sub(Delta, Scale(Dot(Delta, J.Normal), J.Normal)));
+			if (SlideM > ToleranceM)
+			{
+				DissipationW += std::min(J.CohesionCapacityN, J.ShearCapN) * SlideM;
+			}
+		}
+	}
+	return DissipationW;
+}
+
 double Ratio(double DemandN, double CapacityN)
 {
 	if (DemandN == 0.0)
@@ -1031,6 +1059,13 @@ StandingResult SolveProblem(const Problem& P, const StandingOptions& Options)
 				}
 				if (Outcome == Restoration::None)
 				{
+					const double PowerW = AssembleLoad(P, States).dot(Motion);
+					if (!(PowerW > CohesiveDissipationW(P, States, Motion)))
+					{
+						Result.Readings = bHaveFullRank ? ReadAll(P, FullRankStates, FullRankX, bOverstressed) : ReadAll(P, States, X, bOverstressed);
+						Result.State = StandingState::Undecided;
+						return Result;
+					}
 					Result.Readings = ReadAll(P, States, X, bOverstressed);
 					Result.State = StandingState::Mechanism;
 					FillMechanism(P, Motion, Result);
