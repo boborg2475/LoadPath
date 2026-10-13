@@ -32,7 +32,7 @@ stacks, Paterson–Zwick, Couplet–Heyman at Milankovitch's 0.107478 with hinge
 the certificate's associative 31.07°, the cascade on the arch below least thickness, the dry
 wall at t / H within 1 % (10 × 8 and 4 × 5), the bonded 4 × 5 wall at its monolith factor
 `(t/H)(1 + f_t A_base / W) = 2.971` to 1 %, two screws at twice their published shear and
-withdrawal whatever the joint area. Default suite 357 cases in Debug and 384 in Release after
+withdrawal whatever the joint area. Default suite 358 cases in Debug and 385 in Release after
 slice 2e (325 and 347 at the 6b close) (the arch, pile, arch-cascade, fuzz, small-wall and multi-panel factor anchors
 run only in Release under `LOADPATH_SLOW_IN_DEBUG`; fourteen `Slow.*` cases run in Release at
 every slice close, and the
@@ -182,8 +182,14 @@ the non-associative answer) and the two hanging-component cases (slice 6), red b
    elastic solve 0.19 s (was unfinished) and certificate 34 s; the half warehouse's
    certificate 59 s (was 594 s). Stage 3d (a verdict-only option) was dropped as unneeded.
    Carried from the stage reviews, none host-unsafe:
-   - elastic factor: the rank landing exactly on a panel boundary (64, 128) is unpinned
-     (`LargestPivot` resets per panel); `ArchAnchorsTest` (Orduña pile) and `StackAnchorsTest`
+   - elastic factor: a rank landing exactly on a panel boundary is pinned at 64 and 128
+     (`Statics.Factor.ARankOnThePanelBoundaryReadsItsNullSpace`, 2026-10-12: tipping cubes on a
+     bonded slab, nullity checked by `FullPivLU` on the closed-corner Jacobian); resetting
+     `LargestPivot` per panel reddens the rank-64 row only; skipping the trailing update's
+     `Diagonal.tail(Rest)` refresh survives the whole suite (the in-panel running update already
+     holds the Schur diagonal, so the refresh changes rounding only; removing it would be a
+     bit-level change to every factor and needs the pins regenerated, not worth it alone);
+     `ArchAnchorsTest` (Orduña pile) and `StackAnchorsTest`
      (diamond) incidentally guard panel faults, so neither may be loosened blindly; with the
      reference gone, Mechanism-draw readings and motions are not pinned (they differed by up to
      0.79 relative between the factors); the pins (`tests/FactorPins.h`, regenerated only by
