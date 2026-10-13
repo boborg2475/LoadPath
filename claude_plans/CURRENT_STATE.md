@@ -90,8 +90,20 @@ the non-associative answer) and the two hanging-component cases (slice 6), red b
      joints under a 30 N upward load at the middle brick's centroid (and the 1 × 5 alike) at
      λx 0.3, exit Undecided through
      `RestoreInadmissibleReleases` because the closing corner was Open in the full-rank state
-     and the step has no trial shear to decide slip; all are cohesive corners, which never
-     slip, so re-closing them Stuck is the candidate fix (**the next item after 2e closes**);
+     and the step has no trial shear to decide slip; investigated and left as it is (DESIGN
+     §10 "the restore step's refusal on cohesive corners"): the certificate certifies all six
+     as Stands and the combined authority already returns Stands, while every candidate rule
+     traded fast refusals for 50-iteration solves or certificate-refuted Mechanisms;
+   - **the elastic authority's Mechanism on cohesive tensionless walls is refuted by the
+     certificate** (found by the restore-step investigation, 2026-10-12): the lime grid's 7
+     pinned Mechanisms (5 × 5 and 6 × 8 at λx 1.2) and HUNT 96643's are one stepped wedge
+     sliding on open cohesive corners with dissipation 239× to 272× the load power, all
+     certified Stands; the RBSM's Stands credits cohesion at N ≥ 0 but its Mechanism treats an
+     open cohesive corner as free. The combined authority overrules each (host verdicts right)
+     and counts a Disagreement. Candidate: the restore step's admissibility test also refuses a
+     motion whose load power does not exceed the cohesive dissipation on the open corners it
+     slides; measure first (which existing Mechanisms move, whether any dry one does: it must
+     not, dry corners dissipate nothing when open), then rule. **Next item.**
      readings at the iteration cap on a corner reset in the last pass are out of equilibrium
      (the `HeldN` pattern, untested); restore-step re-closures neither count nor reset by
      ruling, pinned on two random-hunt walls (`ARestoreStepReclosureNeitherCountsNorResets`); the

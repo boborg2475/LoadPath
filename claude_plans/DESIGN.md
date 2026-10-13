@@ -1261,7 +1261,8 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   exceptions are traced**: all five leave through `RestoreInadmissibleReleases` returning
   Undecided because the closing corner was Open in the full-rank state and the step has no
   trial shear to decide slip; every one is a cohesive corner, which never slips, so the refusal
-  is unnecessary for them and re-closing them Stuck is the candidate fix, logged as the next
+  is unnecessary for them and re-closing them Stuck is the candidate fix (measured afterwards:
+  not sufficient, and the refusal stays; see the restore-step entry below), logged as the next
   item, not folded into this slice. Also logged: readings at the iteration cap on a corner
   reset in the last pass are out of equilibrium (the advanced reference against the previous
   field, the `HeldN` pattern); the grid test pins its Stand and Mechanism counts as well as
@@ -1303,3 +1304,38 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   with a reference); test names that describe history (`WallsTheGuardKeptFromStandingStand`,
   `FormerlyConvergedPointsReadTheirNewFields`) are kept, since renaming pins costs more than it
   clarifies while their ANCHORS rows explain them.
+- *2026-10-12, orchestrator, the restore step's refusal on cohesive corners (investigated, left
+  as it is):* a high-effort probe traced the six lime points that leave through
+  `RestoreInadmissibleReleases` (the five 10 × 8 grid exceptions and the one-course 1 × 3 and
+  1 × 5 walls with c 1 kPa joints under 30 N of uplift at the middle brick, λx 0.3). In every one
+  the closing corner is cohesive, was Open in the full-rank state, and was never re-closed by an
+  iterate (reference and count zero). **No host verdict is wrong:** the certificate's inscribed
+  cone is exactly the own-field cone (|S| ≤ cA/4 + μN, N ≥ 0) and certifies all six as Stands
+  (t 22 to 35 on the 10 × 8, the cap on the one-course walls), and the combined authority already
+  returns Stands for all six through it (0.5 s each on the 10 × 8). Hand checks agree: in-plane
+  overturning at λx 2.65, out-of-plane rocking at t/H 0.158 (the λy 0.15 points sit 5 % under it),
+  base-bed cohesive sliding about 10× at λx 1.2; the evidence is thin only under a strict
+  no-tension reading, where an end-of-wall stepped wedge rocks freely at λx ≈ 0.96 because
+  cohesion at N = 0 is what holds it, which the project's lower-bound standard and the catalogue's
+  zero-precompression intercept (EC6's fvk0) accept. Candidates measured on the six, the
+  140-point grid, a 984-fixture cohesive sweep (92 reaching the refusal), the suite, Slow and
+  the HUNT pins: (a) re-close Stuck cycles with period 4 on the 1 × 3 (the 2e cycle again; the
+  candidate CURRENT_STATE named is not sufficient) and caps the 10 × 8 at (1.2, 0); (b) count
+  the re-closure, and (c) reset the reference at it, do better (the best, (c), stands the two
+  one-course walls in 11, the 10 × 8 at (1.0, 0.15) and (1.2, 0.05), grid 130 / 9 / 1) but every
+  candidate turns fast refusals (mean 7.1 iterations) into 50-iteration Undecideds on about a
+  fifth of the sweep (mean 22) and turns two grid Undecideds into Mechanisms the certificate
+  refutes. **Ruling: the refusal stays.** It is honest fail-closed, the host answer is right
+  today, and every rule trades a fast non-answer for a slow one or a false label; the restore
+  step's rulings (cohesive restore re-closures neither count nor reset; Open in the full-rank
+  state reads Undecided) are unchanged. **The finding it exposed is logged as its own item:** on
+  cohesive tensionless walls the elastic authority's Mechanism is not a mechanism under the
+  project's own standard. Its Stands credits cohesion at N ≥ 0 but its Mechanism treats an open
+  cohesive corner as free, so at λx 0.96 to 1.2 its label depends on the path: the 7 Mechanisms
+  the lime grid pins (5 × 5 and 6 × 8 at λx 1.2) are all one 9-body stepped wedge sliding on 36
+  open cohesive corners with dissipation 272× the load power, all 7 certified Stands (t 37 to
+  48), and HUNT 96643's Mechanism is the same (239×, certified Stands). The combined authority
+  overrules each (no host harm) and counts a Disagreement. The candidate is to make the
+  restore step's admissibility test for a Mechanism ask whether the motion's power exceeds the
+  cohesive dissipation on the open corners it slides (an upper-bound check the certificate
+  already does), measured first.
