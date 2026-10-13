@@ -1,9 +1,12 @@
 #include "BrickFixtures.h"
+#include "CatalogueTestSupport.h"
 #include "CertificateTestSupport.h"
 #include "StaticsTestSupport.h"
 #include "WedgeFixture.h"
 
+#include "loadpath/Catalogue.h"
 #include "loadpath/StructuralAuthority.h"
+#include "loadpath/geometry/RunningBondWall.h"
 
 #include "doctest.h"
 
@@ -256,7 +259,7 @@ TEST_CASE("Statics.Combined.ThreeBrickBridgeStandsAtEveryProvableBiaxialPoint")
 	}
 }
 
-TEST_CASE("Statics.Combined.ThreeBrickBridgeStandsWhereAnAdmissibleFieldExists")
+TEST_CASE("Statics.Combined.ThreeBrickBridgeTheElasticSeesFallReadsUndecided")
 {
 	struct Case
 	{
@@ -270,22 +273,80 @@ TEST_CASE("Statics.Combined.ThreeBrickBridgeStandsWhereAnAdmissibleFieldExists")
 		const AuthorityResult Result = JudgeWith(B.Model, Biaxial(Each.LambdaX, Each.LambdaY));
 		const StandingResult Elastic = SolveWith(B.Model, BiaxialLateralLoad(Each.LambdaX, Each.LambdaY));
 		INFO("lambda x " << Each.LambdaX << ", lambda y " << Each.LambdaY << ": " << DescribeResult(Result) << "; elastic alone " << Elastic.State);
-		CHECK(Result.Worst == ComponentVerdict::Stands);
+		CHECK(Elastic.State == StandingState::Mechanism);
+		CHECK(Result.Worst == ComponentVerdict::Undecided);
+		CHECK(Result.Disagreements == 1);
 		CHECK(Result.Components.size() == 1u);
-		int Disagreed = 0;
 		for (const ComponentReport& Report : Result.Components)
 		{
+			CHECK(Report.Elastic == StandingState::Mechanism);
+			CHECK(Report.bConsultedCertificate);
+			CHECK(Report.Kinematic == CertificateState::Stands);
+			CHECK(Report.bDisagreed);
 			CHECK(Report.Release.empty());
 			CHECK(Report.Mechanism.empty());
-			CHECK(Report.bDisagreed == (Report.Elastic == StandingState::Mechanism));
-			Disagreed += Report.bDisagreed ? 1 : 0;
+			CHECK(Report.Hinging.empty());
 		}
-		CHECK(Result.Disagreements == Disagreed);
-		if (Each.LambdaX == 2.5)
-		{
-			CHECK(Elastic.State == StandingState::Mechanism);
-			CHECK(Result.Disagreements == 1);
-		}
+	}
+}
+
+TEST_CASE("Statics.Combined.ThreeBrickBridgeStandsWhereTheElasticFindsNoMechanism")
+{
+	const ThreeBrickBridge B = MakeThreeBrickBridge(DryJoint(5.0));
+	const AuthorityResult Result = JudgeWith(B.Model, Biaxial(2.5, 0.75));
+	const StandingResult Elastic = SolveWith(B.Model, BiaxialLateralLoad(2.5, 0.75));
+	INFO(DescribeResult(Result) << "; elastic alone " << Elastic.State);
+	CHECK(Elastic.State == StandingState::Undecided);
+	CHECK(Result.Worst == ComponentVerdict::Stands);
+	CHECK(Result.Disagreements == 0);
+	CHECK(Result.Components.size() == 1u);
+	for (const ComponentReport& Report : Result.Components)
+	{
+		CHECK(Report.Kinematic == CertificateState::Stands);
+		CHECK_FALSE(Report.bDisagreed);
+		CHECK(Report.Release.empty());
+	}
+}
+
+TEST_CASE("Statics.Combined.DryTwoCourseWallTheElasticSeesFallReadsUndecided")
+{
+	const CatalogueResult Loaded = LoadCatalogue(ReadCatalogueFile());
+	REQUIRE(Loaded.Ok());
+	StrengthProfile Bed = JointOrFail(Loaded.Value, "lime_mortar_handmade_brick_upc_mean").Profile;
+	StrengthProfile Perpend = Bed;
+	Bed.ShearCohesionPa = 0.0;
+	Perpend.ShearCohesionPa = 0.0;
+	Bed.FrictionCoefficient = 0.74706556370258748;
+	Perpend.FrictionCoefficient = 0.67429357703282577;
+	Structure Model;
+	geometry::WallSpec Spec;
+	Spec.Bed = AddProfileOk(Model, Bed);
+	Spec.Perpend = AddProfileOk(Model, Perpend);
+	Spec.Courses = 2;
+	Spec.BricksPerCourse = 2;
+	const geometry::Wall W = geometry::BuildRunningBondWall(Model, Spec);
+	REQUIRE(W.bComplete);
+	REQUIRE(W.Courses.size() == 2u);
+	REQUIRE(W.Courses[0].size() == 2u);
+	const std::vector<BodyLoad> Loads{BodyLoad{W.Courses[0][1], Vec3{-66.39608475530504, 51.879148710628506, -10.046133472861092}, Vec3{0.39583565996234071, 0.011794524107767088, 0.045273791494657996}}};
+	const Vec3 Gravity{2.2757538861616866, 0.0, -GravityMPerS2};
+	AuthorityOptions Options;
+	Options.Standing.Gravity = Gravity;
+	Options.Certificate.Gravity = Gravity;
+	const AuthorityResult Result = JudgeWith(Model, Options, Loads);
+	const StandingResult Elastic = SolveWith(Model, Options.Standing, Loads);
+	INFO(DescribeResult(Result) << "; elastic alone " << Elastic.State);
+	CHECK(Model.LiveBodyCount() == 6u);
+	CHECK(Elastic.State == StandingState::Mechanism);
+	CHECK(Result.Worst == ComponentVerdict::Undecided);
+	CHECK(Result.Disagreements == 1);
+	CHECK(Result.Components.size() == 1u);
+	for (const ComponentReport& Report : Result.Components)
+	{
+		CHECK(Report.Elastic == StandingState::Mechanism);
+		CHECK(Report.Kinematic == CertificateState::Stands);
+		CHECK(Report.bDisagreed);
+		CHECK(Report.Release.empty());
 	}
 }
 
