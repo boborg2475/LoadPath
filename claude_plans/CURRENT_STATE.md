@@ -344,10 +344,12 @@ the non-associative answer) and the two hanging-component cases (slice 6), red b
 - The certificate's interior-optimum and stall defects are fixed (2026-10-13, DESIGN §10 opening
   and amendment; the retry shift escalates 1e-16 to 1e-12 of the full diagonal with 20 refinement
   passes after a shifted factor, and the stall window restarts when the complementarity halves);
-  B-SW-01 is pinned in the paper's set-up. Left from it: neither half of the retry fix is pinned
-  alone (a straight 1e-12 shift with 20 passes, or the escalation with 0/1 passes, passes every
-  tier; only both removed redden the 23-block wall; a test on the Foraboschi wall's former bands,
-  e.g. 80 kN / 42 kN Stands, may separate them); `FactorSelection` keeps its single 1e-12 retry;
+  B-SW-01 is pinned in the paper's set-up. The cold review's three send-backs are in a fix round
+  (DESIGN §10 "cold-review rulings"): a `Slow.` separator for the two halves of the retry fix on
+  the Foraboschi wall, scripted tests and two amendments for the severed axis, the Minho test to
+  `Slow.`. Left from it: the restart raises iterations on stuck solves and resets the window's best
+  residual (API.md's cost note owes a line); no fixture reaches the escalation's 1e-12 rung, which
+  on coupling-dominated components would be 1e-8 to 1e-6 of the site diagonal; `FactorSelection` keeps its single 1e-12 retry;
   the selection LP fails on the Foraboschi wall at 140 kN / 85 kN after both cone solves converge
   (reads Undecided with t_out 6e-12); the Foraboschi fixture's limits at 80 and 140 kN (50.3 and
   83.6 kN) are 25 to 47 % above what Portioli's associative-to-non-associative ratio implies, so

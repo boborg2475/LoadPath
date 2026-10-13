@@ -241,8 +241,8 @@ says so.
   2026-10-13** (`Certificate.Anchor.TheMinhoWallCollapsesJustPastItsAssociativeLimit`) in the set-up
   that matches the paper: the push at the masonry top (z 1.0 m) with the 500 N beam's weight, the
   beam free to rotate, the bottom course five full blocks; hand value 16,569.2 N (a stepped wedge
-  rotating about the toe with the heel blocks sliding up at the dilatancy angle, pure separation, so
-  non-associative equals associative); the certificate stands at 16.56 kN and collapses from
+  rotating about the toe with 20 heel blocks sliding up at the dilatancy angle; the non-associative
+  limit is at most this value); the certificate stands at 16.56 kN and collapses from
   16.575 kN. The first fixture (massless beam pushed at its centroid, z 1.05 m) gives 15,542 N,
   which the paper's value rules out.
 - **F-PSY-01, Psycharis drum column: friction found, drum heights not.** Friction angle 37°,

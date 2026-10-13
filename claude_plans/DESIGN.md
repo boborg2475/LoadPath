@@ -1572,8 +1572,9 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   z 1.05 m: 15,542.1 N by hand, 15,542.13 by the 2-D LP); the paper's value 16.55 kN cannot exceed
   the associative limit of its own model, which rules that set-up out; the push at the masonry top
   (z 1.0 m) with the 500 N beam's weight, the bottom course five full blocks and the beam free to
-  rotate gives 16,569.2 N by hand (stepped wedge rotating about the toe, 18 heel blocks sliding up at
-  the dilatancy angle; pure separation, so non-associative equals associative), inside 16.55 ± 0.2.
+  rotate gives 16,569.2 N by hand (stepped wedge rotating about the toe, 20 heel blocks, 16 full and 4 half,
+  sliding up at the dilatancy angle; corrected by the cold review, which also notes the
+  non-associative limit is only shown to be at most this value), inside 16.55 ± 0.2.
   **Rulings.** (1) Fix defect A: escalate the retry shift through 1e-16, 1e-14 and 1e-12 of the
   largest site diagonal (excluding the coupling term c·d²), taking the first that gives positive
   pivots, and run up to 20 iterative-refinement passes on the predictor and corrector in an
@@ -1622,3 +1623,32 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   stalls, where the factor still decides when the window fires; the window's new rule (it fires only
   when neither the largest residual improves by the factor nor the complementarity halves) is what
   the stall tests now pin.
+- *2026-10-13, orchestrator, the severed axis and the certificate defects (cold-review rulings):* the
+  review confirmed the fixes and the analytic values (the 23-block wall stands to exactly H* in every
+  row and only the beam moves past it; the Minho wall stands to 16,567.5 N and collapses from
+  16,572.5 N around the hand value; the stall pins isolate the factor) and sent the work back on three
+  points, all adopted. **(1) Neither half of the retry fix is driven by a test**, and no cheap
+  separator exists in the 23-block family (432 points); the Foraboschi wall does separate them: at
+  80 kN / 42 kN a straight 1e-12 shift reads Undecided, and at 140 kN / 80 kN 1 refinement pass reads
+  Undecided, both well inside the 2-D LP's limits (50.28 and 83.61 kN). Ruling: a `Slow.` test
+  asserting Stands with t_out below the cap at both points (a solver property, not an anchor, so the
+  doubt about the fixture against Portioli does not apply). **(2) Three branches of the severed axis
+  survive every tier** (Shear beating Tension when a joint both opens and slides, the closing-joint
+  fallback, the 1e-3 threshold). Ruling: scripted-mechanism tests on a brick (opening plus sliding
+  reads Tension; a lift just above and just below μ|v_t| + 1e-3|v| reads Tension and Shear), and two
+  amendments to the rule: a joint whose mechanism closes it (a corner's normal velocity below minus
+  the threshold, which only a finite crushing cap allows) reads `Compression` from the mechanism,
+  checked after the opening and before the sliding, so the final fallback is the reading's axis only
+  for a motion that is not finite; and a zero-cap joint (`MaxShearStrengthPa == 0`, which the
+  certificate treats as frictionless with no dilatancy) subtracts no friction lift. The corner
+  points reuse `statics::CornerPoints`. The dead band of the |v_t| measure against the inscribed
+  polygon's support (up to μ(1 − cos π/16) of the slip, inside which rocking reads Shear) is the safe
+  direction and is accepted. **(3) Evidence corrected:** the Foraboschi scan in ANCHORS predated the
+  fix (the bracket is now about 26.3 kN, matching the 2-D LP); the Minho heel is 20 blocks (16 full,
+  4 half), the 1800 N and 1210 N·m stand; "non-associative equals associative" is only shown as at
+  most; the Minho test takes 1.8 s in Release, so it moves to `Slow.`. Logged: the stall window's
+  complementarity restart raises iterations on stuck solves (the Ferris & Tin-Loi G = 64 case 45 to 96,
+  none at the cap) and resets the window's best residual to the current one; no fixture reaches the
+  1e-12 rung of the escalation (1,454 shifted factors in the suite: 1,389 at 1e-16, 65 at 1e-14), and
+  on coupling-dominated components (the bolt row, full/site up to 6e4; rank-one cases where the site
+  part is zero) that rung would be 1e-8 to 1e-6 of the site diagonal, untested.
