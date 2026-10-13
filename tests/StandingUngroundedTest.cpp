@@ -522,6 +522,8 @@ TEST_CASE("Statics.Ungrounded.ATinyGravityStillFallsAlongIt")
 	const Case Cases[] = {
 		Case{Vec3{0.0, 0.0, -1.0e-310}, Vec3{0.0, 0.0, -1.0}},
 		Case{Vec3{1.0e-310, 0.0, -2.0e-310}, Vec3{0.5, 0.0, -1.0}},
+		Case{Vec3{0.0, 0.0, -1.0e-163}, Vec3{0.0, 0.0, -1.0}},
+		Case{Vec3{0.0, 0.0, -1.0e-161}, Vec3{0.0, 0.0, -1.0}},
 	};
 	for (const Case& C : Cases)
 	{
@@ -536,7 +538,7 @@ TEST_CASE("Statics.Ungrounded.ATinyGravityStillFallsAlongIt")
 		CheckRigidFall(R, {P.Lower, P.Upper}, C.Fall);
 		const AuthorityResult A = JudgeWith(Model, Tiny);
 		MESSAGE("judge worst " << static_cast<int>(A.Worst) << ", disagreements " << A.Disagreements);
-		CHECK(A.Worst != ComponentVerdict::InvalidInput);
-		CHECK(A.Worst != ComponentVerdict::Undecided);
+		CHECK(A.Worst == ComponentVerdict::Collapses);
+		CHECK(A.Disagreements == 0);
 	}
 }
