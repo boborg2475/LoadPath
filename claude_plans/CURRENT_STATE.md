@@ -32,8 +32,8 @@ stacks, Paterson–Zwick, Couplet–Heyman at Milankovitch's 0.107478 with hinge
 the certificate's associative 31.07°, the cascade on the arch below least thickness, the dry
 wall at t / H within 1 % (10 × 8 and 4 × 5), the bonded 4 × 5 wall at its monolith factor
 `(t/H)(1 + f_t A_base / W) = 2.971` to 1 %, two screws at twice their published shear and
-withdrawal whatever the joint area. Default suite 369 cases in Debug and 399 in Release after
-slice 2b (325 and 347 at the 6b close) (the arch, pile, arch-cascade, fuzz, small-wall and multi-panel factor anchors
+withdrawal whatever the joint area. Default suite 371 cases in Debug and 401 in Release after
+slice 2b and the cohesive-wedge check (325 and 347 at the 6b close) (the arch, pile, arch-cascade, fuzz, small-wall and multi-panel factor anchors
 run only in Release under `LOADPATH_SLOW_IN_DEBUG`; fourteen `Slow.*` cases run in Release at
 every slice close, and the
 cheap `Measure.Scale.*` rows after them); the `Deferred.*` tier holds the physical wedge pin
@@ -94,13 +94,13 @@ the non-associative answer) and the two hanging-component cases (slice 6), red b
      §10 "the restore step's refusal on cohesive corners"): the certificate certifies all six
      as Stands and the combined authority already returns Stands, while every candidate rule
      traded fast refusals for 50-iteration solves or certificate-refuted Mechanisms;
-   - **the cohesive-wedge Mechanism, ruled 2026-10-12 and in its red step (DESIGN §10 "the
-     cohesive-wedge Mechanism (opening)")**: an elastic Mechanism whose null-space motion slides
+   - **the cohesive-wedge Mechanism, green and merged 2026-10-12, in cold review (DESIGN §10
+     "the cohesive-wedge Mechanism (opening)", "dev notes")**: an elastic Mechanism whose null-space motion slides
      open cohesive corners against at least as much cohesive dissipation as the load supplies
      reads Undecided (the certificate then answers, as for any Mechanism); no host verdict
      changes, the hunt's refuted Mechanisms go from 856 to 195 per 100,000 (the remaining ones are
-     the non-associative gap); worked in the worktree C:\Users\bobby\Documents\LoadPath-wedge on
-     branch `cohesive-wedge`; also logged from the probe: 5 of 458 dry random-wall Mechanisms
+     the non-associative gap); `>` to `>=` at P = Dc is unpinned (no fixture on the boundary);
+     also logged from the probe: 5 of 458 dry random-wall Mechanisms
      carry a Stuck corner moving up to 2.4e-5 of the motion scale;
      readings at the iteration cap on a corner reset in the last pass are out of equilibrium
      (the `HeldN` pattern, untested); restore-step re-closures neither count nor reset by

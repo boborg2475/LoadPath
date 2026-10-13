@@ -1392,3 +1392,17 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   Stands and no disagreement. Logged, not ruled: 5 of 458 dry random-wall Mechanisms carry a
   Stuck corner moving 2e-6 to 2.4e-5 of the motion scale (null-vector residue near the pivot
   tolerance).
+- *2026-10-12, orchestrator, the cohesive-wedge Mechanism (dev notes):* landed as ruled in
+  `CohesiveDissipationW` and a check at the top of `SolveProblem`'s `Restoration::None` block;
+  the power is `AssembleLoad · Motion`, positive by construction (the motion is the orthogonal
+  projection of the load onto the null space, so the power is the projection's squared norm);
+  a refusal reports the readings the restore step's Undecided reports (full-rank readings when a
+  full-rank state exists, else the current ones) and fills no motion. Measured: the four red
+  tests green at the ruling's readings, the green twins (the c 100 Pa stack, the c 300 Pa wall)
+  still Mechanism, 401 Release / 371 Debug after merging slice 2b, `Slow.*` 14 green, no pin
+  moved. Mutants: the dissipation forced to zero reddens the four; skipping the check when a
+  full-rank state exists reddens the same four; slice 2e's clear-on-open still moves HUNT
+  96643 (Undecided after 15 against 13); `>` to `>=` survives (no fixture sits on P = Dc; the
+  only difference is a dissipation-free zero-power motion, which the neutral-load test already
+  removes); dropping the slip-holding filter survives as the equivalent mutant (a dry corner's
+  capacity is zero).
