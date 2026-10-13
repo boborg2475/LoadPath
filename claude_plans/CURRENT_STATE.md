@@ -32,7 +32,7 @@ stacks, Paterson–Zwick, Couplet–Heyman at Milankovitch's 0.107478 with hinge
 the certificate's associative 31.07°, the cascade on the arch below least thickness, the dry
 wall at t / H within 1 % (10 × 8 and 4 × 5), the bonded 4 × 5 wall at its monolith factor
 `(t/H)(1 + f_t A_base / W) = 2.971` to 1 %, two screws at twice their published shear and
-withdrawal whatever the joint area. Default suite 381 cases in Debug and 414 in Release after
+withdrawal whatever the joint area. Default suite 382 cases in Debug and 415 in Release after
 slice 2b and the cohesive-wedge check (325 and 347 at the 6b close) (the arch, pile, arch-cascade, fuzz, small-wall and multi-panel factor anchors
 run only in Release under `LOADPATH_SLOW_IN_DEBUG`; fifteen `Slow.*` cases run in Release at
 every slice close, and the
@@ -314,9 +314,8 @@ the non-associative answer) and the two hanging-component cases (slice 6), red b
    composition-table property is done (`Statics.Combined.EveryConsultedComponentFollowsTheCompositionTable`,
    which also catches a Collapses with an empty release set), but no generated structure reaches a
    certificate Undecided: `Statics.Combined.ElasticMechanismWithCertificateUndecidedReleasesNothing`
-   pins (Mechanism, Undecided), and (Undecided, Undecided) is pinned by nothing (the cold review's
-   mutant releasing the bodies there passes every tier; a fixture: the same brick with
-   `MaxActiveSetIterations = 1`); a
+   pins (Mechanism, Undecided) and `ElasticUndecidedWithCertificateUndecidedReleasesNothing`
+   (Undecided, Undecided); a
    Stands carries no geometric-margin signal (a knife-edge stack both authorities stand falls in
    the DEM). **Known unsafe gap, logged 2026-10-13:**
    where the elastic authority reads Undecided and the certificate Stands, the structure can

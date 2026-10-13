@@ -572,6 +572,41 @@ TEST_CASE("Statics.Combined.ElasticMechanismWithCertificateUndecidedReleasesNoth
 	CHECK(Result.Disagreements == 0);
 }
 
+TEST_CASE("Statics.Combined.ElasticUndecidedWithCertificateUndecidedReleasesNothing")
+{
+	const double Friction = 0.6;
+	const double Lambda = 0.7;
+	CHECK(Lambda > Friction);
+	CHECK(Lambda < Friction * CircumscribedOverInscribed(4));
+	CHECK(Lambda < BrickLengthM / BrickHeightM);
+	const BrickOnGround F = MakeBrickOnGround(DryJoint(Friction));
+	AuthorityOptions Options = Biaxial(Lambda, 0.0);
+	Options.Certificate.ConeGenerators = 4;
+	Options.Standing.MaxActiveSetIterations = 1;
+	const StandingResult Elastic = SolveWith(F.Model, Options.Standing);
+	const CertificateResult Kinematic = DecideWith(F.Model, Options.Certificate);
+	const AuthorityResult Result = JudgeWith(F.Model, Options);
+	INFO("elastic " << Elastic.State << ", certificate " << Kinematic.State << "; " << DescribeResult(Result));
+	CHECK(Elastic.State == StandingState::Undecided);
+	CHECK(Kinematic.State == CertificateState::Undecided);
+	CHECK(Result.Worst == ComponentVerdict::Undecided);
+	CHECK(Result.Components.size() == 1u);
+	if (Result.Components.size() != 1u)
+	{
+		return;
+	}
+	const ComponentReport& Only = Result.Components.front();
+	CHECK(Only.Elastic == StandingState::Undecided);
+	CHECK(Only.Verdict == ComponentVerdict::Undecided);
+	CHECK(Only.bConsultedCertificate);
+	CHECK(Only.Kinematic == CertificateState::Undecided);
+	CHECK(Only.Release.empty());
+	CHECK(Only.Mechanism.empty());
+	CHECK(Only.Hinging.empty());
+	CHECK_FALSE(Only.bDisagreed);
+	CHECK(Result.Disagreements == 0);
+}
+
 TEST_CASE("Statics.Combined.LoadFactorsAreNaNWhenNotConsulted")
 {
 	const BrickOnGround F = MakeBrickOnGround(DryJoint(0.7));
