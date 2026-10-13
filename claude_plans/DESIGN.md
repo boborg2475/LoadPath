@@ -1751,3 +1751,45 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   pre-existing one: plain LLT reads a wrong Stands for a light block at mass ratios of about 1e11 and
   more (a body under about 1e-10 of its component's load scale passes the equilibrium tolerance
   unsolved); logged as a fail-open limit at scales no physical debris reaches.
+- *2026-10-13, orchestrator, the certificate's conditioning near an interior optimum (design ruling):*
+  a high-effort design probe compared primal-dual regularisation (Altman & Gondzio 1999; Friedlander &
+  Orban 2012), the augmented system (full and hybrid), forcing the dense path, full-residual refinement,
+  and a rigorous-bound fallback, against one battery (the 25 Foraboschi stalls at f_c 1.21 MPa, the
+  46-block and 137-block bond walls, the light-block table extended to mass ratios 1e11 and 1e12, the
+  suite, the Slow tier, the pin tables, cost). **Root cause:** every stall is primal-only: at all 93
+  stalled solves the dual residual is about 1e-16 and the gap about 1e-15 while the primal floors at
+  1e-9 to 1e-5, and the solve's t already equals the rigorous dual bound; an interior t* makes t behave
+  as a free variable and the normal equations go as 1/μ², while an optimum on a cap is strictly
+  complementary and converges (45 to 90 iterations, even at tolerance 1e-15). **Results:** regularisation
+  read 14 wrong Stands on the light table and failed 26 suite tests; the hybrid augmented system decided
+  every stall but cost 24× on the suite and 58× on the shed and changed decided answers; forcing the
+  dense path left 11 of 25 stalls; the fallback decided all 25, the 46-block and 137-block stalls,
+  changed no decided answer over 3,729 suite and 12,047 Slow components, cost nothing off the stall
+  points, and with a locally scaled start read the whole light table right, closing the fail-open limit
+  at 1e11 and 1e12. **Ruling (adopted):** (1) **A rigorous dual bound at every cone-solve exit**,
+  converged or not: with ŷ = y/τ and r = Aᵀŷ + c_t e_t, U = −bᵀŷ + Σᵢ ubᵢ max(0, rᵢ + γ(|A|ᵀ|ŷ| + |c|)ᵢ)
+  over the box bounds every variable has (each group's forces and slack by its Bound; t and the cap
+  slack by the cap; a cap site's facet slacks by its CapBound plus twice the sum of its groups' bounds;
+  all variables nonnegative), weak duality for a box-bounded LP valid for any ŷ (Neumaier & Shcherbina
+  2004; Jansson 2004), with a Higham γ rounding allowance. (2) **Outer solve:** converged, unchanged;
+  otherwise the upper bound is min(cap, U_outer) instead of the cap. (3) **Inner solve that stalls or
+  fails with 0 < U_inner < cap:** re-solve it with the cap set to U_inner·(1 − m), m = 1e-5 and then
+  1e-3, stopping at the first that converges; the lower bound is that re-solve's t (a statically
+  admissible field at that load factor, with the same convergence semantics the inner solve already
+  has); if neither converges the component reads Undecided as today. (4) **Scaled start:** a group whose
+  site touches a body whose own load (its largest normalised |Demand|) is below 1e-6 starts its forces
+  at min(default, that load). (5) A `CertificateOptions::bStallRecovery` (default true) switches (2) and
+  (3) off so the stall-rule tests keep pinning the window. (6) `Iterations` stays the largest single cone
+  solve's count (each at most `MaxIterations`), a recovery re-solve counting as its own solve. **What
+  stays:** the homogeneous self-dual method with Mehrotra steps, the normal equations, the dense LLT and
+  the sparse bordered LDLᵀ, the retry escalation, the refinement, the stall rule (it now hands over to
+  (3)), the convergence test, the selection. Converged paths are bit-identical. **Red tests:** promote the
+  Deferred 46-block test and the Deferred Foraboschi crushing anchor into the default (or Slow) tier; the
+  137-block wall at 80 kN / 43,000 N Stands with lower about 2.7146; the outer-stall test reads an upper
+  bound within 1e-6 above the unlimited reading 7.71542823 instead of the cap; a seeded property that the
+  dual bound is at least the converged t and at most t·(1 + 1e-6); the light table at 1e11 and 1e12 (the
+  1 m dry μ 0.4 block Collapses); with recovery on the stall-rule fixture reads Stands [625.07, 637.32];
+  a failed capped re-solve stays Undecided. **Logged:** mechanism deflation was not prototyped (forcing
+  the dense path leaves 11 of 25 stalls, so a column treatment alone cannot close them); the margin
+  policy's cost (the 1e-5 re-solve stalled on 2 of 10 fallbacks, 16 to 50 s, before 1e-3 converged). The
+  probe's prototype and data are in the session scratchpad (`cond\`).
