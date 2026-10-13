@@ -340,6 +340,23 @@ the non-associative answer) and the two hanging-component cases (slice 6), red b
 
 ## Deferred
 
+- F-FOR-01 at 80 and 140 kN, and with f_c 1.21 MPa (the Foraboschi wall,
+  `tests/Slice4AnchorsTest.cpp`, 376 blocks): the certificate reads Undecided (t_in 0, t_out at
+  the cap) across wide bands past the last Stands, and the band does not close with 1000
+  iterations and no stall rule. At 80 kN: Stands to 39 kN, Undecided 40 to 46 kN, no Collapses
+  seen; the paper's model is 39.84 kN, so the associative value should be at or above it. At
+  140 kN the readings are not monotone: Stands at 53.5, 56.5, 61 and 65.5 kN with Undecided at
+  55, 58, 59.5, 62.5, 64, 67 to 70 kN (paper model 55.77, test 61.3). With f_c 1.21 MPa the
+  certificate reads Undecided even at 40 kN vertical and no push (with 1e9 Pa it Stands). Only
+  the 40 kN case is pinned; the other two need the interior-point failure on this wall
+  diagnosed first.
+- B-SW-01, the Minho SW30 wall (1.0 x 1.0 x 0.2 m, 0.2 x 0.1 x 0.2 m blocks, bottom course five
+  full, 30 kN on a 100 mm top beam, push at the beam centroid, mu 0.66): the certificate's limit
+  is 15.54 kN (15.51 at G = 64, same pushing +x or -x), below the 16.55 +- 0.2 kN read from
+  Orduna's Fig. 4(b). An associative value below a published limit-analysis value points at the
+  fixture (load height, beam weight and how the 30 kN enters, bond orientation), not the
+  certificate; the mechanism found is a stepped wedge rotating with the lower blocks sliding up
+  the diagonal at the dilatancy angle. Not pinned until the fixture is matched to the paper.
 - B-WDG-01, the 3DEC tetrahedral wedge: the certificate pins its own associative switch at
   31.07 deg (`Certificate.Anchor.ItascaWedgeSlidesBelowItsAssociativeCriticalFrictionAngle`,
   G = 64, reads 31.080); the physical value is 33.36 deg, and between 31.1 and 33.4 deg the
