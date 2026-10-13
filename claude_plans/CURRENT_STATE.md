@@ -32,7 +32,7 @@ stacks, Paterson–Zwick, Couplet–Heyman at Milankovitch's 0.107478 with hinge
 the certificate's associative 31.07°, the cascade on the arch below least thickness, the dry
 wall at t / H within 1 % (10 × 8 and 4 × 5), the bonded 4 × 5 wall at its monolith factor
 `(t/H)(1 + f_t A_base / W) = 2.971` to 1 %, two screws at twice their published shear and
-withdrawal whatever the joint area. Default suite 382 cases in Debug and 415 in Release after
+withdrawal whatever the joint area. Default suite 381 cases in Debug and 417 in Release after
 slice 2b and the cohesive-wedge check (325 and 347 at the 6b close) (the arch, pile, arch-cascade, fuzz, small-wall and multi-panel factor anchors
 run only in Release under `LOADPATH_SLOW_IN_DEBUG`; fifteen `Slow.*` cases run in Release at
 every slice close, and the
@@ -341,15 +341,19 @@ the non-associative answer) and the two hanging-component cases (slice 6), red b
 
 ## Deferred
 
-- F-FOR-01 at 80 and 140 kN and with f_c 1.21 MPa, and B-SW-01: the certificate's Undecided
-  bands there are two solver defects (an interior inscribed optimum swamped by the retry shift; the
-  stall rule firing on a converging solve), and the Minho fixture pushed at the beam centroid where
-  the paper's set-up pushes at the masonry top with the beam's weight; fixed in the slice opened in
-  DESIGN §10 2026-10-13 "the certificate's interior-optimum and stall defects". Left after it: the
-  Foraboschi fixture's limits at 80 and 140 kN are 25 to 47 % above Portioli's ratio (fixture
-  suspect, not pinned); the selection LP fails at 140 kN / 85 kN after both cone solves converge;
-  the Ferris & Tin-Loi wall at G = 64 reads Undecided within about 1e-6 of its threshold (a
-  resolution limit, fail closed, to be written into API.md).
+- The certificate's interior-optimum and stall defects are fixed (2026-10-13, DESIGN §10 opening
+  and amendment; the retry shift escalates 1e-16 to 1e-12 of the full diagonal with 20 refinement
+  passes after a shifted factor, and the stall window restarts when the complementarity halves);
+  B-SW-01 is pinned in the paper's set-up. Left from it: neither half of the retry fix is pinned
+  alone (a straight 1e-12 shift with 20 passes, or the escalation with 0/1 passes, passes every
+  tier; only both removed redden the 23-block wall; a test on the Foraboschi wall's former bands,
+  e.g. 80 kN / 42 kN Stands, may separate them); `FactorSelection` keeps its single 1e-12 retry;
+  the selection LP fails on the Foraboschi wall at 140 kN / 85 kN after both cone solves converge
+  (reads Undecided with t_out 6e-12); the Foraboschi fixture's limits at 80 and 140 kN (50.3 and
+  83.6 kN) are 25 to 47 % above what Portioli's associative-to-non-associative ratio implies, so
+  those loads stay unpinned (the rigid beam with a point load is suspect); the Ferris & Tin-Loi
+  wall at G = 64 reads Undecided within about 1e-6 of its threshold (written into API.md as a
+  resolution limit, fail closed); the shed's certificate is about 10 % slower (4.6 to 5.0 s).
 - B-WDG-01, the 3DEC tetrahedral wedge: the certificate pins its own associative switch at
   31.07 deg (`Certificate.Anchor.ItascaWedgeSlidesBelowItsAssociativeCriticalFrictionAngle`,
   G = 64, reads 31.080); the physical value is 33.36 deg, and between 31.1 and 33.4 deg the

@@ -578,9 +578,11 @@ length, so verdicts are local and scale-invariant (pinned at s = 1/16 … 16).
 **Solver.** The homogeneous self-dual embedding with Mehrotra predictor-corrector on the normal
 equations, `6 × free bodies` square after Schur-eliminating the diagonal bound rows and the
 rank-one cap row (the plain infeasible-start method stalls when `t* = 0`, where the feasible set
-has no interior); Eigen LLT with one regularised refactor (`1e-12 ×` the largest diagonal) on a
-failed pivot and a second failure reading Undecided; one iterative-refinement pass on the
-corrector; step 0.995 to the boundary; a feasible deterministic start (`α = min(1, bound/2G)`,
+has no interior); Eigen LLT; on a failed pivot the diagonal is shifted by `1e-16`, then `1e-14`, then `1e-12 ×`
+the largest diagonal (coupling term included, dense and bordered alike) until the pivots are
+positive, a failure at `1e-12` reading Undecided; one iterative-refinement pass on the corrector,
+or 20 on both the predictor and the corrector in an iteration whose factor was shifted (DESIGN
+§10, the interior-optimum defect); step 0.995 to the boundary; a feasible deterministic start (`α = min(1, bound/2G)`,
 `t = min(1, cap/2)`, complementarity products 1, duals 0, `τ = κ = 1`); termination when the
 primal residual (per block, term-size scaled), the dual residual (relative to
 `1 + max(1, |s|, |Aᵀy|)`) and the gap `xᵀs/τ²` are all under `FeasibilityTolerance`. Any
@@ -635,7 +637,11 @@ its threshold and the optimum scales with ε, so once it falls under the solver'
 termination gap (ε about 1e-7 for n ≥ 5, 1e-8 for n ≥ 3) the solve returns near the centre of
 the near-optimal set and names every level, or reads Undecided; every body it names there is
 past its own threshold, so this is not host-unsafe, and slice 4b's referee records it:
-the tests pin only that the top block is named. **Listing
+the tests pin only that the top block is named. The cone solves have a **threshold resolution
+limit** too: within about 1e-6 relative of a load factor where the admissible set empties, the
+inscribed solve can stall with its primal residual near 1e-4 and the component reads Undecided
+[0, cap] (the Ferris & Tin-Loi wall at G = 64, λ 9/14 + 1e-6, while G = 16 stands); fail closed.
+**Listing
 threshold (ruled 2026-10-11 after the third review):** a body is unconstrained when the largest
 of its six scaled components exceeds 1e-3 of the component's largest, and an interface hinges
 when a corner's relative speed exceeds 1e-3 of the fastest corner and one of its bodies is
@@ -1402,7 +1408,9 @@ the structured minimum at most 0.85 of the dense minimum (measured 0.67–0.84).
 becomes 20, DESIGN §10).** `CertificateOptions::StallWindow` (10 today, 20 after the fix; 0
 disables) and `StallImprovement` (0.5): a cone solve tracks its best largest relative
 residual and stops when a window of iterations has not brought it below `StallImprovement`
-times the best at the window's start, returning the iteration cap's outcome (no iterate is
+times the best at the window's start, the window also restarting whenever the complementarity
+`(xᵀs + τκ)/(n + 1)` falls below half its value at the window's start (DESIGN §10, the stall
+defect), returning the iteration cap's outcome (no iterate is
 kept: one within tolerance would already have ended the solve, DESIGN §10). The selection
 solve is untouched. Pinned by `Certificate.Stall.*`.
 
