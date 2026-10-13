@@ -407,7 +407,7 @@ public:
 			Model.MarkPass(Pass);
 			++Verdict.Passes;
 			Verdict.LastPass = Pass;
-			if (Verdict.Passes >= Options.MaxPasses)
+			if (Verdict.Passes >= Options.MaxPasses || Pass == UINT32_MAX)
 			{
 				Verdict.State = CascadeState::PassCapReached;
 				std::vector<BodyLoad> CapLoads;

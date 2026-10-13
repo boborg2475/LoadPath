@@ -583,6 +583,31 @@ TEST_CASE("Statics.Solver.LoadsThatOverflowReadInfiniteUtilisationAndNeverStand"
 	CHECK(Bed->Utilisation == Infinity);
 }
 
+TEST_CASE("Statics.Solver.AnOverflowedUpliftReadsItsTension")
+{
+	const auto WithinCapacity = [](double U) { return std::isfinite(U) && U <= 1.0; };
+	const auto CheckUplift = [&](const StrengthProfile& Joint)
+	{
+		const BrickOnGround F = MakeBrickOnGround(Joint);
+		const std::array<BodyLoad, 1> Loads{BodyLoad{F.Brick, Vec3{0.0, 0.0, 2.0e154}, BrickShape().CentreM}};
+		const StandingResult Result = SolveWith(F.Model, StandingOptions{}, Loads);
+		const InterfaceReading* Bed = RequireReading(Result, F.Bed);
+		INFO("state " << Result.State << ", bed utilisation " << (Bed ? Bed->Utilisation : -1.0) << ", tension " << (Bed ? Bed->TensionUtilisation : -1.0) << ", normal " << (Bed ? Bed->NormalForceN : 0.0));
+		CHECK(Result.State != StandingState::Stands);
+		REQUIRE(Bed != nullptr);
+		CHECK(Bed->TensionUtilisation > 1.0);
+		CHECK_FALSE(WithinCapacity(Bed->Utilisation));
+	};
+	SUBCASE("dry")
+	{
+		CheckUplift(DryJoint(0.7));
+	}
+	SUBCASE("cohesive")
+	{
+		CheckUplift(Bonded(1.0e4, 1.0e4, 0.7));
+	}
+}
+
 TEST_CASE("Statics.Solver.LoadsWhoseForceScaleOverflowsNeverStand")
 {
 	const auto WithinCapacity = [](double U) { return std::isfinite(U) && U <= 1.0; };

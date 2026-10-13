@@ -32,7 +32,7 @@ stacks, Paterson–Zwick, Couplet–Heyman at Milankovitch's 0.107478 with hinge
 the certificate's associative 31.07°, the cascade on the arch below least thickness, the dry
 wall at t / H within 1 % (10 × 8 and 4 × 5), the bonded 4 × 5 wall at its monolith factor
 `(t/H)(1 + f_t A_base / W) = 2.971` to 1 %, two screws at twice their published shear and
-withdrawal whatever the joint area. Default suite 377 cases in Debug and 408 in Release after
+withdrawal whatever the joint area. Default suite 379 cases in Debug and 410 in Release after
 slice 2b and the cohesive-wedge check (325 and 347 at the 6b close) (the arch, pile, arch-cascade, fuzz, small-wall and multi-panel factor anchors
 run only in Release under `LOADPATH_SLOW_IN_DEBUG`; fourteen `Slow.*` cases run in Release at
 every slice close, and the
@@ -123,10 +123,6 @@ the non-associative answer) and the two hanging-component cases (slice 6), red b
    - an unloaded component (zero gravity, no loads) has floor 0 and `<=` opens every dry corner,
      reading Stands with all corners open; `<=` → `<` survives the suite, so the boundary is
      unpinned;
-   - in the overflow case the floor is +inf and the reading clamp then zeroes every tensile
-     reading on tensionless corners (a 2e154 uplift reads Undecided with bed utilisation 0), so
-     "readings filled from the overflowed solve" is not true for tension; fails closed; skip the
-     clamp when the floor is not finite;
    - the floor's size is pinned from above by the end-push scaling test (floor 1e-9 reddens it)
      and from below by nothing: a smaller floor only brings the at-rest chatter back at larger
      sizes (noise reaches 1.5e-16 of the scale on the 14 × 10 wall, so 1e-12 keeps about four
@@ -248,12 +244,9 @@ the non-associative answer) and the two hanging-component cases (slice 6), red b
    remaining slice-2 anchors (item 2) can run alongside slice 6.
    Slice 3 and 4b items still open (none host-unsafe; the unsafe one, the wedge band, is under
    Deferred):
-   - the overflow guard (`HighestPass() == UINT32_MAX` → InvalidInput) runs only at entry; a run
-     starting at `UINT32_MAX − 1` that needs two counted passes computes pass 0 on the second,
-     where Crack/Sever/MarkPass refuse and a release removes bodies with no stamp or record;
-     practically unreachable, the fix is the same guard at the top of the loop; the
-     InvalidInput verdict at the limit also reports `FirstPass 0, LastPass UINT32_MAX`
-     (cosmetic, computed before the guard);
+   - the InvalidInput verdict at the pass-counter limit reports `FirstPass 0, LastPass
+     UINT32_MAX` (cosmetic, computed before the entry guard); a run that exhausts the counter
+     mid-run ends at the cap (2026-10-13, `Cascade.ARunThatExhaustsThePassCounterStopsAtTheCap`);
    - the cap re-judge returning InvalidInput leaves `PassCapReached` with empty readings and
      components (fails closed, undocumented);
    - the file reader's own `crack_pass ≤ sever_pass` check is now masked by `Sever` refusing

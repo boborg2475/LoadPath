@@ -352,7 +352,7 @@ never mutates the structure. The host may call it on any thread.
   reports `N = 0`, so the interface's reported normal force, moment and tension demand agree at
   zero rather than reading noise over a zero tensile capacity as +inf. A component whose force
   scale (the sum of |weight| and |load| over its free bodies) is not finite reads Undecided,
-  never Stands, with its readings filled from the overflowed solve; a corner on an interface whose profile has `ShearCohesionPa == 0`
+  never Stands, with its readings filled from the overflowed solve (tensile normal forces reported as computed, not clamped as noise); a corner on an interface whose profile has `ShearCohesionPa == 0`
   slips when its trial `|S|` exceeds `μ N` (and the cap `MaxShearStrengthPa · A/4`), after which its shear is held at capacity
   opposite the trial slip direction with no stiffness along that direction and **no dilation**
   (non-associative, DESIGN §9 row 8). Transverse to the held direction, in the joint plane, a
@@ -941,7 +941,7 @@ reuses a pass number; a run that changed nothing has `LastPass = FirstPass − 1
 `Passes = 0`. The counter is saved: the file writes `highest_pass` and the reader takes the
 larger of that field and the stamps it reads, so a reloaded structure continues numbering.
 `Sever` refuses a pass below the joint's `CrackPass` (the file reader refuses the same), and
-`Run` reads `InvalidInput` when `HighestPass()` is `UINT32_MAX` (the counter cannot advance).
+`Run` reads `InvalidInput` when `HighestPass()` is `UINT32_MAX` (the counter cannot advance), and a run that exhausts the pass counter ends at the cap: `PassCapReached` with `LastPass == UINT32_MAX`.
 
 **The structure file carries state** (slice 1b format, extended here): every interface whose
 two bodies are live is written, `Intact`, `Cracked` or `Severed`, with `state`, `crack_pass`

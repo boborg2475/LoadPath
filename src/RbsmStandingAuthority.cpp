@@ -805,7 +805,7 @@ InterfaceReading ReadJoint(const Joint& J, const JointState& State, const Eigen:
 		if (!Corner.bOpen)
 		{
 			const TrialForces T = Trial(J, C, X);
-			const bool bNoiseTension = J.bReleasesOpening && T.NormalN < 0.0 && T.NormalN >= -NoiseFloorN;
+			const bool bNoiseTension = J.bReleasesOpening && std::isfinite(NoiseFloorN) && T.NormalN < 0.0 && T.NormalN >= -NoiseFloorN;
 			Corner.NormalForceN = bNoiseTension ? 0.0 : T.NormalN;
 			Corner.ShearForceN = Corner.bSlipping ? State.HeldN[C] : IsExactlyZero(State.ReferenceM[C]) ? T.ShearN : Add(T.ShearN, Scale(J.TangentialStiffnessNPerM, State.ReferenceM[C]));
 		}

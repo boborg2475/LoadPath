@@ -694,6 +694,47 @@ TEST_CASE("Cascade.RunIsInvalidInputWhenThePassCounterCannotAdvance")
 	CHECK(F.Model.IsLive(F.Brick));
 }
 
+TEST_CASE("Cascade.ARunThatExhaustsThePassCounterStopsAtTheCap")
+{
+	CheckPierFixture();
+	Pier P = MakeCrackingPier();
+	constexpr std::uint32_t Last = std::numeric_limits<std::uint32_t>::max();
+	CHECK(P.Model.MarkPass(Last - 1));
+	const CascadeVerdict V = RunCascade(P.Model, CascadeOptions{}, P.Loads);
+	INFO(DescribeVerdict(V));
+	CHECK(V.State == CascadeState::PassCapReached);
+	CHECK(V.Passes == 1);
+	CHECK(V.FirstPass == Last);
+	CHECK(V.LastPass == Last);
+	CHECK(P.Model.HighestPass() == Last);
+	for (const FailedInterface& Failure : V.Failures)
+	{
+		CHECK(Failure.Pass == Last);
+	}
+	for (const ReleasedCluster& Cluster : V.Clusters)
+	{
+		CHECK(Cluster.Pass == Last);
+	}
+	for (const InterfaceId Id : P.JointsBottomUp)
+	{
+		const InterfaceRecord& R = P.Model.Interface(Id);
+		INFO("joint " << Id.Index << ": state " << doctest::String(InterfaceStateName(R.State)) << ", crack " << R.CrackPass << ", sever " << R.SeverPass);
+		CHECK((R.State != InterfaceState::Cracked || R.CrackPass == Last));
+		CHECK((R.State != InterfaceState::Severed || R.SeverPass == Last));
+	}
+	for (const BodyId Brick : P.Bricks)
+	{
+		if (P.Model.IsLive(Brick))
+		{
+			continue;
+		}
+		INFO("brick " << Brick.Index << " not live");
+		const bool bRecorded = std::any_of(V.Clusters.begin(), V.Clusters.end(), [&](const ReleasedCluster& C) { return std::any_of(C.Bodies.begin(), C.Bodies.end(), [&](BodyId B) { return SameHandle(B, Brick); }); });
+		CHECK(bRecorded);
+	}
+	CHECK_FALSE(V.Readings.empty());
+}
+
 TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Cascade.ArchBelowLeastThicknessReleasesVoussoirRunsBetweenHinges")
 {
 	SemicircularArch Arch = MakeSemicircularArch(0.1075 - 0.002, DryJoint(0.7));
