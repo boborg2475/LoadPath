@@ -309,6 +309,8 @@ TEST_CASE("Statics.Lime.SolvingTwiceReadsTheSameField")
 	const StandingResult Between = SolveWith(Other.Model, Options);
 	const StandingResult Second = SolveWith(Tall.Model, Options);
 	INFO("10 x 8 at (0.8, 0): " << First.State << " after " << First.ActiveSetIterations << ", then " << Second.State << " after " << Second.ActiveSetIterations << "; 4 x 5 between: " << Between.State << " after " << Between.ActiveSetIterations);
+	CHECK(First.ActiveSetIterations == 16);
+	CHECK(Second.ActiveSetIterations == 16);
 	CHECK(First.State == Second.State);
 	CHECK(First.ActiveSetIterations == Second.ActiveSetIterations);
 	REQUIRE(First.Readings.size() == Second.Readings.size());
@@ -326,4 +328,65 @@ TEST_CASE("Statics.Lime.SolvingTwiceReadsTheSameField")
 		}
 	}
 	CHECK(Differing == 0);
+}
+
+namespace
+{
+struct HuntCase
+{
+	int Courses, BricksPerCourse;
+	double BedCohesionPa, BedFriction, PerpendCohesionPa, PerpendFriction;
+	Vec3 GravityMPerS2;
+	struct Push
+	{
+		int Course, Brick;
+		Vec3 ForceN, PointM;
+	};
+	std::vector<Push> Pushes;
+};
+
+StandingResult SolveHunt(const HuntCase& H)
+{
+	StrengthProfile Bed = LoadLime();
+	StrengthProfile Perpend = Bed;
+	Bed.ShearCohesionPa = H.BedCohesionPa;
+	Bed.FrictionCoefficient = H.BedFriction;
+	Perpend.ShearCohesionPa = H.PerpendCohesionPa;
+	Perpend.FrictionCoefficient = H.PerpendFriction;
+	LimeWall W;
+	geometry::WallSpec Spec;
+	Spec.Bed = AddProfileOk(W.Model, Bed);
+	Spec.Perpend = AddProfileOk(W.Model, Perpend);
+	Spec.Courses = H.Courses;
+	Spec.BricksPerCourse = H.BricksPerCourse;
+	W.Value = geometry::BuildRunningBondWall(W.Model, Spec);
+	REQUIRE(W.Value.bComplete);
+	std::vector<BodyLoad> Loads;
+	for (const HuntCase::Push& P : H.Pushes)
+	{
+		Loads.push_back(BodyLoad{W.Value.Courses[P.Course][P.Brick], P.ForceN, P.PointM});
+	}
+	StandingOptions Options;
+	Options.Gravity = H.GravityMPerS2;
+	return SolveWith(W.Model, Options, Loads);
+}
+}
+
+TEST_CASE("Statics.Lime.ARestoreStepReclosureNeitherCountsNorResets")
+{
+	const HuntCase CountsMatter{1, 6, 30.0, 0.75972470052418806, 30.0, 0.69412002901115355, Vec3{0.92095371388797675, 0.0, -9.80665},
+		{{0, 3, Vec3{-1.0523595483503445, -34.055520837471484, 49.168054889091884}, Vec3{0.75328582369418118, -0.027436240015488902, 0.017198466186857199}},
+		 {0, 4, Vec3{6.6582138033156735, 7.1438837004842251, 0.53305392142438968}, Vec3{0.91799851924929288, 0.022086205388845939, 0.024546325909667158}}}};
+	const StandingResult Counted = SolveHunt(CountsMatter);
+	INFO("1 x 6 weak lime wall with two held loads: " << Counted.State << " after " << Counted.ActiveSetIterations);
+	CHECK(Counted.State == StandingState::Overstressed);
+	CHECK(Counted.ActiveSetIterations == 15);
+
+	const HuntCase KeepsReference{5, 2, 160000.0, 0.0, 300.0, 0.75422437877084136, Vec3{9.3178669623399966, 1.7860632068278335, -9.80665},
+		{{1, 2, Vec3{27.485129299353883, -22.353013601915244, 28.920075248566114}, Vec3{0.30517405110484042, 0.027483145320517918, 0.10532130730518167}},
+		 {1, 1, Vec3{2.7416680132160907, -3.8504440158373101, -2.6771397979574099}, Vec3{0.21949657397784628, -0.0077664640969666299, 0.12663048397739793}}}};
+	const StandingResult Kept = SolveHunt(KeepsReference);
+	INFO("5 x 2 lime wall with two held loads: " << Kept.State << " after " << Kept.ActiveSetIterations);
+	CHECK(Kept.State == StandingState::Mechanism);
+	CHECK(Kept.ActiveSetIterations == 13);
 }

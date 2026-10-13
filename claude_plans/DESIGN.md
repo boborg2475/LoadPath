@@ -1238,7 +1238,7 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   9 iterations into Undecided at 50; in two (a 4 × 3 with c 3 kPa beds at (0.7, 0.1), a 6 × 3
   with c 10 kPa everywhere at (0.8, 0.1)) it turns a Stands with an admissible field (residual
   under 3e-15 W, no violation) into Undecided; in one (one course of three, every joint c 1 kPa,
-  30 N held down on the middle brick, λx 0.3) the unguarded solve exits Undecided after 9
+  30 N pushing up at the middle brick's centroid, λx 0.3; the 1 × 5 does the same) the unguarded solve exits Undecided after 9
   through the restore step where the guarded one Stands in 15; in one both Stand with
   different readings. The structural argument in the dev notes holds only for weak perpends on
   strong beds. The reason to drop it is not the count but the principle the review named: a
@@ -1253,7 +1253,8 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   host-load case is logged under the restore step, not pinned. With the guard gone the review's
   surviving mutants "guard on |offset|" and "guard without μN" vanish, and "clear the
   reference when the corner opens" is equivalent (an open corner carries no pre-force and the
-  next re-closure re-references anyway), so it is recorded as such. **Restore-step
+  next re-closure re-references anyway), so it is recorded as such (corrected by the follow-up
+  rulings below: not equivalent through restore re-closures). **Restore-step
   re-closures neither count nor reset**: the restore step rebuilds the full-rank state for the
   consistency check, it is not an iterate; a cohesive corner it re-closes keeps its reference.
   The mutant that makes them count survives the suite under this ruling. **The five 10 × 8
@@ -1279,3 +1280,26 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   cleared on opening leaves the suite green, as ruled. Survives: the `AssembleLoad` skip removed
   (adding a +0.0 pre-force to the load changes no reading in the suite; the skip there is for
   symmetry with the reading, not for a measured difference).
+- *2026-10-12, orchestrator, slice 2e follow-up review rulings:* the follow-up review closed
+  the four earlier findings in the code (every solve that resets nothing is bit-identical to
+  fa1a35d, signed zeros included, over 52,336 suite, Slow and Measure solves; the 6,960-fixture
+  sweep has no own-field failure and moves 400 Undecided to Overstressed and 2 Undecided to
+  Stands against the guarded build) and blocked on three claims. (1) "Clear the reference on
+  opening" is not equivalent: a corner that resets, opens, and is re-closed by the restore step
+  keeps a non-zero reference under the rule and none under the mutant; the suite never reaches
+  that path, a seeded hunt of 100,000 random lime walls with held loads reaches it in 56 solves
+  and the mutant moves 14 (one Mechanism after 13 becomes Mechanism after 15, no verdict
+  changes). The rule stands (the reference lives until the next reset); the ruling's word is
+  corrected. (2) "Restore re-closures neither count nor reset" changes verdicts on the hunt
+  (counting: three, Overstressed ↔ Undecided; counting and resetting: six, including
+  Overstressed → Mechanism), never a Stands, and had no test: it is now pinned by
+  `ARestoreStepReclosureNeitherCountsNorResets` (HUNT 5 Overstressed after 15, HUNT 96643
+  Mechanism after 13), which kills both mutants. The ruling may be revisited by the restore-step
+  investigation that follows, which has to justify moving either pin. (3) The solve-twice test
+  was order-dependent; it now pins 16 iterations on both solves. Corrections to the pick-up
+  context: the host load in the one-course case points up (30 N on a 28.1 N brick), and the 1 × 5
+  behaves like the 1 × 3. Left for later, logged: the review's seeded hunt as a `Slow.` own-field
+  property with held loads (1.3 s per 1,000 draws; the only generator reaching the restore path
+  with a reference); test names that describe history (`WallsTheGuardKeptFromStandingStand`,
+  `FormerlyConvergedPointsReadTheirNewFields`) are kept, since renaming pins costs more than it
+  clarifies while their ANCHORS rows explain them.

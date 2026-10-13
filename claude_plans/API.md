@@ -422,7 +422,8 @@ never mutates the structure. The host may call it on any thread.
   from a converged full-rank active set. `Mechanism` is reported only when the singular active
   set is admissible as it stands, with the held forces the last full-rank solve gave. When the
   projected motion would close an open corner, the corner is restored once: stuck on a cohesive
-  joint; on a dry joint slipping with held force `μ · N⁺` taken from **that corner's own**
+  joint, keeping its tangential reference and not counting as a re-closure (the restore step
+  rebuilds the full-rank state, it is not an iterate); on a dry joint slipping with held force `μ · N⁺` taken from **that corner's own**
   normal in the last full-rank solve, opposite the motion's tangential part, and zero transverse
   tangent on the re-entry pass. If that corner was open in the last full-rank solve too (no
   physical value exists), the component is `Undecided`. Nothing is ever seeded from a singular

@@ -32,7 +32,7 @@ stacks, Paterson–Zwick, Couplet–Heyman at Milankovitch's 0.107478 with hinge
 the certificate's associative 31.07°, the cascade on the arch below least thickness, the dry
 wall at t / H within 1 % (10 × 8 and 4 × 5), the bonded 4 × 5 wall at its monolith factor
 `(t/H)(1 + f_t A_base / W) = 2.971` to 1 %, two screws at twice their published shear and
-withdrawal whatever the joint area. Default suite 356 cases in Debug and 383 in Release after
+withdrawal whatever the joint area. Default suite 357 cases in Debug and 384 in Release after
 slice 2e (325 and 347 at the 6b close) (the arch, pile, arch-cascade, fuzz, small-wall and multi-panel factor anchors
 run only in Release under `LOADPATH_SLOW_IN_DEBUG`; fourteen `Slow.*` cases run in Release at
 every slice close, and the
@@ -74,7 +74,7 @@ the non-associative answer) and the two hanging-component cases (slice 6), red b
      50, and all Stand in 5 to 9 iterations if the dry rule is applied to them, which the
      scope ruling forbids (`Statics.Lime.AReclosingCohesiveCornerStaysOutOfSlipping`); a
      re-closing cohesive corner got its own ruling in slice 2e;
-   - **slice 2e, fix round green and in follow-up review 2026-10-12 (red step d089f5a, rule
+   - **slice 2e, done 2026-10-12 after a cold review and a follow-up review (red step d089f5a, rule
      8db9af3, fix red step 9da89f8; DESIGN §10 "slice 2e opening", "dev notes", "cold-review
      rulings", "fix-round dev notes")**: a cohesive
      tensionless corner that re-closes for the second or later time in one solve resets its
@@ -87,13 +87,17 @@ the non-associative answer) and the two hanging-component cases (slice 6), red b
      from standing and the weak-perpend Overstressed, adds a solve-twice test and the grid's
      Stand/Mechanism counts, and updates API.md. Left from the review: the five 10 × 8 lime
      exceptions at (1, 0.15) and λx 1.2, and the one-course three-brick wall with c 1 kPa
-     joints under a 30 N held load at λx 0.3, exit Undecided through
+     joints under a 30 N upward load at the middle brick's centroid (and the 1 × 5 alike) at
+     λx 0.3, exit Undecided through
      `RestoreInadmissibleReleases` because the closing corner was Open in the full-rank state
      and the step has no trial shear to decide slip; all are cohesive corners, which never
      slip, so re-closing them Stuck is the candidate fix (**the next item after 2e closes**);
      readings at the iteration cap on a corner reset in the last pass are out of equilibrium
      (the `HeldN` pattern, untested); restore-step re-closures neither count nor reset by
-     ruling, and the mutant making them count survives the suite; the zero-reference skip in
+     ruling, pinned on two random-hunt walls (`ARestoreStepReclosureNeitherCountsNorResets`); the
+     follow-up review's seeded hunt (100,000 lime walls with held loads, 1.3 s per 1,000 draws)
+     belongs in `Slow.` as an own-field property, the only generator that reaches the restore
+     path with a reference; the zero-reference skip in
      `AssembleLoad` survives its mutant (no reading moves); readings at formerly cycling
      points are path-dependent between equally admissible rules (accepted);
    - the restore step (`RestoreInadmissibleReleases`) re-closes a floor-opened corner on a
