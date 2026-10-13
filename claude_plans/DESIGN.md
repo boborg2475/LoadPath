@@ -1593,3 +1593,17 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   Portioli's associative-to-non-associative ratio, so those loads are not pinned (the fixture's rigid
   beam with a point load is suspect). The probe's sources (the 2-D LP, the harness, the patch) are in
   the session scratchpad (`certwalls\`).
+- *2026-10-13, orchestrator, a severed joint's axis (ruling and amendment):* a joint severed with a
+  cluster reported the elastic reading's axis, which on a mechanism means little (the arch's crown
+  hinge read `Compression 2.4e-5`, an overturned brick's bed `Shear 0.4`). Ruling: the axis comes
+  from the component's selected mechanism, the relative velocity of the two bodies at the joint's
+  four corners (a body outside the mechanism still): `Tension` if the joint opens, else `Shear` if it
+  slides above 1e-3 of the fastest corner's relative speed, else the reading's axis; `Ratio` stays
+  the reading's utilisation. **Amendment (dev round):** the certificate's flow is associative, so a
+  sliding corner also lifts by μ times its slip, and the literal rule read a sliding brick's bed as
+  `Tension 1.05`; the opening counted is the separation less that dilatancy, Normal − μ·|tangential|
+  with the profile's friction coefficient, compared with the same threshold. Pins: an overturned
+  brick's bed reads Tension, a sliding brick's Shear (a guard, green before), and all seven hinges of
+  the arch below least thickness read Tension. Mutants caught: the separation's sign, a zero
+  threshold, Tension and Shear swapped, NaN motion outside the mechanism, and dropping the dilatancy
+  term (the sliding guard reads Tension).

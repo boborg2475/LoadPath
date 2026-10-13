@@ -26,9 +26,9 @@ struct FailedInterface
 {
 	InterfaceId Id;
 	std::uint32_t Pass = 0;
-	// The crack: the larger of tension and shear; the sever: the reading's axis at release, None when unread.
+	// The crack: the larger of tension and shear. The sever: Tension if the mechanism opens it beyond friction dilatancy, else Shear if it slides, else the reading's axis (None when unread).
 	GoverningAxis Axis = GoverningAxis::None;
-	// The crack ratio or the reading's utilisation at release.
+	// The crack ratio, or the elastic reading's utilisation at release.
 	double Ratio = 0.0;
 	// False: cracked (bond lost, friction kept); true: severed with its cluster.
 	bool bSevered = false;

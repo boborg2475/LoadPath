@@ -943,3 +943,55 @@ TEST_CASE("Cascade.CollapsesWithAnEmptyReleaseEndsUndecided")
 	CHECK(Row.Model.IsLive(Row.Bricks[0]));
 	CHECK(Row.Model.HighestPass() == 0u);
 }
+
+TEST_CASE("Cascade.AnOverturnedBrickSeversItsBedInTension")
+{
+	constexpr double HighFriction = 5.0;
+	constexpr double LambdaY = 2.0;
+	CHECK(LambdaY > BrickWidthM / BrickHeightM);
+	CHECK(LambdaY < HighFriction / CircumscribedOverInscribed(16));
+	BrickOnGround F = MakeBrickOnGround(DryJoint(HighFriction));
+	CascadeOptions Options;
+	Options.Authority = AuthorityUnderGravity(Vec3{0.0, LambdaY * GravityMPerS2, -GravityMPerS2});
+	const CascadeVerdict V = RunCascade(F.Model, Options);
+	INFO(DescribeVerdict(V));
+	CHECK(V.Failures.size() == 1u);
+	if (!(V.Failures.size() == 1u))
+	{
+		return;
+	}
+	CHECK(SameHandle(V.Failures[0].Id, F.Bed));
+	CHECK(V.Failures[0].bSevered);
+	CHECK(V.Failures[0].Axis == GoverningAxis::Tension);
+}
+
+TEST_CASE("Cascade.ASlidingBrickSeversItsBedInShear")
+{
+	CHECK(PastFrictionLateral > PastFriction * CircumscribedOverInscribed(16));
+	CHECK(PastFrictionLateral < BrickLengthM / BrickHeightM);
+	BrickOnGround F = MakeBrickOnGround(DryJoint(PastFriction));
+	const CascadeVerdict V = RunCascade(F.Model, Lateral(PastFrictionLateral));
+	INFO(DescribeVerdict(V));
+	CHECK(V.Failures.size() == 1u);
+	if (!(V.Failures.size() == 1u))
+	{
+		return;
+	}
+	CHECK(SameHandle(V.Failures[0].Id, F.Bed));
+	CHECK(V.Failures[0].bSevered);
+	CHECK(V.Failures[0].Axis == GoverningAxis::Shear);
+}
+
+TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Cascade.ArchBelowLeastThicknessOpensEveryHingeItSevers")
+{
+	SemicircularArch Arch = MakeSemicircularArch(0.1075 - 0.002, DryJoint(0.7));
+	const CascadeVerdict V = RunCascade(Arch.Model, CascadeOptions{});
+	INFO(DescribeVerdict(V));
+	CHECK(V.Failures.size() == 7u);
+	for (const FailedInterface& Failure : V.Failures)
+	{
+		INFO("interface " << Failure.Id.Index << " axis " << Failure.Axis << " ratio " << Failure.Ratio);
+		CHECK(Failure.bSevered);
+		CHECK(Failure.Axis == GoverningAxis::Tension);
+	}
+}

@@ -32,7 +32,7 @@ stacks, Paterson–Zwick, Couplet–Heyman at Milankovitch's 0.107478 with hinge
 the certificate's associative 31.07°, the cascade on the arch below least thickness, the dry
 wall at t / H within 1 % (10 × 8 and 4 × 5), the bonded 4 × 5 wall at its monolith factor
 `(t/H)(1 + f_t A_base / W) = 2.971` to 1 %, two screws at twice their published shear and
-withdrawal whatever the joint area. Default suite 379 cases in Debug and 411 in Release after
+withdrawal whatever the joint area. Default suite 381 cases in Debug and 414 in Release after
 slice 2b and the cohesive-wedge check (325 and 347 at the 6b close) (the arch, pile, arch-cascade, fuzz, small-wall and multi-panel factor anchors
 run only in Release under `LOADPATH_SLOW_IN_DEBUG`; fifteen `Slow.*` cases run in Release at
 every slice close, and the
@@ -251,10 +251,10 @@ the non-associative answer) and the two hanging-component cases (slice 6), red b
      components (fails closed, undocumented);
    - the file reader's own `crack_pass ≤ sever_pass` check is now masked by `Sever` refusing
      the same (defence in depth, no test fails without it);
-   - a severed joint's `FailedInterface` axis and ratio are the elastic reading's, which on a
-     mechanism means little (the arch crown hinge reads `Compression 2.4e-5`); derive the axis
-     from the certificate's hinge motion (opening = Tension, slip = Shear) or pin the current
-     behaviour; a mutant that always writes `None` survives the suite;
+   - a severed joint's axis now comes from the mechanism (2026-10-13, DESIGN §10 "a severed
+     joint's axis"); its `Ratio` is still the elastic reading's utilisation, which on a
+     mechanism means little; the 1e-3 threshold is written out in Cascade.cpp, not shared with
+     the certificate's `UnconstrainedComponent`;
    - the arch's two 0.484° slivers are released as single-voussoir clusters; whether a hinge
      needs a minimum rotation is still open, and this is the measurement against it;
    - the mechanism selection ignores finite positive shear caps (harmless at `t* = 0`; for
