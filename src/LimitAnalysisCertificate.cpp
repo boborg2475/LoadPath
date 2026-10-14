@@ -2047,6 +2047,10 @@ ComponentVerdict DecideComponent(const Component& C, const CertificateOptions& O
 		if (Outer.bConverged)
 		{
 			OuterLoadFactor = Outer.LoadFactor;
+			if (OuterLoadFactor < 1.0 && !(Outer.DualBound < 1.0))
+			{
+				OuterLoadFactor = std::min(Options.LoadFactorCap, Outer.DualBound);
+			}
 		}
 		else if (Options.bStallRecovery && Outer.DualBound < Options.LoadFactorCap)
 		{

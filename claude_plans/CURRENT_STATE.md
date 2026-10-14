@@ -32,7 +32,7 @@ stacks, Paterson–Zwick, Couplet–Heyman at Milankovitch's 0.107478 with hinge
 the certificate's associative 31.07°, the cascade on the arch below least thickness, the dry
 wall at t / H within 1 % (10 × 8 and 4 × 5), the bonded 4 × 5 wall at its monolith factor
 `(t/H)(1 + f_t A_base / W) = 2.971` to 1 %, two screws at twice their published shear and
-withdrawal whatever the joint area. Default suite 391 cases in Debug and 435 in Release after
+withdrawal whatever the joint area. Default suite 392 cases in Debug and 437 in Release after
 slice 2b and the cohesive-wedge check (325 and 347 at the 6b close) (the arch, pile, arch-cascade, fuzz, small-wall and multi-panel factor anchors
 run only in Release under `LOADPATH_SLOW_IN_DEBUG`; twenty `Slow.*` cases run in Release at
 every slice close, and the
@@ -287,8 +287,7 @@ the non-associative answer) and the two hanging-component cases (slice 6), red b
      figure when it can be read;
    - B-ARC-09, the voussoir-count sweep, is not pinned (expect convergence to 0.107478 from at
      or below);
-   - the 4a items still open: the selection gate is `FeasibilityTolerance`; `t_out` is the
-     circumscribed converged primal, not the dual objective; `Iterations` excludes the
+   - the 4a items still open: the selection gate is `FeasibilityTolerance`; `Iterations` excludes the
      selection solve's count; HiGHS was slice 7's referee question, and slice 7 is dropped by owner
      directive (2026-10-12), so no independent LP referee is coming: the NNLS oracle, the pins and
      the dense-against-sparse comparison are the certificate's referees.
@@ -383,7 +382,14 @@ the non-associative answer) and the two hanging-component cases (slice 6), red b
   it is loose by more than 1e-3 neither rung converges (the cohesive open-slide test stays
   Undecided; small `MaxIterations` costs about 3× in failed rungs); every solve now copies x and
   y at exit for the probe; the margin policy's cost (the probe saw the 1e-5 re-solve stall on 2
-  of 10 fallbacks, 16 to 50 s, before 1e-3 converged); mechanism deflation was not prototyped. The dense selection takes 20 to 27 s on the full wall; the
+  of 10 fallbacks, 16 to 50 s, before 1e-3 converged); mechanism deflation was not prototyped. A Collapses now needs the circumscribed dual bound below 1
+  (2026-10-14, DESIGN §10 "does a Collapses mechanism prove its own collapse"); left from that
+  investigation: the reported mechanism is inscribed and not a proof object (a circumscribed
+  mechanism would be one, but changes shapes and pins: not adopted); the 1e-3 listing threshold can
+  leave the released motion incompatible at a dropped body's joints (the harmonic stack's U 1e-11 to
+  1.7e7 on the listed set); the selection's kinematic rows hold to an absolute 1e-9 not scaled to the
+  crushing bound (U_in up to 55.6 on the Foraboschi wall past its limit); at mass ratios of 1e11 and
+  above the selection's velocity does about -1e-11 of work; none changes a verdict. The dense selection takes 20 to 27 s on the full wall; the
   hinging list wanders between 17 and 33 joints on the 57-body wall; The
   Foraboschi fixture's limits with the paper's f_c 1.21 MPa are about 25.0, 40.0 and 57.1 kN at
   40, 80 and 140 kN, 4.6, 0.5 and 2.3 % above Portioli's model (23.9, 39.8 and 55.8 kN);

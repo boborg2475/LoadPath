@@ -590,12 +590,13 @@ primal residual (per block, term-size scaled), the dual residual (relative to
 non-finite value or the iteration cap marks that solve failed. Every cone solve, converged or not, also returns a **rigorous dual bound** on its optimum: with `ŷ = y/τ` and `r = Aᵀŷ + e_t`, `U = −bᵀŷ + Σᵢ ubᵢ max(0, rᵢ + γₖ (|A|ᵀ|ŷ| + |c|)ᵢ)` over the box every variable has (a group's forces and slack by its bound, `t` and the cap slack by the cap, a cap site's facet slack `K` by its bound plus `Σ_G B_G max_J |f_K · d_J|` over the site's groups, which holds for any `μ`), weak duality for a box-bounded LP valid for any `ŷ` (Neumaier & Shcherbina 2004); a non-finite term (an overflowed `ŷ`) makes `U` unbounded rather than dropping the column; `γₖ = k u / (1 − k u)` with `u` the unit roundoff and `k` the column length (`6 × free bodies + 2` for `t`, `14 + facets` for the rest), plus `γ` over the bound's own sum. **Stall recovery** (`bStallRecovery`, DESIGN §10): an inscribed solve that stalls or fails with `0 < U < cap` is re-solved with the cap at `U (1 − 1e-5)`, then `U (1 − 1e-3)`; the first that converges gives `t_in` (its duals give the mechanism unless it reached that cap, when the stalled solve's last duals do), and if neither converges the component reads Undecided; a circumscribed solve that does not converge gives `t_out = min(cap, U)`. Each re-solve is its own solve for `Iterations`. Deterministic: ordered assembly,
 no threads, Eigen storage and factorisation only. The circumscribed solve is skipped when the
 inscribed one reaches the cap; `t_out` is clamped to at least `t_in` (exact, every inscribed
-set sits inside its circumscribed one). `t_out` is today the converged primal value; the ruling
-that it should be the circumscribed **dual objective** `bᵀy / τ` (an upper bound needs dual
-feasibility) is **open**, logged in CURRENT_STATE; the two agree within the 1e-9 termination gap, so the reported bound can sit on the unsafe side only by that much.
+set sits inside its circumscribed one). `t_out` is the converged primal value, but a Collapses
+needs the circumscribed solve's rigorous dual bound below 1 as well: a converged `t_out < 1 ≤ U_out`
+reads Undecided with `LoadFactorUpper = min(cap, U_out)` (DESIGN §10 2026-10-14; with a loose
+`FeasibilityTolerance` the primal can sit below 1 while the optimum sits above it).
 
 **State.** `Stands` when `t_in ≥ 1` (whatever the circumscribed solve did: if it failed,
-`LoadFactorUpper = min(LoadFactorCap, U)`, or the cap with recovery off); `Collapses` when `t_out < 1`; `Undecided` when
+`LoadFactorUpper = min(LoadFactorCap, U)`, or the cap with recovery off); `Collapses` when `t_out < 1` and, on a converged circumscribed solve, its dual bound `U_out < 1`; `Undecided` when
 `t_in < 1 ≤ t_out` (the polygon band, narrowed by raising `ConeGenerators`; on a cone-vertex
 direction a slide flips Stands → Undecided at `μ` and Undecided → Collapses at `μ / cos(π/G)`,
 on a mid-edge direction at `μ cos(π/G)` and `μ`), when the inscribed solve failed (its recovery re-solves included; bounds `[0, cap]`), when
@@ -612,7 +613,10 @@ Collapses > Stands, load factors are the minimum, the lists collect **every Coll
 component whatever the overall state**, and `Iterations` is the maximum. A single state hides
 which component collapsed; the combined authority (slice 4b) reports per component.
 
-**Mechanism.** Where `t*` is finite and the dual unique, the equilibrium-row duals at the
+**Mechanism.** The mechanism names the bodies to release and the direction they move; it comes
+from the inscribed program and is not itself a proof of collapse (a sliding mechanism dilates at
+`atan μ`, short of the circumscribed cone; the verdict's proof is the circumscribed dual bound,
+DESIGN §10 2026-10-14). Where `t*` is finite and the dual unique, the equilibrium-row duals at the
 inscribed optimum are the body velocities (sign `−y`, rotations unscaled by the characteristic
 length, normalised per component so the largest physical component is 1). At `t* = 0` the dual
 optimal set is a cone and the interior point returns its analytic centre, which names every

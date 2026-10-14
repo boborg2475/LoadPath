@@ -250,3 +250,46 @@ TEST_CASE("Certificate.DualBound.AnOverflowedDualReadsUnbounded")
 	INFO(std::setprecision(17) << "cube mu 0, t " << Probe.LoadFactor << ", U at the overflowed dual " << U);
 	CHECK((U == std::numeric_limits<double>::infinity() || U >= Probe.LoadFactor));
 }
+
+TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Certificate.DualBound.EveryGroundedCollapsesHasItsOuterDualBoundBelowOne")
+{
+	int Collapses = 0;
+	int Components = 0;
+	for (const BoundCase& Base : BoundCases())
+	{
+		const CertificateOptions& Options = Base.Options;
+		const CertificateResult R = DecideWith(Base.Model, Options);
+		const ComponentPartition& Partition = Base.Model.Components();
+		REQUIRE(R.Components.size() == Partition.FreeBodies.size());
+		for (std::size_t K = 0; K < R.Components.size(); ++K)
+		{
+			++Components;
+			if (R.Components[K].State != CertificateState::Collapses)
+			{
+				continue;
+			}
+			bool bGrounded = false;
+			for (const BodyId Id : Partition.FreeBodies[K])
+			{
+				for (const InterfaceId Each : Base.Model.InterfacesOf(Id))
+				{
+					const InterfaceRecord& Record = Base.Model.Interface(Each);
+					if (Base.Model.IsLive(Each) && (Base.Model.Body(Record.BodyA).bGrounded || Base.Model.Body(Record.BodyB).bGrounded))
+					{
+						bGrounded = true;
+					}
+				}
+			}
+			if (!bGrounded)
+			{
+				continue;
+			}
+			++Collapses;
+			const detail::ProgramProbe Outer = detail::ProbeProgram(Base.Model, {}, Options, K, false);
+			INFO(std::setprecision(17) << Base.Name << ", component " << K << ": t_out " << Outer.LoadFactor << ", U_out " << Outer.DualBound << ", converged " << Outer.bConverged);
+			CHECK(Outer.DualBound < 1.0);
+		}
+	}
+	MESSAGE(Components << " components, " << Collapses << " grounded Collapses");
+	CHECK(Collapses > 0);
+}

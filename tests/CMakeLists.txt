@@ -24,6 +24,7 @@ add_executable(loadpath_tests
 	CertificateAnchorsTest.cpp
 	CertificateShearCapTest.cpp
 	CertificateDualBoundTest.cpp
+	CertificateCollapseGateTest.cpp
 	StructuralAuthorityTest.cpp
 	ArchAnchorsTest.cpp
 	InterfaceStateTest.cpp

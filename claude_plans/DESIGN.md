@@ -1834,3 +1834,38 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   γ₃ B |d| per group would cover it). The test named `TheDualBoundBracketsEveryConvergedLoadFactor` checks
   that recovery leaves converged components unchanged, not a bound; renamed
   `RecoveryLeavesConvergedComponentsUnchanged`.
+- *2026-10-14, orchestrator, does a Collapses mechanism prove its own collapse (investigation and
+  ruling):* a probe evaluated the dual bound at each reported mechanism (velocities un-normalised to
+  equilibrium-row duals, per group y_G = −max(0, max_J d_J · v_rel), so a group is charged its
+  polygon's support function; facet duals by a 2-D search per cap site; unit demand work) over 33,680
+  Collapses components (default suite 2,809, Slow 12,034, a hunt of 20,000 walls 7,793, single-brick
+  μ 0.6 and μ 5 grids 11,227). **The reported mechanism does not certify collapse on the
+  circumscribed program**: 14,312 read U_out ≥ 1, about 14,250 of them by construction. The mechanism
+  comes from the inscribed program, whose sliding motion dilates at atan μ, and the circumscribed cone
+  needs atan(μ / cos(π/G)), so the shortfall is charged at a crushing bound (U_out up to 1e15 on the
+  light-block family); every μ 0.6 brick slide fails this way, only rocking and opening mechanisms
+  pass. On the inscribed program the mechanism sits at t_in (converged duals) or near 0 (selection),
+  except: the 1e-3 listing threshold drops slow bodies and leaves the released motion incompatible at
+  their joints (the harmonic stack 1e-11 → 1.7e7; 17 default and 13 hunt cases); the selection's
+  kinematic rows hold to an absolute 1e-9 that is not scaled to the crushing bound (U_in up to 55.6 on
+  the Foraboschi wall past its limit, 20.3 on the Heyman couplet arch); at mass ratios of 1e11 and
+  above the selection's velocity does work of about −1e-11 (right body, roundoff work); 8 rigid falls
+  at the tiniest gravity have denormal demand. **The verdicts are backed**: on all 21,561 grounded
+  Collapses the circumscribed solve's own dual bound is below 1 (largest 0.99997), and its equilibrium
+  duals with the closed-form group duals give U_out ≤ t_out (1 + 2.6e-4), tighter than `DualBound` on
+  μ 5 shear caps (0.30000 against 0.30445). The 46-block wall at 47,150 N (the at-cap branch): live
+  U_in 0.5530404 and U_out 0.5618605, M2 0.5531002 and 0.5637792, so U_out < 1 does not separate them
+  and U_in ≤ t_in (1 + ε) would need ε under 1.2e-4 where converged inner duals already sit 1.6e-3
+  above t_in on the hunt walls; the below-cap branch (live against M11) never fired in 33,680
+  components. **Ruling:** (1) the reported mechanism stays inscribed: it names the bodies and the
+  direction a host releases; it is not a proof object, and API.md now says so. Choosing it from the
+  circumscribed program (its duals at finite t, its selection at t ≈ 0) would make it an upper-bound
+  mechanism but changes shapes and pins and still needs the threshold and tolerance fixes, so it is
+  logged, not adopted. (2) **A Collapses needs the rigorous circumscribed bound below 1**: on a
+  converged circumscribed solve, t_out < 1 ≤ U_out reads Undecided with LoadFactorUpper =
+  min(cap, U_out). This closes the open 4a item that t_out is a primal value (an upper bound needs dual
+  feasibility): with a loose `FeasibilityTolerance` the converged primal can sit below 1 while the
+  optimum sits above it. At default options it changed nothing in the probe's data. (3) Logged: the
+  listing threshold's incompatibility, the selection's unscaled tolerance, the negative-work selection
+  at 1e11, the at-cap mechanism choice still unpinned (no property found that separates it robustly).
+  The probe's logs and scripts are in the session scratchpad (`mech\`).
