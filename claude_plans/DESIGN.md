@@ -1890,3 +1890,26 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   same deterministic solve); API.md's State lists the new Undecided case; the probe's ephemeral
   scratchpad reference is dropped. The `min(cap, U_out)` in the gate is redundant with `Decide`'s
   per-component cap (an equivalent mutant), kept for clarity.
+- *2026-10-14, orchestrator, the dual-polish ruling:* the rigorous bound is weak duality at y^ =
+  y/τ and holds for any y^, so it may be evaluated at a better y^ built from the solver's. A probe
+  measured three polishes over 4,430 suite solves, the seeded probes, the Slow tier and the stall
+  iterates: (1) each group row's dual in closed form, y_G = −max(0, max_J a_J) (a_J the column's
+  reduced cost without y_G; this charges the group B_G max(0, max_J a_J), the minimum over y_G), and
+  the cap row's y_cap = −max(0, 1 − D·y); (2) each cap site's facet duals at the exact optimum of its
+  small convex problem (they enter only through φ = Σ y_K f_K; a dual simplex from the slack basis,
+  costs non-negative), groups re-polished after; (3) the equilibrium and facet duals divided by the
+  demand work D·y, the exact 1-D optimum once the rest is polished. Groups alone barely help; the
+  shear-cap excess sits in the facet duals: on cap-site solves U − t falls from up to 3.45e-3 (1 + |t|)
+  to 4.8e-8, the μ 5 shear-capped brick's outer U from 0.30445 to 0.300000028 (t* 0.3). The stall
+  families are already tight (U − t 1.6e-10 on the 46-block wall, 3.6e-10 on the 137-block), so
+  recovery is unchanged; the cohesive open slide has t* exactly 0, which no relative rung can
+  bracket, so it stays Undecided under any polish. Cost about 5 µs per G16 cap site per solve exit
+  (1.7 % on the bonded 85-body wall). **Ruling (adopted):** all three polishes, inside
+  `RigorousDualBound`, the rounding allowance recomputed at the polished y^, a site whose facet LP
+  does not certify optimality keeping its unpolished duals. Why now: the Collapses gate reads U_out, so
+  a shear-capped brick at t*_out 0.9999 read Undecided (U_out 1.000126) although it collapses.
+  `LoadFactorUpper` stays the primal: reporting min(cap, U_out) is blocked by the light block at mass
+  ratio 1e8, whose equilibrium duals no polish reaches (U_out 7.54 against t 1.89). Logged from the
+  probe: a failed inner solve reads Undecided even when U_out < 1, though, where the load factor scales every load
+  (gravity included), t_in = 0 is admissible and U_out < 1 alone proves collapse (unverified) (the cohesive open slide's outer U is 1.09e-3); the mechanism
+  would then come from the selection.

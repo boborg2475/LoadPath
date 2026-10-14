@@ -12,6 +12,7 @@
 
 #include "doctest.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -32,6 +33,7 @@ constexpr int BoxDrawCount = oracle::bOptimisedBuild ? 300 : 30;
 constexpr double BoxRelative = 1.0e-9;
 constexpr double BoxAbsolute = 1.0e-9;
 constexpr double BoundRelative = 1.0e-10;
+constexpr double TightnessRelative = 1.0e-6;
 constexpr int GeneratorChoices[] = {4, 8, 16};
 
 struct BoundCase
@@ -142,6 +144,68 @@ std::vector<BoundCase> BoundCases()
 	return Cases;
 }
 
+BoundCase CappedBrick(double Friction, double CapOverWeight, double Lambda)
+{
+	BoundCase C;
+	std::ostringstream Name;
+	Name << "brick mu " << Friction << ", cap " << CapOverWeight << " W/A, lateral " << Lambda;
+	C.Name = Name.str();
+	StrengthProfile Profile = DryJoint(Friction);
+	Profile.MaxShearStrengthPa = CapOverWeight * BrickMassKg * GravityMPerS2 / (BrickLengthM * BrickWidthM);
+	C.Model = MakeBrickOnGround(Profile).Model;
+	C.Options = CertificateLateral(Lambda);
+	C.Friction = Friction;
+	return C;
+}
+
+BoundCase CappedStack(double Lambda)
+{
+	BoundCase C;
+	std::ostringstream Name;
+	Name << "3 capped bricks mu 5, cap 0.5 W/A, lateral " << Lambda;
+	C.Name = Name.str();
+	const double WeightN = 3.0 * BrickMassKg * GravityMPerS2;
+	const double AreaM2 = BrickLengthM * BrickWidthM;
+	const ProfileId P = AddProfileOk(C.Model, CappedProfile(5.0, 3.0 * WeightN / AreaM2, 0.5 * WeightN / AreaM2));
+	const BodyId Ground = AddGroundPlane(C.Model);
+	std::vector<Box> Shapes;
+	std::vector<BodyId> Bodies;
+	for (int Course = 0; Course < 3; ++Course)
+	{
+		Shapes.push_back(BrickShape(0.02 * Course, Course));
+		Bodies.push_back(AddBox(C.Model, Shapes.back()));
+		if (Course == 0)
+		{
+			AddInterfaceOk(C.Model, OnGroundPlane(Ground, Bodies.back(), Shapes.back(), P));
+		}
+		else
+		{
+			AddInterfaceOk(C.Model, *StackedFaces(Bodies[Bodies.size() - 2], Shapes[Shapes.size() - 2], Bodies.back(), Shapes.back(), P));
+		}
+	}
+	C.Options = CertificateLateral(Lambda);
+	C.Friction = 5.0;
+	return C;
+}
+
+std::vector<BoundCase> TightnessCases()
+{
+	std::vector<BoundCase> Cases = BoundCases();
+	for (const double Lambda : {0.5, 1.0, 0.3 / 0.9999, 2.0})
+	{
+		Cases.push_back(CappedBrick(5.0, 0.3, Lambda));
+	}
+	for (const double Lambda : {0.2, 0.5, 1.0})
+	{
+		Cases.push_back(CappedBrick(0.6, 0.3, Lambda));
+	}
+	for (const double Lambda : {0.3, 1.0})
+	{
+		Cases.push_back(CappedStack(Lambda));
+	}
+	return Cases;
+}
+
 struct Probed
 {
 	std::string Name;
@@ -149,10 +213,10 @@ struct Probed
 	detail::ProgramProbe Probe;
 };
 
-std::vector<Probed> ProbeEveryCase()
+std::vector<Probed> ProbeEveryCase(const std::vector<BoundCase>& Cases)
 {
 	std::vector<Probed> Out;
-	for (const BoundCase& C : BoundCases())
+	for (const BoundCase& C : Cases)
 	{
 		const std::size_t Components = C.Model.Components().FreeBodies.size();
 		for (std::size_t Component = 0; Component < Components; ++Component)
@@ -174,7 +238,7 @@ TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Certificate.DualBound.EveryConvergedPrimalLies
 	int Converged = 0;
 	int Breaches = 0;
 	std::ostringstream Breached;
-	for (const Probed& P : ProbeEveryCase())
+	for (const Probed& P : ProbeEveryCase(BoundCases()))
 	{
 		if (!P.Probe.bConverged)
 		{
@@ -215,7 +279,7 @@ TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Certificate.DualBound.EveryConvergedPrimalLies
 TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Certificate.DualBound.BoundsEveryConvergedLoadFactor")
 {
 	int Converged = 0;
-	for (const Probed& P : ProbeEveryCase())
+	for (const Probed& P : ProbeEveryCase(BoundCases()))
 	{
 		if (!P.Probe.bConverged)
 		{
@@ -292,4 +356,31 @@ TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Certificate.DualBound.EveryGroundedCollapsesHa
 	}
 	MESSAGE(Components << " components, " << Collapses << " grounded Collapses");
 	CHECK(Collapses > 0);
+}
+
+TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Certificate.DualBound.ConvergedBoundsSitWithinTheirTolerance")
+{
+	int Converged = 0;
+	int Loose = 0;
+	double WorstRelative = 0.0;
+	for (const Probed& P : ProbeEveryCase(TightnessCases()))
+	{
+		if (!P.Probe.bConverged)
+		{
+			continue;
+		}
+		++Converged;
+		const double T = P.Probe.LoadFactor;
+		const double Relative = (P.Probe.DualBound - T) / (1.0 + std::abs(T));
+		WorstRelative = std::max(WorstRelative, Relative);
+		const bool bTight = P.Probe.DualBound <= T + TightnessRelative * (1.0 + std::abs(T));
+		INFO(std::setprecision(17) << P.Name << ": t " << T << ", U " << P.Probe.DualBound << ", (U - t) / (1 + |t|) " << Relative);
+		CHECK(bTight);
+		if (!bTight)
+		{
+			++Loose;
+		}
+	}
+	MESSAGE(Converged << " converged probes, " << Loose << " loose, worst (U - t) / (1 + |t|) " << std::setprecision(4) << WorstRelative);
+	CHECK(Converged > 0);
 }

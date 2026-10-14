@@ -32,6 +32,8 @@ constexpr double ComplementarityRestart = 0.5;
 constexpr double UnconstrainedComponent = 1.0e-3;
 constexpr double ObjectiveNorm = 1.0;
 constexpr double Unbounded = std::numeric_limits<double>::infinity();
+constexpr int FacetPivotLimit = 20000;
+constexpr int FacetBlandAfter = 2000;
 constexpr double UnitRoundoff = std::numeric_limits<double>::epsilon() / 2.0;
 constexpr double LightBodyLoad = 1.0e-6;
 constexpr std::array<double, 2> RecoveryMargins{1.0e-5, 1.0e-3};
@@ -1414,13 +1416,8 @@ Eigen::VectorXd ColumnBoxes(const Program& P)
 	return Boxes;
 }
 
-double RigorousDualBound(const Component& C, const Program& P, const Eigen::VectorXd& Bounds, const Embedding& E)
+double BoundAtDuals(const Component& C, const Program& P, const Eigen::VectorXd& Bounds, const Eigen::VectorXd& Y)
 {
-	if (!(E.Tau > 0.0))
-	{
-		return Unbounded;
-	}
-	const Eigen::VectorXd Y = E.Y / E.Tau;
 	Eigen::VectorXd R = ApplyTranspose(C, P, Y);
 	R.data()[P.LoadFactor] += ObjectiveNorm;
 	const Eigen::VectorXd Allowance = ApplyAbsTranspose(C, P, Y);
@@ -1453,6 +1450,209 @@ double RigorousDualBound(const Component& C, const Program& P, const Eigen::Vect
 	}
 	Upper += Gamma(static_cast<double>(P.RowCount + P.Variables + 1)) * Magnitude;
 	return IsFinite(Upper) ? Upper : Unbounded;
+}
+
+void PolishGroupsAndCap(const Component& C, const Program& P, Eigen::VectorXd& Y)
+{
+	for (std::size_t G = 0; G < P.Groups.size(); ++G)
+	{
+		Y(P.FirstGroupRow + static_cast<Eigen::Index>(G)) = 0.0;
+	}
+	Y(P.CapRow) = 0.0;
+	const Eigen::VectorXd R = ApplyTranspose(C, P, Y);
+	for (std::size_t G = 0; G < P.Groups.size(); ++G)
+	{
+		const Group& Gr = P.Groups[G];
+		double Largest = 0.0;
+		for (std::size_t J = Gr.First; J < Gr.First + Gr.Count; ++J)
+		{
+			Largest = std::max(Largest, R(static_cast<Eigen::Index>(J)));
+		}
+		Y(P.FirstGroupRow + static_cast<Eigen::Index>(G)) = -Largest;
+	}
+	Y(P.CapRow) = -std::max(0.0, R(P.LoadFactor) + ObjectiveNorm);
+}
+
+bool FacetDualSimplex(const Eigen::VectorXd& Cost, const Eigen::MatrixXd& A, Eigen::VectorXd B, Eigen::VectorXd& X)
+{
+	const Eigen::Index M = A.rows();
+	const Eigen::Index N = A.cols();
+	Eigen::MatrixXd T(M, N + M);
+	T.leftCols(N) = A;
+	T.rightCols(M).setIdentity();
+	Eigen::VectorXd D(N + M);
+	D.head(N) = Cost;
+	D.tail(M).setZero();
+	std::vector<Eigen::Index> Basis(static_cast<std::size_t>(M));
+	for (Eigen::Index I = 0; I < M; ++I)
+	{
+		Basis[static_cast<std::size_t>(I)] = N + I;
+	}
+	const double Tol = 1.0e-13 * (1.0 + (M > 0 ? B.cwiseAbs().maxCoeff() : 0.0));
+	bool bOptimal = false;
+	for (int Pivots = 0; Pivots < FacetPivotLimit; ++Pivots)
+	{
+		const bool bBland = Pivots >= FacetBlandAfter;
+		Eigen::Index Row = -1;
+		double Worst = -Tol;
+		for (Eigen::Index I = 0; I < M; ++I)
+		{
+			const bool bPick = bBland ? (B(I) < -Tol && (Row < 0 || Basis[static_cast<std::size_t>(I)] < Basis[static_cast<std::size_t>(Row)])) : B(I) < Worst;
+			if (bPick)
+			{
+				Worst = B(I);
+				Row = I;
+			}
+		}
+		if (Row < 0)
+		{
+			bOptimal = true;
+			break;
+		}
+		Eigen::Index Col = -1;
+		double Best = Unbounded;
+		for (Eigen::Index J = 0; J < N + M; ++J)
+		{
+			const double Entry = T(Row, J);
+			if (Entry < -1.0e-12)
+			{
+				const double Ratio = std::max(0.0, D(J)) / -Entry;
+				if (Ratio < Best)
+				{
+					Best = Ratio;
+					Col = J;
+				}
+			}
+		}
+		if (Col < 0)
+		{
+			return false;
+		}
+		const double Pivot = T(Row, Col);
+		T.row(Row) /= Pivot;
+		B(Row) /= Pivot;
+		for (Eigen::Index I = 0; I < M; ++I)
+		{
+			const double F = T(I, Col);
+			if (I != Row && F != 0.0)
+			{
+				T.row(I) -= F * T.row(Row);
+				B(I) -= F * B(Row);
+			}
+		}
+		D -= D(Col) * T.row(Row).transpose();
+		Basis[static_cast<std::size_t>(Row)] = Col;
+	}
+	if (!bOptimal)
+	{
+		return false;
+	}
+	X = Eigen::VectorXd::Zero(N);
+	for (Eigen::Index I = 0; I < M; ++I)
+	{
+		if (Basis[static_cast<std::size_t>(I)] < N)
+		{
+			X(Basis[static_cast<std::size_t>(I)]) = std::max(0.0, B(I));
+		}
+	}
+	return true;
+}
+
+void PolishFacets(const Component& C, const Program& P, Eigen::VectorXd& Y)
+{
+	const Eigen::VectorXd Boxes = ColumnBoxes(P);
+	Eigen::VectorXd Base = Y;
+	for (std::size_t G = 0; G < P.Groups.size(); ++G)
+	{
+		Base(P.FirstGroupRow + static_cast<Eigen::Index>(G)) = 0.0;
+	}
+	for (const CapSite& Cap : P.CapSites)
+	{
+		Base.segment(Cap.FirstRow, static_cast<Eigen::Index>(Cap.Facets.size())).setZero();
+	}
+	const Eigen::VectorXd Reduced = ApplyTranspose(C, P, Base);
+	for (const CapSite& Cap : P.CapSites)
+	{
+		const Eigen::Index F = static_cast<Eigen::Index>(Cap.Facets.size());
+		const Eigen::Index Gs = static_cast<Eigen::Index>(Cap.Groups.size());
+		Eigen::Index Rows = 0;
+		for (const std::size_t G : Cap.Groups)
+		{
+			Rows += static_cast<Eigen::Index>(P.Groups[G].Count);
+		}
+		const Eigen::Index N = 2 * F + Gs;
+		Eigen::MatrixXd A = Eigen::MatrixXd::Zero(Rows, N);
+		Eigen::VectorXd B(Rows);
+		Eigen::VectorXd Cost(N);
+		for (Eigen::Index K = 0; K < F; ++K)
+		{
+			Cost(K) = std::max(0.0, Boxes(Cap.FirstSlack + K) - Cap.Bound);
+			Cost(F + K) = Cap.Bound;
+		}
+		Eigen::Index Row = 0;
+		for (Eigen::Index W = 0; W < Gs; ++W)
+		{
+			const Group& Gr = P.Groups[Cap.Groups[static_cast<std::size_t>(W)]];
+			Cost(2 * F + W) = Gr.Bound;
+			for (std::size_t J = Gr.First; J < Gr.First + Gr.Count; ++J)
+			{
+				for (Eigen::Index K = 0; K < F; ++K)
+				{
+					const double Coefficient = Dot(Cap.Facets[static_cast<std::size_t>(K)], P.Directions[J]);
+					A(Row, K) = Coefficient;
+					A(Row, F + K) = -Coefficient;
+				}
+				A(Row, 2 * F + W) = -1.0;
+				B(Row) = -Reduced(static_cast<Eigen::Index>(J));
+				++Row;
+			}
+		}
+		Eigen::VectorXd X;
+		if (!FacetDualSimplex(Cost, A, B, X))
+		{
+			continue;
+		}
+		for (Eigen::Index K = 0; K < F; ++K)
+		{
+			Y(Cap.FirstRow + K) = X(K) - X(F + K);
+		}
+	}
+}
+
+void ScaleToUnitWork(const Component& C, const Program& P, Eigen::VectorXd& Y)
+{
+	const double Work = DemandDot(C, Y.data());
+	if (!(Work > 0.0))
+	{
+		return;
+	}
+	Y.head(C.Rows) /= Work;
+	for (const CapSite& Cap : P.CapSites)
+	{
+		Y.segment(Cap.FirstRow, static_cast<Eigen::Index>(Cap.Facets.size())) /= Work;
+	}
+	PolishGroupsAndCap(C, P, Y);
+}
+
+double RigorousDualBound(const Component& C, const Program& P, const Eigen::VectorXd& Bounds, const Embedding& E)
+{
+	if (!(E.Tau > 0.0))
+	{
+		return Unbounded;
+	}
+	const Eigen::VectorXd Given = E.Y / E.Tau;
+	const double Unpolished = BoundAtDuals(C, P, Bounds, Given);
+	if (!Given.allFinite())
+	{
+		return Unpolished;
+	}
+	Eigen::VectorXd Y = Given;
+	PolishFacets(C, P, Y);
+	PolishGroupsAndCap(C, P, Y);
+	const double Polished = BoundAtDuals(C, P, Bounds, Y);
+	ScaleToUnitWork(C, P, Y);
+	const double Scaled = BoundAtDuals(C, P, Bounds, Y);
+	return std::min({Unpolished, Polished, Scaled});
 }
 
 Outcome SolveProgram(const Component& C, const Program& P, const CertificateOptions& Options)

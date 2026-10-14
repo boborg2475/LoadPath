@@ -96,3 +96,20 @@ TEST_CASE("Certificate.CollapseGate.ConvergedOuterBelowOneWithDualBoundAboveOneI
 	CHECK(R.LoadFactorUpper == doctest::Approx(std::min(S.Options.LoadFactorCap, Loose.DualBound)).epsilon(1.0e-12));
 	CHECK(R.Mechanism.empty());
 }
+
+TEST_CASE("Certificate.CollapseGate.AShearCappedSlideJustUnderOneCollapses")
+{
+	constexpr double CapOverWeight = 0.3;
+	constexpr double OuterOptimum = 0.9999;
+	StrengthProfile Profile = DryJoint(5.0);
+	Profile.MaxShearStrengthPa = CapOverWeight * BrickMassKg * GravityMPerS2 / (BrickLengthM * BrickWidthM);
+	const BrickOnGround F = MakeBrickOnGround(Profile);
+	const CertificateOptions Options = CertificateLateral(CapOverWeight / OuterOptimum);
+	const detail::ProgramProbe Outer = detail::ProbeProgram(F.Model, {}, Options, 0, false);
+	const CertificateResult R = DecideWith(F.Model, Options);
+	INFO(std::setprecision(12) << "analytic t*_out " << OuterOptimum << ", t_out " << Outer.LoadFactor << ", U_out " << Outer.DualBound << ", converged " << Outer.bConverged << "; state " << R.State << " [" << R.LoadFactorLower << ", " << R.LoadFactorUpper << "]");
+	REQUIRE(Outer.bConverged);
+	REQUIRE(std::abs(Outer.LoadFactor - OuterOptimum) <= 1.0e-6);
+	CHECK(R.State == CertificateState::Collapses);
+	CHECK(R.LoadFactorUpper < 1.0);
+}

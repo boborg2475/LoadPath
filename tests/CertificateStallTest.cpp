@@ -211,8 +211,8 @@ constexpr double HalfWarehouseWallRelative = 1.0e-6;
 constexpr int HalfWarehouseWallIterationCeiling = 69;
 constexpr double UnreachableTolerance = 1.0e-15;
 constexpr int StalledWallFiringIteration = 69;
-constexpr int FailedResolveIterations = 30;
-constexpr int SecondRungIterations = 40;
+constexpr int FailedResolveIterations = 23;
+constexpr int SecondRungIterations = 29;
 constexpr double SecondRungLower = 624.4515807676147;
 }
 

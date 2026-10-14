@@ -22,6 +22,6 @@ struct ProgramProbe
 // Invalid input or an out-of-range component returns a default probe.
 ProgramProbe ProbeProgram(const Structure& Model, std::span<const BodyLoad> Loads, const CertificateOptions& Options, std::size_t Component, bool bInscribed);
 
-// The rigorous dual bound at the given duals (one per row); +inf for invalid input, a bad index or a wrong dual count.
+// The rigorous dual bound from the given duals (one per row) after the same polish the solver applies; +inf for invalid input, a bad index or a wrong dual count.
 double ProbeDualBound(const Structure& Model, std::span<const BodyLoad> Loads, const CertificateOptions& Options, std::size_t Component, bool bInscribed, const std::vector<double>& Duals);
 }
