@@ -504,7 +504,7 @@ enum class CertificateState : uint8_t { Stands, Collapses, Undecided, InvalidInp
 struct CertificateOptions {
 	Vec3   Gravity = {0.0, 0.0, -GravityMPerS2};
 	int    ConeGenerators = 16;            // even, >= 4; the friction circle is approximated by this polygon
-	double LoadFactorCap = 1.0e3;          // the LP's upper bound on t; reaching it means "stands with margin >= cap"
+	double LoadFactorCap = 1.0e3;          // the LP's upper bound on t, at least 1; reaching it means "stands with margin >= cap"
 	double FeasibilityTolerance = 1.0e-9;  // relative, on the equilibrium residual, dual residual and gap
 	int    MaxIterations = 200;            // interior-point iterations per solve before it is declared failed
 	bool   bStallRecovery = true;          // on a stalled or failed cone solve, bound t by the rigorous dual bound and re-solve under it
@@ -593,16 +593,20 @@ inscribed one reaches the cap; `t_out` is clamped to at least `t_in` (exact, eve
 set sits inside its circumscribed one). `t_out` is the converged primal value, but a Collapses
 needs the circumscribed solve's rigorous dual bound below 1 as well: a converged `t_out < 1 ≤ U_out`
 reads Undecided with `LoadFactorUpper = min(cap, U_out)` (DESIGN §10 2026-10-14; with a loose
-`FeasibilityTolerance` the primal can sit below 1 while the optimum sits above it).
+`FeasibilityTolerance` the primal can sit below 1 while the optimum sits above it). Only that
+verdict is backed: elsewhere the reported `LoadFactorUpper` is the primal and can sit below
+`t*_out` by the termination gap (1.3e-9 below `U_out` on the 46-block wall at default options;
+5.8e-5 below the optimum on a cohesive block at tolerance 1e-2), which is the unsafe side of an
+upper bound; reporting `min(cap, U_out)` instead is open (CURRENT_STATE).
 
 **State.** `Stands` when `t_in ≥ 1` (whatever the circumscribed solve did: if it failed,
 `LoadFactorUpper = min(LoadFactorCap, U)`, or the cap with recovery off); `Collapses` when `t_out < 1` and, on a converged circumscribed solve, its dual bound `U_out < 1`; `Undecided` when
-`t_in < 1 ≤ t_out` (the polygon band, narrowed by raising `ConeGenerators`; on a cone-vertex
+`t_in < 1 ≤ t_out` (including a converged `t_out < 1 ≤ U_out`, bounds `[t_in, min(cap, U_out)]`; the polygon band, narrowed by raising `ConeGenerators`; on a cone-vertex
 direction a slide flips Stands → Undecided at `μ` and Undecided → Collapses at `μ / cos(π/G)`,
 on a mid-edge direction at `μ cos(π/G)` and `μ`), when the inscribed solve failed (its recovery re-solves included; bounds `[0, cap]`), when
 `t_in < 1` and the circumscribed solve failed with recovery off or with `U_out ≥ cap` (bounds
 `[0, cap]`), or when the mechanism selection below failed; `InvalidInput` on the slice-2 rules (dead-body load,
-non-finite load or gravity) plus `ConeGenerators` odd or under 4 and non-finite or non-positive
+non-finite load or gravity) plus `ConeGenerators` odd or under 4, a `LoadFactorCap` below 1, and non-finite or non-positive
 options, with `InvalidInterface` left default. On dry joints the cones are homogeneous, so `t`
 is exactly 0 or the cap; finite load factors come only from bonded, cohesive or crushing bounds
 (`ft A L / (W (λh − L))` for tension tipping, `c A / (W (sin θ − μ cos θ))` for cohesive sliding,

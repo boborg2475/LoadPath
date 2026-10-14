@@ -1868,4 +1868,25 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   optimum sits above it. At default options it changed nothing in the probe's data. (3) Logged: the
   listing threshold's incompatibility, the selection's unscaled tolerance, the negative-work selection
   at 1e11, the at-cap mechanism choice still unpinned (no property found that separates it robustly).
-  The probe's logs and scripts are in the session scratchpad (`mech\`).
+  The probe's instrumentation is not kept in the repository; the counts above are reproducible
+  only by rebuilding the mechanism-to-dual evaluator (a test-support oracle, logged).
+- *2026-10-14, orchestrator, the Collapses gate (cold-review rulings):* the review confirmed the
+  shift-escalation refactor bit-identical (3,881 default, 12,054 Slow and 8 Deferred decisions,
+  mechanisms included) and the gate sound for a cap of at least 1 on every path (a failed outer with
+  recovery off never reads Collapses; a stalled outer uses U; the clamp to t_in needs no gate),
+  firing once across every tier, in its own fixture, with every other decision bit-identical.
+  **Blocking, fixed:** (1) **the cap-below-one ruling**: with `LoadFactorCap < 1` a stable brick read
+  Collapses [0.999, 0.999] with no proof (the outer solve is skipped at the cap, and a capped outer's
+  U is at most the cap); the cap means "stands with at least this margin", so a cap below 1 is now
+  InvalidInput in `AreCertificateOptionsValid`, which the combined authority and the cascade share
+  (cap 1 stays valid). (2) "This closes the open 4a item" overclaimed: only the Collapses verdict is
+  backed by U_out; the reported `LoadFactorUpper` stays the primal and can sit below t*_out (1.3e-9
+  below U on the 46-block wall at default options, 5.8e-5 below the optimum at tolerance 1e-2), so
+  API.md's caveat is restored and the item re-logged with its cost (reporting min(cap, U_out) moves
+  pins by up to 1.2e-4 on shear caps). **Non-blocking, done:** the gate fixture now measures the
+  loose solve's gap at t* = 1 and places t* at 1 + gap/2 (the gap is set by which iterate passes the
+  tolerance check, 5.78e-5 at G 16 from 1e-2 to 1e-4, so a fixed offset was one accepted iterate from
+  failing its precondition); the property row says it does not bite on gate removal (it re-runs the
+  same deterministic solve); API.md's State lists the new Undecided case; the probe's ephemeral
+  scratchpad reference is dropped. The `min(cap, U_out)` in the gate is redundant with `Decide`'s
+  per-component cap (an equivalent mutant), kept for clarity.

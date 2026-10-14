@@ -493,6 +493,7 @@ TEST_CASE("Authority.Judge.InvalidOptionsAreInvalidWhateverIsClean")
 	AddCertificate("Certificate.ConeGenerators 3", [](CertificateOptions& O) { O.ConeGenerators = 3; });
 	AddCertificate("Certificate.ConeGenerators 5", [](CertificateOptions& O) { O.ConeGenerators = 5; });
 	AddCertificate("Certificate.LoadFactorCap 0", [](CertificateOptions& O) { O.LoadFactorCap = 0.0; });
+	AddCertificate("Certificate.LoadFactorCap 0.5", [](CertificateOptions& O) { O.LoadFactorCap = 0.5; });
 	AddCertificate("Certificate.LoadFactorCap +inf", [](CertificateOptions& O) { O.LoadFactorCap = std::numeric_limits<double>::infinity(); });
 	AddCertificate("Certificate.FeasibilityTolerance 0", [](CertificateOptions& O) { O.FeasibilityTolerance = 0.0; });
 	AddCertificate("Certificate.MaxIterations 0", [](CertificateOptions& O) { O.MaxIterations = 0; });

@@ -114,6 +114,7 @@ const InvalidCase InvalidCases[] = {
 	{"three cone generators", [](TwoBrickStack&, std::vector<BodyLoad>&, CertificateOptions& Options) { Options.ConeGenerators = 3; }},
 	{"five cone generators", [](TwoBrickStack&, std::vector<BodyLoad>&, CertificateOptions& Options) { Options.ConeGenerators = 5; }},
 	{"zero load factor cap", [](TwoBrickStack&, std::vector<BodyLoad>&, CertificateOptions& Options) { Options.LoadFactorCap = 0.0; }},
+	{"load factor cap below 1", [](TwoBrickStack&, std::vector<BodyLoad>&, CertificateOptions& Options) { Options.LoadFactorCap = 0.5; }},
 	{"negative load factor cap", [](TwoBrickStack&, std::vector<BodyLoad>&, CertificateOptions& Options) { Options.LoadFactorCap = -1.0; }},
 	{"NaN load factor cap", [](TwoBrickStack&, std::vector<BodyLoad>&, CertificateOptions& Options) { Options.LoadFactorCap = NaN; }},
 	{"infinite load factor cap", [](TwoBrickStack&, std::vector<BodyLoad>&, CertificateOptions& Options) { Options.LoadFactorCap = Infinity; }},

@@ -26,7 +26,7 @@ struct CertificateOptions
 	Vec3 Gravity = {0.0, 0.0, -GravityMPerS2};
 	// Even and at least 4; the friction circle is approximated by this polygon.
 	int ConeGenerators = 16;
-	// The upper bound on the load factor; reaching it means the structure stands with at least this margin.
+	// The upper bound on the load factor, at least 1; reaching it means the structure stands with at least this margin.
 	double LoadFactorCap = 1.0e3;
 	// Relative, on the equilibrium residual and complementarity.
 	double FeasibilityTolerance = 1.0e-9;

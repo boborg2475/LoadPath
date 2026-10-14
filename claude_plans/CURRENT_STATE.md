@@ -32,8 +32,8 @@ stacks, Paterson–Zwick, Couplet–Heyman at Milankovitch's 0.107478 with hinge
 the certificate's associative 31.07°, the cascade on the arch below least thickness, the dry
 wall at t / H within 1 % (10 × 8 and 4 × 5), the bonded 4 × 5 wall at its monolith factor
 `(t/H)(1 + f_t A_base / W) = 2.971` to 1 %, two screws at twice their published shear and
-withdrawal whatever the joint area. Default suite 392 cases in Debug and 437 in Release after
-slice 2b and the cohesive-wedge check (325 and 347 at the 6b close) (the arch, pile, arch-cascade, fuzz, small-wall and multi-panel factor anchors
+withdrawal whatever the joint area. Default suite 393 cases in Debug and 438 in Release as of
+2026-10-14 (325 and 347 at the 6b close) (the arch, pile, arch-cascade, fuzz, small-wall and multi-panel factor anchors
 run only in Release under `LOADPATH_SLOW_IN_DEBUG`; twenty `Slow.*` cases run in Release at
 every slice close, and the
 cheap `Measure.Scale.*` rows after them); the `Deferred.*` tier holds the physical wedge pin
@@ -287,7 +287,11 @@ the non-associative answer) and the two hanging-component cases (slice 6), red b
      figure when it can be read;
    - B-ARC-09, the voussoir-count sweep, is not pinned (expect convergence to 0.107478 from at
      or below);
-   - the 4a items still open: the selection gate is `FeasibilityTolerance`; `Iterations` excludes the
+   - the 4a items still open: the selection gate is `FeasibilityTolerance`; `LoadFactorUpper` is the
+     circumscribed converged primal, which can sit below the optimum by the termination gap (only
+     the Collapses verdict is backed by the rigorous `U_out`, since 2026-10-14); reporting
+     `min(cap, U_out)` would make it a true upper bound but moves the pins by up to 1.2e-4 on
+     shear-capped solves; `Iterations` excludes the
      selection solve's count; HiGHS was slice 7's referee question, and slice 7 is dropped by owner
      directive (2026-10-12), so no independent LP referee is coming: the NNLS oracle, the pins and
      the dense-against-sparse comparison are the certificate's referees.
