@@ -384,8 +384,7 @@ the non-associative answer) and the two hanging-component cases (slice 6), red b
   Undecided; small `MaxIterations` costs about 3× in failed rungs); every solve now copies x and
   y at exit for the probe; the margin policy's cost (the probe saw the 1e-5 re-solve stall on 2
   of 10 fallbacks, 16 to 50 s, before 1e-3 converged); mechanism deflation was not prototyped. The dense selection takes 20 to 27 s on the full wall; the
-  hinging list wanders between 17 and 33 joints on the 57-body wall; `FactorSelection`'s local
-  `bShifted` is unused and `FactorBordered` keeps a third copy of the escalation loop. The
+  hinging list wanders between 17 and 33 joints on the 57-body wall; The
   Foraboschi fixture's limits with the paper's f_c 1.21 MPa are about 25.0, 40.0 and 57.1 kN at
   40, 80 and 140 kN, 4.6, 0.5 and 2.3 % above Portioli's model (23.9, 39.8 and 55.8 kN);
   `Slow.Certificate.Anchor.ForaboschiWallWithCrushingBracketsThePaperModel` pins Stands at the

@@ -581,26 +581,34 @@ bool HasPositivePivots(const Eigen::LLT<Eigen::MatrixXd>& Factor)
 	return std::all_of(Pivots.data(), Pivots.data() + Pivots.size(), [](double Pivot) { return Pivot > 0.0 && IsFinite(Pivot); });
 }
 
-bool FactorWithRetryShifts(Eigen::MatrixXd& M, Eigen::LLT<Eigen::MatrixXd>& Factor, bool& bShifted)
+template <typename AddShift, typename TryFactor>
+bool EscalateShifts(double LargestDiagonal, AddShift&& Add, TryFactor&& Try)
 {
-	const double LargestDiagonal = M.diagonal().maxCoeff();
 	if (!(LargestDiagonal > 0.0))
 	{
 		return false;
 	}
-	bShifted = true;
 	double Applied = 0.0;
 	for (const double Shift : RetryShifts)
 	{
-		M.diagonal().array() += (Shift - Applied) * LargestDiagonal;
+		Add((Shift - Applied) * LargestDiagonal);
 		Applied = Shift;
-		Factor.compute(M);
-		if (HasPositivePivots(Factor))
+		if (Try())
 		{
 			return true;
 		}
 	}
 	return false;
+}
+
+bool FactorWithRetryShifts(Eigen::MatrixXd& M, Eigen::LLT<Eigen::MatrixXd>& Factor)
+{
+	return EscalateShifts(
+		M.diagonal().maxCoeff(), [&](double Delta) { M.diagonal().array() += Delta; },
+		[&]() {
+			Factor.compute(M);
+			return HasPositivePivots(Factor);
+		});
 }
 
 using Matrix3 = std::array<double, 9>;
@@ -717,26 +725,19 @@ bool FactorBordered(const Component& C, double Coupling, SparseNormal& S, bool& 
 	{
 		LargestDiagonal = std::max(LargestDiagonal, S.Bordered.coeff(Row, Row) + Coupling * Demand[Row] * Demand[Row]);
 	}
-	if (!(LargestDiagonal > 0.0))
-	{
-		return false;
-	}
 	bShifted = true;
-	double Applied = 0.0;
-	for (const double Shift : RetryShifts)
-	{
-		for (int Row = 0; Row < C.Rows; ++Row)
-		{
-			S.Bordered.coeffRef(Row, Row) += (Shift - Applied) * LargestDiagonal;
-		}
-		Applied = Shift;
-		S.BorderedFactor.factorize(S.Bordered);
-		if (HasBorderedPivots(S))
-		{
-			return true;
-		}
-	}
-	return false;
+	return EscalateShifts(
+		LargestDiagonal,
+		[&](double Delta) {
+			for (int Row = 0; Row < C.Rows; ++Row)
+			{
+				S.Bordered.coeffRef(Row, Row) += Delta;
+			}
+		},
+		[&]() {
+			S.BorderedFactor.factorize(S.Bordered);
+			return HasBorderedPivots(S);
+		});
 }
 
 bool FactorSparse(const Component& C, double Dt, double DeltaT, const std::vector<Matrix3>& SiteMatrix, Normal& N)
@@ -889,7 +890,8 @@ bool FactorNormal(const Component& C, const Program& P, Normal& N)
 	{
 		return true;
 	}
-	return FactorWithRetryShifts(M, N.Factor, N.bShifted);
+	N.bShifted = true;
+	return FactorWithRetryShifts(M, N.Factor);
 }
 
 Eigen::VectorXd SolveNormal(const Component& C, const Program& P, const Normal& N, const Eigen::VectorXd& R)
@@ -1742,8 +1744,7 @@ bool FactorSelection(SelectionSystem& Sys)
 		M.noalias() += D[Sel.RowCount - 1] * P.Offset * P.Offset.transpose();
 	}
 	Sys.Factor.compute(M);
-	bool bShifted = false;
-	if (!HasPositivePivots(Sys.Factor) && !FactorWithRetryShifts(M, Sys.Factor, bShifted))
+	if (!HasPositivePivots(Sys.Factor) && !FactorWithRetryShifts(M, Sys.Factor))
 	{
 		return false;
 	}
