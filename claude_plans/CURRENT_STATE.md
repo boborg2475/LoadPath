@@ -290,8 +290,8 @@ the non-associative answer) and the two hanging-component cases (slice 6), red b
    - the 4a items still open: the selection gate is `FeasibilityTolerance`; `LoadFactorUpper` is the
      circumscribed converged primal, which can sit below the optimum by the termination gap (only
      the Collapses verdict is backed by the rigorous `U_out`, since 2026-10-14); reporting
-     `min(cap, U_out)` would make it a true upper bound but moves the pins by up to 1.2e-4 on
-     shear-capped solves; `Iterations` excludes the
+     `min(cap, U_out)` would make it a true upper bound but is blocked by the light block at mass
+     ratio 1e8, whose equilibrium duals no polish reaches (U_out 7.54 against t 1.89); `Iterations` excludes the
      selection solve's count; HiGHS was slice 7's referee question, and slice 7 is dropped by owner
      directive (2026-10-12), so no independent LP referee is coming: the NNLS oracle, the pins and
      the dense-against-sparse comparison are the certificate's referees.
@@ -382,11 +382,20 @@ the non-associative answer) and the two hanging-component cases (slice 6), red b
   loads' mechanisms differ by 0.21, so a neighbour is no reference); a lasting oracle for the
   boxes (the LP with `ColumnBoxes` imposed keeps the optimum, through an (A, b, boxes) export and
   a small bounded simplex in test support) is not written; the seeded box draws carry no cohesion
-  or tension (only the bolted block covers a cohesion group's facet term); U can exceed t by 1.2e-4 relative on shear-capped solves, and when
-  it is loose by more than 1e-3 neither rung converges (the cohesive open-slide test stays
+  or tension (only the bolted block covers a cohesion group's facet term); when U is loose by more than 1e-3 neither rung converges (the cohesive open-slide test stays
   Undecided; small `MaxIterations` costs about 3× in failed rungs); every solve now copies x and
   y at exit for the probe; the margin policy's cost (the probe saw the 1e-5 re-solve stall on 2
-  of 10 fallbacks, 16 to 50 s, before 1e-3 converged); mechanism deflation was not prototyped. The bound is polished (2026-10-14, DESIGN §10 "the dual-polish ruling"): left from it, `LoadFactorUpper` stays the primal (reporting min(cap, U_out) is blocked by the light block at mass ratio 1e8, U_out 7.54 against t 1.89, whose equilibrium duals no polish reaches); the two recovery stall fixtures are iteration-count knife edges (`SecondRungIterations` 29 decides on rung 2 but 30 decides on rung 1; `FailedResolveIterations` 23 sits in a 20 to 25 band), so any solver change may need them re-fixtured by sweep; a failed inner solve with U_out < 1 reads Undecided (candidate: read Collapses where t_in = 0 is admissible, unverified). A Collapses now needs the circumscribed dual bound below 1
+  of 10 fallbacks, 16 to 50 s, before 1e-3 converged); mechanism deflation was not prototyped. The bound is polished (2026-10-14, DESIGN §10 "the dual-polish ruling"): left from it, `LoadFactorUpper` stays the primal (reporting min(cap, U_out) is blocked by the light block at mass ratio 1e8, U_out 7.54 against t 1.89, whose equilibrium duals no polish reaches); the two recovery stall fixtures are iteration-count knife edges (`SecondRungIterations` 29 decides on rung 2 but 30 decides on rung 1; `FailedResolveIterations` 23 sits in a 20 to 25 band), so any solver change may need them re-fixtured by sweep; a failed inner solve with U_out < 1 reads Undecided (candidate: read Collapses where t_in = 0 is admissible, unverified); from the polish's cold
+  review: the allowance recomputation at the polished duals and each `PolishGroupsAndCap` call are
+  unguarded (mutants survive), and the facet simplex's failure and Bland paths are never exercised
+  (1.4 million calls, at most 10 pivots); a bounded-LP oracle in test support (an
+  `ExportProgram` seam returning A, b and the boxes, a dense simplex, the bound at the simplex's
+  duals within [t*, t* + 1e-9] and under perturbation) and a facet-simplex seam with a 2 × 3 LP, an
+  infeasible row and a degenerate Beale instance would guard both; a recovery-margin seam would let
+  the stall fixtures pin each rung without iteration-count knife edges (margins {1e-13, 1e-3} make
+  rung 1 stall and rung 2 converge on the ec6 wall);
+  `Certificate.Mechanics.StandsSurvivesAnOuterSolveThatDoesNotConverge` asserts U at least a pinned
+  primal 2e-9 below it, at solver tolerance 1e-9. A Collapses now needs the circumscribed dual bound below 1
   (2026-10-14, DESIGN §10 "does a Collapses mechanism prove its own collapse"); left from that
   investigation: the reported mechanism is inscribed and not a proof object (a circumscribed
   mechanism would be one, but changes shapes and pins: not adopted); the 1e-3 listing threshold can

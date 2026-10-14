@@ -1895,10 +1895,12 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   measured three polishes over 4,430 suite solves, the seeded probes, the Slow tier and the stall
   iterates: (1) each group row's dual in closed form, y_G = −max(0, max_J a_J) (a_J the column's
   reduced cost without y_G; this charges the group B_G max(0, max_J a_J), the minimum over y_G), and
-  the cap row's y_cap = −max(0, 1 − D·y); (2) each cap site's facet duals at the exact optimum of its
-  small convex problem (they enter only through φ = Σ y_K f_K; a dual simplex from the slack basis,
+  the cap row's y_cap = −max(0, 1 − D·y); (2) each cap site's facet duals at the optimum of a small
+  LP over them (a restriction: it imposes every group column's reduced cost non-positive instead of
+  charging it against its box, so it affects tightness, never validity) (they enter only through φ = Σ y_K f_K; a dual simplex from the slack basis,
   costs non-negative), groups re-polished after; (3) the equilibrium and facet duals divided by the
-  demand work D·y, the exact 1-D optimum once the rest is polished. Groups alone barely help; the
+  demand work D·y, the exact 1-D optimum once the rest is polished (removed after the cold review:
+  it moved U by at most 6e-7 and no test needed it). Groups alone barely help; the
   shear-cap excess sits in the facet duals: on cap-site solves U − t falls from up to 3.45e-3 (1 + |t|)
   to 4.8e-8, the μ 5 shear-capped brick's outer U from 0.30445 to 0.300000028 (t* 0.3). The stall
   families are already tight (U − t 1.6e-10 on the 46-block wall, 3.6e-10 on the 137-block), so
@@ -1913,3 +1915,18 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   probe: a failed inner solve reads Undecided even when U_out < 1, though, where the load factor scales every load
   (gravity included), t_in = 0 is admissible and U_out < 1 alone proves collapse (unverified) (the cohesive open slide's outer U is 1.09e-3); the mechanism
   would then come from the selection.
+- *2026-10-14, orchestrator, the dual polish (cold-review rulings):* the review found no fail-open
+  path: the polish never runs on non-finite duals, every polished vector goes back through the
+  unpolished bound with its allowance recomputed, and a non-finite result reads Unbounded. An
+  independent two-phase simplex (row-equilibrated, its basis re-solved with full-pivot LU and
+  trusted only when primal and dual feasible to 1e-9) over 7,922 solve exits, with 60 adversarial
+  dual vectors each (about 475,000), found no bound below t* − 1e-12 (1 + |t*|): the smallest
+  polished margin on 861 interior optima is +7.4e-14 relative. No decided state moved over 4,020
+  `Decide` results; the bounds that moved follow the tighter U through the recovery caps (the
+  Foraboschi crushing anchor's lower bound 1.27135017203 → 1.27135016991). **Blocking, fixed:** the
+  unit-work rescale (3) changed U by at most 6e-7 relative and no test needed it (its mutant passed
+  440 of 440), so it is removed under the minimum-code rule; API.md's formula and two stale
+  CURRENT_STATE sentences are corrected. Logged: the unguarded allowance recomputation and polish
+  calls, the never-exercised facet-simplex failure path, an oracle and seams that would guard them,
+  the stall fixtures' iteration-count knife edges (a margin seam would remove them), and an outer
+  stall pin 2e-9 from its bound.

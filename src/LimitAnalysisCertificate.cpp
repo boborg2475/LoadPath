@@ -1619,21 +1619,6 @@ void PolishFacets(const Component& C, const Program& P, Eigen::VectorXd& Y)
 	}
 }
 
-void ScaleToUnitWork(const Component& C, const Program& P, Eigen::VectorXd& Y)
-{
-	const double Work = DemandDot(C, Y.data());
-	if (!(Work > 0.0))
-	{
-		return;
-	}
-	Y.head(C.Rows) /= Work;
-	for (const CapSite& Cap : P.CapSites)
-	{
-		Y.segment(Cap.FirstRow, static_cast<Eigen::Index>(Cap.Facets.size())) /= Work;
-	}
-	PolishGroupsAndCap(C, P, Y);
-}
-
 double RigorousDualBound(const Component& C, const Program& P, const Eigen::VectorXd& Bounds, const Embedding& E)
 {
 	if (!(E.Tau > 0.0))
@@ -1649,10 +1634,7 @@ double RigorousDualBound(const Component& C, const Program& P, const Eigen::Vect
 	Eigen::VectorXd Y = Given;
 	PolishFacets(C, P, Y);
 	PolishGroupsAndCap(C, P, Y);
-	const double Polished = BoundAtDuals(C, P, Bounds, Y);
-	ScaleToUnitWork(C, P, Y);
-	const double Scaled = BoundAtDuals(C, P, Bounds, Y);
-	return std::min({Unpolished, Polished, Scaled});
+	return std::min(Unpolished, BoundAtDuals(C, P, Bounds, Y));
 }
 
 Outcome SolveProgram(const Component& C, const Program& P, const CertificateOptions& Options)
