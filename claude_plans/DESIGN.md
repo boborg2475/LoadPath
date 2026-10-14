@@ -1987,3 +1987,26 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   not stop the test); every index after a REQUIRE in the two certificate test files is now guarded.
   The default-tier oracle sibling gains the seeds that catch a dropped group polish and facet-slack
   boxes × 0.9; Beale's example also certifies through a mid-run switch to Bland.
+- *2026-10-14, orchestrator, the failed-inner ruling (cold-review rulings):* the review confirmed
+  t = 0 admissible for every joint type the program builds (dry, tension-capable with an offset,
+  cohesive, crushing- and shear-capped, NormalOnly, the bolt and screw rows, cracked joints) and every
+  path to Collapses backed by a rigorous U_out < 1. **Blocking, fixed:** the mechanism. "t_in = 0 is
+  under the selection gate" was a false premise: the selection finds a positive-work mechanism only
+  when t*_in is about 0, which the converged path proves before it runs; taken as a mere lower bound,
+  t_in = 0 let the selection converge when t*_in > 0 and return its best zero-dissipation motion,
+  which did negative work (forced seeds at `MaxIterations` 8: −1.84, −1.06, −0.33 J) and named wrong
+  bodies (a two-brick capped slide listed both bricks and the bed; the cascade severed the bed,
+  removed the brick that should stand and reported Stands, where the base read Undecided).
+  **Ruling (adopted):** the selection's mechanisms dissipate nothing, so positive external work proves
+  t*_in = 0 and the mechanism genuine; on the failed-inner path only, Collapses needs the selected
+  mechanism's normalised work (Demand · y, the motion at unit L1) above 1e-6, else Undecided on
+  [0, U_out or t_out] with empty lists. Measured over the default suite: the genuine failed-inner
+  mechanisms do +2.26e-3 to +5.86e-3, the bad ones −3.4e-11 to −7.4e-13 (zero-dissipation round-off),
+  so 1e-6 sits 2,200× under the smallest genuine one. The converged path is unchanged (its 2,098
+  selections do +6.1e-9 to +0.82; a mass-ratio-1e11 light block's correct mechanism does about
+  −1e-11, so the gate would be wrong there). A property now requires every Collapses mechanism over
+  the seeded and forced cases to do positive work, and a cascade test keeps the brick under the capped
+  slide. Logged: a failed inner with a converged outer at t_out < 1 ≤ U_out has no fixture (480 sweep
+  points found none) and needs an injection seam to pin; a negative U_out (impossible while the bound
+  is rigorous, since t = 0 is feasible) would read Collapses [0, 0] rather than a fault; a starved
+  selection reads a proven collapse as Undecided (documented, fail-closed).

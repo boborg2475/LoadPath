@@ -600,7 +600,7 @@ verdict is backed: elsewhere the reported `LoadFactorUpper` is the primal and ca
 upper bound; reporting `min(cap, U_out)` instead is open (CURRENT_STATE).
 
 **State.** `Stands` when `t_in ≥ 1` (whatever the circumscribed solve did: if it failed,
-`LoadFactorUpper = min(LoadFactorCap, U)`, or the cap with recovery off); `Collapses` when `t_out < 1` and, on a converged circumscribed solve, its dual bound `U_out < 1`; with recovery on, a failed inscribed solve counts as `t_in = 0` (the load factor scales every load, so zero load with zero joint forces is admissible), so a rigorous `U_out < 1` still reads Collapses, its mechanism from the selection; `Undecided` when
+`LoadFactorUpper = min(LoadFactorCap, U)`, or the cap with recovery off); `Collapses` when `t_out < 1` and, on a converged circumscribed solve, its dual bound `U_out < 1`; with recovery on, a failed inscribed solve counts as `t_in = 0` (the load factor scales every load, so zero load with zero joint forces is admissible), so a rigorous `U_out < 1` still reads Collapses, its mechanism from the selection when that mechanism does positive work (normalised work above 1e-6; zero-dissipation mechanisms with positive work prove `t*_in = 0`), else Undecided; `Undecided` when
 `t_in < 1 ≤ t_out` (including a converged `t_out < 1 ≤ U_out`, bounds `[t_in, min(cap, U_out)]`; the polygon band, narrowed by raising `ConeGenerators`; on a cone-vertex
 direction a slide flips Stands → Undecided at `μ` and Undecided → Collapses at `μ / cos(π/G)`,
 on a mid-edge direction at `μ cos(π/G)` and `μ`), when the inscribed solve failed (its recovery re-solves included) and, with recovery on, the circumscribed solve gives no rigorous `U_out < 1` (bounds `[0, t_out or U_out]`, or `[0, cap]` with recovery off), when
@@ -650,7 +650,8 @@ past its own threshold, so this is not host-unsafe, and slice 4b's referee recor
 the tests pin only that the top block is named. The cone solves have a **threshold resolution
 limit** too: within about 1e-6 relative of a load factor where the admissible set empties, the
 inscribed solve can stall with its primal residual near 1e-4 and the component reads Undecided
-[0, cap] (the Ferris & Tin-Loi wall at G = 64, λ 9/14 + 1e-6, while G = 16 stands); fail closed.
+(the Ferris & Tin-Loi wall at G = 64, λ 9/14 + 1e-6, while G = 16 stands: [0, cap] with recovery
+off, [0, t_out] with it, about [0, 999.9999999996]); fail closed.
 Near an interior optimum (`t*` strictly inside `(0, cap)`) a solve can stall with only its primal residual floored; stall recovery decides it (DESIGN §10).
 **Listing
 threshold (ruled 2026-10-11 after the third review):** a body is unconstrained when the largest

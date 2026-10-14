@@ -38,6 +38,7 @@ constexpr double UnitRoundoff = std::numeric_limits<double>::epsilon() / 2.0;
 constexpr double LightBodyLoad = 1.0e-6;
 constexpr std::array<double, 2> RecoveryMargins{1.0e-5, 1.0e-3};
 constexpr double AtCapRelative = 1.0e-6;
+constexpr double FailedInnerMinimumWork = 1.0e-6;
 
 struct Site
 {
@@ -2216,7 +2217,8 @@ ComponentVerdict DecideComponent(const Component& C, const CertificateOptions& O
 			}
 		}
 	}
-	if (!Inner.bConverged)
+	const bool bInnerFailed = !Inner.bConverged;
+	if (bInnerFailed)
 	{
 		if (!Options.bStallRecovery)
 		{
@@ -2260,6 +2262,11 @@ ComponentVerdict DecideComponent(const Component& C, const CertificateOptions& O
 		if (Inner.LoadFactor < Options.FeasibilityTolerance)
 		{
 			if (!SolveSelection(BuildSelection(C, InnerProgram, Options.FeasibilityTolerance), Options, Velocity))
+			{
+				V.State = CertificateState::Undecided;
+				return V;
+			}
+			if (bInnerFailed && !(DemandDot(C, Velocity.data()) > FailedInnerMinimumWork))
 			{
 				V.State = CertificateState::Undecided;
 				return V;

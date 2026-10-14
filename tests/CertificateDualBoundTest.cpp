@@ -344,6 +344,26 @@ std::vector<BoundCase> ForcedFailureCases()
 	}
 	return Cases;
 }
+
+double MechanismWorkJ(const Structure& Model, const CertificateOptions& Options, std::span<const BodyLoad> Loads, const std::vector<MechanismMotion>& Mechanism)
+{
+	double WorkJ = 0.0;
+	for (const MechanismMotion& M : Mechanism)
+	{
+		const BodyDesc& Body = Model.Body(M.Body);
+		WorkJ += Body.MassKg * Dot(Options.Gravity, M.TranslationM);
+		for (const BodyLoad& L : Loads)
+		{
+			if (SameHandle(L.Body, M.Body))
+			{
+				const Vec3 Arm{L.PointM.X - Body.CentroidM.X, L.PointM.Y - Body.CentroidM.Y, L.PointM.Z - Body.CentroidM.Z};
+				const Vec3 Spin = Cross(M.RotationRad, Arm);
+				WorkJ += Dot(L.ForceN, Vec3{M.TranslationM.X + Spin.X, M.TranslationM.Y + Spin.Y, M.TranslationM.Z + Spin.Z});
+			}
+		}
+	}
+	return WorkJ;
+}
 }
 
 TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Certificate.DualBound.EveryGroundedCollapsesHasItsOuterDualBoundBelowOne")
@@ -370,6 +390,9 @@ TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Certificate.DualBound.EveryGroundedCollapsesHa
 			{
 				continue;
 			}
+			const double WorkJ = MechanismWorkJ(Base.Model, Options, {}, R.Components[K].Mechanism);
+			INFO(std::setprecision(17) << Base.Name << ", component " << K << ": mechanism work " << WorkJ << " J over " << R.Components[K].Mechanism.size() << " bodies, t [" << R.Components[K].LoadFactorLower << ", " << R.Components[K].LoadFactorUpper << "]");
+			CHECK(WorkJ > 0.0);
 			bool bGrounded = false;
 			for (const BodyId Id : Partition.FreeBodies[K])
 			{
@@ -814,9 +837,15 @@ TEST_CASE("Certificate.DualBound.AFailedInnerSolveWithAnOuterBoundBelowOneCollap
 	CHECK(R.State == CertificateState::Collapses);
 	CHECK(R.LoadFactorLower == 0.0);
 	CHECK(R.LoadFactorUpper < 1.0);
-	CHECK(std::find(R.UnconstrainedBodies.begin(), R.UnconstrainedBodies.end(), S.Upper) != R.UnconstrainedBodies.end());
-	CHECK_FALSE(R.HingingInterfaces.empty());
+	CHECK(R.UnconstrainedBodies.size() == 2u);
+	CHECK(HasBody(R.UnconstrainedBodies, S.Lower));
+	CHECK(HasBody(R.UnconstrainedBodies, S.Upper));
+	CHECK(R.HingingInterfaces.size() == 1u);
+	CHECK(HasInterface(R.HingingInterfaces, S.Bed));
 	CHECK(R.Mechanism.size() == R.UnconstrainedBodies.size());
+	const double WorkJ = MechanismWorkJ(S.Model, Options, {}, R.Mechanism);
+	INFO(std::setprecision(17) << "mechanism work " << WorkJ << " J");
+	CHECK(WorkJ > 0.0);
 }
 
 TEST_CASE("Certificate.DualBound.AFailedInnerSolveWithAnOuterBoundAtOrAboveOneStaysUndecided")
@@ -838,6 +867,25 @@ TEST_CASE("Certificate.DualBound.AFailedInnerSolveWithAnOuterBoundAtOrAboveOneSt
 		CHECK(R.UnconstrainedBodies.empty());
 		CHECK(R.HingingInterfaces.empty());
 	}
+	StrengthProfile Capped = DryJoint(5.0);
+	Capped.MaxShearStrengthPa = 0.3 * BrickMassKg * GravityMPerS2 / (BrickLengthM * BrickWidthM);
+	const BrickOnGround G = MakeBrickOnGround(Capped);
+	CertificateOptions Options = CertificateLateral(0.1);
+	Options.FeasibilityTolerance = 5.0e-17;
+	const detail::ProgramProbe Inner = detail::ProbeProgram(G.Model, {}, Options, 0, true);
+	const detail::ProgramProbe Outer = detail::ProbeProgram(G.Model, {}, Options, 0, false);
+	const double OuterBound = Outer.bConverged ? Outer.LoadFactor : Outer.DualBound;
+	const CertificateResult R = DecideWith(G.Model, Options);
+	INFO(std::setprecision(17) << "capped brick at tolerance 5e-17: inner converged " << Inner.bConverged << " U " << Inner.DualBound << "; outer converged " << Outer.bConverged << " t " << Outer.LoadFactor << " U " << Outer.DualBound << "; state " << static_cast<int>(R.State) << " [" << R.LoadFactorLower << ", " << R.LoadFactorUpper << "], unconstrained " << R.UnconstrainedBodies.size() << ", hinging " << R.HingingInterfaces.size());
+	REQUIRE_FALSE(Inner.bConverged);
+	REQUIRE(OuterBound >= 1.0);
+	REQUIRE(OuterBound < Options.LoadFactorCap);
+	CHECK(R.State == CertificateState::Undecided);
+	CHECK(R.LoadFactorLower == 0.0);
+	CHECK(std::abs(R.LoadFactorUpper - OuterBound) <= 1.0e-12 * OuterBound);
+	CHECK(R.UnconstrainedBodies.empty());
+	CHECK(R.HingingInterfaces.empty());
+	CHECK(R.Mechanism.empty());
 }
 
 namespace

@@ -276,6 +276,34 @@ TEST_CASE("Cascade.StackSlidingAtTheGroundIsReleasedAsOneCluster")
 	CHECK_FALSE(S.Model.IsLive(S.Upper));
 }
 
+TEST_CASE("Cascade.AFailedInnerSolveNeverReleasesTheBrickUnderACappedSlide")
+{
+	StrengthProfile Capped = DryJoint(5.0);
+	Capped.MaxShearStrengthPa = 0.3 * WeightN() / (BrickLengthM * BrickWidthM);
+	Structure Model;
+	const ProfileId BedProfile = AddProfileOk(Model, DryJoint(5.0));
+	const ProfileId JointProfile = AddProfileOk(Model, Capped);
+	const BodyId Ground = AddGroundPlane(Model);
+	const BodyId Lower = AddBox(Model, BrickShape(0.0, 0));
+	const BodyId Upper = AddBox(Model, BrickShape(0.0, 1));
+	const InterfaceId Bed = AddInterfaceOk(Model, OnGroundPlane(Ground, Lower, BrickShape(0.0, 0), BedProfile));
+	AddInterfaceOk(Model, *StackedFaces(Lower, BrickShape(0.0, 0), Upper, BrickShape(0.0, 1), JointProfile));
+	CascadeOptions Options = Lateral(0.45);
+	Options.Authority.Certificate.MaxIterations = 7;
+	const CascadeVerdict V = RunCascade(Model, Options);
+	INFO(DescribeVerdict(V));
+	CHECK(Model.IsLive(Lower));
+	CHECK(Model.IsLive(Bed));
+	for (const FailedInterface& F : V.Failures)
+	{
+		CHECK_FALSE(SameHandle(F.Id, Bed));
+	}
+	for (const ReleasedCluster& C : V.Clusters)
+	{
+		CHECK(SameIdList(C.Bodies, {Upper}));
+	}
+}
+
 TEST_CASE("Cascade.StackWithOnlyTheTopPastItsEdgeReleasesTheTopAlone")
 {
 	Stack S = BuildOnTable({PlacedBlock{0.0, 0}, PlacedBlock{0.0, 1}, PlacedBlock{0.6, 2}}, 1.0);
