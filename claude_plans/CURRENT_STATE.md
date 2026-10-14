@@ -32,7 +32,7 @@ stacks, Paterson–Zwick, Couplet–Heyman at Milankovitch's 0.107478 with hinge
 the certificate's associative 31.07°, the cascade on the arch below least thickness, the dry
 wall at t / H within 1 % (10 × 8 and 4 × 5), the bonded 4 × 5 wall at its monolith factor
 `(t/H)(1 + f_t A_base / W) = 2.971` to 1 %, two screws at twice their published shear and
-withdrawal whatever the joint area. Default suite 393 cases in Debug and 435 in Release after
+withdrawal whatever the joint area. Default suite 391 cases in Debug and 435 in Release after
 slice 2b and the cohesive-wedge check (325 and 347 at the 6b close) (the arch, pile, arch-cascade, fuzz, small-wall and multi-panel factor anchors
 run only in Release under `LOADPATH_SLOW_IN_DEBUG`; twenty `Slow.*` cases run in Release at
 every slice close, and the
@@ -370,9 +370,16 @@ the non-associative answer) and the two hanging-component cases (slice 6), red b
   an overflowed column dropped) are fixed and guarded through `src/CertificateProbe.h` (DESIGN §10,
   the conditioning's cold-review rulings). Left from it: the γ rounding allowance is unguarded
   (dropping it moves U by about 1e-17); the boxes' own rounding is not allowed for (a computed
-  |f · d| can sit an ulp low); which duals give the mechanism after a capped re-solve (the
-  re-solve's, or the stalled solve's last when the re-solve reached its cap) is unguarded, no
-  fixture reaching the branch; U can exceed t by 1.2e-4 relative on shear-capped solves, and when
+  |f · d| errs by up to γ₃|f||d|, the whole value at small μ; about 1e-13 relative in U; fix:
+  inflate each box by (1 + γ) plus γ₃ B |d| per group); which duals give the mechanism after a
+  capped re-solve (the re-solve's, or the stalled solve's last when the re-solve reached its cap)
+  is unguarded: the 46-block wall at 47,150 N takes the at-cap branch and the choices differ by
+  0.227 in normalised motion, but its lists are identical, so a pin must assert the mechanism (a
+  virtual-work check that its kinematic multiplier equals t_in is the principled form; nearby
+  loads' mechanisms differ by 0.21, so a neighbour is no reference); a lasting oracle for the
+  boxes (the LP with `ColumnBoxes` imposed keeps the optimum, through an (A, b, boxes) export and
+  a small bounded simplex in test support) is not written; the seeded box draws carry no cohesion
+  or tension (only the bolted block covers a cohesion group's facet term); U can exceed t by 1.2e-4 relative on shear-capped solves, and when
   it is loose by more than 1e-3 neither rung converges (the cohesive open-slide test stays
   Undecided; small `MaxIterations` costs about 3× in failed rungs); every solve now copies x and
   y at exit for the probe; the margin policy's cost (the probe saw the 1e-5 re-solve stall on 2

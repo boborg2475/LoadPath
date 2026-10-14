@@ -1825,8 +1825,12 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   rungs cost about 3×. The Ferris & Tin-Loi G = 64 case was re-measured: Undecided [0, 1000] in 96
   with recovery on and off (a dry wall, U ≥ cap, recovery never fires), so API.md's sentence stands.
   Left unguarded: the γ allowance (dropping it moves U by about 1e-17), the capped-re-solve mechanism
-  choice between the re-solve's duals and the stalled solve's last duals (no fixture reaches the
-  branch where they differ), and the boxes' own rounding (computed |f_K · d_J| can sit an ulp under
-  the exact value). The test named `TheDualBoundBracketsEveryConvergedLoadFactor` checks
+  choice between the re-solve's duals and the stalled solve's last duals (the 46-block wall at
+  47,150 N takes the at-cap branch and the two differ, by 0.227 max-abs in normalised motion, but
+  every body and the same 31 joints are listed either way, so only an assertion on the mechanism
+  itself would bite; the fix round's re-review), and the boxes' own rounding (the computed
+  |f_K · d_J| errs by up to γ₃|f||d|, which at small μ is the whole value; about 1e-13 relative in
+  U, under the recovery margins, but not covered by γ; inflating each box by (1 + γ) and adding
+  γ₃ B |d| per group would cover it). The test named `TheDualBoundBracketsEveryConvergedLoadFactor` checks
   that recovery leaves converged components unchanged, not a bound; renamed
   `RecoveryLeavesConvergedComponentsUnchanged`.

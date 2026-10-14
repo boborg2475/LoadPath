@@ -598,8 +598,9 @@ feasibility) is **open**, logged in CURRENT_STATE; the two agree within the 1e-9
 `LoadFactorUpper = min(LoadFactorCap, U)`, or the cap with recovery off); `Collapses` when `t_out < 1`; `Undecided` when
 `t_in < 1 ≤ t_out` (the polygon band, narrowed by raising `ConeGenerators`; on a cone-vertex
 direction a slide flips Stands → Undecided at `μ` and Undecided → Collapses at `μ / cos(π/G)`,
-on a mid-edge direction at `μ cos(π/G)` and `μ`), when the inscribed solve failed (with recovery on and a circumscribed solve that also failed,
-the bounds read `[t_in, min(cap, U_out)]`), or when the mechanism selection below failed; `InvalidInput` on the slice-2 rules (dead-body load,
+on a mid-edge direction at `μ cos(π/G)` and `μ`), when the inscribed solve failed (its recovery re-solves included; bounds `[0, cap]`), when
+`t_in < 1` and the circumscribed solve failed with recovery off or with `U_out ≥ cap` (bounds
+`[0, cap]`), or when the mechanism selection below failed; `InvalidInput` on the slice-2 rules (dead-body load,
 non-finite load or gravity) plus `ConeGenerators` odd or under 4 and non-finite or non-positive
 options, with `InvalidInterface` left default. On dry joints the cones are homogeneous, so `t`
 is exactly 0 or the cap; finite load factors come only from bonded, cohesive or crushing bounds

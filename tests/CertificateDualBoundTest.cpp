@@ -3,6 +3,7 @@
 #include "CertificateProbe.h"
 #include "CertificateTestSupport.h"
 #include "FactorTestSupport.h"
+#include "SlowInDebug.h"
 #include "StaticAdmissibilityOracle.h"
 #include "StaticsTestSupport.h"
 
@@ -168,7 +169,7 @@ std::vector<Probed> ProbeEveryCase()
 }
 }
 
-TEST_CASE("Certificate.DualBound.EveryConvergedPrimalLiesInsideItsBox")
+TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Certificate.DualBound.EveryConvergedPrimalLiesInsideItsBox")
 {
 	int Converged = 0;
 	int Breaches = 0;
@@ -211,7 +212,7 @@ TEST_CASE("Certificate.DualBound.EveryConvergedPrimalLiesInsideItsBox")
 	CHECK(Converged > 0);
 }
 
-TEST_CASE("Certificate.DualBound.BoundsEveryConvergedLoadFactor")
+TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Certificate.DualBound.BoundsEveryConvergedLoadFactor")
 {
 	int Converged = 0;
 	for (const Probed& P : ProbeEveryCase())
