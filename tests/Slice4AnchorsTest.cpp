@@ -343,7 +343,7 @@ TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Certificate.Solver.AFiniteLoadFactorBelowTheCa
 	MESSAGE("23-block wall: " << SecondsSince(Start) << " s");
 }
 
-TEST_CASE("Deferred.Certificate.Solver.TheFortySixBlockWallDecidesAtAnIsolatedStallLoad")
+TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Certificate.Solver.TheFortySixBlockWallDecidesAtAnIsolatedStallLoad")
 {
 	const auto Start = std::chrono::steady_clock::now();
 	const BlockWall Wall = MakeForaboschiBondWall(1.04, 10, 1.21e6);
@@ -364,6 +364,22 @@ TEST_CASE("Deferred.Certificate.Solver.TheFortySixBlockWallDecidesAtAnIsolatedSt
 		}
 	}
 	MESSAGE("46-block wall: " << SecondsSince(Start) << " s");
+}
+
+TEST_CASE("Slow.Certificate.Solver.TheSparseWallDecidesAtAnIsolatedStallLoad")
+{
+	const auto Start = std::chrono::steady_clock::now();
+	const BlockWall Wall = MakeForaboschiBondWall(2.08, 16, 1.21e6);
+	REQUIRE(Wall.Blocks.size() == 137u);
+	REQUIRE(Wall.Contacts == 377);
+	CHECK(6 * static_cast<int>(Wall.Blocks.size()) > CertificateOptions{}.DenseRowLimit);
+	const CertificateResult Got = DecideWith(Wall.Model, CertificateOptions{}, BeamLoads(Wall, 80000.0, 43000.0));
+	INFO(std::setprecision(10) << "137 blocks, " << Wall.Contacts << " contacts, H 43000: " << Got.State << " [" << Got.LoadFactorLower << ", " << Got.LoadFactorUpper << "] in " << Got.Iterations);
+	MESSAGE(std::setprecision(10) << "137-block wall: " << Got.State << " [" << Got.LoadFactorLower << ", " << Got.LoadFactorUpper << "] in " << Got.Iterations << ", contacts " << Wall.Contacts << ", " << SecondsSince(Start) << " s");
+	CHECK(Got.State == CertificateState::Stands);
+	CHECK(Got.LoadFactorLower >= 2.7140);
+	CHECK(Got.LoadFactorLower <= 2.7147);
+	CHECK(Got.LoadFactorUpper < CertificateOptions{}.LoadFactorCap);
 }
 
 namespace
@@ -418,7 +434,7 @@ TEST_CASE("Certificate.Solver.ALightBlockOnAHeavyOneReadsItsAnalyticLimit")
 	for (const double HalfM : {0.005, 0.5})
 	{
 		const double OverlapFraction = HalfM < 0.1 ? 1.0 : 0.9;
-		for (const double Ratio : {1.0, 1.0e2, 1.0e4, 1.0e5, 1.0e6, 1.0e7, 1.0e8, 1.0e10})
+		for (const double Ratio : {1.0, 1.0e2, 1.0e4, 1.0e5, 1.0e6, 1.0e7, 1.0e8, 1.0e10, 1.0e11, 1.0e12})
 		{
 			const double LightKg = HeavyKg / Ratio;
 			const double LightWeightN = LightKg * GravityMPerS2;
@@ -458,7 +474,7 @@ TEST_CASE("Certificate.Solver.ALightBlockOnAHeavyOneReadsItsAnalyticLimit")
 			}
 		}
 	}
-	CHECK(Rows == 64);
+	CHECK(Rows == 80);
 	MESSAGE("light block table: " << SecondsSince(Start) << " s");
 }
 
@@ -537,7 +553,7 @@ TEST_CASE("Slow.Certificate.Selection.TheForaboschiWallPastItsLimitNamesItsMecha
 	CHECK(HasBody(Past.UnconstrainedBodies, Wall.Beam));
 	CHECK(!Past.HingingInterfaces.empty());
 }
-TEST_CASE("Deferred.Certificate.Anchor.ForaboschiWallWithCrushingBracketsThePaperModel")
+TEST_CASE("Slow.Certificate.Anchor.ForaboschiWallWithCrushingBracketsThePaperModel")
 {
 	struct Case
 	{

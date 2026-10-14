@@ -32,9 +32,9 @@ stacks, Paterson–Zwick, Couplet–Heyman at Milankovitch's 0.107478 with hinge
 the certificate's associative 31.07°, the cascade on the arch below least thickness, the dry
 wall at t / H within 1 % (10 × 8 and 4 × 5), the bonded 4 × 5 wall at its monolith factor
 `(t/H)(1 + f_t A_base / W) = 2.971` to 1 %, two screws at twice their published shear and
-withdrawal whatever the joint area. Default suite 390 cases in Debug and 427 in Release after
+withdrawal whatever the joint area. Default suite 390 cases in Debug and 431 in Release after
 slice 2b and the cohesive-wedge check (325 and 347 at the 6b close) (the arch, pile, arch-cascade, fuzz, small-wall and multi-panel factor anchors
-run only in Release under `LOADPATH_SLOW_IN_DEBUG`; eighteen `Slow.*` cases run in Release at
+run only in Release under `LOADPATH_SLOW_IN_DEBUG`; twenty `Slow.*` cases run in Release at
 every slice close, and the
 cheap `Measure.Scale.*` rows after them); the `Deferred.*` tier holds the physical wedge pin
 (it belonged to slice 7, which the owner dropped on 2026-10-12; the pin stays as the record of
@@ -360,39 +360,27 @@ the non-associative answer) and the two hanging-component cases (slice 6), red b
   on coupling-dominated components would be 1e-8 to 1e-6 of the site diagonal; the selection LP's single 1e-12 retry failed rocking walls past their limit, fixed (DESIGN §10
   "the selection LP's retry"; `Certificate.Selection.ARockingWallPastItsLimitNamesItsMechanism`);
   the selection corrector takes 3 refinement passes (DESIGN §10 "the modified Cholesky
-  (cold-review rulings: reverted)"); left: the selection has no stall rule; a body under about
-  1e-10 of its component's load scale passes the equilibrium tolerance unsolved (a light block on
-  a heavy one reads a wrong Stands from mass ratios of about 1e11; written into API.md, fail open
-  at scales no debris reaches); **the next certificate item: the normal matrix loses conditioning
-  near an interior optimum** (t* strictly inside (0, cap)): on the dense path a few loads in
-  thousands stall (the 46-block bond wall at 80 kN / 47,150 N,
-  `Deferred.Certificate.Solver.TheFortySixBlockWallDecidesAtAnIsolatedStallLoad`), and on the sparse
-  bordered path, whose site block alone is singular along the mechanism, a few percent of loads
-  stall and read Undecided [0, cap] (5 in 101 on a 1 N grid
-  at 40 kN, 13 in 261 at 80 kN on the Foraboschi wall with f_c 1.21 MPa; the 137-block bond wall
-  2.08 m by 16 courses at 80 kN / 43,000 N is a sparse fixture whose dense answer is Stands
-  [2.71462858, 2.72715935]); a designed fix is a stable treatment of the dense load-factor column
-  (a product-form factor or an explicit deflation of the collapse mechanism); measured and not
-  adopted: a primal clean-up at the stall with a dense re-solve (decides all 24, about 30 s each),
-  and a modified Cholesky on the dense factor (reverted: it cannot tell a stall direction from a
-  light body's rows, so a 2.4 g pebble undid decided verdicts and a light block read a wrong Stands;
-  the guards `Certificate.Solver.APebbleOnTheBeamChangesNoVerdict` and
-  `Certificate.Solver.ALightBlockOnAHeavyOneReadsItsAnalyticLimit` now pin plain behaviour);
-  the dense selection takes 20 to 27 s on the full wall; the hinging list
-  wanders between 17 and 33 joints on the 57-body wall; `FactorSelection`'s local `bShifted` is
-  unused and `FactorBordered` keeps a third copy of the escalation loop. The Foraboschi fixture's limits at 80 and 140 kN with infinite
-  crushing (50.3 and 83.6 kN) sat 25 to 47 % above Portioli's model; with the paper's f_c 1.21 MPa
-  the certificate's limits are about 25.0, 40.0 and 57.1 kN at 40, 80 and 140 kN, 4.6, 0.5 and
-  2.3 % above the model's 23.9, 39.8 and 55.8 kN (2026-10-13), so the gap was the missing crushing
-  cap, not the fixture; `Deferred.Certificate.Anchor.ForaboschiWallWithCrushingBracketsThePaperModel`
-  pins Stands at the model values and Collapses about 8 % past each limit, and is RED at 40 kN only:
-  an isolated repeatable stall, Undecided [0, 1000] in 114 iterations at exactly 23,900 N (load
-  factor about 1.27; 23,875, 23,901 and 23,925 N stand in about 60), with more at 25,046 N
-  (40 kN) and a pocket at 48,125 to 48,350 N (80 kN, about 20 % past the limit, neighbours
-  Collapses): sparse-path stalls, still red after the modified Cholesky (it waits on the sparse
-  conditioning item above); the 80 kN Stands point has only 0.5 % margin; the Ferris & Tin-Loi
-  wall at G = 64 reads Undecided within about 1e-6 of its threshold (written into API.md as a
-  resolution limit, fail closed); the shed's certificate is about 10 % slower (4.6 to 5.0 s).
+  (cold-review rulings: reverted)"); left: the selection has no stall rule. The certificate's
+  conditioning near an interior optimum is fixed (2026-10-13, DESIGN §10 "the certificate's
+  conditioning near an interior optimum"): a rigorous dual bound at every cone-solve exit, a capped
+  re-solve on an inscribed stall, `t_out = min(cap, U)` on a circumscribed stall, a scaled start
+  for bodies under 1e-6 of the load scale, `CertificateOptions::bStallRecovery`; the 46-block and
+  137-block walls, the Foraboschi crushing anchor at 23,900 N and the light-block table at mass
+  ratios 1e11 and 1e12 now decide. Left from it: the per-solve dual bound has no test seam, so the
+  bound's rounding allowance is unguarded (removing the γ terms keeps every test green) and the
+  property `Certificate.Solver.TheDualBoundBracketsEveryConvergedLoadFactor` stands in for
+  (bound ≥ converged t, ≤ t (1 + 1e-6)) is unwritten; the margin policy's cost (the probe saw the
+  1e-5 re-solve stall on 2 of 10 fallbacks, 16 to 50 s, before 1e-3 converged); mechanism
+  deflation was not prototyped; the Ferris & Tin-Loi wall at G = 64 within about 1e-6 of its
+  threshold (API.md's threshold resolution limit) was not re-measured under stall recovery, so
+  that sentence may now be stale. The dense selection takes 20 to 27 s on the full wall; the
+  hinging list wanders between 17 and 33 joints on the 57-body wall; `FactorSelection`'s local
+  `bShifted` is unused and `FactorBordered` keeps a third copy of the escalation loop. The
+  Foraboschi fixture's limits with the paper's f_c 1.21 MPa are about 25.0, 40.0 and 57.1 kN at
+  40, 80 and 140 kN, 4.6, 0.5 and 2.3 % above Portioli's model (23.9, 39.8 and 55.8 kN);
+  `Slow.Certificate.Anchor.ForaboschiWallWithCrushingBracketsThePaperModel` pins Stands at the
+  model values and Collapses about 8 % past each limit; the 80 kN Stands point has only 0.5 %
+  margin.
 - B-WDG-01, the 3DEC tetrahedral wedge: the certificate pins its own associative switch at
   31.07 deg (`Certificate.Anchor.ItascaWedgeSlidesBelowItsAssociativeCriticalFrictionAngle`,
   G = 64, reads 31.080); the physical value is 33.36 deg, and between 31.1 and 33.4 deg the

@@ -441,7 +441,10 @@ TEST_CASE("Certificate.Mechanics.StandsSurvivesAnOuterSolveThatDoesNotConverge")
 	CHECK(Result.State == CertificateState::Stands);
 	CHECK(Result.LoadFactorLower >= 1.0);
 	CHECK(std::abs(Result.LoadFactorLower - Full.LoadFactorLower) <= LoadFactorRelative * Full.LoadFactorLower);
-	CHECK(Result.LoadFactorUpper == Limited.LoadFactorCap);
+	CHECK(Result.LoadFactorUpper < Limited.LoadFactorCap);
+	CHECK(Result.LoadFactorUpper >= Full.LoadFactorUpper);
+	CHECK(Result.LoadFactorUpper <= Full.LoadFactorUpper * (1.0 + 1.0e-6));
+	CHECK(std::abs(Full.LoadFactorUpper - 7.71542823) <= 1.0e-8 * 7.71542823);
 	CHECK(Result.Mechanism.empty());
 }
 

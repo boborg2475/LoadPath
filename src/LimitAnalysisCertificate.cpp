@@ -31,6 +31,10 @@ constexpr double ComplementarityRestart = 0.5;
 constexpr double UnconstrainedComponent = 1.0e-3;
 constexpr double ObjectiveNorm = 1.0;
 constexpr double Unbounded = std::numeric_limits<double>::infinity();
+constexpr double UnitRoundoff = std::numeric_limits<double>::epsilon() / 2.0;
+constexpr double LightBodyLoad = 1.0e-6;
+constexpr std::array<double, 2> RecoveryMargins{1.0e-5, 1.0e-3};
+constexpr double AtCapRelative = 1.0e-6;
 
 struct Site
 {
@@ -179,6 +183,8 @@ struct Outcome
 	double LoadFactor = 0.0;
 	Eigen::VectorXd Y;
 	int Iterations = 0;
+	double DualBound = Unbounded;
+	Eigen::VectorXd LastY;
 };
 
 struct ComponentVerdict
@@ -964,7 +970,21 @@ Eigen::VectorXd SolveNormal(const Component& C, const Program& P, const Normal& 
 	return Y;
 }
 
-Embedding StartingPoint(const Program& P)
+double OwnLoad(const Component& C, int Offset)
+{
+	if (Offset < 0)
+	{
+		return 0.0;
+	}
+	double Largest = 0.0;
+	for (int R = 0; R < DofPerBody; ++R)
+	{
+		Largest = std::max(Largest, std::abs(C.Demand.data()[Offset + R]));
+	}
+	return Largest;
+}
+
+Embedding StartingPoint(const Component& C, const Program& P)
 {
 	Embedding E;
 	E.X = Eigen::VectorXd::Zero(P.Variables);
@@ -972,7 +992,16 @@ Embedding StartingPoint(const Program& P)
 	for (std::size_t G = 0; G < P.Groups.size(); ++G)
 	{
 		const Group& Gr = P.Groups[G];
-		const double Start = std::min(1.0, Gr.Bound / (2.0 * static_cast<double>(Gr.Count)));
+		double Start = std::min(1.0, Gr.Bound / (2.0 * static_cast<double>(Gr.Count)));
+		const Site& S = C.Sites[Gr.SiteIndex];
+		for (const int Offset : {S.OffsetA, S.OffsetB})
+		{
+			const double Load = OwnLoad(C, Offset);
+			if (Load > 0.0 && Load < LightBodyLoad)
+			{
+				Start = std::min(Start, Load);
+			}
+		}
 		for (std::size_t J = Gr.First; J < Gr.First + Gr.Count; ++J)
 		{
 			X[J] = Start;
@@ -1271,11 +1300,142 @@ void Advance(Embedding& E, const Direction& Dir, double Step)
 	E.Kappa += Step * Dir.Kappa;
 }
 
+double Gamma(double Count)
+{
+	const double Product = Count * UnitRoundoff;
+	return Product / (1.0 - Product);
+}
+
+Vec3 AbsPointVelocity(const double* Y, int Offset, const Vec3& Arm)
+{
+	if (Offset < 0)
+	{
+		return Vec3{};
+	}
+	const double* Row = Y + Offset;
+	const double Wx = std::abs(Row[3]);
+	const double Wy = std::abs(Row[4]);
+	const double Wz = std::abs(Row[5]);
+	const double Ax = std::abs(Arm.X);
+	const double Ay = std::abs(Arm.Y);
+	const double Az = std::abs(Arm.Z);
+	return Vec3{std::abs(Row[0]) + Wy * Az + Wz * Ay, std::abs(Row[1]) + Wz * Ax + Wx * Az, std::abs(Row[2]) + Wx * Ay + Wy * Ax};
+}
+
+double AbsDot(const Vec3& A, const Vec3& B)
+{
+	return std::abs(A.X) * B.X + std::abs(A.Y) * B.Y + std::abs(A.Z) * B.Z;
+}
+
+Eigen::VectorXd ApplyAbsTranspose(const Component& C, const Program& P, const Eigen::VectorXd& Y)
+{
+	Eigen::VectorXd Out(P.Variables);
+	double* O = Out.data();
+	const Eigen::VectorXd Magnitude = Y.cwiseAbs();
+	const double* Duals = Magnitude.data();
+	for (std::size_t G = 0; G < P.Groups.size(); ++G)
+	{
+		const Group& Gr = P.Groups[G];
+		const Site& S = C.Sites[Gr.SiteIndex];
+		const Vec3 V = statics::Add(AbsPointVelocity(Duals, S.OffsetA, S.ArmA), AbsPointVelocity(Duals, S.OffsetB, S.ArmB));
+		const double GroupDual = Duals[P.FirstGroupRow + static_cast<Eigen::Index>(G)];
+		for (std::size_t J = Gr.First; J < Gr.First + Gr.Count; ++J)
+		{
+			O[J] = AbsDot(P.Directions[J], V) + GroupDual;
+		}
+		O[P.FirstSlack + static_cast<Eigen::Index>(G)] = GroupDual;
+	}
+	double DemandSum = 0.0;
+	for (int R = 0; R < C.Rows; ++R)
+	{
+		DemandSum += std::abs(C.Demand.data()[R]) * Duals[R];
+	}
+	O[P.LoadFactor] = DemandSum + Duals[P.CapRow] + ObjectiveNorm;
+	O[P.CapSlack] = Duals[P.CapRow];
+	for (const CapSite& Cap : P.CapSites)
+	{
+		Vec3 Facet;
+		for (std::size_t K = 0; K < Cap.Facets.size(); ++K)
+		{
+			const Eigen::Index Offset = static_cast<Eigen::Index>(K);
+			const Vec3& F = Cap.Facets[K];
+			Facet = statics::Add(Facet, Scale(Duals[Cap.FirstRow + Offset], Vec3{std::abs(F.X), std::abs(F.Y), std::abs(F.Z)}));
+			O[Cap.FirstSlack + Offset] = Duals[Cap.FirstRow + Offset];
+		}
+		for (const std::size_t G : Cap.Groups)
+		{
+			const Group& Gr = P.Groups[G];
+			for (std::size_t J = Gr.First; J < Gr.First + Gr.Count; ++J)
+			{
+				O[J] += AbsDot(P.Directions[J], Facet);
+			}
+		}
+	}
+	return Out;
+}
+
+double RigorousDualBound(const Component& C, const Program& P, const Eigen::VectorXd& Bounds, const Embedding& E)
+{
+	if (!(E.Tau > 0.0))
+	{
+		return Unbounded;
+	}
+	const Eigen::VectorXd Y = E.Y / E.Tau;
+	Eigen::VectorXd R = ApplyTranspose(C, P, Y);
+	R.data()[P.LoadFactor] += ObjectiveNorm;
+	const Eigen::VectorXd Allowance = ApplyAbsTranspose(C, P, Y);
+	std::size_t MostFacets = 0;
+	for (const CapSite& Cap : P.CapSites)
+	{
+		MostFacets = std::max(MostFacets, Cap.Facets.size());
+	}
+	const double ColumnGamma = Gamma(static_cast<double>(2 * DofPerBody + 2 + static_cast<int>(MostFacets)));
+	const double LoadFactorGamma = Gamma(static_cast<double>(C.Rows + 2));
+	double Upper = 0.0;
+	double Magnitude = 0.0;
+	for (Eigen::Index Row = 0; Row < P.RowCount; ++Row)
+	{
+		Upper -= Bounds.data()[Row] * Y.data()[Row];
+		Magnitude += std::abs(Bounds.data()[Row] * Y.data()[Row]);
+	}
+	const auto Add = [&](Eigen::Index I, double Bound) {
+		const double Rounding = (I == P.LoadFactor ? LoadFactorGamma : ColumnGamma) * Allowance.data()[I];
+		const double Excess = std::max(0.0, R.data()[I] + Rounding);
+		Upper += Excess * Bound;
+		Magnitude += Excess * Bound;
+	};
+	for (std::size_t G = 0; G < P.Groups.size(); ++G)
+	{
+		const Group& Gr = P.Groups[G];
+		for (std::size_t J = Gr.First; J < Gr.First + Gr.Count; ++J)
+		{
+			Add(static_cast<Eigen::Index>(J), Gr.Bound);
+		}
+		Add(P.FirstSlack + static_cast<Eigen::Index>(G), Gr.Bound);
+	}
+	Add(P.LoadFactor, P.Cap);
+	Add(P.CapSlack, P.Cap);
+	for (const CapSite& Cap : P.CapSites)
+	{
+		double Reach = Cap.Bound;
+		for (const std::size_t G : Cap.Groups)
+		{
+			Reach += 2.0 * P.Groups[G].Bound;
+		}
+		for (std::size_t K = 0; K < Cap.Facets.size(); ++K)
+		{
+			Add(Cap.FirstSlack + static_cast<Eigen::Index>(K), Reach);
+		}
+	}
+	Upper += Gamma(static_cast<double>(P.RowCount + P.Variables + 1)) * Magnitude;
+	return IsFinite(Upper) ? Upper : Unbounded;
+}
+
 Outcome SolveProgram(const Component& C, const Program& P, const CertificateOptions& Options)
 {
 	Outcome Out;
 	const Eigen::VectorXd Bounds = RowBounds(C, P);
-	Embedding E = StartingPoint(P);
+	Embedding E = StartingPoint(C, P);
 	const double PairCount = static_cast<double>(P.Variables + 1);
 	SparseNormal Sparse;
 	const bool bSparse = C.Rows > Options.DenseRowLimit;
@@ -1283,6 +1443,14 @@ Outcome SolveProgram(const Component& C, const Program& P, const CertificateOpti
 	double WindowBest = 0.0;
 	double WindowMu = 0.0;
 	int WindowStart = 0;
+	const auto Finish = [&]() {
+		Out.DualBound = RigorousDualBound(C, P, Bounds, E);
+		if (E.Tau > 0.0)
+		{
+			Out.LastY = E.Y.head(C.Rows) / E.Tau;
+		}
+		return Out;
+	};
 	for (int Iteration = 0;; ++Iteration)
 	{
 		const Residuals R = ComputeResiduals(C, P, E, Bounds);
@@ -1292,18 +1460,18 @@ Outcome SolveProgram(const Component& C, const Program& P, const CertificateOpti
 		Out.Iterations = Iteration;
 		if (!bFinite)
 		{
-			return Out;
+			return Finish();
 		}
 		if (bConverged)
 		{
 			Out.bConverged = true;
 			Out.LoadFactor = E.X.data()[P.LoadFactor] / E.Tau;
 			Out.Y = E.Y.head(C.Rows) / E.Tau;
-			return Out;
+			return Finish();
 		}
 		if (Iteration >= Options.MaxIterations)
 		{
-			return Out;
+			return Finish();
 		}
 		const double Mu = Complementarity(E) / PairCount;
 		if (Iteration == 0 || Largest < Options.StallImprovement * WindowBest || Mu < ComplementarityRestart * WindowMu)
@@ -1314,7 +1482,7 @@ Outcome SolveProgram(const Component& C, const Program& P, const CertificateOpti
 		}
 		else if (Options.StallWindow > 0 && Iteration - WindowStart >= Options.StallWindow)
 		{
-			return Out;
+			return Finish();
 		}
 		N.Sparse = bSparse ? &Sparse : nullptr;
 		N.bShifted = false;
@@ -1325,7 +1493,7 @@ Outcome SolveProgram(const Component& C, const Program& P, const CertificateOpti
 		}
 		if (!FactorNormal(C, P, N))
 		{
-			return Out;
+			return Finish();
 		}
 		NewtonContext Ctx;
 		Ctx.C = &C;
@@ -1823,8 +1991,24 @@ ComponentVerdict DecideComponent(const Component& C, const CertificateOptions& O
 		return V;
 	}
 	const Program InnerProgram = BuildProgram(C, Options.ConeGenerators, 1.0, Options.LoadFactorCap, true);
-	const Outcome Inner = SolveProgram(C, InnerProgram, Options);
+	Outcome Inner = SolveProgram(C, InnerProgram, Options);
 	V.Iterations = Inner.Iterations;
+	if (!Inner.bConverged && Options.bStallRecovery && Inner.DualBound > 0.0 && Inner.DualBound < Options.LoadFactorCap)
+	{
+		for (const double Margin : RecoveryMargins)
+		{
+			const double CappedAt = Inner.DualBound * (1.0 - Margin);
+			const Outcome Capped = SolveProgram(C, BuildProgram(C, Options.ConeGenerators, 1.0, CappedAt, true), Options);
+			V.Iterations = std::max(V.Iterations, Capped.Iterations);
+			if (Capped.bConverged)
+			{
+				Inner.bConverged = true;
+				Inner.LoadFactor = Capped.LoadFactor;
+				Inner.Y = Capped.LoadFactor >= CappedAt * (1.0 - AtCapRelative) ? Inner.LastY : Capped.Y;
+				break;
+			}
+		}
+	}
 	if (!Inner.bConverged)
 	{
 		return V;
@@ -1838,6 +2022,10 @@ ComponentVerdict DecideComponent(const Component& C, const CertificateOptions& O
 		if (Outer.bConverged)
 		{
 			OuterLoadFactor = Outer.LoadFactor;
+		}
+		else if (Options.bStallRecovery && Outer.DualBound < Options.LoadFactorCap)
+		{
+			OuterLoadFactor = Outer.DualBound;
 		}
 		else if (!(Inner.LoadFactor >= 1.0))
 		{

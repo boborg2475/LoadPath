@@ -507,6 +507,7 @@ struct CertificateOptions {
 	double LoadFactorCap = 1.0e3;          // the LP's upper bound on t; reaching it means "stands with margin >= cap"
 	double FeasibilityTolerance = 1.0e-9;  // relative, on the equilibrium residual, dual residual and gap
 	int    MaxIterations = 200;            // interior-point iterations per solve before it is declared failed
+	bool   bStallRecovery = true;          // on a stalled or failed cone solve, bound t by the rigorous dual bound and re-solve under it
 };
 
 struct CertificateResult {
@@ -582,11 +583,11 @@ has no interior); Eigen LLT; on a failed pivot the diagonal is shifted by `1e-16
 the largest diagonal (coupling term included, dense and bordered alike) until the pivots are
 positive, a failure at `1e-12` reading Undecided; one iterative-refinement pass on the corrector,
 or 20 on both the predictor and the corrector in an iteration whose factor was shifted (DESIGN
-§10, the interior-optimum defect); step 0.995 to the boundary; a feasible deterministic start (`α = min(1, bound/2G)`,
+§10, the interior-optimum defect); step 0.995 to the boundary; a feasible deterministic start (`α = min(1, bound/2G)`, lowered to the body's own load where a group touches a body whose largest normalised `|Demand|` is under 1e-6,
 `t = min(1, cap/2)`, complementarity products 1, duals 0, `τ = κ = 1`); termination when the
 primal residual (per block, term-size scaled), the dual residual (relative to
 `1 + max(1, |s|, |Aᵀy|)`) and the gap `xᵀs/τ²` are all under `FeasibilityTolerance`. Any
-non-finite value or the iteration cap marks that solve failed. Deterministic: ordered assembly,
+non-finite value or the iteration cap marks that solve failed. Every cone solve, converged or not, also returns a **rigorous dual bound** on its optimum: with `ŷ = y/τ` and `r = Aᵀŷ + e_t`, `U = −bᵀŷ + Σᵢ ubᵢ max(0, rᵢ + γₖ (|A|ᵀ|ŷ| + |c|)ᵢ)` over the box every variable has (a group's forces and slack by its bound, `t` and the cap slack by the cap, a cap site's facet slacks by its bound plus twice its groups' bounds), weak duality for a box-bounded LP valid for any `ŷ` (Neumaier & Shcherbina 2004); `γₖ = k u / (1 − k u)` with `u` the unit roundoff and `k` the column length (`6 × free bodies + 2` for `t`, `14 + facets` for the rest), plus `γ` over the bound's own sum. **Stall recovery** (`bStallRecovery`, DESIGN §10): an inscribed solve that stalls or fails with `0 < U < cap` is re-solved with the cap at `U (1 − 1e-5)`, then `U (1 − 1e-3)`; the first that converges gives `t_in` (its duals give the mechanism unless it reached that cap, when the stalled solve's last duals do), and if neither converges the component reads Undecided; a circumscribed solve that does not converge gives `t_out = min(cap, U)`. Each re-solve is its own solve for `Iterations`. Deterministic: ordered assembly,
 no threads, Eigen storage and factorisation only. The circumscribed solve is skipped when the
 inscribed one reaches the cap; `t_out` is clamped to at least `t_in` (exact, every inscribed
 set sits inside its circumscribed one). `t_out` is today the converged primal value; the ruling
@@ -594,7 +595,7 @@ that it should be the circumscribed **dual objective** `bᵀy / τ` (an upper bo
 feasibility) is **open**, logged in CURRENT_STATE; the two agree within the 1e-9 termination gap, so the reported bound can sit on the unsafe side only by that much.
 
 **State.** `Stands` when `t_in ≥ 1` (whatever the circumscribed solve did: if it failed,
-`LoadFactorUpper = LoadFactorCap`); `Collapses` when `t_out < 1`; `Undecided` when
+`LoadFactorUpper = min(LoadFactorCap, U)`, or the cap with recovery off); `Collapses` when `t_out < 1`; `Undecided` when
 `t_in < 1 ≤ t_out` (the polygon band, narrowed by raising `ConeGenerators`; on a cone-vertex
 direction a slide flips Stands → Undecided at `μ` and Undecided → Collapses at `μ / cos(π/G)`,
 on a mid-edge direction at `μ cos(π/G)` and `μ`), when the inscribed solve failed, or when the
@@ -641,12 +642,7 @@ the tests pin only that the top block is named. The cone solves have a **thresho
 limit** too: within about 1e-6 relative of a load factor where the admissible set empties, the
 inscribed solve can stall with its primal residual near 1e-4 and the component reads Undecided
 [0, cap] (the Ferris & Tin-Loi wall at G = 64, λ 9/14 + 1e-6, while G = 16 stands); fail closed.
-Near an interior optimum (`t*` strictly inside `(0, cap)`), a few loads in thousands on the
-dense path and a few percent on the sparse path stall and read Undecided [0, cap] (the normal
-matrix loses conditioning along the collapse mechanism; DESIGN §10); fail closed. A **light-body
-resolution limit**: a body under about 1e-10 of its component's load scale passes the
-equilibrium tolerance unsolved, so a light block on a heavy one reads a wrong Stands from mass
-ratios of about 1e11 (a fail-open limit at scales no physical debris reaches).
+Near an interior optimum (`t*` strictly inside `(0, cap)`) a solve can stall with only its primal residual floored; stall recovery decides it (DESIGN §10).
 **Listing
 threshold (ruled 2026-10-11 after the third review):** a body is unconstrained when the largest
 of its six scaled components exceeds 1e-3 of the component's largest, and an interface hinges

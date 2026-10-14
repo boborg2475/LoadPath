@@ -211,6 +211,7 @@ constexpr double HalfWarehouseWallRelative = 1.0e-6;
 constexpr int HalfWarehouseWallIterationCeiling = 69;
 constexpr double UnreachableTolerance = 1.0e-15;
 constexpr int StalledWallFiringIteration = 69;
+constexpr int FailedResolveIterations = 30;
 }
 
 TEST_CASE("Slow.Certificate.Stall.TheHalfWarehouseWallConvergesUnderTheRule")
@@ -238,6 +239,7 @@ TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Certificate.Stall.ANeverConvergingSolveStopsBe
 	RequireTheStallRuleExists();
 	CertificateOptions Options = CertificateLateral(0.4);
 	Options.FeasibilityTolerance = UnreachableTolerance;
+	Options.bStallRecovery = false;
 	const Structure Model = Ec6Wall(4, 4);
 	const CertificateResult Off = DecideWith(Model, WithStallWindow(Options, 0));
 	const CertificateResult On = DecideWith(Model, Options);
@@ -315,6 +317,7 @@ TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Certificate.Stall.TheDefaultWindowLeavesConver
 	CHECK(CertificateOptions{}.StallWindow == 20);
 	CertificateOptions Options = CertificateLateral(0.4);
 	Options.FeasibilityTolerance = UnreachableTolerance;
+	Options.bStallRecovery = false;
 	const CertificateResult Got = DecideWith(Ec6Wall(4, 4), Options);
 	INFO("ec6 4 x 4 wall at lateral 0.4, tolerance 1e-15, default options: " << Got.State << " in " << Got.Iterations);
 	CHECK(Got.State == CertificateState::Undecided);
@@ -326,6 +329,7 @@ TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Certificate.Stall.TheWindowFiresExactlyItsLeng
 	RequireTheStallRuleExists();
 	CertificateOptions Options = CertificateLateral(0.4);
 	Options.FeasibilityTolerance = UnreachableTolerance;
+	Options.bStallRecovery = false;
 	const Structure Model = Ec6Wall(4, 4);
 	const CertificateResult Twenty = DecideWith(Model, WithStallWindow(Options, 20));
 	const CertificateResult TwentyOne = DecideWith(Model, WithStallWindow(Options, 21));
@@ -341,6 +345,7 @@ TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Certificate.Stall.ImprovementMustBeByTheFactor
 	RequireTheStallRuleExists();
 	CertificateOptions Options = CertificateLateral(0.4);
 	Options.FeasibilityTolerance = UnreachableTolerance;
+	Options.bStallRecovery = false;
 	const Structure Model = Ec6Wall(4, 4);
 	const CertificateResult Default = DecideWith(Model, WithStallWindow(Options, 3));
 	const CertificateResult Strict = DecideWith(Model, WithStall(Options, 3, 1.0e-6));
@@ -349,4 +354,59 @@ TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Certificate.Stall.ImprovementMustBeByTheFactor
 	CHECK(Default.Iterations == 7);
 	CHECK(Strict.State == CertificateState::Undecided);
 	CHECK(Strict.Iterations == 6);
+}
+
+TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Certificate.Stall.WithRecoveryTheStalledWallStands")
+{
+	CertificateOptions Options = CertificateLateral(0.4);
+	Options.FeasibilityTolerance = UnreachableTolerance;
+	CHECK(Options.bStallRecovery);
+	const CertificateResult Got = DecideWith(Ec6Wall(4, 4), Options);
+	INFO(std::setprecision(17) << "ec6 4 x 4 wall at lateral 0.4, tolerance 1e-15, recovery on: " << Got.State << " in " << Got.Iterations << " [" << Got.LoadFactorLower << ", " << Got.LoadFactorUpper << "]");
+	CHECK(Got.State == CertificateState::Stands);
+	CHECK(Near(Got.LoadFactorLower, 625.07665742313804, 1.0e-3, 0.0));
+	CHECK(Got.LoadFactorLower <= 625.07665742313804 * (1.0 + 1.0e-9));
+	CHECK(Near(Got.LoadFactorUpper, 637.32263311103361, 1.0e-3, 0.0));
+	CHECK(Got.LoadFactorUpper >= 637.32263311103361 * (1.0 - 1.0e-9));
+	CHECK(Got.Iterations <= Options.MaxIterations);
+}
+
+TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Certificate.Stall.AFailedCappedResolveStaysUndecided")
+{
+	CertificateOptions Options = CertificateLateral(0.4);
+	Options.FeasibilityTolerance = UnreachableTolerance;
+	Options.MaxIterations = FailedResolveIterations;
+	CHECK(Options.bStallRecovery);
+	const CertificateResult Got = DecideWith(Ec6Wall(4, 4), Options);
+	INFO(std::setprecision(17) << "ec6 4 x 4 wall at lateral 0.4, tolerance 1e-15, MaxIterations " << Options.MaxIterations << ", recovery on: " << Got.State << " in " << Got.Iterations << " [" << Got.LoadFactorLower << ", " << Got.LoadFactorUpper << "]");
+	MESSAGE(std::setprecision(17) << "failed capped re-solve fixture: " << Got.State << " in " << Got.Iterations << " [" << Got.LoadFactorLower << ", " << Got.LoadFactorUpper << "]");
+	CHECK(Got.State == CertificateState::Undecided);
+	CHECK(Got.Iterations <= Options.MaxIterations);
+}
+
+TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Certificate.Solver.TheDualBoundBracketsEveryConvergedLoadFactor")
+{
+	int Components = 0;
+	int Mismatches = 0;
+	for (const NamedCase& C : AgreementCases())
+	{
+		CertificateOptions Off = C.Options;
+		Off.bStallRecovery = false;
+		const CertificateResult With = DecideWith(C.Model, C.Options);
+		const CertificateResult Without = DecideWith(C.Model, Off);
+		REQUIRE(With.Components.size() == Without.Components.size());
+		for (std::size_t Index = 0; Index < With.Components.size(); ++Index)
+		{
+			const CertificateComponent& A = With.Components[Index];
+			const CertificateComponent& B = Without.Components[Index];
+			const bool bSame = A.State == B.State && A.Iterations == B.Iterations && A.LoadFactorLower == B.LoadFactorLower && A.LoadFactorUpper == B.LoadFactorUpper;
+			INFO(std::setprecision(17) << C.Name << " component " << Index << ": recovery on " << A.State << " in " << A.Iterations << " [" << A.LoadFactorLower << ", " << A.LoadFactorUpper << "], off " << B.State << " in " << B.Iterations << " [" << B.LoadFactorLower << ", " << B.LoadFactorUpper << "]");
+			CHECK(bSame);
+			Mismatches += bSame ? 0 : 1;
+			++Components;
+		}
+	}
+	MESSAGE(Components << " components, " << Mismatches << " mismatches");
+	CHECK(Components > 0);
+	CHECK(Mismatches == 0);
 }

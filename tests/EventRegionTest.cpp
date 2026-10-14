@@ -1023,6 +1023,7 @@ TEST_CASE("Authority.Judge.DifferentOptionsReuseNothing")
 	Add("Certificate.DenseRowLimit 6", [](AuthorityOptions& O) { O.Certificate.DenseRowLimit = 6; });
 	Add("Certificate.StallWindow 11", [](AuthorityOptions& O) { O.Certificate.StallWindow = 11; });
 	Add("Certificate.StallImprovement 0.4", [](AuthorityOptions& O) { O.Certificate.StallImprovement = 0.4; });
+	Add("Certificate.bStallRecovery false", [](AuthorityOptions& O) { O.Certificate.bStallRecovery = false; });
 	for (const auto& [Name, Options] : Variants)
 	{
 		INFO("options differing in " << std::string(Name));
