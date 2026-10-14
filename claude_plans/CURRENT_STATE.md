@@ -32,9 +32,9 @@ stacks, Paterson–Zwick, Couplet–Heyman at Milankovitch's 0.107478 with hinge
 the certificate's associative 31.07°, the cascade on the arch below least thickness, the dry
 wall at t / H within 1 % (10 × 8 and 4 × 5), the bonded 4 × 5 wall at its monolith factor
 `(t/H)(1 + f_t A_base / W) = 2.971` to 1 %, two screws at twice their published shear and
-withdrawal whatever the joint area. Default suite 394 cases in Debug and 440 in Release as of
+withdrawal whatever the joint area. Default suite 397 cases in Debug and 445 in Release as of
 2026-10-14 (325 and 347 at the 6b close) (the arch, pile, arch-cascade, fuzz, small-wall and multi-panel factor anchors
-run only in Release under `LOADPATH_SLOW_IN_DEBUG`; twenty `Slow.*` cases run in Release at
+run only in Release under `LOADPATH_SLOW_IN_DEBUG`; twenty-one `Slow.*` cases run in Release at
 every slice close, and the
 cheap `Measure.Scale.*` rows after them); the `Deferred.*` tier holds the physical wedge pin
 (it belonged to slice 7, which the owner dropped on 2026-10-12; the pin stays as the record of
@@ -372,28 +372,22 @@ the non-associative answer) and the two hanging-component cases (slice 6), red b
   ratios 1e11 and 1e12 now decide; its cold review's two bound holes (the facet box under μ > 2,
   an overflowed column dropped) are fixed and guarded through `src/CertificateProbe.h` (DESIGN §10,
   the conditioning's cold-review rulings). Left from it: the γ rounding allowance is unguarded
-  (dropping it moves U by about 1e-17); the boxes' own rounding is not allowed for (a computed
+  (dropping it moves U by about 1e-17 near interior-point duals, but by up to 3.5e-7 at vertex
+  duals on dry joints' large boxes; computing it at the unpolished duals while evaluating the
+  polished ones survives every test, being rounding-level); the boxes' own rounding is not allowed for (a computed
   |f · d| errs by up to γ₃|f||d|, the whole value at small μ; about 1e-13 relative in U; fix:
   inflate each box by (1 + γ) plus γ₃ B |d| per group); which duals give the mechanism after a
   capped re-solve (the re-solve's, or the stalled solve's last when the re-solve reached its cap)
   is unguarded: the 46-block wall at 47,150 N takes the at-cap branch and the choices differ by
   0.227 in normalised motion, but its lists are identical, so a pin must assert the mechanism (a
   virtual-work check that its kinematic multiplier equals t_in is the principled form; nearby
-  loads' mechanisms differ by 0.21, so a neighbour is no reference); a lasting oracle for the
-  boxes (the LP with `ColumnBoxes` imposed keeps the optimum, through an (A, b, boxes) export and
-  a small bounded simplex in test support) is not written; the seeded box draws carry no cohesion
+  loads' mechanisms differ by 0.21, so a neighbour is no reference); the seeded box draws carry no cohesion
   or tension (only the bolted block covers a cohesion group's facet term); when U is loose by more than 1e-3 neither rung converges (the cohesive open-slide test stays
   Undecided; small `MaxIterations` costs about 3× in failed rungs); every solve now copies x and
   y at exit for the probe; the margin policy's cost (the probe saw the 1e-5 re-solve stall on 2
-  of 10 fallbacks, 16 to 50 s, before 1e-3 converged); mechanism deflation was not prototyped. The bound is polished (2026-10-14, DESIGN §10 "the dual-polish ruling"): left from it, `LoadFactorUpper` stays the primal (reporting min(cap, U_out) is blocked by the light block at mass ratio 1e8, U_out 7.54 against t 1.89, whose equilibrium duals no polish reaches); the two recovery stall fixtures are iteration-count knife edges (`SecondRungIterations` 29 decides on rung 2 but 30 decides on rung 1; `FailedResolveIterations` 23 sits in a 20 to 25 band), so any solver change may need them re-fixtured by sweep; a failed inner solve with U_out < 1 reads Undecided (candidate: read Collapses where t_in = 0 is admissible, unverified); from the polish's cold
-  review: the allowance recomputation at the polished duals and each `PolishGroupsAndCap` call are
-  unguarded (mutants survive), and the facet simplex's failure and Bland paths are never exercised
-  (1.4 million calls, at most 10 pivots); a bounded-LP oracle in test support (an
-  `ExportProgram` seam returning A, b and the boxes, a dense simplex, the bound at the simplex's
-  duals within [t*, t* + 1e-9] and under perturbation) and a facet-simplex seam with a 2 × 3 LP, an
-  infeasible row and a degenerate Beale instance would guard both; a recovery-margin seam would let
-  the stall fixtures pin each rung without iteration-count knife edges (margins {1e-13, 1e-3} make
-  rung 1 stall and rung 2 converge on the ec6 wall);
+  of 10 fallbacks, 16 to 50 s, before 1e-3 converged); mechanism deflation was not prototyped. The bound is polished (2026-10-14, DESIGN §10 "the dual-polish ruling"): left from it, `LoadFactorUpper` stays the primal (reporting min(cap, U_out) is blocked by the light block at mass ratio 1e8, U_out 7.54 against t 1.89, whose equilibrium duals no polish reaches); a failed inner solve with U_out < 1 reads Undecided (candidate: read Collapses where t_in = 0 is admissible, unverified); the bounded-LP oracle (tests/LpOracle.h, through `detail::ExportProgram`) skips the two
+  largest wall programs (over 500,000 entries; the dense oracle takes minutes there) and the
+  light-block family (it defeats the oracle at mass ratios of 1e7 and above);
   `Certificate.Mechanics.StandsSurvivesAnOuterSolveThatDoesNotConverge` asserts U at least a pinned
   primal 2e-9 below it, at solver tolerance 1e-9. A Collapses now needs the circumscribed dual bound below 1
   (2026-10-14, DESIGN §10 "does a Collapses mechanism prove its own collapse"); left from that

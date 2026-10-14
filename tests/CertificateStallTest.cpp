@@ -2,6 +2,7 @@
 #include "ArchFixtures.h"
 #include "BrickFixtures.h"
 #include "CatalogueTestSupport.h"
+#include "CertificateProbe.h"
 #include "CertificateTestSupport.h"
 #include "FactorTestSupport.h"
 #include "SlowInDebug.h"
@@ -211,8 +212,8 @@ constexpr double HalfWarehouseWallRelative = 1.0e-6;
 constexpr int HalfWarehouseWallIterationCeiling = 69;
 constexpr double UnreachableTolerance = 1.0e-15;
 constexpr int StalledWallFiringIteration = 69;
-constexpr int FailedResolveIterations = 23;
-constexpr int SecondRungIterations = 29;
+constexpr double AboveOptimumMargins[] = {1.0e-14, 1.0e-13};
+constexpr double SecondRungMargins[] = {1.0e-13, 1.0e-3};
 constexpr double SecondRungLower = 624.4515807676147;
 }
 
@@ -373,27 +374,24 @@ TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Certificate.Stall.WithRecoveryTheStalledWallSt
 	CHECK(Got.Iterations <= Options.MaxIterations);
 }
 
-TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Certificate.Stall.AFailedCappedResolveStaysUndecided")
+TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Certificate.Stall.BothRungsAboveTheOptimumStayUndecided")
 {
 	CertificateOptions Options = CertificateLateral(0.4);
 	Options.FeasibilityTolerance = UnreachableTolerance;
-	Options.MaxIterations = FailedResolveIterations;
 	CHECK(Options.bStallRecovery);
-	const CertificateResult Got = DecideWith(Ec6Wall(4, 4), Options);
-	INFO(std::setprecision(17) << "ec6 4 x 4 wall at lateral 0.4, tolerance 1e-15, MaxIterations " << Options.MaxIterations << ", recovery on: " << Got.State << " in " << Got.Iterations << " [" << Got.LoadFactorLower << ", " << Got.LoadFactorUpper << "]");
-	MESSAGE(std::setprecision(17) << "failed capped re-solve fixture: " << Got.State << " in " << Got.Iterations << " [" << Got.LoadFactorLower << ", " << Got.LoadFactorUpper << "]");
+	const CertificateResult Got = detail::DecideWithRecoveryMargins(Ec6Wall(4, 4), {}, Options, AboveOptimumMargins);
+	INFO(std::setprecision(17) << "ec6 4 x 4 wall at lateral 0.4, tolerance 1e-15, margins {1e-14, 1e-13}: " << Got.State << " in " << Got.Iterations << " [" << Got.LoadFactorLower << ", " << Got.LoadFactorUpper << "]");
 	CHECK(Got.State == CertificateState::Undecided);
 	CHECK(Got.Iterations <= Options.MaxIterations);
 }
 
-TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Certificate.Stall.TheSecondRungDecidesWhenTheFirstFails")
+TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Certificate.Stall.TheSecondRungDecidesWhenTheFirstIsAboveTheOptimum")
 {
 	CertificateOptions Options = CertificateLateral(0.4);
 	Options.FeasibilityTolerance = UnreachableTolerance;
-	Options.MaxIterations = SecondRungIterations;
 	CHECK(Options.bStallRecovery);
-	const CertificateResult Got = DecideWith(Ec6Wall(4, 4), Options);
-	INFO(std::setprecision(17) << "ec6 4 x 4 wall at lateral 0.4, tolerance 1e-15, MaxIterations " << Options.MaxIterations << ", recovery on: " << Got.State << " in " << Got.Iterations << " [" << Got.LoadFactorLower << ", " << Got.LoadFactorUpper << "]");
+	const CertificateResult Got = detail::DecideWithRecoveryMargins(Ec6Wall(4, 4), {}, Options, SecondRungMargins);
+	INFO(std::setprecision(17) << "ec6 4 x 4 wall at lateral 0.4, tolerance 1e-15, margins {1e-13, 1e-3}: " << Got.State << " in " << Got.Iterations << " [" << Got.LoadFactorLower << ", " << Got.LoadFactorUpper << "]");
 	CHECK(Got.State == CertificateState::Stands);
 	CHECK(Near(Got.LoadFactorLower, SecondRungLower, PinnedRelative, 0.0));
 	CHECK(Got.LoadFactorLower <= 625.07665742313804 * (1.0 + 1.0e-9));

@@ -1473,7 +1473,7 @@ void PolishGroupsAndCap(const Component& C, const Program& P, Eigen::VectorXd& Y
 	Y(P.CapRow) = -std::max(0.0, R(P.LoadFactor) + ObjectiveNorm);
 }
 
-bool FacetDualSimplex(const Eigen::VectorXd& Cost, const Eigen::MatrixXd& A, Eigen::VectorXd B, Eigen::VectorXd& X)
+bool FacetDualSimplex(const Eigen::VectorXd& Cost, const Eigen::MatrixXd& A, Eigen::VectorXd B, Eigen::VectorXd& X, int PivotLimit, int BlandAfter)
 {
 	const Eigen::Index M = A.rows();
 	const Eigen::Index N = A.cols();
@@ -1490,9 +1490,9 @@ bool FacetDualSimplex(const Eigen::VectorXd& Cost, const Eigen::MatrixXd& A, Eig
 	}
 	const double Tol = 1.0e-13 * (1.0 + (M > 0 ? B.cwiseAbs().maxCoeff() : 0.0));
 	bool bOptimal = false;
-	for (int Pivots = 0; Pivots < FacetPivotLimit; ++Pivots)
+	for (int Pivots = 0; Pivots < PivotLimit; ++Pivots)
 	{
-		const bool bBland = Pivots >= FacetBlandAfter;
+		const bool bBland = Pivots >= BlandAfter;
 		Eigen::Index Row = -1;
 		double Worst = -Tol;
 		for (Eigen::Index I = 0; I < M; ++I)
@@ -1558,7 +1558,7 @@ bool FacetDualSimplex(const Eigen::VectorXd& Cost, const Eigen::MatrixXd& A, Eig
 	return true;
 }
 
-void PolishFacets(const Component& C, const Program& P, Eigen::VectorXd& Y)
+void PolishFacets(const Component& C, const Program& P, Eigen::VectorXd& Y, int PivotLimit)
 {
 	const Eigen::VectorXd Boxes = ColumnBoxes(P);
 	Eigen::VectorXd Base = Y;
@@ -1608,7 +1608,7 @@ void PolishFacets(const Component& C, const Program& P, Eigen::VectorXd& Y)
 			}
 		}
 		Eigen::VectorXd X;
-		if (!FacetDualSimplex(Cost, A, B, X))
+		if (!FacetDualSimplex(Cost, A, B, X, PivotLimit, FacetBlandAfter))
 		{
 			continue;
 		}
@@ -1619,7 +1619,7 @@ void PolishFacets(const Component& C, const Program& P, Eigen::VectorXd& Y)
 	}
 }
 
-double RigorousDualBound(const Component& C, const Program& P, const Eigen::VectorXd& Bounds, const Embedding& E)
+double RigorousDualBound(const Component& C, const Program& P, const Eigen::VectorXd& Bounds, const Embedding& E, int FacetLimit = FacetPivotLimit)
 {
 	if (!(E.Tau > 0.0))
 	{
@@ -1632,7 +1632,7 @@ double RigorousDualBound(const Component& C, const Program& P, const Eigen::Vect
 		return Unpolished;
 	}
 	Eigen::VectorXd Y = Given;
-	PolishFacets(C, P, Y);
+	PolishFacets(C, P, Y, FacetLimit);
 	PolishGroupsAndCap(C, P, Y);
 	return std::min(Unpolished, BoundAtDuals(C, P, Bounds, Y));
 }
@@ -2189,7 +2189,7 @@ bool FallRigid(const Component& C, ComponentVerdict& V)
 	return true;
 }
 
-ComponentVerdict DecideComponent(const Component& C, const CertificateOptions& Options)
+ComponentVerdict DecideComponent(const Component& C, const CertificateOptions& Options, std::span<const double> Margins)
 {
 	ComponentVerdict V;
 	V.Upper = Options.LoadFactorCap;
@@ -2202,7 +2202,7 @@ ComponentVerdict DecideComponent(const Component& C, const CertificateOptions& O
 	V.Iterations = Inner.Iterations;
 	if (!Inner.bConverged && Options.bStallRecovery && Inner.DualBound > 0.0 && Inner.DualBound < Options.LoadFactorCap)
 	{
-		for (const double Margin : RecoveryMargins)
+		for (const double Margin : Margins)
 		{
 			const double CappedAt = Inner.DualBound * (1.0 - Margin);
 			const Outcome Capped = SolveProgram(C, BuildProgram(C, Options.ConeGenerators, 1.0, CappedAt, true), Options);
@@ -2323,43 +2323,48 @@ std::vector<double> ToVector(const Eigen::VectorXd& V)
 	return std::vector<double>(V.data(), V.data() + V.size());
 }
 
+CertificateResult DecideAll(const Structure& Model, std::span<const BodyLoad> Loads, const CertificateOptions& Options, std::span<const BodyId> Only, std::span<const double> Margins)
+{
+	CertificateResult Result;
+	std::vector<bool> Chosen;
+	if (!IsInputValid(Model, Loads, Options) || !ChooseComponents(Model, Only, Chosen))
+	{
+		Result.State = CertificateState::InvalidInput;
+		return Result;
+	}
+	Result.State = CertificateState::Stands;
+	Result.LoadFactorLower = Options.LoadFactorCap;
+	Result.LoadFactorUpper = Options.LoadFactorCap;
+	const std::vector<Component> Components = BuildComponents(Model, Loads, Options.Gravity, Chosen);
+	for (std::size_t K = 0; K < Components.size(); ++K)
+	{
+		if (!Chosen.empty() && !Chosen[K])
+		{
+			continue;
+		}
+		const Component& C = Components[K];
+		const ComponentVerdict V = DecideComponent(C, Options, Margins);
+		if (Severity(V.State) > Severity(Result.State))
+		{
+			Result.State = V.State;
+		}
+		Result.LoadFactorLower = std::min(Result.LoadFactorLower, V.Lower);
+		Result.LoadFactorUpper = std::min(Result.LoadFactorUpper, V.Upper);
+		Result.Iterations = std::max(Result.Iterations, V.Iterations);
+		Result.Mechanism.insert(Result.Mechanism.end(), V.Mechanism.begin(), V.Mechanism.end());
+		Result.UnconstrainedBodies.insert(Result.UnconstrainedBodies.end(), V.Moving.begin(), V.Moving.end());
+		Result.HingingInterfaces.insert(Result.HingingInterfaces.end(), V.Hinging.begin(), V.Hinging.end());
+		Result.Components.push_back(CertificateComponent{C.FreeBodies, V.State, std::min(Options.LoadFactorCap, V.Lower), std::min(Options.LoadFactorCap, V.Upper), V.Iterations, V.Mechanism, V.Moving, V.Hinging});
+	}
+	return Result;
+}
+
 class LimitAnalysisCertificate final : public ICollapseCertificate
 {
 public:
 	CertificateResult Decide(const Structure& Model, std::span<const BodyLoad> Loads, const CertificateOptions& Options, std::span<const BodyId> Only) const override
 	{
-		CertificateResult Result;
-		std::vector<bool> Chosen;
-		if (!IsInputValid(Model, Loads, Options) || !ChooseComponents(Model, Only, Chosen))
-		{
-			Result.State = CertificateState::InvalidInput;
-			return Result;
-		}
-		Result.State = CertificateState::Stands;
-		Result.LoadFactorLower = Options.LoadFactorCap;
-		Result.LoadFactorUpper = Options.LoadFactorCap;
-		const std::vector<Component> Components = BuildComponents(Model, Loads, Options.Gravity, Chosen);
-		for (std::size_t K = 0; K < Components.size(); ++K)
-		{
-			if (!Chosen.empty() && !Chosen[K])
-			{
-				continue;
-			}
-			const Component& C = Components[K];
-			const ComponentVerdict V = DecideComponent(C, Options);
-			if (Severity(V.State) > Severity(Result.State))
-			{
-				Result.State = V.State;
-			}
-			Result.LoadFactorLower = std::min(Result.LoadFactorLower, V.Lower);
-			Result.LoadFactorUpper = std::min(Result.LoadFactorUpper, V.Upper);
-			Result.Iterations = std::max(Result.Iterations, V.Iterations);
-			Result.Mechanism.insert(Result.Mechanism.end(), V.Mechanism.begin(), V.Mechanism.end());
-			Result.UnconstrainedBodies.insert(Result.UnconstrainedBodies.end(), V.Moving.begin(), V.Moving.end());
-			Result.HingingInterfaces.insert(Result.HingingInterfaces.end(), V.Hinging.begin(), V.Hinging.end());
-			Result.Components.push_back(CertificateComponent{C.FreeBodies, V.State, std::min(Options.LoadFactorCap, V.Lower), std::min(Options.LoadFactorCap, V.Upper), V.Iterations, V.Mechanism, V.Moving, V.Hinging});
-		}
-		return Result;
+		return DecideAll(Model, Loads, Options, Only, RecoveryMargins);
 	}
 };
 }
@@ -2401,6 +2406,72 @@ double ProbeDualBound(const Structure& Model, std::span<const BodyLoad> Loads, c
 	E.Y = Eigen::Map<const Eigen::VectorXd>(Duals.data(), P.RowCount);
 	E.Tau = 1.0;
 	return RigorousDualBound(C, P, RowBounds(C, P), E);
+}
+
+ExportedProgram ExportProgram(const Structure& Model, std::span<const BodyLoad> Loads, const CertificateOptions& Options, std::size_t Index, bool bInscribed)
+{
+	ExportedProgram Out;
+	Component C;
+	if (!ProbedComponent(Model, Loads, Options, Index, C))
+	{
+		return Out;
+	}
+	const Program P = ProbedProgram(C, Options, bInscribed);
+	Out.Rows = static_cast<int>(P.RowCount);
+	Out.Columns = static_cast<int>(P.Variables);
+	Out.A.reserve(static_cast<std::size_t>(P.RowCount) * static_cast<std::size_t>(P.Variables));
+	Eigen::VectorXd Unit = Eigen::VectorXd::Zero(P.Variables);
+	for (Eigen::Index J = 0; J < P.Variables; ++J)
+	{
+		Unit(J) = 1.0;
+		const Eigen::VectorXd Column = Apply(C, P, Unit);
+		Out.A.insert(Out.A.end(), Column.data(), Column.data() + Column.size());
+		Unit(J) = 0.0;
+	}
+	Out.B = ToVector(RowBounds(C, P));
+	Out.Boxes = ToVector(ColumnBoxes(P));
+	Out.LoadFactorColumn = static_cast<int>(P.LoadFactor);
+	return Out;
+}
+
+bool FacetSimplexForTest(const std::vector<double>& Cost, const std::vector<double>& A, const std::vector<double>& B, int PivotLimit, int BlandAfter, std::vector<double>& X)
+{
+	const Eigen::Index N = static_cast<Eigen::Index>(Cost.size());
+	const Eigen::Index M = static_cast<Eigen::Index>(B.size());
+	if (A.size() != static_cast<std::size_t>(M * N))
+	{
+		return false;
+	}
+	Eigen::VectorXd Solution;
+	if (!FacetDualSimplex(Eigen::Map<const Eigen::VectorXd>(Cost.data(), N), Eigen::Map<const Eigen::MatrixXd>(A.data(), M, N), Eigen::Map<const Eigen::VectorXd>(B.data(), M), Solution, PivotLimit, BlandAfter))
+	{
+		return false;
+	}
+	X = ToVector(Solution);
+	return true;
+}
+
+double ProbeDualBoundWithFacetPivotLimit(const Structure& Model, std::span<const BodyLoad> Loads, const CertificateOptions& Options, std::size_t Index, bool bInscribed, const std::vector<double>& Duals, int PivotLimit)
+{
+	Component C;
+	if (!ProbedComponent(Model, Loads, Options, Index, C))
+	{
+		return Unbounded;
+	}
+	const Program P = ProbedProgram(C, Options, bInscribed);
+	if (static_cast<Eigen::Index>(Duals.size()) != P.RowCount)
+	{
+		return Unbounded;
+	}
+	Embedding E;
+	E.Y = Eigen::Map<const Eigen::VectorXd>(Duals.data(), P.RowCount);
+	E.Tau = 1.0;
+	return RigorousDualBound(C, P, RowBounds(C, P), E, PivotLimit);
+}
+
+CertificateResult DecideWithRecoveryMargins(const Structure& Model, std::span<const BodyLoad> Loads, const CertificateOptions& Options, std::span<const double> Margins)
+{
+	return DecideAll(Model, Loads, Options, {}, Margins);
 }
 }
 

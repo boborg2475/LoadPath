@@ -1930,3 +1930,21 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   calls, the never-exercised facet-simplex failure path, an oracle and seams that would guard them,
   the stall fixtures' iteration-count knife edges (a margin seam would remove them), and an outer
   stall pin 2e-9 from its bound.
+- *2026-10-14, orchestrator, an LP oracle for the dual bound and margin-driven recovery pins:* the
+  test tier gains an independent referee for the bound. `detail::ExportProgram` returns a
+  component's program (dense A built by `Apply` on unit vectors, `RowBounds`, `ColumnBoxes`), and
+  tests/LpOracle.h solves it by a dense two-phase simplex (equilibrated rows, steepest edge, Bland
+  after 50 stalled pivots, the final basis re-solved with full-pivot LU and trusted only when primal
+  and dual feasible to 1e-9 relative). Over 622 trusted programs and 12,440 perturbed dual vectors
+  the bound never reads below t*; at the oracle's optimal duals it sits within [3.3e-14, 4.6e-7]
+  above t*, the upper end the γ allowance on dry joints' large boxes (zeroing the allowance leaves
+  7.2e-10), which corrects the earlier note that dropping γ moves U by about 1e-17: true near
+  interior-point duals only. The oracle catches the old facet-box hole, a box scaled by 0.9 and a
+  dropped group polish; the allowance computed at the wrong duals survives (rounding-level, always
+  above t*). `detail::FacetSimplexForTest` runs the production facet simplex on a hand LP, an
+  infeasible row and Beale's cycling example (certified only through the Bland branch: with Bland
+  out of reach it cycles), and a forced facet failure keeps every bound above t*. The two
+  iteration-count stall fixtures are replaced through `detail::DecideWithRecoveryMargins`: on the
+  ec6 4 × 4 wall U_in sits 1.3e-12 to 2.8e-12 relative above t*, so margins {1e-14, 1e-13} cap both
+  rungs above t* (both stall: Undecided) and {1e-13, 1e-3} make rung 1 stall and rung 2 converge
+  (Stands at 624.4516), independent of `MaxIterations`.
