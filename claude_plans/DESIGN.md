@@ -1945,9 +1945,11 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   infeasible row and Beale's cycling example (certified only through the Bland branch: with Bland
   out of reach it cycles), and a forced facet failure keeps every bound above t*. The two
   iteration-count stall fixtures are replaced through `detail::DecideWithRecoveryMargins`: on the
-  ec6 4 × 4 wall U_in sits 1.3e-12 to 2.8e-12 relative above t*, so margins {1e-14, 1e-13} cap both
-  rungs above t* (both stall: Undecided) and {1e-13, 1e-3} make rung 1 stall and rung 2 converge
-  (Stands at 624.4516), independent of `MaxIterations`.
+  ec6 4 × 4 wall at tolerance 1e-15 a single rung stalls for every margin from 1e-14 to 3e-6 (caps
+  above and below t* alike: the tolerance is out of reach) and converges at 1e-5, so {1e-14, 1e-13}
+  stalls both rungs (Undecided) and {1e-13, 1e-3} stalls rung 1 and converges rung 2 (Stands at
+  624.4516), independent of `MaxIterations` (corrected by the cold review: the first draft credited
+  caps above t*, since U_in sits only 1.3e-12 to 2.8e-12 above it).
 - *2026-10-14, orchestrator, the failed-inner ruling:* the load factor scales every load,
   gravity included (`C.Demand` is all applied wrenches over the force scale), and every strength
   region contains the origin (a tension-capable corner's shifted variables carry exactly its offset,
@@ -1965,3 +1967,23 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   6.0e-8, the selection naming the whole stack rotating rigidly about its base edge (both bricks at
   −1 rad about x, the base bed hinging). A failed inscribed solve whose outer bound is at least 1
   still reads Undecided, now bounded [0, t_out or U_out] rather than [0, cap].
+- *2026-10-14, orchestrator, the LP oracle (cold-review rulings):* production was bit-identical
+  (3,993 decisions, 9,001 solves and their duals hashed, default, Slow and Deferred). **Blocking,
+  fixed:** (1) the oracle's trust test let wrong optima through (a primal check relative to the
+  largest multiplier and residual floors relative to the largest scale): the light block at mass
+  ratios 1e10 and 1e12 was trusted at 1000 against a true 2, and a 2 × 4 LP at 1 against
+  1.000001. Trust now needs the clamped primal's residual within 1e-9 of each row's own scale (a
+  4-ulp floor of the largest), each positive reduced cost either bounded by a column bound from the
+  program's own same-signed rows or at rounding level, and the objective gap Σ max(0, d_j) x̄_j at
+  most 1e-7 (1 + |t*|). **Ruling on the threshold:** 1e-7, not the review's 1e-13, which untrusted
+  9 of 24 real programs (rounding-level reduced costs times row bounds near 1e7 give gaps to
+  2.67e-8); the margin is 3.7× above the worst real program and 5× below the 2 × 4
+  counterexample. The oracle certifies its own optimum only to that level; the tests keep their
+  1e-12 precision because every trusted t* must also sit inside the certificate's tight bracket
+  [t at tolerance 1e-13, U] within 1e-12 (it does, to 9.4e-15). No real program is untrusted.
+  (2) The stall fixtures' stated mechanism was false (see the corrected entry above); the tests are
+  renamed and a documented-edge test pins single rungs at 1e-9, 1e-6 and 3e-6 Undecided and 1e-5
+  Stands. (3) Two facet tests crashed the run when a REQUIRE failed (the no-exceptions doctest does
+  not stop the test); every index after a REQUIRE in the two certificate test files is now guarded.
+  The default-tier oracle sibling gains the seeds that catch a dropped group polish and facet-slack
+  boxes × 0.9; Beale's example also certifies through a mid-run switch to Bland.

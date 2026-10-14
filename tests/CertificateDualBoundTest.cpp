@@ -20,6 +20,7 @@
 #include <iomanip>
 #include <iterator>
 #include <limits>
+#include <optional>
 #include <random>
 #include <sstream>
 #include <string>
@@ -249,6 +250,10 @@ TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Certificate.DualBound.EveryConvergedPrimalLies
 		}
 		++Converged;
 		REQUIRE(P.Probe.Primal.size() == P.Probe.Boxes.size());
+		if (P.Probe.Primal.size() != P.Probe.Boxes.size())
+		{
+			continue;
+		}
 		double WorstRatio = 0.0;
 		std::size_t WorstColumn = 0;
 		bool bBreach = false;
@@ -309,6 +314,10 @@ TEST_CASE("Certificate.DualBound.AnOverflowedDualReadsUnbounded")
 	const detail::ProgramProbe Probe = detail::ProbeProgram(Model, {}, Options, 0, true);
 	REQUIRE(Probe.bConverged);
 	REQUIRE(Probe.Duals.size() >= 6u);
+	if (Probe.Duals.size() < 6u)
+	{
+		return;
+	}
 	std::vector<double> Duals(Probe.Duals.size(), 0.0);
 	Duals[1] = -1.7e308;
 	Duals[3] = -1.7e308;
@@ -350,6 +359,10 @@ TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Certificate.DualBound.EveryGroundedCollapsesHa
 		const CertificateResult R = DecideWith(Base.Model, Options);
 		const ComponentPartition& Partition = Base.Model.Components();
 		REQUIRE(R.Components.size() == Partition.FreeBodies.size());
+		if (R.Components.size() != Partition.FreeBodies.size())
+		{
+			continue;
+		}
 		for (std::size_t K = 0; K < R.Components.size(); ++K)
 		{
 			++Components;
@@ -414,6 +427,7 @@ namespace
 {
 constexpr double OracleFloorRelative = 1.0e-12;
 constexpr double OracleCeilingRelative = 1.0e-6;
+constexpr double TightTolerance = 1.0e-13;
 constexpr int PerturbationsPerExport = 20;
 constexpr std::uint32_t PerturbationSeed = 9090u;
 constexpr int PerturbationKinds = 5;
@@ -428,6 +442,9 @@ struct OracleTally
 	int Untrusted = 0;
 	int TooLarge = 0;
 	int Perturbed = 0;
+	int TightUnconverged = 0;
+	double WorstGap = 0.0;
+	double WorstTightLow = std::numeric_limits<double>::infinity();
 	double WorstProbe = std::numeric_limits<double>::infinity();
 	double WorstAtOptimumLow = std::numeric_limits<double>::infinity();
 	double WorstAtOptimumHigh = -std::numeric_limits<double>::infinity();
@@ -538,6 +555,10 @@ void BracketTheOptimum(const std::vector<BoundCase>& Cases, OracleTally& Tally)
 				REQUIRE(E.Boxes.size() == static_cast<std::size_t>(E.Columns));
 				REQUIRE(E.LoadFactorColumn >= 0);
 				REQUIRE(E.LoadFactorColumn < E.Columns);
+				if (E.Rows <= 0 || E.Columns <= 0 || E.A.size() != static_cast<std::size_t>(E.Rows) * static_cast<std::size_t>(E.Columns) || E.B.size() != static_cast<std::size_t>(E.Rows) || E.Boxes.size() != static_cast<std::size_t>(E.Columns) || E.LoadFactorColumn < 0 || E.LoadFactorColumn >= E.Columns)
+				{
+					continue;
+				}
 				if (static_cast<std::size_t>(E.Rows) * static_cast<std::size_t>(E.Columns) > OracleEntryLimit)
 				{
 					++Tally.TooLarge;
@@ -564,6 +585,22 @@ void BracketTheOptimum(const std::vector<BoundCase>& Cases, OracleTally& Tally)
 				CHECK(Probe.DualBound >= Floor);
 				CHECK(AtOptimum >= Floor);
 				CHECK(AtOptimum <= Ceiling);
+				Tally.WorstGap = std::max(Tally.WorstGap, O.Gap / (1.0 + std::abs(T)));
+				CertificateOptions Tight = C.Options;
+				Tight.FeasibilityTolerance = TightTolerance;
+				const detail::ProgramProbe TightProbe = detail::ProbeProgram(C.Model, {}, Tight, K, bInscribed);
+				if (TightProbe.bConverged)
+				{
+					const double BracketSlack = OracleFloorRelative * (1.0 + std::abs(T));
+					Tally.WorstTightLow = std::min(Tally.WorstTightLow, Relative(T, TightProbe.LoadFactor));
+					INFO(std::setprecision(17) << "tolerance 1e-13 probe: t " << TightProbe.LoadFactor << ", U " << TightProbe.DualBound << ", oracle gap " << O.Gap);
+					CHECK(T >= TightProbe.LoadFactor - BracketSlack);
+					CHECK(T <= TightProbe.DualBound + BracketSlack);
+				}
+				else
+				{
+					++Tally.TightUnconverged;
+				}
 				const std::size_t EquilibriumRows = static_cast<std::size_t>(DofPerBodyRows) * Partition.FreeBodies[K].size();
 				const std::size_t Facets = FirstFacetRow(E, EquilibriumRows);
 				std::vector<double> GroupsZeroed = O.Y;
@@ -596,7 +633,7 @@ void BracketTheOptimum(const std::vector<BoundCase>& Cases, OracleTally& Tally)
 
 void ReportTally(const OracleTally& Tally)
 {
-	MESSAGE(std::setprecision(4) << Tally.Exports << " exports, " << Tally.Trusted << " trusted, " << Tally.Untrusted << " untrusted, " << Tally.TooLarge << " too large, " << Tally.Perturbed << " perturbed duals; worst (U - t*) / (1 + |t*|): probe " << Tally.WorstProbe << ", at y* [" << Tally.WorstAtOptimumLow << ", " << Tally.WorstAtOptimumHigh << "], perturbed " << Tally.WorstPerturbed << "; loosest at random facet duals from y* " << Tally.LoosestRandomFacets << ", at y* with group and cap duals zeroed " << Tally.LoosestRegrouped << Tally.Reasons.str());
+	MESSAGE(std::setprecision(4) << Tally.Exports << " exports, " << Tally.Trusted << " trusted, " << Tally.Untrusted << " untrusted, " << Tally.TooLarge << " too large, " << Tally.Perturbed << " perturbed duals; worst (U - t*) / (1 + |t*|): probe " << Tally.WorstProbe << ", at y* [" << Tally.WorstAtOptimumLow << ", " << Tally.WorstAtOptimumHigh << "], perturbed " << Tally.WorstPerturbed << "; loosest at random facet duals from y* " << Tally.LoosestRandomFacets << ", at y* with group and cap duals zeroed " << Tally.LoosestRegrouped << "; worst oracle gap / (1 + |t*|) " << Tally.WorstGap << ", worst (t* - t_tight) / (1 + |t_tight|) " << Tally.WorstTightLow << ", " << Tally.TightUnconverged << " tolerance-1e-13 probes unconverged" << Tally.Reasons.str());
 }
 
 std::vector<BoundCase> SmallOracleCases()
@@ -604,6 +641,10 @@ std::vector<BoundCase> SmallOracleCases()
 	std::vector<BoundCase> Cases;
 	Cases.push_back(MuFiveBlock());
 	for (int Draw = 0; Draw < 6; ++Draw)
+	{
+		Cases.push_back(SeededCase(Draw));
+	}
+	for (const int Draw : {61, 65, 108, 247})
 	{
 		Cases.push_back(SeededCase(Draw));
 	}
@@ -666,6 +707,7 @@ TEST_CASE("Slow.Certificate.DualBound.TheBoundBracketsTheOptimum")
 	BracketTheOptimum(TightnessCases(), Tally);
 	ReportTally(Tally);
 	CHECK(Tally.Trusted > 0);
+	CHECK(Tally.Untrusted == 0);
 }
 
 TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Certificate.DualBound.TheBoundBracketsTheOptimumOnSmallPrograms")
@@ -682,6 +724,10 @@ TEST_CASE("Certificate.DualBound.FacetSimplexSolvesASmallLp")
 	std::vector<double> X;
 	REQUIRE(detail::FacetSimplexForTest({1.0, 2.0, 3.0}, A, {-2.0, -3.0}, DefaultFacetPivotLimit, DefaultFacetBlandAfter, X));
 	REQUIRE(X.size() == 3u);
+	if (X.size() != 3u)
+	{
+		return;
+	}
 	INFO(std::setprecision(17) << "x (" << X[0] << ", " << X[1] << ", " << X[2] << ")");
 	CHECK(std::abs(X[0]) <= 1.0e-12);
 	CHECK(std::abs(X[1] - 3.0) <= 1.0e-12);
@@ -699,10 +745,25 @@ TEST_CASE("Certificate.DualBound.FacetSimplexTerminatesOnBealesDualThroughBland"
 	std::vector<double> X;
 	REQUIRE(detail::FacetSimplexForTest(BealeDualCost(), BealeDualMatrix(), BealeDualBounds(), 50, 0, X));
 	REQUIRE(X.size() == 3u);
+	if (X.size() != 3u)
+	{
+		return;
+	}
 	INFO(std::setprecision(17) << "u (" << X[0] << ", " << X[1] << ", " << X[2] << ")");
 	CHECK(std::abs(X[0]) <= 1.0e-12);
 	CHECK(std::abs(X[1] - 1.5) <= 1.0e-12);
 	CHECK(std::abs(X[2] - 1.25) <= 1.0e-12);
+	std::vector<double> Switched;
+	REQUIRE(detail::FacetSimplexForTest(BealeDualCost(), BealeDualMatrix(), BealeDualBounds(), 1000, 500, Switched));
+	REQUIRE(Switched.size() == 3u);
+	if (Switched.size() != 3u)
+	{
+		return;
+	}
+	INFO(std::setprecision(17) << "Bland after 500: u (" << Switched[0] << ", " << Switched[1] << ", " << Switched[2] << ")");
+	CHECK(std::abs(Switched[0]) <= 1.0e-12);
+	CHECK(std::abs(Switched[1] - 1.5) <= 1.0e-12);
+	CHECK(std::abs(Switched[2] - 1.25) <= 1.0e-12);
 	std::vector<double> Limited;
 	CHECK_FALSE(detail::FacetSimplexForTest(BealeDualCost(), BealeDualMatrix(), BealeDualBounds(), 0, 0, Limited));
 	std::vector<double> Dantzig;
@@ -777,4 +838,61 @@ TEST_CASE("Certificate.DualBound.AFailedInnerSolveWithAnOuterBoundAtOrAboveOneSt
 		CHECK(R.UnconstrainedBodies.empty());
 		CHECK(R.HingingInterfaces.empty());
 	}
+}
+
+namespace
+{
+Structure LightBlockOnHeavy(double HalfM, double LightKg, const StrengthProfile& Joint)
+{
+	Structure Model;
+	const BodyId Ground = AddGroundPlane(Model);
+	const Box Heavy{Vec3{0.0, 0.0, 0.5}, Vec3{0.5, 0.5, 0.5}, 1000.0};
+	const BodyId HeavyBody = AddBox(Model, Heavy);
+	AddInterfaceOk(Model, OnGroundPlane(Ground, HeavyBody, Heavy, AddProfileOk(Model, DryJoint(0.8))));
+	const Box Light{Vec3{-0.1, 0.0, 1.0 + HalfM}, Vec3{HalfM, HalfM, HalfM}, LightKg};
+	const BodyId LightBody = AddBox(Model, Light);
+	const std::optional<InterfaceDesc> Contact = StackedFaces(HeavyBody, Heavy, LightBody, Light, AddProfileOk(Model, Joint));
+	REQUIRE(Contact.has_value());
+	if (!Contact)
+	{
+		return Model;
+	}
+	AddInterfaceOk(Model, *Contact);
+	return Model;
+}
+}
+
+TEST_CASE("Certificate.DualBound.TheOracleNeverTrustsAWrongOptimum")
+{
+	const std::vector<double> A = ColumnMajor({{1.0, -1.0e-12, 1.0, 0.0}, {0.0, 1.0, 0.0, 1.0}});
+	const lp::OracleResult Tiny = lp::SolveMaxLp(2, 4, A, {1.0, 1.0e6}, {1.0, 0.0, 0.0, 0.0});
+	const double TinyOptimum = 1.000001;
+	INFO(std::setprecision(17) << "2 x 4 LP: trusted " << Tiny.bTrusted << ", t* " << Tiny.Optimum << " (" << Tiny.Why << "), true optimum " << TinyOptimum);
+	CHECK((!Tiny.bTrusted || std::abs(Tiny.Optimum - TinyOptimum) <= 1.0e-12 * (1.0 + TinyOptimum)));
+	const double HalfM = 0.005;
+	const double Mu = 0.3;
+	const double Lambda = 0.5;
+	const double Target = 2.0;
+	std::ostringstream Untrusted;
+	int Trusted = 0;
+	for (const double Ratio : {1.0, 1.0e4, 1.0e6, 1.0e8, 1.0e10, 1.0e12})
+	{
+		const double LightKg = 1000.0 / Ratio;
+		StrengthProfile Joint = DryJoint(Mu);
+		Joint.ShearCohesionPa = Target * LightKg * GravityMPerS2 * (Lambda - Mu) / (4.0 * HalfM * HalfM);
+		const detail::ExportedProgram E = detail::ExportProgram(LightBlockOnHeavy(HalfM, LightKg, Joint), {}, CertificateLateral(Lambda), 0, true);
+		const lp::OracleResult O = SolveExport(E);
+		INFO(std::setprecision(17) << "light block at mass ratio " << Ratio << " (" << E.Rows << " x " << E.Columns << "): trusted " << O.bTrusted << ", t* " << O.Optimum << " (" << O.Why << "), true optimum " << Target);
+		CHECK((!O.bTrusted || std::abs(O.Optimum - Target) <= 1.0e-9 * (1.0 + Target)));
+		if (Ratio == 1.0)
+		{
+			CHECK(O.bTrusted);
+		}
+		Trusted += O.bTrusted ? 1 : 0;
+		if (!O.bTrusted)
+		{
+			Untrusted << "\n  ratio " << Ratio << ": " << O.Why;
+		}
+	}
+	MESSAGE(Trusted << " of 6 light-block exports trusted" << Untrusted.str());
 }

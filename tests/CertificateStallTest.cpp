@@ -212,7 +212,7 @@ constexpr double HalfWarehouseWallRelative = 1.0e-6;
 constexpr int HalfWarehouseWallIterationCeiling = 69;
 constexpr double UnreachableTolerance = 1.0e-15;
 constexpr int StalledWallFiringIteration = 69;
-constexpr double AboveOptimumMargins[] = {1.0e-14, 1.0e-13};
+constexpr double NeitherRungMargins[] = {1.0e-14, 1.0e-13};
 constexpr double SecondRungMargins[] = {1.0e-13, 1.0e-3};
 constexpr double SecondRungLower = 624.4515807676147;
 }
@@ -227,6 +227,10 @@ TEST_CASE("Slow.Certificate.Stall.TheHalfWarehouseWallConvergesUnderTheRule")
 	const std::vector<std::vector<BodyId>>& Parts = Model.Components().FreeBodies;
 	const auto Wall = std::find_if(Parts.begin(), Parts.end(), [](const std::vector<BodyId>& Part) { return Part.size() == HalfWarehouseWallBodies; });
 	REQUIRE(Wall != Parts.end());
+	if (Wall == Parts.end())
+	{
+		return;
+	}
 	const Clock::time_point Start = Clock::now();
 	const CertificateResult Got = MakeLimitAnalysisCertificate()->Decide(Model, {}, CertificateOptions{}, *Wall);
 	const double Seconds = SecondsSince(Start);
@@ -374,18 +378,18 @@ TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Certificate.Stall.WithRecoveryTheStalledWallSt
 	CHECK(Got.Iterations <= Options.MaxIterations);
 }
 
-TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Certificate.Stall.BothRungsAboveTheOptimumStayUndecided")
+TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Certificate.Stall.TheResolveStaysUndecidedWhenNeitherRungConverges")
 {
 	CertificateOptions Options = CertificateLateral(0.4);
 	Options.FeasibilityTolerance = UnreachableTolerance;
 	CHECK(Options.bStallRecovery);
-	const CertificateResult Got = detail::DecideWithRecoveryMargins(Ec6Wall(4, 4), {}, Options, AboveOptimumMargins);
+	const CertificateResult Got = detail::DecideWithRecoveryMargins(Ec6Wall(4, 4), {}, Options, NeitherRungMargins);
 	INFO(std::setprecision(17) << "ec6 4 x 4 wall at lateral 0.4, tolerance 1e-15, margins {1e-14, 1e-13}: " << Got.State << " in " << Got.Iterations << " [" << Got.LoadFactorLower << ", " << Got.LoadFactorUpper << "]");
 	CHECK(Got.State == CertificateState::Undecided);
 	CHECK(Got.Iterations <= Options.MaxIterations);
 }
 
-TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Certificate.Stall.TheSecondRungDecidesWhenTheFirstIsAboveTheOptimum")
+TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Certificate.Stall.TheSecondRungDecidesWhenOnlyTheSecondRungConverges")
 {
 	CertificateOptions Options = CertificateLateral(0.4);
 	Options.FeasibilityTolerance = UnreachableTolerance;
@@ -395,6 +399,22 @@ TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Certificate.Stall.TheSecondRungDecidesWhenTheF
 	CHECK(Got.State == CertificateState::Stands);
 	CHECK(Near(Got.LoadFactorLower, SecondRungLower, PinnedRelative, 0.0));
 	CHECK(Got.LoadFactorLower <= 625.07665742313804 * (1.0 + 1.0e-9));
+}
+
+TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Certificate.Stall.ASingleRungFirstConvergesAtAMarginOf1e-5")
+{
+	CertificateOptions Options = CertificateLateral(0.4);
+	Options.FeasibilityTolerance = UnreachableTolerance;
+	CHECK(Options.bStallRecovery);
+	const Structure Wall = Ec6Wall(4, 4);
+	for (const double Margin : {1.0e-9, 1.0e-6, 3.0e-6, 1.0e-5})
+	{
+		const double Margins[] = {Margin};
+		const CertificateResult Got = detail::DecideWithRecoveryMargins(Wall, {}, Options, Margins);
+		INFO(std::setprecision(17) << "ec6 4 x 4 wall at lateral 0.4, tolerance 1e-15, single margin " << Margin << ": " << Got.State << " in " << Got.Iterations << " [" << Got.LoadFactorLower << ", " << Got.LoadFactorUpper << "]");
+		CHECK(Got.State == (Margin < 1.0e-5 ? CertificateState::Undecided : CertificateState::Stands));
+		CHECK(Got.Iterations <= Options.MaxIterations);
+	}
 }
 
 TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Certificate.Solver.RecoveryLeavesConvergedComponentsUnchanged")
@@ -408,6 +428,10 @@ TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Certificate.Solver.RecoveryLeavesConvergedComp
 		const CertificateResult With = DecideWith(C.Model, C.Options);
 		const CertificateResult Without = DecideWith(C.Model, Off);
 		REQUIRE(With.Components.size() == Without.Components.size());
+		if (With.Components.size() != Without.Components.size())
+		{
+			continue;
+		}
 		for (std::size_t Index = 0; Index < With.Components.size(); ++Index)
 		{
 			const CertificateComponent& A = With.Components[Index];

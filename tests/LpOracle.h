@@ -29,7 +29,8 @@ inline constexpr double PivotEntry = 1.0e-9;
 inline constexpr double CostTolerance = 1.0e-11;
 inline constexpr int StallPivots = 50;
 inline constexpr int RefinementPasses = 3;
-inline constexpr double FloorRelative = 1.0e-12;
+inline constexpr double GapRelative = 1.0e-7;
+inline constexpr double RoundingRelative = 4.0 * std::numeric_limits<double>::epsilon();
 inline constexpr double RhsPerturbation = 1.0e-10;
 inline constexpr unsigned PerturbationSeed = 20261014u;
 
@@ -40,6 +41,8 @@ struct OracleResult
 	std::vector<double> X;
 	// The certificate's sign convention: Y = -u for the textbook dual u (min b^T u, A^T u >= c), so A^T Y + c <= 0 at the optimum.
 	std::vector<double> Y;
+	// Positive reduced costs times the ColumnBounds bounds: the true optimum lies in [Optimum, Optimum + Gap] when trusted.
+	double Gap = 0.0;
 	int Pivots = 0;
 	bool bUsedBland = false;
 	std::string Why;
@@ -92,6 +95,49 @@ inline void Pivot(Tableau& Tab, Eigen::Index Row, Eigen::Index Col)
 	}
 	Tab.Basis[static_cast<std::size_t>(Row)] = Col;
 	++Tab.Pivots;
+}
+
+inline void NeumaierAdd(double& Sum, double& Carry, double Term)
+{
+	const double Next = Sum + Term;
+	Carry += std::abs(Sum) >= std::abs(Term) ? (Sum - Next) + Term : (Term - Next) + Sum;
+	Sum = Next;
+}
+
+template <class L, class R>
+double CompensatedDot(const L& Left, const R& Right)
+{
+	double Sum = 0.0;
+	double Carry = 0.0;
+	for (Eigen::Index I = 0; I < Left.size(); ++I)
+	{
+		NeumaierAdd(Sum, Carry, Left(I) * Right(I));
+	}
+	return Sum + Carry;
+}
+
+// Each column's upper bound from the rows whose entries all share their right-hand side's sign (b = 0 rows count in either sign); +inf where no such row covers it.
+inline Eigen::VectorXd ColumnBounds(const Eigen::Map<const Eigen::MatrixXd>& A, const Eigen::Map<const Eigen::VectorXd>& B)
+{
+	Eigen::VectorXd Bounds = Eigen::VectorXd::Constant(A.cols(), std::numeric_limits<double>::infinity());
+	for (Eigen::Index I = 0; I < A.rows(); ++I)
+	{
+		for (const double Sign : {1.0, -1.0})
+		{
+			if (Sign * B(I) < 0.0 || ((Sign * A.row(I).array()) < 0.0).any())
+			{
+				continue;
+			}
+			for (Eigen::Index J = 0; J < A.cols(); ++J)
+			{
+				if (A(I, J) != 0.0)
+				{
+					Bounds(J) = std::min(Bounds(J), B(I) / A(I, J));
+				}
+			}
+		}
+	}
+	return Bounds;
 }
 
 inline std::string Scientific(double V)
@@ -190,7 +236,7 @@ inline bool RunPhase(Tableau& Tab, bool bPhase1, int PivotCap, std::string& Why)
 }
 }
 
-// A is dense column-major, Rows x Columns; phase 2 pivots on a seeded perturbation of b, and a result is trusted only when the final basis, re-solved by full-pivot LU against the exact b, is primal and dual feasible to 1e-9 relative.
+// A is dense column-major, Rows x Columns; phase 2 pivots on a seeded perturbation of b, and a result is trusted only when the final basis, re-solved by full-pivot LU against the exact b, has every row residual (negatives clamped to zero) and every reduced cost within 1e-9 relative with no floor, and its positive reduced costs times the column bounds of ColumnBounds sum to at most 1e-13 (1 + |t*|).
 inline OracleResult SolveMaxLp(int Rows, int Columns, const std::vector<double>& A, const std::vector<double>& B, const std::vector<double>& C)
 {
 	using namespace detail;
@@ -375,36 +421,51 @@ inline OracleResult SolveMaxLp(int Rows, int Columns, const std::vector<double>&
 		Out.Why = "non-finite re-solve";
 		return Out;
 	}
-	const double XScale = 1.0 + X.cwiseAbs().maxCoeff();
-	if (X.minCoeff() < -TrustRelative * XScale)
-	{
-		Out.Why = "primal infeasible after re-solve";
-		return Out;
-	}
+	X = X.cwiseMax(0.0);
 	const Eigen::VectorXd Residual = Original * X - Bv;
-	const Eigen::VectorXd ResidualScale = Bv.cwiseAbs() + Original.cwiseAbs() * X.cwiseAbs();
-	const double ResidualFloor = FloorRelative * ResidualScale.maxCoeff();
+	const Eigen::VectorXd ResidualScale = Bv.cwiseAbs() + Original.cwiseAbs() * X;
+	const double ResidualFloor = RoundingRelative * ResidualScale.maxCoeff();
 	for (Eigen::Index I = 0; I < M; ++I)
 	{
-		if (std::abs(Residual(I)) > TrustRelative * ResidualScale(I) + ResidualFloor)
+		if (!(std::abs(Residual(I)) <= TrustRelative * ResidualScale(I) + ResidualFloor))
 		{
-			Out.Why = "residual at row " + std::to_string(I) + ": " + Scientific(Residual(I)) + " against scale " + Scientific(ResidualScale(I));
+			Out.Why = "residual at row " + std::to_string(I) + " with negatives clamped: " + Scientific(Residual(I)) + " against scale " + Scientific(ResidualScale(I));
 			return Out;
 		}
 	}
-	const Eigen::VectorXd Reduced = Cv - Original.transpose() * U;
 	const Eigen::VectorXd ReducedScale = Cv.cwiseAbs() + Original.cwiseAbs().transpose() * U.cwiseAbs();
-	const double ReducedFloor = FloorRelative * ReducedScale.maxCoeff();
+	const double ReducedFloor = RoundingRelative * ReducedScale.maxCoeff();
+	const Eigen::VectorXd Bounds = ColumnBounds(Original, Bv);
+	const double Optimum = CompensatedDot(Cv, X);
+	double Gap = 0.0;
+	double GapCarry = 0.0;
 	for (Eigen::Index J = 0; J < N; ++J)
 	{
-		if (Reduced(J) > TrustRelative * ReducedScale(J) + ReducedFloor)
+		const double Reduced = Cv(J) - CompensatedDot(Original.col(J), U);
+		if (Reduced <= 0.0)
 		{
-			Out.Why = "dual infeasible at column " + std::to_string(J) + ": reduced cost " + Scientific(Reduced(J)) + " against scale " + Scientific(ReducedScale(J));
-			return Out;
+			continue;
 		}
+		if (!std::isfinite(Bounds(J)))
+		{
+			if (Reduced > ReducedFloor)
+			{
+				Out.Why = "unbounded column " + std::to_string(J) + " with reduced cost " + Scientific(Reduced) + " against scale " + Scientific(ReducedScale(J));
+				return Out;
+			}
+			continue;
+		}
+		NeumaierAdd(Gap, GapCarry, Reduced * Bounds(J));
+	}
+	Gap += GapCarry;
+	if (!(Gap <= GapRelative * (1.0 + std::abs(Optimum))))
+	{
+		Out.Why = "objective gap: positive reduced costs times column bounds sum to " + Scientific(Gap) + " against t* " + Scientific(Optimum);
+		return Out;
 	}
 	Out.bTrusted = true;
-	Out.Optimum = Cv.dot(X);
+	Out.Optimum = Optimum;
+	Out.Gap = Gap;
 	Out.X.assign(X.data(), X.data() + N);
 	Out.Y.resize(static_cast<std::size_t>(M));
 	for (Eigen::Index I = 0; I < M; ++I)
