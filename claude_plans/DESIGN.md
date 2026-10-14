@@ -1783,7 +1783,8 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   solve's count (each at most `MaxIterations`), a recovery re-solve counting as its own solve. **What
   stays:** the homogeneous self-dual method with Mehrotra steps, the normal equations, the dense LLT and
   the sparse bordered LDLᵀ, the retry escalation, the refinement, the stall rule (it now hands over to
-  (3)), the convergence test, the selection. Converged paths are bit-identical. **Red tests:** promote the
+  (3)), the convergence test, the selection. Converged paths are bit-identical (corrected by the
+  cold-review rulings below: not where the scaled start applies). **Red tests:** promote the
   Deferred 46-block test and the Deferred Foraboschi crushing anchor into the default (or Slow) tier; the
   137-block wall at 80 kN / 43,000 N Stands with lower about 2.7146; the outer-stall test reads an upper
   bound within 1e-6 above the unlimited reading 7.71542823 instead of the cap; a seeded property that the
@@ -1793,3 +1794,39 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   the dense path leaves 11 of 25 stalls, so a column treatment alone cannot close them); the margin
   policy's cost (the 1e-5 re-solve stalled on 2 of 10 fallbacks, 16 to 50 s, before 1e-3 converged). The
   probe's prototype and data are in the session scratchpad (`cond\`).
+- *2026-10-13, orchestrator, the certificate's conditioning (cold-review rulings):* the review
+  confirmed the recovery: over 1,414 converged solves and 96,152 adversarial `ŷ` (scaled, noisy,
+  random, single-row, zeroed blocks) no bound fell below the 1e-12-tolerance optimum; every capped
+  re-solve's lower bound sat at or under the reference (ec6 4 × 4 625.07041 ≤ 625.07666, 137-block
+  2.7146014 ≤ 2.7146286); across 3,230 shared components 8 states changed, each a wrong Stands or an
+  Undecided made right (6 light blocks at mass ratios 1e11 to 1e13, the ec6 wall at tolerance 1e-15,
+  a random 3 × 3 wall independently confirmed at [2.370709, 2.614916]); the Slow tier changed nothing;
+  costs within noise. **Blocking, fixed:** the bound was not valid for every `ŷ` as claimed. (a) A
+  facet slack's box `CapBound + 2 Σ B_G` assumed |f_K · d_J| ≤ 2, but a friction direction gives μ·RS,
+  so for μ > 2 (inscribed) or μ > 2cos(π/G) (circumscribed) a constructed `ŷ` read U 0.8005 under the
+  μ 5 block's optimum 0.9416 (outer 0.8095 under 0.9714). The box is now `CapBound + Σ_G B_G max_J
+  |f_K · d_J|`, valid in exact arithmetic for any μ; the antipodal form `2 CapBound` is tighter but the
+  facets come from cos/sin per angle, so the antipode is not an exact negation. (b) `max(0, NaN)`
+  dropped an overflowed column (|ŷ| near 1e308 gave U 0 on a cube whose optimum is the cap); a
+  non-finite term now returns Unbounded. Both are guarded through a test-only seam
+  (`src/CertificateProbe.h`, `detail::ProbeProgram` / `ProbeDualBound`, sharing `ColumnBoxes` with the
+  bound): every converged primal lies inside its box (11 of 608 probes breached before, every one at
+  μ ≥ 3.39), every converged bound is at least its t, and the overflowed dual reads unbounded. Also
+  blocking, now pinned: the mechanism after a successful capped re-solve (the 46-block wall at
+  47,150 N lists its beam and hinges; zeroing the re-solve's duals read Collapses with empty lists)
+  and the 1e-3 rung (the ec6 4 × 4 at `MaxIterations` 40 Stands at 624.45158 only through it).
+  **Corrections:** "converged paths are bit-identical" is false where the scaled start applies (a
+  body under 1e-6 of the load scale): 60 components' bounds moved by up to 2e-9 relative, no state.
+  The ruling's property "U ≥ t and U ≤ t(1 + 1e-6)" is false as written: U sits below t by up to the
+  primal residual (1.4e-11 (1 + |t|)), so the test allows 1e-10 (1 + |t|); and U exceeds t(1 + 1e-6)
+  on 27 shear-capped solves, by up to 1.2e-4 relative, so the upper half is not pinned. Recovery
+  cannot help when U is loose by more than 1e-3 (both rungs land above t* and stall again; the
+  cohesive open-slide test stays Undecided, as before), and with small `MaxIterations` the failed
+  rungs cost about 3×. The Ferris & Tin-Loi G = 64 case was re-measured: Undecided [0, 1000] in 96
+  with recovery on and off (a dry wall, U ≥ cap, recovery never fires), so API.md's sentence stands.
+  Left unguarded: the γ allowance (dropping it moves U by about 1e-17), the capped-re-solve mechanism
+  choice between the re-solve's duals and the stalled solve's last duals (no fixture reaches the
+  branch where they differ), and the boxes' own rounding (computed |f_K · d_J| can sit an ulp under
+  the exact value). The test named `TheDualBoundBracketsEveryConvergedLoadFactor` checks
+  that recovery leaves converged components unchanged, not a bound; renamed
+  `RecoveryLeavesConvergedComponentsUnchanged`.

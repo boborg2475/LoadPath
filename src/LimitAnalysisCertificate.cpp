@@ -1,6 +1,7 @@
 #include "loadpath/CollapseCertificate.h"
 
 #include "CapSiteFactor.h"
+#include "CertificateProbe.h"
 #include "EigenInclude.h"
 #include "StaticsCommon.h"
 
@@ -185,6 +186,8 @@ struct Outcome
 	int Iterations = 0;
 	double DualBound = Unbounded;
 	Eigen::VectorXd LastY;
+	Eigen::VectorXd X;
+	Eigen::VectorXd AllY;
 };
 
 struct ComponentVerdict
@@ -1374,6 +1377,41 @@ Eigen::VectorXd ApplyAbsTranspose(const Component& C, const Program& P, const Ei
 	return Out;
 }
 
+Eigen::VectorXd ColumnBoxes(const Program& P)
+{
+	Eigen::VectorXd Boxes(P.Variables);
+	for (std::size_t G = 0; G < P.Groups.size(); ++G)
+	{
+		const Group& Gr = P.Groups[G];
+		for (std::size_t J = Gr.First; J < Gr.First + Gr.Count; ++J)
+		{
+			Boxes(static_cast<Eigen::Index>(J)) = Gr.Bound;
+		}
+		Boxes(P.FirstSlack + static_cast<Eigen::Index>(G)) = Gr.Bound;
+	}
+	Boxes(P.LoadFactor) = P.Cap;
+	Boxes(P.CapSlack) = P.Cap;
+	for (const CapSite& Cap : P.CapSites)
+	{
+		for (std::size_t K = 0; K < Cap.Facets.size(); ++K)
+		{
+			double Reach = Cap.Bound;
+			for (const std::size_t G : Cap.Groups)
+			{
+				const Group& Gr = P.Groups[G];
+				double Largest = 0.0;
+				for (std::size_t J = Gr.First; J < Gr.First + Gr.Count; ++J)
+				{
+					Largest = std::max(Largest, std::abs(Dot(Cap.Facets[K], P.Directions[J])));
+				}
+				Reach += Gr.Bound * Largest;
+			}
+			Boxes(Cap.FirstSlack + static_cast<Eigen::Index>(K)) = Reach;
+		}
+	}
+	return Boxes;
+}
+
 double RigorousDualBound(const Component& C, const Program& P, const Eigen::VectorXd& Bounds, const Embedding& E)
 {
 	if (!(E.Tau > 0.0))
@@ -1398,34 +1436,18 @@ double RigorousDualBound(const Component& C, const Program& P, const Eigen::Vect
 		Upper -= Bounds.data()[Row] * Y.data()[Row];
 		Magnitude += std::abs(Bounds.data()[Row] * Y.data()[Row]);
 	}
-	const auto Add = [&](Eigen::Index I, double Bound) {
+	const Eigen::VectorXd Boxes = ColumnBoxes(P);
+	for (Eigen::Index I = 0; I < P.Variables; ++I)
+	{
 		const double Rounding = (I == P.LoadFactor ? LoadFactorGamma : ColumnGamma) * Allowance.data()[I];
-		const double Excess = std::max(0.0, R.data()[I] + Rounding);
-		Upper += Excess * Bound;
-		Magnitude += Excess * Bound;
-	};
-	for (std::size_t G = 0; G < P.Groups.size(); ++G)
-	{
-		const Group& Gr = P.Groups[G];
-		for (std::size_t J = Gr.First; J < Gr.First + Gr.Count; ++J)
+		const double Raw = R.data()[I] + Rounding;
+		if (!IsFinite(Raw))
 		{
-			Add(static_cast<Eigen::Index>(J), Gr.Bound);
+			return Unbounded;
 		}
-		Add(P.FirstSlack + static_cast<Eigen::Index>(G), Gr.Bound);
-	}
-	Add(P.LoadFactor, P.Cap);
-	Add(P.CapSlack, P.Cap);
-	for (const CapSite& Cap : P.CapSites)
-	{
-		double Reach = Cap.Bound;
-		for (const std::size_t G : Cap.Groups)
-		{
-			Reach += 2.0 * P.Groups[G].Bound;
-		}
-		for (std::size_t K = 0; K < Cap.Facets.size(); ++K)
-		{
-			Add(Cap.FirstSlack + static_cast<Eigen::Index>(K), Reach);
-		}
+		const double Excess = std::max(0.0, Raw);
+		Upper += Excess * Boxes.data()[I];
+		Magnitude += Excess * Boxes.data()[I];
 	}
 	Upper += Gamma(static_cast<double>(P.RowCount + P.Variables + 1)) * Magnitude;
 	return IsFinite(Upper) ? Upper : Unbounded;
@@ -1448,6 +1470,8 @@ Outcome SolveProgram(const Component& C, const Program& P, const CertificateOpti
 		if (E.Tau > 0.0)
 		{
 			Out.LastY = E.Y.head(C.Rows) / E.Tau;
+			Out.X = E.X / E.Tau;
+			Out.AllY = E.Y / E.Tau;
 		}
 		return Out;
 	};
@@ -2086,6 +2110,32 @@ bool ChooseComponents(const Structure& Model, std::span<const BodyId> Only, std:
 	return true;
 }
 
+bool ProbedComponent(const Structure& Model, std::span<const BodyLoad> Loads, const CertificateOptions& Options, std::size_t Index, Component& Out)
+{
+	if (!IsInputValid(Model, Loads, Options))
+	{
+		return false;
+	}
+	std::vector<Component> Components = BuildComponents(Model, Loads, Options.Gravity, {});
+	if (Index >= Components.size())
+	{
+		return false;
+	}
+	Out = std::move(Components[Index]);
+	return true;
+}
+
+Program ProbedProgram(const Component& C, const CertificateOptions& Options, bool bInscribed)
+{
+	const double RadiusScale = bInscribed ? 1.0 : 1.0 / std::cos(Pi / static_cast<double>(Options.ConeGenerators));
+	return BuildProgram(C, Options.ConeGenerators, RadiusScale, Options.LoadFactorCap, bInscribed);
+}
+
+std::vector<double> ToVector(const Eigen::VectorXd& V)
+{
+	return std::vector<double>(V.data(), V.data() + V.size());
+}
+
 class LimitAnalysisCertificate final : public ICollapseCertificate
 {
 public:
@@ -2125,6 +2175,46 @@ public:
 		return Result;
 	}
 };
+}
+
+namespace detail
+{
+ProgramProbe ProbeProgram(const Structure& Model, std::span<const BodyLoad> Loads, const CertificateOptions& Options, std::size_t Index, bool bInscribed)
+{
+	ProgramProbe Probe;
+	Component C;
+	if (!ProbedComponent(Model, Loads, Options, Index, C))
+	{
+		return Probe;
+	}
+	const Program P = ProbedProgram(C, Options, bInscribed);
+	const Outcome Out = SolveProgram(C, P, Options);
+	Probe.bConverged = Out.bConverged;
+	Probe.LoadFactor = Out.LoadFactor;
+	Probe.DualBound = Out.DualBound;
+	Probe.Primal = ToVector(Out.X);
+	Probe.Duals = ToVector(Out.AllY);
+	Probe.Boxes = ToVector(ColumnBoxes(P));
+	return Probe;
+}
+
+double ProbeDualBound(const Structure& Model, std::span<const BodyLoad> Loads, const CertificateOptions& Options, std::size_t Index, bool bInscribed, const std::vector<double>& Duals)
+{
+	Component C;
+	if (!ProbedComponent(Model, Loads, Options, Index, C))
+	{
+		return Unbounded;
+	}
+	const Program P = ProbedProgram(C, Options, bInscribed);
+	if (static_cast<Eigen::Index>(Duals.size()) != P.RowCount)
+	{
+		return Unbounded;
+	}
+	Embedding E;
+	E.Y = Eigen::Map<const Eigen::VectorXd>(Duals.data(), P.RowCount);
+	E.Tau = 1.0;
+	return RigorousDualBound(C, P, RowBounds(C, P), E);
+}
 }
 
 std::unique_ptr<ICollapseCertificate> MakeLimitAnalysisCertificate()

@@ -212,6 +212,8 @@ constexpr int HalfWarehouseWallIterationCeiling = 69;
 constexpr double UnreachableTolerance = 1.0e-15;
 constexpr int StalledWallFiringIteration = 69;
 constexpr int FailedResolveIterations = 30;
+constexpr int SecondRungIterations = 40;
+constexpr double SecondRungLower = 624.4515807676147;
 }
 
 TEST_CASE("Slow.Certificate.Stall.TheHalfWarehouseWallConvergesUnderTheRule")
@@ -384,7 +386,20 @@ TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Certificate.Stall.AFailedCappedResolveStaysUnd
 	CHECK(Got.Iterations <= Options.MaxIterations);
 }
 
-TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Certificate.Solver.TheDualBoundBracketsEveryConvergedLoadFactor")
+TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Certificate.Stall.TheSecondRungDecidesWhenTheFirstFails")
+{
+	CertificateOptions Options = CertificateLateral(0.4);
+	Options.FeasibilityTolerance = UnreachableTolerance;
+	Options.MaxIterations = SecondRungIterations;
+	CHECK(Options.bStallRecovery);
+	const CertificateResult Got = DecideWith(Ec6Wall(4, 4), Options);
+	INFO(std::setprecision(17) << "ec6 4 x 4 wall at lateral 0.4, tolerance 1e-15, MaxIterations " << Options.MaxIterations << ", recovery on: " << Got.State << " in " << Got.Iterations << " [" << Got.LoadFactorLower << ", " << Got.LoadFactorUpper << "]");
+	CHECK(Got.State == CertificateState::Stands);
+	CHECK(Near(Got.LoadFactorLower, SecondRungLower, PinnedRelative, 0.0));
+	CHECK(Got.LoadFactorLower <= 625.07665742313804 * (1.0 + 1.0e-9));
+}
+
+TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Certificate.Solver.RecoveryLeavesConvergedComponentsUnchanged")
 {
 	int Components = 0;
 	int Mismatches = 0;

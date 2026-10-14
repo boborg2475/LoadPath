@@ -361,6 +361,9 @@ TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Certificate.Solver.TheFortySixBlockWallDecides
 		{
 			CHECK(Got.LoadFactorLower >= 0.55301);
 			CHECK(Got.LoadFactorLower <= 0.55307);
+			INFO("moving " << Got.UnconstrainedBodies.size() << ", hinging " << Got.HingingInterfaces.size());
+			CHECK(HasBody(Got.UnconstrainedBodies, Wall.Beam));
+			CHECK_FALSE(Got.HingingInterfaces.empty());
 		}
 	}
 	MESSAGE("46-block wall: " << SecondsSince(Start) << " s");

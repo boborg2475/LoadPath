@@ -32,7 +32,7 @@ stacks, Paterson–Zwick, Couplet–Heyman at Milankovitch's 0.107478 with hinge
 the certificate's associative 31.07°, the cascade on the arch below least thickness, the dry
 wall at t / H within 1 % (10 × 8 and 4 × 5), the bonded 4 × 5 wall at its monolith factor
 `(t/H)(1 + f_t A_base / W) = 2.971` to 1 %, two screws at twice their published shear and
-withdrawal whatever the joint area. Default suite 390 cases in Debug and 431 in Release after
+withdrawal whatever the joint area. Default suite 393 cases in Debug and 435 in Release after
 slice 2b and the cohesive-wedge check (325 and 347 at the 6b close) (the arch, pile, arch-cascade, fuzz, small-wall and multi-panel factor anchors
 run only in Release under `LOADPATH_SLOW_IN_DEBUG`; twenty `Slow.*` cases run in Release at
 every slice close, and the
@@ -366,14 +366,17 @@ the non-associative answer) and the two hanging-component cases (slice 6), red b
   re-solve on an inscribed stall, `t_out = min(cap, U)` on a circumscribed stall, a scaled start
   for bodies under 1e-6 of the load scale, `CertificateOptions::bStallRecovery`; the 46-block and
   137-block walls, the Foraboschi crushing anchor at 23,900 N and the light-block table at mass
-  ratios 1e11 and 1e12 now decide. Left from it: the per-solve dual bound has no test seam, so the
-  bound's rounding allowance is unguarded (removing the γ terms keeps every test green) and the
-  property `Certificate.Solver.TheDualBoundBracketsEveryConvergedLoadFactor` stands in for
-  (bound ≥ converged t, ≤ t (1 + 1e-6)) is unwritten; the margin policy's cost (the probe saw the
-  1e-5 re-solve stall on 2 of 10 fallbacks, 16 to 50 s, before 1e-3 converged); mechanism
-  deflation was not prototyped; the Ferris & Tin-Loi wall at G = 64 within about 1e-6 of its
-  threshold (API.md's threshold resolution limit) was not re-measured under stall recovery, so
-  that sentence may now be stale. The dense selection takes 20 to 27 s on the full wall; the
+  ratios 1e11 and 1e12 now decide; its cold review's two bound holes (the facet box under μ > 2,
+  an overflowed column dropped) are fixed and guarded through `src/CertificateProbe.h` (DESIGN §10,
+  the conditioning's cold-review rulings). Left from it: the γ rounding allowance is unguarded
+  (dropping it moves U by about 1e-17); the boxes' own rounding is not allowed for (a computed
+  |f · d| can sit an ulp low); which duals give the mechanism after a capped re-solve (the
+  re-solve's, or the stalled solve's last when the re-solve reached its cap) is unguarded, no
+  fixture reaching the branch; U can exceed t by 1.2e-4 relative on shear-capped solves, and when
+  it is loose by more than 1e-3 neither rung converges (the cohesive open-slide test stays
+  Undecided; small `MaxIterations` costs about 3× in failed rungs); every solve now copies x and
+  y at exit for the probe; the margin policy's cost (the probe saw the 1e-5 re-solve stall on 2
+  of 10 fallbacks, 16 to 50 s, before 1e-3 converged); mechanism deflation was not prototyped. The dense selection takes 20 to 27 s on the full wall; the
   hinging list wanders between 17 and 33 joints on the 57-body wall; `FactorSelection`'s local
   `bShifted` is unused and `FactorBordered` keeps a third copy of the escalation loop. The
   Foraboschi fixture's limits with the paper's f_c 1.21 MPa are about 25.0, 40.0 and 57.1 kN at
