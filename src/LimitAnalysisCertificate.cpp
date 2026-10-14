@@ -2218,7 +2218,11 @@ ComponentVerdict DecideComponent(const Component& C, const CertificateOptions& O
 	}
 	if (!Inner.bConverged)
 	{
-		return V;
+		if (!Options.bStallRecovery)
+		{
+			return V;
+		}
+		Inner.LoadFactor = 0.0;
 	}
 	double OuterLoadFactor = Options.LoadFactorCap;
 	if (Inner.LoadFactor < Options.LoadFactorCap * (1.0 - Options.FeasibilityTolerance))

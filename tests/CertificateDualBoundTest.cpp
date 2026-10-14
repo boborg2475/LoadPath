@@ -18,6 +18,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <iomanip>
+#include <iterator>
 #include <limits>
 #include <random>
 #include <sstream>
@@ -317,11 +318,33 @@ TEST_CASE("Certificate.DualBound.AnOverflowedDualReadsUnbounded")
 	CHECK((U == std::numeric_limits<double>::infinity() || U >= Probe.LoadFactor));
 }
 
+namespace
+{
+std::vector<BoundCase> ForcedFailureCases()
+{
+	std::vector<BoundCase> Cases;
+	for (int Draw = 0; Draw < 10; ++Draw)
+	{
+		for (const int Cap : {3, 8})
+		{
+			BoundCase Forced = SeededCase(Draw);
+			Forced.Options.MaxIterations = Cap;
+			Forced.Name += ", MaxIterations " + std::to_string(Cap);
+			Cases.push_back(std::move(Forced));
+		}
+	}
+	return Cases;
+}
+}
+
 TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Certificate.DualBound.EveryGroundedCollapsesHasItsOuterDualBoundBelowOne")
 {
 	int Collapses = 0;
 	int Components = 0;
-	for (const BoundCase& Base : BoundCases())
+	std::vector<BoundCase> Cases = BoundCases();
+	std::vector<BoundCase> Forced = ForcedFailureCases();
+	Cases.insert(Cases.end(), std::make_move_iterator(Forced.begin()), std::make_move_iterator(Forced.end()));
+	for (const BoundCase& Base : Cases)
 	{
 		const CertificateOptions& Options = Base.Options;
 		const CertificateResult R = DecideWith(Base.Model, Options);
@@ -711,4 +734,47 @@ TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Certificate.DualBound.AFailedFacetLpKeepsAVali
 	}
 	MESSAGE(Trusted << " trusted cap-site exports, " << Changed << " where the failed facet LP moved the bound");
 	CHECK(Changed > 0);
+}
+
+TEST_CASE("Certificate.DualBound.AFailedInnerSolveWithAnOuterBoundBelowOneCollapses")
+{
+	StrengthProfile Profile = DryJoint(0.7);
+	Profile.ShearCohesionPa = 1.0e7;
+	Profile.MaxShearStrengthPa = 100.0;
+	const TwoBrickStack S = MakeTwoBrickStack(Profile, 0.03);
+	const CertificateOptions Options = CertificateLateral(1.5, 0.875);
+	const detail::ProgramProbe Inner = detail::ProbeProgram(S.Model, {}, Options, 0, true);
+	const detail::ProgramProbe Outer = detail::ProbeProgram(S.Model, {}, Options, 0, false);
+	INFO(std::setprecision(17) << "inner converged " << Inner.bConverged << " t " << Inner.LoadFactor << " U " << Inner.DualBound << "; outer converged " << Outer.bConverged << " t " << Outer.LoadFactor << " U " << Outer.DualBound);
+	REQUIRE_FALSE(Inner.bConverged);
+	REQUIRE(Outer.DualBound < 1.0);
+	const CertificateResult R = DecideWith(S.Model, Options);
+	INFO("state " << static_cast<int>(R.State) << ", lower " << R.LoadFactorLower << ", upper " << R.LoadFactorUpper << ", unconstrained " << R.UnconstrainedBodies.size() << ", hinging " << R.HingingInterfaces.size() << ", iterations " << R.Iterations);
+	CHECK(R.State == CertificateState::Collapses);
+	CHECK(R.LoadFactorLower == 0.0);
+	CHECK(R.LoadFactorUpper < 1.0);
+	CHECK(std::find(R.UnconstrainedBodies.begin(), R.UnconstrainedBodies.end(), S.Upper) != R.UnconstrainedBodies.end());
+	CHECK_FALSE(R.HingingInterfaces.empty());
+	CHECK(R.Mechanism.size() == R.UnconstrainedBodies.size());
+}
+
+TEST_CASE("Certificate.DualBound.AFailedInnerSolveWithAnOuterBoundAtOrAboveOneStaysUndecided")
+{
+	const BrickOnGround F = MakeBrickOnGround(DryJoint(0.7));
+	for (const int Cap : {1, 2, 3})
+	{
+		CertificateOptions Options = CertificateLateral(0.1);
+		Options.MaxIterations = Cap;
+		const detail::ProgramProbe Inner = detail::ProbeProgram(F.Model, {}, Options, 0, true);
+		const detail::ProgramProbe Outer = detail::ProbeProgram(F.Model, {}, Options, 0, false);
+		const CertificateResult R = DecideWith(F.Model, Options);
+		INFO(std::setprecision(17) << "MaxIterations " << Cap << ": inner converged " << Inner.bConverged << " U " << Inner.DualBound << "; outer converged " << Outer.bConverged << " t " << Outer.LoadFactor << " U " << Outer.DualBound << "; state " << static_cast<int>(R.State) << " [" << R.LoadFactorLower << ", " << R.LoadFactorUpper << "]");
+		REQUIRE_FALSE(Inner.bConverged);
+		REQUIRE_FALSE(Outer.DualBound < 1.0);
+		CHECK(R.State == CertificateState::Undecided);
+		CHECK(R.LoadFactorLower == 0.0);
+		CHECK(R.LoadFactorUpper >= 1.0);
+		CHECK(R.UnconstrainedBodies.empty());
+		CHECK(R.HingingInterfaces.empty());
+	}
 }

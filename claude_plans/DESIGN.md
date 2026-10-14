@@ -1948,3 +1948,20 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   ec6 4 × 4 wall U_in sits 1.3e-12 to 2.8e-12 relative above t*, so margins {1e-14, 1e-13} cap both
   rungs above t* (both stall: Undecided) and {1e-13, 1e-3} make rung 1 stall and rung 2 converge
   (Stands at 624.4516), independent of `MaxIterations`.
+- *2026-10-14, orchestrator, the failed-inner ruling:* the load factor scales every load,
+  gravity included (`C.Demand` is all applied wrenches over the force scale), and every strength
+  region contains the origin (a tension-capable corner's shifted variables carry exactly its offset,
+  a uniform λ = TensionN/G inside the friction group with zero shear inside the cap facets; a joint
+  with neither crushing nor tension has no group), so t = 0 with zero joint forces is always
+  statically admissible and t_in = 0 is a valid lower bound whatever the inscribed solve did.
+  **Ruling (adopted):** with `bStallRecovery` on, an inscribed solve that fails (its recovery
+  re-solves included) no longer returns Undecided at once: it counts as t_in = 0, the circumscribed
+  solve runs, and a rigorous U_out < 1 (a converged t_out under the gate, or a stalled solve's
+  min(cap, U)) reads Collapses on [0, U_out or t_out] with the selection's mechanism (t_in = 0 is
+  under the selection gate; a failed selection still reads Undecided). With recovery off the old
+  early return stays, so the stall-rule tests keep pinning a single solve's iteration count (running
+  the outer solve there raised their `Iterations` pins). The cohesive open slide (t* exactly 0 for
+  both programs, every inscribed solve failing in 4 to 12 iterations) now reads Collapses at U_out
+  6.0e-8, the selection naming the whole stack rotating rigidly about its base edge (both bricks at
+  −1 rad about x, the base bed hinging). A failed inscribed solve whose outer bound is at least 1
+  still reads Undecided, now bounded [0, t_out or U_out] rather than [0, cap].

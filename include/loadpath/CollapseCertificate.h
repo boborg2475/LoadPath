@@ -38,7 +38,7 @@ struct CertificateOptions
 	double StallImprovement = 0.5;
 	// Components with more equilibrium rows than this factor the normal matrix sparsely, with the load-factor coupling as a border; at or below it, densely with the coupling added into M. Both paths solve the cap sites in structured form.
 	int DenseRowLimit = 600;
-	// On a stalled or failed cone solve, bound the load factor by the rigorous dual bound and re-solve under it; false keeps the stall-rule window observable.
+	// On a stalled or failed cone solve, bound the load factor by the rigorous dual bound and re-solve under it, and let a failed inscribed solve count as t_in = 0; false keeps the stall-rule window observable.
 	bool bStallRecovery = true;
 };
 

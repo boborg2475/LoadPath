@@ -32,7 +32,7 @@ stacks, Paterson–Zwick, Couplet–Heyman at Milankovitch's 0.107478 with hinge
 the certificate's associative 31.07°, the cascade on the arch below least thickness, the dry
 wall at t / H within 1 % (10 × 8 and 4 × 5), the bonded 4 × 5 wall at its monolith factor
 `(t/H)(1 + f_t A_base / W) = 2.971` to 1 %, two screws at twice their published shear and
-withdrawal whatever the joint area. Default suite 397 cases in Debug and 445 in Release as of
+withdrawal whatever the joint area. Default suite 399 cases in Debug and 447 in Release as of
 2026-10-14 (325 and 347 at the 6b close) (the arch, pile, arch-cascade, fuzz, small-wall and multi-panel factor anchors
 run only in Release under `LOADPATH_SLOW_IN_DEBUG`; twenty-one `Slow.*` cases run in Release at
 every slice close, and the
@@ -382,10 +382,10 @@ the non-associative answer) and the two hanging-component cases (slice 6), red b
   0.227 in normalised motion, but its lists are identical, so a pin must assert the mechanism (a
   virtual-work check that its kinematic multiplier equals t_in is the principled form; nearby
   loads' mechanisms differ by 0.21, so a neighbour is no reference); the seeded box draws carry no cohesion
-  or tension (only the bolted block covers a cohesion group's facet term); when U is loose by more than 1e-3 neither rung converges (the cohesive open-slide test stays
-  Undecided; small `MaxIterations` costs about 3× in failed rungs); every solve now copies x and
+  or tension (only the bolted block covers a cohesion group's facet term); when U is loose by more than 1e-3 neither rung converges (small `MaxIterations` costs about 3× in failed rungs; a failed inscribed
+  solve now counts as t_in = 0, so the cohesive open slide Collapses through its outer bound); every solve now copies x and
   y at exit for the probe; the margin policy's cost (the probe saw the 1e-5 re-solve stall on 2
-  of 10 fallbacks, 16 to 50 s, before 1e-3 converged); mechanism deflation was not prototyped. The bound is polished (2026-10-14, DESIGN §10 "the dual-polish ruling"): left from it, `LoadFactorUpper` stays the primal (reporting min(cap, U_out) is blocked by the light block at mass ratio 1e8, U_out 7.54 against t 1.89, whose equilibrium duals no polish reaches); a failed inner solve with U_out < 1 reads Undecided (candidate: read Collapses where t_in = 0 is admissible, unverified); the bounded-LP oracle (tests/LpOracle.h, through `detail::ExportProgram`) skips the two
+  of 10 fallbacks, 16 to 50 s, before 1e-3 converged); mechanism deflation was not prototyped. The bound is polished (2026-10-14, DESIGN §10 "the dual-polish ruling"): left from it, `LoadFactorUpper` stays the primal (reporting min(cap, U_out) is blocked by the light block at mass ratio 1e8, U_out 7.54 against t 1.89, whose equilibrium duals no polish reaches); the bounded-LP oracle (tests/LpOracle.h, through `detail::ExportProgram`) skips the two
   largest wall programs (over 500,000 entries; the dense oracle takes minutes there) and the
   light-block family (it defeats the oracle at mass ratios of 1e7 and above);
   `Certificate.Mechanics.StandsSurvivesAnOuterSolveThatDoesNotConverge` asserts U at least a pinned

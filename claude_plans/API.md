@@ -507,7 +507,7 @@ struct CertificateOptions {
 	double LoadFactorCap = 1.0e3;          // the LP's upper bound on t, at least 1; reaching it means "stands with margin >= cap"
 	double FeasibilityTolerance = 1.0e-9;  // relative, on the equilibrium residual, dual residual and gap
 	int    MaxIterations = 200;            // interior-point iterations per solve before it is declared failed
-	bool   bStallRecovery = true;          // on a stalled or failed cone solve, bound t by the rigorous dual bound and re-solve under it
+	bool   bStallRecovery = true;          // on a stalled or failed cone solve, bound t by the rigorous dual bound and re-solve under it; a failed inscribed solve counts as t_in = 0
 };
 
 struct CertificateResult {
@@ -600,10 +600,10 @@ verdict is backed: elsewhere the reported `LoadFactorUpper` is the primal and ca
 upper bound; reporting `min(cap, U_out)` instead is open (CURRENT_STATE).
 
 **State.** `Stands` when `t_in ≥ 1` (whatever the circumscribed solve did: if it failed,
-`LoadFactorUpper = min(LoadFactorCap, U)`, or the cap with recovery off); `Collapses` when `t_out < 1` and, on a converged circumscribed solve, its dual bound `U_out < 1`; `Undecided` when
+`LoadFactorUpper = min(LoadFactorCap, U)`, or the cap with recovery off); `Collapses` when `t_out < 1` and, on a converged circumscribed solve, its dual bound `U_out < 1`; with recovery on, a failed inscribed solve counts as `t_in = 0` (the load factor scales every load, so zero load with zero joint forces is admissible), so a rigorous `U_out < 1` still reads Collapses, its mechanism from the selection; `Undecided` when
 `t_in < 1 ≤ t_out` (including a converged `t_out < 1 ≤ U_out`, bounds `[t_in, min(cap, U_out)]`; the polygon band, narrowed by raising `ConeGenerators`; on a cone-vertex
 direction a slide flips Stands → Undecided at `μ` and Undecided → Collapses at `μ / cos(π/G)`,
-on a mid-edge direction at `μ cos(π/G)` and `μ`), when the inscribed solve failed (its recovery re-solves included; bounds `[0, cap]`), when
+on a mid-edge direction at `μ cos(π/G)` and `μ`), when the inscribed solve failed (its recovery re-solves included) and, with recovery on, the circumscribed solve gives no rigorous `U_out < 1` (bounds `[0, t_out or U_out]`, or `[0, cap]` with recovery off), when
 `t_in < 1` and the circumscribed solve failed with recovery off or with `U_out ≥ cap` (bounds
 `[0, cap]`), or when the mechanism selection below failed; `InvalidInput` on the slice-2 rules (dead-body load,
 non-finite load or gravity) plus `ConeGenerators` odd or under 4, a `LoadFactorCap` below 1, and non-finite or non-positive
