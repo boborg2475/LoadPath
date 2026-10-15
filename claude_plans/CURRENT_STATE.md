@@ -44,6 +44,8 @@ the non-associative answer) and the two hanging-component cases (slice 6), red b
 
 ## Next
 
+**The near-term order is in [IMMEDIATE_UPDATES.md](IMMEDIATE_UPDATES.md)** (owner, 2026-10-15: elastic speed and elastic trust first). This list stays the full record.
+
 1. Slice 2c, **dry perpends settle**: **done** after a cold review and two follow-ups
    (2026-10-11). `DryNoiseFloorRelative` 1e-12 of the component's force scale: a tensionless
    corner opens only below −floor, a dry corner is open inside ±floor and re-closes above
