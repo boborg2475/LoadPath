@@ -163,6 +163,25 @@ Invoke them with the Agent tool and `subagent_type`, or through the `/test-exper
 `.claude/agents/` are the single source of truth. Pass a subagent anything that exists only in
 the conversation: the exact red output, values already worked out, constraints that must hold.
 
+### The owner approves every test plan before test code is written
+
+Owner, 2026-10-15. test-expert works in two steps:
+
+1. **Plan.** It writes `claude_plans/test_plans/<YYYY-MM-DD>-<feature>.md` and no test code. One
+   entry per case: the test name; the behaviour it pins, in a sentence; the fixture; the
+   assertion and its kind (mechanism or outcome, DESIGN §6); why it is red today, or, for a
+   regression net that is green on arrival, the mutant that will prove it bites; and its tier
+   (default, `LOADPATH_SLOW_IN_DEBUG`, `Slow.`, `Measure.`, `Deferred.`). The file opens with a
+   status line: `Status: proposed`.
+2. **Tests, after approval.** The orchestrator relays the plan to the owner and waits. The owner
+   approves it, edits it or rejects cases; the orchestrator records that on the status line
+   (`Status: approved by the owner, <date>`, with any edits applied to the entries). Only then
+   does test-expert write the tests, exactly as approved. A case it wants to add or change
+   while writing goes back to the owner as an amendment to the plan, not into the code.
+
+A review that asks for new tests produces a plan amendment the same way. The plan files stay in
+the repository as the record of what was agreed.
+
 Expect `dev-expert` to refuse when a test is not genuinely red and `review-expert` to send work
 back. Act on blocking findings, log deferred ones in CURRENT_STATE.md, and do not call anything
 done until review has passed.

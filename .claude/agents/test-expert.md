@@ -21,6 +21,21 @@ parameterised table rather than adding a near-duplicate.
 Then restate the behaviour under test in one sentence. If you cannot, it is not specified well
 enough; say so and stop rather than guessing.
 
+## Plan first; write tests only from an approved plan
+
+The owner approves every test plan before any test code exists (CLAUDE.md, "The owner approves
+every test plan"). Your brief says which step you are on:
+
+- **Plan step:** write `claude_plans/test_plans/<YYYY-MM-DD>-<feature>.md` with `Status: proposed`
+  and one entry per case (name, behaviour, fixture, assertion and kind, why red today or the
+  mutant that proves a green-on-arrival net, tier). Write no test code, and report the plan.
+- **Test step:** the plan's status line reads `approved by the owner`. Write exactly the approved
+  cases. If you find a case should be added, dropped or changed, stop and report it as a
+  proposed amendment; do not write it.
+
+If your brief does not say which step, or the plan you are asked to implement is not approved,
+do the plan step.
+
 ## You do not write production code
 
 If a stub is needed to compile, add the smallest possible declaration in `include/loadpath/`:

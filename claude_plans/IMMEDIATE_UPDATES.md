@@ -24,39 +24,34 @@ section 1, then 2, then 3, then the parked items in section 4. Remove an item wh
   at any shard count). Options: move it to `Slow.*`, or split it so its fixtures land in different
   shards. Left as it is until the owner decides; the sharding work changes no test.
 
-## 2. Code: elastic speed (approved, after section 1)
+## 2. Code: elastic speed (approved): done 2026-10-15
 
-Warehouse, Release, 2026-10-15: cold elastic solve 419 ms (442 to 530 ms in the profile), judge
-the same plus about 1.5 ms; warm re-judge after a removal about 140 to 150 ms. The solve is
-single-threaded at that measurement, and every component converges in one active-set pass at rest. The phases can be
-read at any time from the profiling build (`-Profile`, `LOADPATH_PROFILE`; landed 2026-10-15).
-
-1. **Parallel component solves, the rest** (owner's ideas file; the elastic part landed
-   2026-10-15). The elastic `SolveComponents` runs through the host's `IParallelFor`: the
-   warehouse's elastic solve went from 448 ms serial to 227 ms on 2 workers, 231 on 4 and 220 on
-   8 (the largest component bounds it). Left: the certificate's `DecideAll` and the combined
-   authority's per-component consults through the same hook, which first needs the nesting
-   decision (a consult's `Body` would call the elastic solve, which calls `For`). Details in
-   CURRENT_STATE.
+The permanent profiling timers (553611c) and parallel elastic component solves (959316e) landed.
 
 ## 3. Test control (owner, 2026-10-15), after section 2
 
 The owner wants more control over what gets tested, and a set of end-to-end tests the project is
 validated against before features are added. Both run alongside test-expert.
 
-1. **The owner approves test cases before they are written.** test-expert first proposes a test
-   plan: each case's name, the behaviour it pins, the fixture, the assertion and its kind
-   (mechanism or outcome), and why it should be red today. The orchestrator relays it; no test code
-   is written until the owner approves or edits it. Recorded in CLAUDE.md and the test-expert
-   brief; the plan format is decided with the first use.
-2. **End-to-end validation tests.** Whole-structure scenarios through the public API (build the
+The approval step landed 2026-10-15 (CLAUDE.md, "The owner approves every test plan"; plans in
+`claude_plans/test_plans/`). What remains:
+
+1. **End-to-end validation tests.** Whole-structure scenarios through the public API (build the
    structure, judge it, run the cascade, remove pieces, read who stands and what releases),
    checked against expected outcomes. A feature is validated against them before it lands. Start
    with an inventory of what already does this (the `Measure.Scale` rows, the anchors from papers
    and codes, the cascade fuzz families, the warehouse and shed), then test-expert proposes the
-   missing scenarios for the owner to approve, under step 1.
+   missing scenarios for the owner to approve, as the first plan under the new step.
 
 ## 4. Parked (owner, 2026-10-15): not before sections 1 to 3
+
+### Parallel certificate consults (moved here 2026-10-15)
+
+The elastic part of parallel component solves landed (959316e): the warehouse's elastic solve
+went from 448 ms serial to 220 to 231 ms on 2 to 8 workers. The rest, the certificate's `DecideAll`
+and the combined authority's consults through the same hook, is certificate speed rather than
+elastic speed, so it waits behind the owner's elastic-first goal. It first needs the nesting
+decision; the full list is in CURRENT_STATE.
 
 ### Elastic speed-ups
 
