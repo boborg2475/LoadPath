@@ -90,7 +90,11 @@ powershell -NoProfile -ExecutionPolicy Bypass -File Scripts/Test.ps1 -tc="Model.
 ```
 
 `-Config Release` builds and runs the optimised build. `Scripts/Build.ps1` builds without
-running. **The exit code is meaningful**: non-zero when any assertion fails, and the summary
+running. **The default run is sharded**: `Test.ps1` splits it across processes (half the logical
+cores, at most 8; `-Jobs N` overrides, `-Jobs 1` runs serially), each running a contiguous range
+of the same filtered order, balanced by per-test durations cached in the build folder. A `-tc`
+run stays serial unless `-Jobs` is given. Same tests, same totals; the Release default takes
+about 20 s instead of about 60 s. Never shard `Slow.*`: its budget rows assert on wall time. **The exit code is meaningful**: non-zero when any assertion fails, and the summary
 prints to stdout. The suite is expected to run in seconds; a test that needs more than about a
 second goes behind a `Slow.` prefix, which `Scripts/Test.ps1` excludes from the default run (it
 prints how many it skipped). A case that is slow only in Debug puts `LOADPATH_SLOW_IN_DEBUG`
