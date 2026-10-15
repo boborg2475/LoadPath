@@ -1,7 +1,11 @@
 #include "BitwiseTestSupport.h"
 #include "CascadeTestSupport.h"
+#include "ParallelTestSupport.h"
 #include "SlowInDebug.h"
 
+#include "loadpath/CollapseCertificate.h"
+#include "loadpath/ParallelFor.h"
+#include "loadpath/StandingAuthority.h"
 #include "loadpath/StructuralAuthority.h"
 #include "loadpath/geometry/RunningBondWall.h"
 
@@ -23,6 +27,7 @@ using namespace loadpath::test;
 namespace
 {
 constexpr int ReaderThreads = 8;
+constexpr int SharedPoolWorkers = 4;
 constexpr int Repeats = 200;
 constexpr int LateralRepeats = 15;
 constexpr double LateralLambda = 0.5;
@@ -43,6 +48,7 @@ struct ReaderOutcome
 {
 	ComponentPartition Partition;
 	AuthorityResult Verdict;
+	AuthorityResult Pooled;
 };
 
 bool ConsultedCertificate(const AuthorityResult& Verdict)
@@ -54,6 +60,8 @@ void CheckReadersAgreeWithSerial(const StrengthProfile& Joint, const AuthorityOp
 {
 	const Structure Template = MakeWall(Joint);
 	const std::unique_ptr<IStructuralAuthority> Authority = MakeAuthority();
+	const ThreadPoolFor Pool(SharedPoolWorkers);
+	const std::unique_ptr<IStructuralAuthority> PooledAuthority = MakeCombinedAuthority(MakeRbsmStandingAuthority(&Pool), MakeLimitAnalysisCertificate());
 
 	Structure SerialModel = Template;
 	const ComponentPartition SerialPartition = SerialModel.Components();
@@ -64,6 +72,7 @@ void CheckReadersAgreeWithSerial(const StrengthProfile& Joint, const AuthorityOp
 
 	int PartitionMismatches = 0;
 	int VerdictMismatches = 0;
+	int PooledMismatches = 0;
 	for (int Repeat = 0; Repeat < RepeatCount; ++Repeat)
 	{
 		const Structure Shared = Template;
@@ -75,9 +84,10 @@ void CheckReadersAgreeWithSerial(const StrengthProfile& Joint, const AuthorityOp
 		{
 			Readers.emplace_back([&, T] {
 				Start.arrive_and_wait();
+				AuthorityResult Pooled = PooledAuthority->Judge(Shared, {}, Options, nullptr);
 				ComponentPartition Partition = Shared.Components();
 				AuthorityResult Verdict = Authority->Judge(Shared, {}, Options, nullptr);
-				Outcomes[T] = ReaderOutcome{std::move(Partition), std::move(Verdict)};
+				Outcomes[T] = ReaderOutcome{std::move(Partition), std::move(Verdict), std::move(Pooled)};
 			});
 		}
 		for (std::thread& Reader : Readers)
@@ -89,11 +99,14 @@ void CheckReadersAgreeWithSerial(const StrengthProfile& Joint, const AuthorityOp
 			REQUIRE(Outcome.has_value());
 			PartitionMismatches += bitwise::Same(Outcome->Partition, SerialPartition) ? 0 : 1;
 			VerdictMismatches += bitwise::Same(Outcome->Verdict, SerialVerdict) ? 0 : 1;
+			PooledMismatches += SameParallel(Outcome->Pooled, SerialVerdict) ? 0 : 1;
 		}
 	}
-	INFO("readers " << RepeatCount * ReaderThreads << ", partition mismatches " << PartitionMismatches << ", verdict mismatches " << VerdictMismatches);
+	INFO("readers " << RepeatCount * ReaderThreads << ", partition mismatches " << PartitionMismatches << ", verdict mismatches " << VerdictMismatches << ", shared " << SharedPoolWorkers << "-worker pool mismatches " << PooledMismatches << ", pool For calls " << Pool.Calls << ", indices run " << Pool.Ran.load());
 	CHECK(PartitionMismatches == 0);
 	CHECK(VerdictMismatches == 0);
+	CHECK(PooledMismatches == 0);
+	CHECK_MESSAGE(Pool.Calls >= static_cast<std::size_t>(RepeatCount * ReaderThreads), "every pooled judge went through the shared hook");
 }
 }
 

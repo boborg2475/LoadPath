@@ -58,6 +58,7 @@ add_executable(loadpath_tests
 	Slice2bAnchorsTest.cpp
 	Slice4AnchorsTest.cpp
 	ConcurrencyTest.cpp
+	ParallelSolveTest.cpp
 	StaleLoadTest.cpp
 	ProfileTimingsTest.cpp)
 target_link_libraries(loadpath_tests PRIVATE loadpath doctest)

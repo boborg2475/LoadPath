@@ -65,3 +65,11 @@ before a line of this project exists. Each cost real time there. Add a new one t
 - **Never revert a test mutation with `git checkout --` on a file carrying uncommitted work.**
   Re-apply the line.
 - **`grep -c $'\r'` is useless in Git Bash** for line-ending checks; use `tr -cd '\r' | wc -c`.
+- **`REQUIRE` does not stop a test here.** Under `DOCTEST_CONFIG_NO_EXCEPTIONS_BUT_WITH_ALL_ASSERTS`
+  a failed `REQUIRE` records the failure and carries on, so indexing after it can crash the
+  process (a SIGSEGV on `Calls[0]` after a failed size check, 2026-10-15). Guard the access with
+  an `if` after the check.
+- **A `Structure` copy takes a fresh lineage**, so a warm re-judge on a copy reuses nothing. Judge
+  cold and warm on the same object when a test needs reuse.
+- **Two builds into one folder at once collide** (C1041 on the shared `.pdb`). Agents running in
+  parallel use different build folders: the main tree and the scratch worktree.

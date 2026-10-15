@@ -2129,3 +2129,34 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   by `Measure.Profile.ReadingsDigest` printing the same digest of every reading's bits in both. A
   runtime toggle was rejected: it would add an option to `SameOptions` and a branch to every solve
   for a debugging aid.
+- *2026-10-15, orchestrator, parallel component solves (owner's ideas file, IMMEDIATE_UPDATES §2):*
+  the host supplies the threads. `include/loadpath/ParallelFor.h` declares `IParallelFor` with one
+  call, `For(Count, Body)`: run `Body(I)` once for every I in [0, Count), possibly concurrently and
+  in any order, and return when all have finished. The library never creates a thread; the
+  Unreal adapter will pass the engine's task system, the tests a small `std::thread` pool.
+  `MakeRbsmStandingAuthority(const IParallelFor* Workers = nullptr)` takes a non-owning pointer
+  the host keeps alive; null is serial, today's path. It is not an option: `StandingOptions` and
+  `SameOptions` are unchanged, because the worker count must never change an answer. This slice
+  parallelises the elastic `SolveComponents` only; the certificate's `DecideAll` and the combined
+  authority's consults take the same hook in a later slice.
+  - **Thread protection is by construction, not by locks.** The structure is read-only during a
+    solve, each component solves in its own working memory and writes only its own pre-assigned
+    slot, and the merge (readings, mechanisms, unconstrained bodies, iterations, timings, the
+    overall state) runs afterwards on the calling thread in ascending component order. The only
+    shared mutable state a solve can reach is the `Components()` cache, already behind a mutex
+    (627d604). So the answer is bit-identical on any worker count and in any execution order.
+  - **The ideas file's per-component claim is a host scheduling rule, not a library lock.** Two
+    solves of the same component at once are safe (both read-only) and only waste work, so the
+    library adds no claim and no global state (§7). API.md tells the host to keep one judge in
+    flight per structure and merge new events into the next one.
+  - **Amended after review (2026-10-15).** A hook must accept concurrent `For` calls from any
+    thread, because an authority shares its hook across concurrent solves; engine task systems
+    already do. The bit-identical guarantee holds when each `Body` runs with the calling thread's
+    floating-point environment (rounding mode, denormal flushing): the control word is per
+    thread, and a worker set to round toward zero changed the answer in the review's probe. That
+    is a documented precondition for now; enforcing it (capture the caller's environment, set it
+    in each task) is logged for the Unreal adapter slice, since denormal flushing is not portable
+    through `<cfenv>`. The library never nests `For` today; whether hooks must allow nesting is
+    decided with the certificate's consults. Shared state, completely: besides the
+    `Components()` cache, Eigen 3.4 keeps a function-local static for cache sizes (thread-safe
+    first initialisation, read-only afterwards).

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "loadpath/Handles.h"
+#include "loadpath/ParallelFor.h"
 #include "loadpath/PhaseTimings.h"
 #include "loadpath/Structure.h"
 #include "loadpath/Units.h"
@@ -124,5 +125,6 @@ public:
 	virtual StandingResult Solve(const Structure& Model, std::span<const BodyLoad> Loads, const StandingOptions& Options, std::span<const BodyId> Only) const = 0;
 };
 
-std::unique_ptr<IStandingAuthority> MakeRbsmStandingAuthority();
+// Workers is non-owning and the host keeps it alive; null solves serially, and the answer is bit-identical either way when the hook keeps the caller's floating-point environment.
+std::unique_ptr<IStandingAuthority> MakeRbsmStandingAuthority(const IParallelFor* Workers = nullptr);
 }

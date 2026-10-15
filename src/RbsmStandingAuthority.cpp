@@ -9,6 +9,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <limits>
 #include <optional>
 #include <random>
@@ -1122,13 +1123,15 @@ bool IsIncluded(const std::vector<bool>& Chosen, std::size_t ProblemIndex)
 	return Chosen.empty() || ProblemIndex == 0 || Chosen[ProblemIndex - 1];
 }
 
-StandingResult SolveComponents(const std::vector<Problem>& Problems, std::size_t InterfaceCount, const StandingOptions& Options, const std::vector<bool>& Chosen)
+StandingResult SolveComponents(const std::vector<Problem>& Problems, std::size_t InterfaceCount, const StandingOptions& Options, const std::vector<bool>& Chosen, const IParallelFor* Workers)
 {
 	std::vector<bool> bSlotIncluded(InterfaceCount, false);
+	std::vector<std::size_t> Work;
 	for (std::size_t I = 0; I < Problems.size(); ++I)
 	{
 		if (IsIncluded(Chosen, I))
 		{
+			Work.push_back(I);
 			for (const std::size_t Slot : Problems[I].ReadingSlots)
 			{
 				bSlotIncluded[Slot] = true;
@@ -1144,19 +1147,30 @@ StandingResult SolveComponents(const std::vector<Problem>& Problems, std::size_t
 			LocalOfSlot[Slot] = ReadingCount++;
 		}
 	}
+	std::vector<StandingResult> Solved(Work.size());
+	const std::function<void(std::size_t)> SolveOne = [&](std::size_t K) {
+		PhaseTimings Timings;
+		Solved[K] = profile::Timed(Timings.TotalSeconds, [&] { return SolveProblem(Problems[Work[K]], Options, Timings); });
+		Solved[K].Timings = Timings;
+	};
+	if (Workers != nullptr)
+	{
+		Workers->For(Work.size(), SolveOne);
+	}
+	else
+	{
+		for (std::size_t K = 0; K < Work.size(); ++K)
+		{
+			SolveOne(K);
+		}
+	}
 	StandingResult Result;
 	Result.State = StandingState::Stands;
 	Result.Readings.resize(ReadingCount);
-	for (std::size_t I = 0; I < Problems.size(); ++I)
+	for (std::size_t K = 0; K < Work.size(); ++K)
 	{
-		if (!IsIncluded(Chosen, I))
-		{
-			continue;
-		}
-		const Problem& P = Problems[I];
-		PhaseTimings Timings;
-		StandingResult Component = profile::Timed(Timings.TotalSeconds, [&] { return SolveProblem(P, Options, Timings); });
-		Component.Timings = Timings;
+		const Problem& P = Problems[Work[K]];
+		StandingResult& Component = Solved[K];
 		if (Component.State == StandingState::InvalidInput)
 		{
 			StandingResult Invalid;
@@ -1168,10 +1182,10 @@ StandingResult SolveComponents(const std::vector<Problem>& Problems, std::size_t
 			Result.State = Component.State;
 		}
 		std::vector<std::size_t> Slots(P.ReadingSlots.size());
-		for (std::size_t K = 0; K < P.ReadingSlots.size(); ++K)
+		for (std::size_t R = 0; R < P.ReadingSlots.size(); ++R)
 		{
-			Slots[K] = LocalOfSlot[P.ReadingSlots[K]];
-			Result.Readings[Slots[K]] = Component.Readings[K];
+			Slots[R] = LocalOfSlot[P.ReadingSlots[R]];
+			Result.Readings[Slots[R]] = Component.Readings[R];
 		}
 		Result.Mechanism.insert(Result.Mechanism.end(), Component.Mechanism.begin(), Component.Mechanism.end());
 		Result.UnconstrainedBodies.insert(Result.UnconstrainedBodies.end(), Component.UnconstrainedBodies.begin(), Component.UnconstrainedBodies.end());
@@ -1188,6 +1202,8 @@ StandingResult SolveComponents(const std::vector<Problem>& Problems, std::size_t
 class RbsmStandingAuthority final : public IStandingAuthority
 {
 public:
+	explicit RbsmStandingAuthority(const IParallelFor* InWorkers) : Workers(InWorkers) {}
+
 	StandingResult Solve(const Structure& Model, std::span<const BodyLoad> Loads, const StandingOptions& Options, std::span<const BodyId> Only) const override
 	{
 		std::vector<std::size_t> Stale;
@@ -1210,13 +1226,15 @@ private:
 			Result.InvalidInterface = bInvalid ? Offending : InterfaceId::Invalid();
 			return Result;
 		}
-		return SolveComponents(BuildProblems(Model, Loads, Options), Model.LiveInterfaces().size(), Options, Chosen);
+		return SolveComponents(BuildProblems(Model, Loads, Options), Model.LiveInterfaces().size(), Options, Chosen, Workers);
 	}
+
+	const IParallelFor* Workers = nullptr;
 };
 }
 
-std::unique_ptr<IStandingAuthority> MakeRbsmStandingAuthority()
+std::unique_ptr<IStandingAuthority> MakeRbsmStandingAuthority(const IParallelFor* Workers)
 {
-	return std::make_unique<RbsmStandingAuthority>();
+	return std::make_unique<RbsmStandingAuthority>(Workers);
 }
 }

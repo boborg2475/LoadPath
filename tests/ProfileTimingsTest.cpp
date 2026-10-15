@@ -1,9 +1,11 @@
 #include "BrickFixtures.h"
 #include "CascadeTestSupport.h"
+#include "ParallelTestSupport.h"
 #include "ScaleTestSupport.h"
 #include "StaticsTestSupport.h"
 #include "WarehouseTestSupport.h"
 
+#include "loadpath/ParallelFor.h"
 #include "loadpath/PhaseTimings.h"
 #include "loadpath/StandingAuthority.h"
 #include "loadpath/StructuralAuthority.h"
@@ -315,17 +317,15 @@ std::string Hex(std::uint64_t Value)
 	std::snprintf(Text, sizeof(Text), "%016llx", static_cast<unsigned long long>(Value));
 	return Text;
 }
-}
 
-TEST_CASE("Profile.Timings.ElasticFillsThePhasesItRunsAndSumsItsComponents")
+void CheckElasticTimings(const TwoWallsAndAFloatingBrick& F, const IParallelFor* Hook, const std::string& HookName)
 {
-	const TwoWallsAndAFloatingBrick F = MakeTwoWallsAndAFloatingBrick();
 	for (const SolvePath Path : {SolvePath::Dense, SolvePath::Sparse})
 	{
-		const std::string PathName = Path == SolvePath::Dense ? "dense" : "sparse";
+		const std::string PathName = HookName + ", " + (Path == SolvePath::Dense ? "dense" : "sparse");
 		StandingOptions Options;
 		Options.DenseDofLimit = Path == SolvePath::Dense ? INT_MAX : 0;
-		const StandingResult R = SolveWith(F.Model, Options);
+		const StandingResult R = MakeRbsmStandingAuthority(Hook)->Solve(F.Model, {}, Options, {});
 		INFO(PathName << " path, " << std::string(bProfiled ? "profiled" : "normal") << " build, state " << R.State);
 		REQUIRE(R.Components.size() == 3u);
 		CHECK(R.Readings.size() == F.Model.LiveInterfaces().size());
@@ -357,6 +357,17 @@ TEST_CASE("Profile.Timings.ElasticFillsThePhasesItRunsAndSumsItsComponents")
 			CheckAllZero(R.Timings, PathName + " result");
 		}
 	}
+}
+}
+
+TEST_CASE("Profile.Timings.ElasticFillsThePhasesItRunsAndSumsItsComponents")
+{
+	const TwoWallsAndAFloatingBrick F = MakeTwoWallsAndAFloatingBrick();
+	CheckElasticTimings(F, nullptr, "serial");
+	const OrderedFor Reverse = ReverseFor();
+	CheckElasticTimings(F, &Reverse, "reverse hook");
+	const ThreadPoolFor Pool(4);
+	CheckElasticTimings(F, &Pool, "4-worker pool");
 }
 
 TEST_CASE("Profile.Timings.JudgeSplitsElasticAndCertificateTimeAndReuseCostsNothing")

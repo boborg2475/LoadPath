@@ -32,8 +32,8 @@ stacks, Paterson–Zwick, Couplet–Heyman at Milankovitch's 0.107478 with hinge
 the certificate's associative 31.07°, the cascade on the arch below least thickness, the dry
 wall at t / H within 1 % (10 × 8 and 4 × 5), the bonded 4 × 5 wall at its monolith factor
 `(t/H)(1 + f_t A_base / W) = 2.971` to 1 %, two screws at twice their published shear and
-withdrawal whatever the joint area. Default suite 422 cases in Debug and 475 in Release as of
-2026-10-15 (325 and 347 at the 6b close) (the arch, pile, arch-cascade, fuzz, small-wall and multi-panel factor anchors
+withdrawal whatever the joint area. Default suite 429 cases in Debug and 484 in Release as of
+2026-10-15, sharded across six processes (about 110 s and 18 s) (325 and 347 at the 6b close) (the arch, pile, arch-cascade, fuzz, small-wall and multi-panel factor anchors
 run only in Release under `LOADPATH_SLOW_IN_DEBUG`; twenty-two `Slow.*` cases run in Release at
 every slice close, and the
 cheap `Measure.Scale.*` rows after them); the `Deferred.*` tier holds the physical wedge pin
@@ -44,7 +44,27 @@ the non-associative answer) and the two hanging-component cases (slice 6), red b
 
 ## Next
 
-**The near-term order is in [IMMEDIATE_UPDATES.md](IMMEDIATE_UPDATES.md)** (owner, 2026-10-15: elastic speed and elastic trust first). This list stays the full record.
+**The near-term order is in [IMMEDIATE_UPDATES.md](IMMEDIATE_UPDATES.md)** (owner, 2026-10-15: workflow, then the approved elastic items, then test control; the elastic-trust work is parked). This list stays the full record.
+
+**Parallel component solves, the rest (deferred 2026-10-15, IMMEDIATE_UPDATES §2 item 1).** The
+elastic `SolveComponents` runs through the host's `IParallelFor` (DESIGN §10 "parallel component
+solves", amended after review). Still to do, in order:
+- **Decide nesting.** The certificate's `DecideAll` and the combined authority's per-component
+  consults taking the same hook would nest `For` (a consult's `Body` calls the elastic solve,
+  which calls `For`). Either the contract requires hooks to allow nesting (engine task systems
+  do; the test pool in tests/ParallelTestSupport.h would deadlock and must change), or the
+  library flattens it (consults use the hook, the elastic solve inside a consult runs serially).
+- **Then parallelise `DecideAll` and the consults**, bit-identical on any worker count, with the
+  same reverse/shuffle/pool tests as `Statics.Parallel.*`.
+- **A fail-closed merge guard** (review non-blocking 1): if a hook skips an index, the merge
+  in `SolveComponents` reads a default slot out of bounds. Check that each slot ran (a
+  `std::vector<std::uint8_t>` flag or the readings count against the problem's slots) and read
+  Undecided instead; red test: a hook that skips one index.
+- **Enforce the floating-point precondition** in the Unreal adapter slice: capture the caller's
+  environment and set it in each task (the review's round-toward-zero probe is the red test).
+- **A trivial-problem fast path** (review note): problem 0 always goes through `For`; running a
+  Count ≤ 2 solve inline would help the warm cascade's many small solves, but changes the pinned
+  one-call rule (`Statics.Parallel.EachProblemIsHandedToTheHookOnce...`), so it needs a ruling.
 
 1. Slice 2c, **dry perpends settle**: **done** after a cold review and two follow-ups
    (2026-10-11). `DryNoiseFloorRelative` 1e-12 of the component's force scale: a tensionless

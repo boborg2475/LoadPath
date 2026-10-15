@@ -270,11 +270,55 @@ public:
 	// Only: empty solves every component; otherwise the components containing a listed body, Readings and Components covering those only (plus interfaces joining two grounded bodies); an entry that is not a live free body is InvalidInput (stage 2).
 	virtual StandingResult Solve(const Structure&, std::span<const BodyLoad> Loads, const StandingOptions&, std::span<const BodyId> Only) const = 0;
 };
-std::unique_ptr<IStandingAuthority> MakeRbsmStandingAuthority();
+std::unique_ptr<IStandingAuthority> MakeRbsmStandingAuthority(const IParallelFor* Workers = nullptr);   // non-owning; null is serial (2026-10-15, "Parallel component solves")
 ```
 
 `Solve` is const, keeps no state between calls, is deterministic for a given structure, and
 never mutates the structure. The host may call it on any thread.
+
+### Parallel component solves (`ParallelFor.h`, 2026-10-15, DESIGN §10 "parallel component solves")
+
+```cpp
+class IParallelFor {
+public:
+	virtual ~IParallelFor() = default;
+	// Calls Body(I) once for every I in [0, Count), possibly concurrently and in any order, and returns when all have finished.
+	// For itself may be called from several threads at once (an authority shares its hook across concurrent solves), and each Body must run with the calling thread's floating-point environment.
+	virtual void For(std::size_t Count, const std::function<void(std::size_t)>& Body) const = 0;
+};
+```
+
+- **A hook must accept concurrent `For` calls from any thread.** The hook lives inside the
+  authority, and `Solve` may be called on several threads at once, so concurrent solves on one
+  authority share it. Engine task systems (Unreal's `ParallelFor`, TBB) already do, with the
+  calling thread helping. A pool that keeps one job in shared fields without a lock is not a
+  conforming hook: a second `For` would overwrite the first and skip its indices.
+- **Each `Body` must run with the calling thread's floating-point environment** (rounding mode,
+  denormal flushing). The control word is per thread; a worker set to round toward zero gives a
+  different answer (shown by the review's probe, 2026-10-15). The library does not enforce this
+  yet; enforcement is logged for the Unreal adapter slice.
+- **The library never calls `For` from inside a `Body`** today. Whether a hook must support
+  nested calls is decided when the certificate's consults take the hook, since that would nest.
+- **The host supplies the threads.** The library never creates a thread. The Unreal adapter
+  will pass the engine's task system; the tests pass a small `std::thread` pool or a serial
+  hook that runs the indices in a chosen order.
+- **The factory parameter is non-owning.** `MakeRbsmStandingAuthority(&Workers)` stores the
+  pointer; the host keeps the hook alive for the authority's lifetime. Null (the default) solves
+  serially. It is not an option: `StandingOptions` and `SameOptions` are unchanged.
+- **One `For` call per `Solve`**, with `Count` = 1 + the components solved: problem 0 (the
+  interfaces joining two grounded bodies) is always one of the indices. Each index solves into
+  its own slot; the merge runs afterwards on the calling thread in ascending component order.
+  An `InvalidInput` component returns the same result as the serial path even though later
+  components were also solved.
+- **The answer is bit-identical on any worker count and in any execution order**, given the
+  floating-point precondition above. Only the
+  elastic `SolveComponents` uses the hook; the certificate's `DecideAll` and the combined
+  authority's consults stay serial until a later slice.
+- **Host rule: keep one judge in flight per structure** and merge new events into the next one.
+  Two concurrent solves of one component are safe (both read the structure only) but waste work;
+  the library adds no claim and no global state.
+- **Timings under a hook** are per-component wall times, so their sum (`StandingResult::Timings`,
+  `ElasticTimings`) can exceed the call's wall time.
 
 ### States
 

@@ -28,23 +28,16 @@ section 1, then 2, then 3, then the parked items in section 4. Remove an item wh
 
 Warehouse, Release, 2026-10-15: cold elastic solve 419 ms (442 to 530 ms in the profile), judge
 the same plus about 1.5 ms; warm re-judge after a removal about 140 to 150 ms. The solve is
-single-threaded, and every component converges in one active-set pass at rest. The phases can be
+single-threaded at that measurement, and every component converges in one active-set pass at rest. The phases can be
 read at any time from the profiling build (`-Profile`, `LOADPATH_PROFILE`; landed 2026-10-15).
 
-1. **Parallel component solves, from the owner's ideas file** ("Multi-threaded component solves,
-   and thread safety"). Independent components share no load path, so they solve at the same time.
-   - **Threads come from the host**: the library takes a "parallel for" callback and never creates
-     threads itself. In Unreal the adapter passes the engine's task system (the adapter stays off
-     until the owner lifts it); tests pass a small pool, or run serially.
-   - **Thread protection**: each component solves in its own working memory, the shared structure
-     is read-only during a solve, a per-component claim keyed on the component's body set stops two
-     solves working on the same component, and no global mutable state (no singleton solver).
-   - **Same answer on any worker count**: each component writes its own result slot and the merge
-     runs in ascending component order. A test runs 1, 2, 4 and 8 workers and compares bitwise
-     (BENCHMARKS F-INV-02).
-   - Where: the elastic `SolveComponents` first; the certificate's `DecideAll` and the combined
-     authority's per-component consults use the same hook. The `Components()` cache race is
-     already fixed (mutex, 627d604). Measured estimate on the warehouse: about −47%.
+1. **Parallel component solves, the rest** (owner's ideas file; the elastic part landed
+   2026-10-15). The elastic `SolveComponents` runs through the host's `IParallelFor`: the
+   warehouse's elastic solve went from 448 ms serial to 227 ms on 2 workers, 231 on 4 and 220 on
+   8 (the largest component bounds it). Left: the certificate's `DecideAll` and the combined
+   authority's per-component consults through the same hook, which first needs the nesting
+   decision (a consult's `Body` would call the elastic solve, which calls `For`). Details in
+   CURRENT_STATE.
 
 ## 3. Test control (owner, 2026-10-15), after section 2
 
