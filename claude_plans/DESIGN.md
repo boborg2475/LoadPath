@@ -2110,3 +2110,22 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   remain open. A crushing release hands the host a cluster whose mechanism moves into the
   ground, which a rigid-body host may simply leave resting: reporting crushed joints is what lets
   the host fragment it.
+- *2026-10-15, owner, near-term order:* `claude_plans/IMMEDIATE_UPDATES.md` holds it. Workflow
+  first (sharded default run, the scratch worktree, `Scripts/Mutate.ps1`, each tier once per
+  change); then the permanent profiling timers and parallel component solves; then test control
+  (the owner approves test-expert's test plans; an end-to-end validation suite every feature is
+  checked against); only then the parked items (the bit-identical elastic speed-ups and the
+  elastic-trust work: the warm chatter fix, the fallback census, the noise-floor option, adaptive
+  thresholds, the "assumed standing" default).
+- *2026-10-15, orchestrator, profiling timers:* a compile-time switch, not a runtime option. CMake
+  option `LOADPATH_PROFILE` (off by default) defines `LOADPATH_PROFILE=1` for the library and the
+  tests; preset `msvc-profile` builds into `build/msvc-profile`; `-Profile` on the scripts selects
+  it. `PhaseTimings` (seconds per phase: assembly, analysis, factorization, solves, the check,
+  readout, total) sits on each solved `StandingComponent`, summed on `StandingResult`, and on
+  `AuthorityResult` as `ElasticTimings`, `CertificateSeconds` and `JudgeSeconds`; reused components
+  add zero. The fields exist in both builds so the layout never changes; the normal build reads
+  no clock and leaves them 0.0. Timings feed no decision and no reuse comparison, so answers are
+  bit-identical across the two builds: proved by the profiled build passing the default suite and
+  by `Measure.Profile.ReadingsDigest` printing the same digest of every reading's bits in both. A
+  runtime toggle was rejected: it would add an option to `SameOptions` and a branch to every solve
+  for a debugging aid.

@@ -337,3 +337,29 @@ and iteration count bit-identical in hexfloat on the shed, the half warehouse an
 
 Run-to-run noise is about ±0.5 s on the shed. The absolute times are below the 7.1 s and 73.6 s
 the profile table records for the shed and half warehouse; that table predates 3c.
+
+## Rows and the elastic profile (2026-10-15, HEAD 5998770, Release, copied exe, one row per process)
+
+| Structure | Pieces | Joints | Components | Elastic | Certificate | Judge | Cascade: base course | Cascade: post removed |
+|---|---|---|---|---|---|---|---|---|
+| Wall 10 × 8 | 86 | 227 | 1 | 13 ms | 880 ms | 10 ms | 0.9 ms, 1 pass | |
+| Shed | 420 | 1,090 | 5 | 35 ms | 5.3 s | 33 ms | 27 ms, 1 pass | 68 ms cold, 45 ms warm |
+| Wall 40 × 32 | 1,297 | 3,784 | 1 | 168 ms | 30.7 s | 192 ms | 16 ms, 1 pass | |
+| Half warehouse | 1,822 | 5,138 | 5 | 177 ms | 46.5 s | 184 ms | 130 ms, 1 pass | 229 ms cold |
+| Warehouse | 3,695 | 10,678 | 5 | 419 ms | 77.5 s | 549 ms | 294 ms, 1 pass | 577 ms cold, 138 ms warm |
+
+Every verdict Stands. "Warm" is the post-removed cascade with the first judge as `Previous` (4 of
+5 components reused).
+
+Where the warehouse's cold elastic solve spends its time (profiled separately, 442 to 530 ms per
+run with the instrumentation): factorization about 185 ms (40%, `SimplicialLDLT` at about
+1.9 G multiply-adds/s); assembly about 175 ms (building the triplet list, both triangles into an
+unreserved vector, about 100 ms; `setFromTriplets` about 74 ms); `analyzePattern` about 41 ms;
+the eigenvalue check about 32 ms. Every component converges in one active-set pass at rest, the
+solve is single-threaded, nothing is solved twice, and `Components()` costs 0.4 ms. The judge is
+the elastic solve plus about 1.5 ms.
+
+The warm re-judge after the post removal is about 150 ms, and most of it is one component: the
+198-DoF frame flips one corner Stuck ↔ Slipping to the 50-pass cap (36 to 46 ms), reads
+Undecided, and the certificate takes 96 to 111 ms to stand it. The candidate speed-ups and this
+chatter are listed, parked, in IMMEDIATE_UPDATES.md section 4.
