@@ -4,7 +4,7 @@ The short list of what happens next, in order. CURRENT_STATE.md stays the full T
 file is the near-term slice of it. The owner's goal (2026-10-15) is a fast elastic solver that is
 trusted in more cases, so the collapse certificate is eventually not needed, but **the workflow
 comes first** (owner, 2026-10-15: more control over test cases before anything else). Order:
-section 1, then section 2, then the parked items in section 3. Remove an item when it lands.
+section 1, then 2, then 3, then the parked items in section 4. Remove an item when it lands.
 
 ## 1. Workflow
 
@@ -51,7 +51,24 @@ single-threaded, and every component converges in one active-set pass at rest.
      authority's per-component consults use the same hook. The `Components()` cache race is
      already fixed (mutex, 627d604). Measured estimate on the warehouse: about −47%.
 
-## 3. Parked (owner, 2026-10-15): not before sections 1 and 2
+## 3. Test control (owner, 2026-10-15), after section 2
+
+The owner wants more control over what gets tested, and a set of end-to-end tests the project is
+validated against before features are added. Both run alongside test-expert.
+
+1. **The owner approves test cases before they are written.** test-expert first proposes a test
+   plan: each case's name, the behaviour it pins, the fixture, the assertion and its kind
+   (mechanism or outcome), and why it should be red today. The orchestrator relays it; no test code
+   is written until the owner approves or edits it. Recorded in CLAUDE.md and the test-expert
+   brief; the plan format is decided with the first use.
+2. **End-to-end validation tests.** Whole-structure scenarios through the public API (build the
+   structure, judge it, run the cascade, remove pieces, read who stands and what releases),
+   checked against expected outcomes. A feature is validated against them before it lands. Start
+   with an inventory of what already does this (the `Measure.Scale` rows, the anchors from papers
+   and codes, the cascade fuzz families, the warehouse and shed), then test-expert proposes the
+   missing scenarios for the owner to approve, under step 1.
+
+## 4. Parked (owner, 2026-10-15): not before sections 1 to 3
 
 ### Elastic speed-ups
 
