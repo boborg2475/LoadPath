@@ -442,17 +442,30 @@ TEST_CASE("Cascade.TopBandCracksJointsWithinTheBandOfTheWorstRatio")
 	}
 }
 
-TEST_CASE("Cascade.CrushingOverloadCracksNothingAndEndsOverstressed")
+TEST_CASE("Cascade.CrushingOverloadCracksNothingAndReleasesTheBrick")
 {
 	BrickOnGround F = MakeBrickOnGround(CrushedByOwnWeight());
 	const CascadeVerdict V = RunCascade(F.Model, CascadeOptions{});
 	INFO(DescribeVerdict(V));
-	CHECK(V.State == CascadeState::Overstressed);
-	CheckNothingChanged(V);
-	CheckStamps(F.Model, F.Bed, InterfaceState::Intact, 0, 0);
-	CHECK(F.Model.IsLive(F.Brick));
-	CHECK(V.Readings.size() == 1u);
-	CHECK(V.Components.size() == 1u);
+	CHECK(V.State == CascadeState::Stands);
+	CHECK(V.Passes == 1);
+	CHECK(V.Failures.size() == 1u);
+	if (!(V.Failures.size() == 1u))
+	{
+		return;
+	}
+	CHECK(SameHandle(V.Failures[0].Id, F.Bed));
+	CHECK(V.Failures[0].Pass == 1u);
+	CHECK(V.Failures[0].bSevered);
+	CHECK(V.Failures[0].Axis == GoverningAxis::Compression);
+	CHECK(V.Clusters.size() == 1u);
+	if (!(V.Clusters.size() == 1u))
+	{
+		return;
+	}
+	CHECK(SameIdList(V.Clusters[0].Bodies, {F.Brick}));
+	CHECK(SameIdList(V.Clusters[0].Severed, {F.Bed}));
+	CheckStamps(F.Model, F.Bed, InterfaceState::Severed, 0, 1);
 }
 
 TEST_CASE("Cascade.UndecidedComponentChangesNothing")

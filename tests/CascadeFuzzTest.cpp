@@ -31,6 +31,8 @@ constexpr int FuzzDraws = oracle::bOptimisedBuild ? 40 : 8;
 constexpr std::uint64_t FuzzSeedBase = 0x5c0ffee5ull;
 constexpr int LimeFuzzDraws = oracle::bOptimisedBuild ? 40 : 8;
 constexpr std::uint64_t LimeFuzzSeedBase = 0x11e5eed5ull;
+constexpr int EccentricFuzzDraws = oracle::bOptimisedBuild ? 6 : 3;
+constexpr std::uint64_t EccentricFuzzSeedBase = 0xecc0c0deull;
 
 class SplitMix
 {
@@ -57,6 +59,7 @@ struct FuzzDraw
 {
 	Structure Model;
 	std::vector<InterfaceId> AllInterfaces;
+	std::vector<BodyLoad> Loads;
 	AuthorityOptions Options;
 	std::string Description;
 };
@@ -271,7 +274,7 @@ void CheckReleasesCertified(const Structure& Before, const FuzzDraw& D, const Ca
 	{
 		return;
 	}
-	const AuthorityResult Judged = MakeAuthority()->Judge(Before, {}, D.Options, nullptr);
+	const AuthorityResult Judged = MakeAuthority()->Judge(Before, D.Loads, D.Options, nullptr);
 	INFO("judge before the pass: " << DescribeAuthority(Judged));
 	CheckNoCohesiveCornerSlips(Before, Judged.Readings, "judge before the pass");
 	for (const ReleasedCluster& Cluster : V.Clusters)
@@ -371,7 +374,7 @@ void CheckRemainderJudged(const Structure& End, const FuzzDraw& D, const Cascade
 {
 	INFO("final: " << DescribeVerdict(Last));
 	CHECK(Last.Passes == 0);
-	const AuthorityResult Fresh = MakeAuthority()->Judge(End, {}, D.Options, nullptr);
+	const AuthorityResult Fresh = MakeAuthority()->Judge(End, D.Loads, D.Options, nullptr);
 	INFO("fresh judge: " << DescribeAuthority(Fresh));
 	CheckNoCohesiveCornerSlips(End, Fresh.Readings, "fresh judge");
 	CHECK(Last.State == ExpectedEnd(Fresh.Worst));
@@ -427,13 +430,54 @@ void CheckFileRoundTrip(const Structure& End)
 struct Coverage
 {
 	int Stands = 0, Overstressed = 0, Undecided = 0, Capped = 0, Other = 0;
-	int Cracks = 0, Severs = 0, Clusters = 0, MultiBodyClusters = 0, DrawsWithCrack = 0, DrawsWithRelease = 0;
+	int Cracks = 0, Severs = 0, CompressionSevers = 0, Clusters = 0, MultiBodyClusters = 0, DrawsWithCrack = 0, DrawsWithRelease = 0;
 };
 
-void RunDraw(std::uint64_t Seed, bool bLime, Coverage& Seen)
+FuzzDraw MakeEccentricDraw(std::uint64_t Seed)
+{
+	FuzzDraw D;
+	SplitMix Rng(Seed);
+	const double Eccentricity = Rng.Uniform(0.05, 0.3);
+	const double PointLoadOverWeight = Rng.Uniform(2.0, 12.0);
+	const double SignX = Rng.Between(0, 1) == 0 ? -1.0 : 1.0;
+	const double SignY = Rng.Between(0, 1) == 0 ? -1.0 : 1.0;
+	const double WeightN = BrickMassKg * GravityMPerS2;
+	const double VerticalN = (1.0 + PointLoadOverWeight) * WeightN;
+	const double PlasticShare = (1.0 + Eccentricity) / 4.0;
+	const double ElasticShare = (1.0 + 2.0 * Eccentricity) / 4.0;
+	const double CornerShare = PlasticShare + Rng.Uniform(0.15, 0.85) * (ElasticShare - PlasticShare);
+	StrengthProfile Bed = DryJoint(Rng.Uniform(0.5, 0.9));
+	Bed.CompressiveStrengthPa = 4.0 * CornerShare * VerticalN / (BrickLengthM * BrickWidthM);
+	const ProfileId P = AddProfileOk(D.Model, Bed);
+	const BodyId Ground = AddGroundPlane(D.Model);
+	const Box Shape = BrickShape(0.0, 0);
+	const BodyId Brick = AddBox(D.Model, Shape);
+	AddInterfaceOk(D.Model, OnGroundPlane(Ground, Brick, Shape, P));
+	const double LeverScale = Eccentricity * (1.0 + PointLoadOverWeight) / PointLoadOverWeight;
+	D.Loads.push_back(BodyLoad{Brick, Vec3{0.0, 0.0, -PointLoadOverWeight * WeightN}, Vec3{Shape.CentreM.X + SignX * LeverScale * 0.5 * BrickLengthM, Shape.CentreM.Y + SignY * LeverScale * 0.5 * BrickWidthM, Shape.CentreM.Z}});
+	D.AllInterfaces = D.Model.LiveInterfaces();
+	std::ostringstream Out;
+	Out << "eccentric crushing e " << Eccentricity << ", load " << PointLoadOverWeight << " W, corner share " << CornerShare << " in (" << PlasticShare << ", " << ElasticShare << ")";
+	D.Description = Out.str();
+	return D;
+}
+
+enum class FuzzFamily
+{
+	Masonry,
+	Lime,
+	EccentricCrushing
+};
+
+FuzzDraw MakeFamilyDraw(std::uint64_t Seed, FuzzFamily Family)
+{
+	return Family == FuzzFamily::EccentricCrushing ? MakeEccentricDraw(Seed) : MakeDraw(Seed, Family == FuzzFamily::Lime);
+}
+
+void RunDraw(std::uint64_t Seed, FuzzFamily Family, Coverage& Seen)
 {
 	const auto DrawStart = std::chrono::steady_clock::now();
-	FuzzDraw D = MakeDraw(Seed, bLime);
+	FuzzDraw D = MakeFamilyDraw(Seed, Family);
 	INFO("seed " << Seed << ": " << D.Description);
 	const std::size_t LiveAtEntry = D.Model.LiveInterfaceCount();
 	const std::unique_ptr<ICascade> Cascade = MakeCascade(MakeAuthority());
@@ -444,7 +488,7 @@ void RunDraw(std::uint64_t Seed, bool bLime, Coverage& Seen)
 	while (true)
 	{
 		const Structure Before = D.Model;
-		Last = Cascade->Run(D.Model, {}, FuzzOptions(D, 1), nullptr);
+		Last = Cascade->Run(D.Model, D.Loads, FuzzOptions(D, 1), nullptr);
 		INFO("pass run from " << Before.HighestPass() << ": " << DescribeVerdict(Last));
 		CheckReleasesCertified(Before, D, Last);
 		CheckNoCohesiveCornerSlips(D.Model, Last.Readings, "pass verdict");
@@ -465,8 +509,8 @@ void RunDraw(std::uint64_t Seed, bool bLime, Coverage& Seen)
 	}
 	CheckFileRoundTrip(D.Model);
 
-	FuzzDraw Again = MakeDraw(Seed, bLime);
-	const CascadeVerdict Whole = MakeCascade(MakeAuthority())->Run(Again.Model, {}, FuzzOptions(Again, FuzzMaxPasses), nullptr);
+	FuzzDraw Again = MakeFamilyDraw(Seed, Family);
+	const CascadeVerdict Whole = MakeCascade(MakeAuthority())->Run(Again.Model, Again.Loads, FuzzOptions(Again, FuzzMaxPasses), nullptr);
 	INFO("whole run: " << DescribeVerdict(Whole));
 	CheckNoCohesiveCornerSlips(Again.Model, Whole.Readings, "whole run");
 	CHECK(Whole.State == End);
@@ -494,6 +538,7 @@ void RunDraw(std::uint64_t Seed, bool bLime, Coverage& Seen)
 	for (const FailedInterface& F : Failures)
 	{
 		(F.bSevered ? Seen.Severs : Cracks) += 1;
+		Seen.CompressionSevers += F.bSevered && F.Axis == GoverningAxis::Compression ? 1 : 0;
 	}
 	Seen.Cracks += Cracks;
 	Seen.DrawsWithCrack += Cracks > 0 ? 1 : 0;
@@ -513,12 +558,17 @@ TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Cascade.Fuzz.SeededStructuresKeepTheCascadeInv
 	const auto Start = std::chrono::steady_clock::now();
 	for (int Draw = 0; Draw < FuzzDraws; ++Draw)
 	{
-		RunDraw(FuzzSeedBase + static_cast<std::uint64_t>(Draw), false, Seen);
+		RunDraw(FuzzSeedBase + static_cast<std::uint64_t>(Draw), FuzzFamily::Masonry, Seen);
+	}
+	for (int Draw = 0; Draw < EccentricFuzzDraws; ++Draw)
+	{
+		RunDraw(EccentricFuzzSeedBase + static_cast<std::uint64_t>(Draw), FuzzFamily::EccentricCrushing, Seen);
 	}
 	const double Seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - Start).count();
-	MESSAGE("cascade fuzz: " << FuzzDraws << " draws in " << Seconds << " s; ends Stands " << Seen.Stands << ", Overstressed " << Seen.Overstressed << ", Undecided " << Seen.Undecided << ", PassCapReached " << Seen.Capped << ", other " << Seen.Other << "; cracks " << Seen.Cracks << " in " << Seen.DrawsWithCrack << " draws, severs " << Seen.Severs << ", clusters " << Seen.Clusters << " (" << Seen.MultiBodyClusters << " multi-body) in " << Seen.DrawsWithRelease << " draws");
+	MESSAGE("cascade fuzz: " << FuzzDraws << " + " << EccentricFuzzDraws << " eccentric draws in " << Seconds << " s; ends Stands " << Seen.Stands << ", Overstressed " << Seen.Overstressed << ", Undecided " << Seen.Undecided << ", PassCapReached " << Seen.Capped << ", other " << Seen.Other << "; cracks " << Seen.Cracks << " in " << Seen.DrawsWithCrack << " draws, severs " << Seen.Severs << " (" << Seen.CompressionSevers << " crushed), clusters " << Seen.Clusters << " (" << Seen.MultiBodyClusters << " multi-body) in " << Seen.DrawsWithRelease << " draws");
 	CHECK(Seen.Cracks >= 1);
 	CHECK(Seen.MultiBodyClusters >= 1);
+	CHECK(Seen.CompressionSevers >= 1);
 	CHECK(Seen.Overstressed >= 1);
 	CHECK(Seen.Stands >= 1);
 }
@@ -531,7 +581,7 @@ TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Cascade.Fuzz.LimeStructuresKeepTheCascadeInvar
 	{
 		const std::uint64_t Seed = LimeFuzzSeedBase + static_cast<std::uint64_t>(Draw);
 		LimeDraws += MakeDraw(Seed, true).Description.rfind("lime", 0) == 0 ? 1 : 0;
-		RunDraw(Seed, true, Seen);
+		RunDraw(Seed, FuzzFamily::Lime, Seen);
 	}
 	MESSAGE("lime cascade fuzz: " << LimeFuzzDraws << " draws, " << LimeDraws << " with lime joints; ends Stands " << Seen.Stands << ", Overstressed " << Seen.Overstressed << ", Undecided " << Seen.Undecided << ", PassCapReached " << Seen.Capped);
 	CHECK(LimeDraws >= 1);

@@ -2081,3 +2081,32 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   const access to one `Structure` is data-race-free and gives identical answers; mutation still needs
   exclusive access; `Structure` stays copyable and movable, uses no exceptions, and the library still
   creates no threads.
+- *2026-10-15, orchestrator, crushing, first step (owner-ranked ideas, second item):* a joint
+  crushed in compression (`Compression > fc · A / 4` at a corner) left its component `Overstressed`
+  forever: the crack step never acts on compression (cracking keeps the compressive strength, so
+  it changes nothing), and the combined authority never consulted the certificate for an
+  Overstressed component. Towers that really failed by crushing (BENCHMARKS F-NEG-01) read as
+  standing. **Ruling (adopted; wording corrected after the review):** a component whose elastic state is
+  `Overstressed` and that is only crushed is consulted with the certificate: every reading in the
+  component is finite, none is torn (`ft > 0` and tension ratio above 1), none is sheared (`c > 0`
+  and shear ratio above 1), and some compression ratio is above 1 (exactly "Overstressed for
+  crushing alone" under the elastic authority's own release rules). A non-finite ratio keeps the
+  component out; so a bed with `fc = 0` (compression ratio +inf) is Overstressed and never
+  consulted, which is the intended fail-closed answer. The certificate already
+  caps each corner's compression at `fc · A / 4` and certifies a crushing collapse with the same
+  rigour as any other (a Collapses needs U_out < 1). Composition: certificate Collapses → the
+  component's verdict is Collapses and the cascade releases it; Stands → Overstressed (not a disagreement: lumping any
+  continuous stress field with 0 ≤ σ ≤ fc onto the four corners gives corner forces at most
+  fc · A / 4 with the same resultant, so the corner model is never more pessimistic than the
+  continuum and a certified Collapses means no rigid-plastic field exists; a Stands only says the
+  corner model, which is optimistic for eccentric crushing, can carry it); Undecided →
+  Overstressed (fail closed, nothing released); InvalidInput → InvalidInput as for any consult. A
+  component with any tension or shear overstress keeps today's path: the crack band acts on it
+  first, and once only compression remains a later pass consults. The 2026-10-11 locality ruling
+  (a component's elastic verdict is its own sub-solve) is unchanged; its fixture's crushed brick
+  now reads Collapses at t 0.4896, which is physically right, so the fixture moves to a
+  tension-overstressed brick to keep testing locality. A crushing or softening law (crushed joints
+  losing strength as stamped state, BENCHMARKS F-STR) and reporting crushed joints to the host
+  remain open. A crushing release hands the host a cluster whose mechanism moves into the
+  ground, which a rigid-body host may simply leave resting: reporting crushed joints is what lets
+  the host fragment it.

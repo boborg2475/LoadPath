@@ -3,6 +3,7 @@
 #include "StaticsCommon.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
@@ -272,7 +273,7 @@ private:
 				Reports[K].bReused = true;
 				continue;
 			}
-			Reports[K] = ReportOf(Whole.Components[NextSolved++]);
+			Reports[K] = ReportOf(Model, Whole.Readings, Whole.Components[NextSolved++]);
 			Reports[K].Loads = std::move(LoadsOf[K]);
 			if (!Reports[K].bConsultedCertificate)
 			{
@@ -320,7 +321,29 @@ private:
 		return Result;
 	}
 
-	static ComponentReport ReportOf(StandingComponent& Part)
+	static bool IsOnlyCrushed(const Structure& Model, const std::vector<InterfaceReading>& Readings, const StandingComponent& Part)
+	{
+		bool bCrushed = false;
+		for (const std::size_t Slot : Part.ReadingSlots)
+		{
+			const InterfaceReading& Reading = Readings[Slot];
+			if (!std::isfinite(Reading.CompressionUtilisation) || !std::isfinite(Reading.TensionUtilisation) || !std::isfinite(Reading.ShearUtilisation))
+			{
+				return false;
+			}
+			const StrengthProfile Profile = Model.EffectiveProfile(Reading.Id);
+			const bool bTorn = Profile.TensileStrengthPa > 0.0 && Reading.TensionUtilisation > 1.0;
+			const bool bSheared = Profile.ShearCohesionPa > 0.0 && Reading.ShearUtilisation > 1.0;
+			if (bTorn || bSheared)
+			{
+				return false;
+			}
+			bCrushed = bCrushed || Reading.CompressionUtilisation > 1.0;
+		}
+		return bCrushed;
+	}
+
+	static ComponentReport ReportOf(const Structure& Model, const std::vector<InterfaceReading>& Readings, StandingComponent& Part)
 	{
 		ComponentReport Report;
 		Report.Bodies = std::move(Part.Bodies);
@@ -334,6 +357,7 @@ private:
 		else if (Report.Elastic == StandingState::Overstressed)
 		{
 			Report.Verdict = ComponentVerdict::Overstressed;
+			Report.bConsultedCertificate = IsOnlyCrushed(Model, Readings, Part);
 		}
 		else
 		{
@@ -350,6 +374,11 @@ private:
 		switch (Kinematic.State)
 		{
 		case CertificateState::Stands:
+			if (Report.Elastic == StandingState::Overstressed)
+			{
+				Report.Verdict = ComponentVerdict::Overstressed;
+				break;
+			}
 			Report.bDisagreed = Report.Elastic == StandingState::Mechanism;
 			Report.Verdict = Report.bDisagreed ? ComponentVerdict::Undecided : ComponentVerdict::Stands;
 			break;
@@ -360,7 +389,7 @@ private:
 			Report.Hinging = std::move(Kinematic.HingingInterfaces);
 			break;
 		case CertificateState::Undecided:
-			Report.Verdict = ComponentVerdict::Undecided;
+			Report.Verdict = Report.Elastic == StandingState::Overstressed ? ComponentVerdict::Overstressed : ComponentVerdict::Undecided;
 			break;
 		case CertificateState::InvalidInput:
 			Report.Verdict = ComponentVerdict::InvalidInput;

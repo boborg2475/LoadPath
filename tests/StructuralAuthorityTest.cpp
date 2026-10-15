@@ -158,6 +158,20 @@ StrengthProfile CrushedUnderOwnWeight()
 	return Profile;
 }
 
+StrengthProfile TornByAPull()
+{
+	StrengthProfile Profile = DryJoint(0.7);
+	Profile.TensileStrengthPa = 1.0e4;
+	Profile.ShearCohesionPa = 1.0e4;
+	return Profile;
+}
+
+BodyLoad TearingPull(BodyId Brick, const Box& Shape)
+{
+	const double PullN = BrickMassKg * GravityMPerS2 + 2.0 * TornByAPull().TensileStrengthPa * BrickLengthM * BrickWidthM;
+	return BodyLoad{Brick, Vec3{0.0, 0.0, PullN}, Shape.CentreM};
+}
+
 std::string DescribeReport(const ComponentReport& Report)
 {
 	std::ostringstream Out;
@@ -358,18 +372,18 @@ TEST_CASE("Statics.Combined.ReportsEachComponentAndTheWorstVerdict")
 	CHECK(PushOverWeight < BrickLengthM / BrickHeightM);
 	Structure Model;
 	const BodyId Ground = AddGroundPlane(Model);
-	const ProfileId Crushed = AddProfileOk(Model, CrushedUnderOwnWeight());
+	const ProfileId Torn = AddProfileOk(Model, TornByAPull());
 	const ProfileId Dry = AddProfileOk(Model, DryJoint(Friction));
-	const BodyId CrushedBrick = AddBox(Model, BrickShape(0.0));
-	const InterfaceId CrushedBed = AddInterfaceOk(Model, OnGroundPlane(Ground, CrushedBrick, BrickShape(0.0), Crushed));
+	const BodyId TornBrick = AddBox(Model, BrickShape(0.0));
+	const InterfaceId TornBed = AddInterfaceOk(Model, OnGroundPlane(Ground, TornBrick, BrickShape(0.0), Torn));
 	const BodyId PushedBrick = AddBox(Model, BrickShape(1.0));
 	const InterfaceId PushedBed = AddInterfaceOk(Model, OnGroundPlane(Ground, PushedBrick, BrickShape(1.0), Dry));
-	const std::vector<BodyLoad> Loads{BodyLoad{PushedBrick, Vec3{PushOverWeight * BrickMassKg * GravityMPerS2, 0.0, 0.0}, BrickShape(1.0).CentreM}};
+	const std::vector<BodyLoad> Loads{TearingPull(TornBrick, BrickShape(0.0)), BodyLoad{PushedBrick, Vec3{PushOverWeight * BrickMassKg * GravityMPerS2, 0.0, 0.0}, BrickShape(1.0).CentreM}};
 	const AuthorityResult Result = JudgeWith(Model, AuthorityOptions{}, Loads);
 	INFO(DescribeResult(Result));
 	CHECK(Result.Worst == ComponentVerdict::Collapses);
 	CHECK(Result.Disagreements == 0);
-	CHECK(HasReading(Result, CrushedBed));
+	CHECK(HasReading(Result, TornBed));
 	CHECK(HasReading(Result, PushedBed));
 	CHECK(Result.Components.size() == 2u);
 	if (Result.Components.size() != 2u)
@@ -378,7 +392,7 @@ TEST_CASE("Statics.Combined.ReportsEachComponentAndTheWorstVerdict")
 	}
 	const ComponentReport& First = Result.Components[0];
 	const ComponentReport& Second = Result.Components[1];
-	CHECK(SameIds(First.Bodies, {CrushedBrick}));
+	CHECK(SameIds(First.Bodies, {TornBrick}));
 	CHECK(First.Elastic == StandingState::Overstressed);
 	CHECK(First.Verdict == ComponentVerdict::Overstressed);
 	CHECK_FALSE(First.bConsultedCertificate);
@@ -474,15 +488,16 @@ TEST_CASE("Statics.Combined.ComponentVerdictsAreLocal")
 	const double TiltRad = 29.0 * RadPerDegree;
 	Structure Model;
 	const BodyId Ground = AddGroundPlane(Model);
-	const ProfileId Crushed = AddProfileOk(Model, CrushedUnderOwnWeight());
+	const ProfileId Torn = AddProfileOk(Model, TornByAPull());
 	const ProfileId Dry = AddProfileOk(Model, DryJoint(0.6));
-	const BodyId CrushedBrick = AddBox(Model, BrickShape(0.0));
-	AddInterfaceOk(Model, OnGroundPlane(Ground, CrushedBrick, BrickShape(0.0), Crushed));
+	const BodyId TornBrick = AddBox(Model, BrickShape(0.0));
+	const InterfaceId TornBed = AddInterfaceOk(Model, OnGroundPlane(Ground, TornBrick, BrickShape(0.0), Torn));
 	const BodyId CappedBrick = AddBox(Model, BrickShape(1.0));
 	AddInterfaceOk(Model, OnGroundPlane(Ground, CappedBrick, BrickShape(1.0), Dry));
 	AuthorityOptions Options = Tilted(TiltRad);
 	Options.Standing.MaxActiveSetIterations = 1;
-	const AuthorityResult Result = JudgeWith(Model, Options);
+	const std::vector<BodyLoad> Loads{TearingPull(TornBrick, BrickShape(0.0))};
+	const AuthorityResult Result = JudgeWith(Model, Options, Loads);
 	INFO(DescribeResult(Result));
 	CHECK(Result.Components.size() == 2u);
 	if (Result.Components.size() != 2u)
@@ -491,14 +506,57 @@ TEST_CASE("Statics.Combined.ComponentVerdictsAreLocal")
 	}
 	const ComponentReport& First = Result.Components[0];
 	const ComponentReport& Second = Result.Components[1];
-	CHECK(SameIds(First.Bodies, {CrushedBrick}));
+	CHECK(SameIds(First.Bodies, {TornBrick}));
 	CHECK(First.Elastic == StandingState::Overstressed);
+	for (const InterfaceReading& Reading : Result.Readings)
+	{
+		if (SameHandle(Reading.Id, TornBed))
+		{
+			CHECK(Reading.Axis == GoverningAxis::Tension);
+			CHECK(Reading.TensionUtilisation > 1.0);
+		}
+	}
 	CHECK(First.Verdict == ComponentVerdict::Overstressed);
 	CHECK_FALSE(First.bConsultedCertificate);
 	CHECK(First.Release.empty());
 	CHECK(SameIds(Second.Bodies, {CappedBrick}));
 	CHECK(Second.Elastic == StandingState::Undecided);
 	CHECK(Second.bConsultedCertificate);
+}
+
+TEST_CASE("Statics.Combined.ACrushedComponentIsConsultedAndCollapses")
+{
+	const double TiltRad = 29.0 * RadPerDegree;
+	const StrengthProfile Profile = CrushedUnderOwnWeight();
+	const double StrengthOverWeight = Profile.CompressiveStrengthPa * BrickLengthM * BrickWidthM / (BrickMassKg * GravityMPerS2);
+	const double CrushingLoadFactor = StrengthOverWeight / (std::cos(TiltRad) + BrickHeightM / BrickLengthM * std::sin(TiltRad));
+	CHECK(CrushingLoadFactor < 1.0);
+	const BrickOnGround F = MakeBrickOnGround(Profile);
+	const AuthorityResult Result = JudgeWith(F.Model, Tilted(TiltRad));
+	INFO(DescribeResult(Result));
+	for (const InterfaceReading& Reading : Result.Readings)
+	{
+		CHECK(Reading.Axis == GoverningAxis::Compression);
+		CHECK(Reading.TensionUtilisation <= 1.0);
+		CHECK(Reading.ShearUtilisation <= 1.0);
+	}
+	CHECK(Result.Worst == ComponentVerdict::Collapses);
+	CHECK(Result.Disagreements == 0);
+	CHECK(Result.Components.size() == 1u);
+	if (Result.Components.size() != 1u)
+	{
+		return;
+	}
+	const ComponentReport& Only = Result.Components.front();
+	CHECK(Only.Elastic == StandingState::Overstressed);
+	CHECK(Only.bConsultedCertificate);
+	CHECK(Only.Kinematic == CertificateState::Collapses);
+	CHECK(Only.Verdict == ComponentVerdict::Collapses);
+	CHECK_FALSE(Only.bDisagreed);
+	CHECK(std::abs(Only.LoadFactorLower - CrushingLoadFactor) <= 1.0e-6 * CrushingLoadFactor);
+	CHECK(std::abs(Only.LoadFactorUpper - CrushingLoadFactor) <= 1.0e-6 * CrushingLoadFactor);
+	CHECK(SameIds(Only.Release, {F.Brick}));
+	CHECK(SameIds(Only.Hinging, {F.Bed}));
 }
 
 TEST_CASE("Statics.Combined.NonFiniteReadingsNeverStand")

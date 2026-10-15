@@ -29,6 +29,7 @@ add_executable(loadpath_tests
 	ArchAnchorsTest.cpp
 	InterfaceStateTest.cpp
 	CrackedJointTest.cpp
+	CrushingTest.cpp
 	CascadeTest.cpp
 	CatalogueTest.cpp
 	CatalogueAnchorsTest.cpp

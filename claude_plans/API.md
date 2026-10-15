@@ -770,8 +770,14 @@ Undecided beside an unrelated pass-capped one, and read NaN readings as Stands. 
 (slice 2) makes the sub-solve's readings equal the whole-structure ones, so the cost is a second
 solve, logged for slice 6. Per component (the same partition both implementations use, the
 shared partition code, so the mapping of bodies to components is one definition):
-- elastic `Stands` → `Stands`; elastic `Overstressed` → `Overstressed` (slice 3's domain; the
-  certificate is not consulted, its crushing bound would only restate the same joint);
+- elastic `Stands` → `Stands`;
+- elastic `Overstressed` that is only crushed (every reading in the component finite, none torn
+  (`ft > 0` and tension ratio above 1), none sheared (`c > 0` and shear ratio above 1), and some
+  compression ratio above 1; a bed with `fc = 0` reads +inf and is never consulted) → the certificate is consulted on that component alone, as below:
+  `Collapses` → `Collapses` with its lists; `Stands` or `Undecided` → `Overstressed`, nothing
+  released and no disagreement counted; `InvalidInput` → `InvalidInput` (2026-10-15, DESIGN §10
+  "crushing, first step"); any other elastic `Overstressed` → `Overstressed`, not consulted (slice
+  3's crack band acts on it);
 - elastic `Mechanism` or `Undecided` → the certificate is consulted on that component alone (a
   structure holding only that component's bodies, grounded bodies kept, loads filtered):
   `Stands` → `Stands` when the elastic said Undecided, and `Undecided` with `bDisagreed` and

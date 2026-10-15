@@ -16,7 +16,7 @@ end to end: `IStandingAuthority` (RBSM corner springs, per-component Schur-pivot
 active set, Stands/Overstressed certified, Mechanism a verdict, Undecided fail-closed),
 `ICollapseCertificate` (inscribed/circumscribed LP, homogeneous self-dual interior point,
 mechanism selection, shear-cap facet rows), `IStructuralAuthority` (every component solved
-alone by the elastic authority, Mechanism and Undecided refereed by the certificate,
+alone by the elastic authority, Mechanism, Undecided and only-crushed Overstressed refereed by the certificate,
 disagreements counted, the certificate's list the only release set) and `ICascade` (judge,
 release certified clusters severing their boundary, crack the top band of over-capacity bonded
 joints, repeat; pass stamps and a pass counter on the structure, carried by the file; cracked
@@ -32,7 +32,7 @@ stacks, Paterson–Zwick, Couplet–Heyman at Milankovitch's 0.107478 with hinge
 the certificate's associative 31.07°, the cascade on the arch below least thickness, the dry
 wall at t / H within 1 % (10 × 8 and 4 × 5), the bonded 4 × 5 wall at its monolith factor
 `(t/H)(1 + f_t A_base / W) = 2.971` to 1 %, two screws at twice their published shear and
-withdrawal whatever the joint area. Default suite 415 cases in Debug and 468 in Release as of
+withdrawal whatever the joint area. Default suite 422 cases in Debug and 475 in Release as of
 2026-10-15 (325 and 347 at the 6b close) (the arch, pile, arch-cascade, fuzz, small-wall and multi-panel factor anchors
 run only in Release under `LOADPATH_SLOW_IN_DEBUG`; twenty-two `Slow.*` cases run in Release at
 every slice close, and the
@@ -255,10 +255,12 @@ the non-associative answer) and the two hanging-component cases (slice 6), red b
      joint's axis" and the two reviews' rulings; closed after the follow-up review, whose order
      and threshold pins were added); its `Ratio` is still the elastic reading's utilisation, which
      on a mechanism means little; the 1e-3 threshold is written out in Cascade.cpp, not shared with
-     the certificate's `UnconstrainedComponent`; no test drives a closing (Compression) mechanism
-     through the real certificate end to end (the follow-up review found 10 such joints in seeded
-     cascade draws with weakened crushing, 4 in `Cascade.Fuzz.SeededStructuresKeepTheCascadeInvariants`
-     and 6 in `Cascade.EventRegion.ReusedComponentsEqualAFreshJudge`, none asserting the axis); a
+     the certificate's `UnconstrainedComponent`; a closing (Compression) mechanism is now driven end
+     to end by the pier anchor and `Cascade.CrushingOverloadCracksNothingAndReleasesTheBrick`
+     (crushing ruling, 2026-10-15), and the fuzz counts Compression severs; the crushing ruling's
+     follow-ups stay open: a crushing or softening law (a crushed joint losing compressive strength
+     and stiffness as stamped state, so load sheds and crushing spreads; BENCHMARKS F-STR-01,
+     F-STR-03, B-VAS-02) and reporting crushed joints to the host so it can fragment the brick; an only-crushed component whose certificate says Stands or Undecided is re-certified on every judge that touches it (the 10 × 8 wall's certificate costs 844 ms, the shed's 4.98 s; HEAD paid nothing for these); the crack band and `IsOnlyCrushed` disagree on a joint with `ft > 0`, `c = 0` and a shear ratio 1 + ulp (the review saw 13 of 1,000 cascades take a different path to the same end, e.g. wall seed 3237998184; the artefact predates the ruling); some walls with tension-only perpends under lateral gravity read elastic Overstressed with a non-finite ratio while the largest compression ratio is 0.26 to 0.77 (review probe seeds 3237998141, 3237998164, 3237998271; pre-existing); a
      joint with `CompressiveStrengthPa == 0` gets no friction group in the certificate, so no
      dilatancy, but `MechanismAxis` still subtracts μ (degenerate: it carries nothing); the
      separator test's `HorizontalN < LpLimitN` check compares two constants;

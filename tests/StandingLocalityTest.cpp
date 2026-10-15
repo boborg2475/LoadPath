@@ -14,6 +14,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <span>
 #include <random>
 #include <string>
 #include <vector>
@@ -437,6 +438,7 @@ namespace
 struct CompositionTally
 {
 	int Pairs[5][5] = {};
+	int OnlyCrushed = 0;
 };
 
 ComponentVerdict TableVerdict(StandingState Elastic, CertificateState Kinematic)
@@ -445,25 +447,93 @@ ComponentVerdict TableVerdict(StandingState Elastic, CertificateState Kinematic)
 	{
 		return ComponentVerdict::Collapses;
 	}
-	if (Kinematic == CertificateState::Undecided)
-	{
-		return ComponentVerdict::Undecided;
-	}
 	if (Kinematic == CertificateState::InvalidInput)
 	{
 		return ComponentVerdict::InvalidInput;
 	}
+	if (Elastic == StandingState::Overstressed)
+	{
+		return ComponentVerdict::Overstressed;
+	}
+	if (Kinematic == CertificateState::Undecided)
+	{
+		return ComponentVerdict::Undecided;
+	}
 	return Elastic == StandingState::Mechanism ? ComponentVerdict::Undecided : ComponentVerdict::Stands;
 }
 
-void CheckComposition(const AuthorityResult& Result, CompositionTally& Tally)
+constexpr double CrushingRemovedFactor = 1.0e6;
+
+Structure WithCrushingScaled(const Structure& Model, double Factor)
 {
+	Structure Copy;
+	for (const BodyId Body : Model.LiveBodies())
+	{
+		const Result<BodyId> Added = Copy.AddBody(Model.Body(Body));
+		REQUIRE(Added.Ok());
+		REQUIRE(SameHandle(Added.Value, Body));
+	}
+	std::vector<ProfileId> From;
+	std::vector<ProfileId> To;
+	for (const InterfaceId Id : Model.LiveInterfaces())
+	{
+		const InterfaceRecord& Record = Model.Interface(Id);
+		REQUIRE(Record.State == InterfaceState::Intact);
+		std::size_t Slot = 0;
+		while (Slot < From.size() && !SameHandle(From[Slot], Record.Profile))
+		{
+			++Slot;
+		}
+		if (Slot == From.size())
+		{
+			StrengthProfile Scaled = Model.Profile(Record.Profile);
+			Scaled.CompressiveStrengthPa *= Factor;
+			From.push_back(Record.Profile);
+			To.push_back(AddProfileOk(Copy, Scaled));
+		}
+		const InterfaceDesc Desc{Record.BodyA, Record.BodyB, Record.NormalAToB, Record.CentreM, Record.AxisU, Record.AxisV, Record.HalfExtentUM, Record.HalfExtentVM, To[Slot]};
+		const Result<InterfaceId> Added = Copy.AddInterface(Desc);
+		REQUIRE(Added.Ok());
+		REQUIRE(SameHandle(Added.Value, Id));
+	}
+	return Copy;
+}
+
+const StandingComponent* SameBodies(const StandingResult& Solved, const std::vector<BodyId>& Bodies)
+{
+	for (const StandingComponent& Part : Solved.Components)
+	{
+		if (Part.Bodies.size() != Bodies.size())
+		{
+			continue;
+		}
+		bool bSame = true;
+		for (std::size_t K = 0; K < Bodies.size(); ++K)
+		{
+			bSame = bSame && SameHandle(Part.Bodies[K], Bodies[K]);
+		}
+		if (bSame)
+		{
+			return &Part;
+		}
+	}
+	return nullptr;
+}
+
+void CheckComposition(const Structure& Model, std::span<const BodyLoad> Loads, const AuthorityOptions& Options, const AuthorityResult& Result, CompositionTally& Tally)
+{
+	const StandingResult WithoutCrushing = MakeRbsmStandingAuthority()->Solve(WithCrushingScaled(Model, CrushingRemovedFactor), Loads, Options.Standing, {});
 	int Disagreed = 0;
 	ComponentVerdict Worst = ComponentVerdict::Stands;
 	for (const ComponentReport& Report : Result.Components)
 	{
 		INFO("component " << Describe(Report.Bodies) << ": verdict " << static_cast<int>(Report.Verdict) << " elastic " << Report.Elastic << " kinematic " << static_cast<int>(Report.Kinematic) << " consulted " << Report.bConsultedCertificate << " disagreed " << Report.bDisagreed << " release " << Report.Release.size() << " mechanism " << Report.Mechanism.size() << " hinging " << Report.Hinging.size());
-		const bool bShouldConsult = Report.Elastic == StandingState::Mechanism || Report.Elastic == StandingState::Undecided;
+		const StandingComponent* Uncrushed = SameBodies(WithoutCrushing, Report.Bodies);
+		REQUIRE(Uncrushed != nullptr);
+		INFO("with crushing strengths x" << CrushingRemovedFactor << " the elastic reads " << Uncrushed->State);
+		const bool bOnlyCrushed = Report.Elastic == StandingState::Overstressed && Uncrushed->State == StandingState::Stands;
+		Tally.OnlyCrushed += bOnlyCrushed ? 1 : 0;
+		const bool bShouldConsult = Report.Elastic == StandingState::Mechanism || Report.Elastic == StandingState::Undecided || bOnlyCrushed;
 		CHECK(Report.bConsultedCertificate == bShouldConsult);
 		if (!Report.bConsultedCertificate)
 		{
@@ -501,7 +571,7 @@ void CheckComposition(const AuthorityResult& Result, CompositionTally& Tally)
 	CHECK(Result.Worst == Worst);
 }
 
-AuthorityResult JudgeHuntDraw(const IStructuralAuthority& Authority, std::mt19937& Rng, const StrengthProfile& Lime)
+void CheckHuntDraw(const IStructuralAuthority& Authority, std::mt19937& Rng, const StrengthProfile& Lime, CompositionTally& Tally)
 {
 	auto U = [&](double A, double B) { return std::uniform_real_distribution<double>(A, B)(Rng); };
 	auto I = [&](int A, int B) { return std::uniform_int_distribution<int>(A, B)(Rng); };
@@ -540,7 +610,7 @@ AuthorityResult JudgeHuntDraw(const IStructuralAuthority& Authority, std::mt1993
 	AuthorityOptions Options;
 	Options.Standing.Gravity = Gravity;
 	Options.Certificate.Gravity = Gravity;
-	return Authority.Judge(Model, Loads, Options, nullptr);
+	CheckComposition(Model, Loads, Options, Authority.Judge(Model, Loads, Options, nullptr), Tally);
 }
 }
 
@@ -559,7 +629,7 @@ TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Statics.Combined.EveryConsultedComponentFollow
 		Options.Standing = TiltedPlane(TiltRad);
 		Options.Standing.MaxActiveSetIterations = 1 + static_cast<int>(Rng() % 3u);
 		Options.Certificate = CertificateTilt(TiltRad);
-		CheckComposition(Authority->Judge(Whole.Model, Whole.Loads, Options, nullptr), Tally);
+		CheckComposition(Whole.Model, Whole.Loads, Options, Authority->Judge(Whole.Model, Whole.Loads, Options, nullptr), Tally);
 	}
 	const CatalogueResult Loaded = LoadCatalogue(ReadCatalogueFile());
 	REQUIRE(Loaded.Ok());
@@ -568,7 +638,7 @@ TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Statics.Combined.EveryConsultedComponentFollow
 	for (int Draw = 0; Draw < HuntDrawCount; ++Draw)
 	{
 		INFO("hunt seed " << HuntSeed << " draw " << Draw);
-		CheckComposition(JudgeHuntDraw(*Authority, Hunt, Lime), Tally);
+		CheckHuntDraw(*Authority, Hunt, Lime, Tally);
 	}
 	for (int E = 0; E < 5; ++E)
 	{
@@ -580,10 +650,13 @@ TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Statics.Combined.EveryConsultedComponentFollow
 			}
 		}
 	}
+	MESSAGE("overstressed only by crushing: " << Tally.OnlyCrushed);
+	CHECK(Tally.OnlyCrushed > 0);
 	const int Mechanism = static_cast<int>(StandingState::Mechanism);
 	const int Undecided = static_cast<int>(StandingState::Undecided);
 	CHECK(Tally.Pairs[static_cast<int>(StandingState::Stands)][4] > 0);
 	CHECK(Tally.Pairs[static_cast<int>(StandingState::Overstressed)][4] > 0);
+	CHECK(Tally.Pairs[static_cast<int>(StandingState::Overstressed)][static_cast<int>(CertificateState::Collapses)] > 0);
 	CHECK(Tally.Pairs[Mechanism][static_cast<int>(CertificateState::Stands)] > 0);
 	CHECK(Tally.Pairs[Mechanism][static_cast<int>(CertificateState::Collapses)] > 0);
 	CHECK(Tally.Pairs[Undecided][static_cast<int>(CertificateState::Stands)] > 0);

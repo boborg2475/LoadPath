@@ -88,5 +88,12 @@ TEST_CASE("Statics.Cracked.CrackedBedKeepsTheCrushingBound")
 	}
 	CHECK(Elastic.Readings.front().Axis == GoverningAxis::Compression);
 	CHECK(Kinematic.State == CertificateState::Collapses);
-	CHECK(Combined.Worst == ComponentVerdict::Overstressed);
+	CHECK(Combined.Worst == ComponentVerdict::Collapses);
+	CHECK(Combined.Components.size() == 1u);
+	if (!(Combined.Components.size() == 1u))
+	{
+		return;
+	}
+	CHECK(Combined.Components.front().bConsultedCertificate);
+	CHECK(SameIdList(Combined.Components.front().Release, {F.Brick}));
 }
