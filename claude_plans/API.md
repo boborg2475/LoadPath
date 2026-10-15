@@ -258,10 +258,11 @@ struct StandingResult {
 	std::vector<InterfaceReading> Readings;        // every live interface, ascending slot order
 	std::vector<MechanismMotion> Mechanism;        // every mechanism component, whatever State
 	std::vector<BodyId> UnconstrainedBodies;       // bodies every mechanism component moves
-	std::vector<StandingComponent> Components;     // per component: bodies, State, ActiveSetIterations, ReadingSlots into Readings; empty on InvalidInput (stage 1b-ii)
+	std::vector<StandingComponent> Components;     // per component: bodies, State, ActiveSetIterations, ReadingSlots into Readings, Timings of that component's solve; empty on InvalidInput (stage 1b-ii)
 	int ActiveSetIterations = 0;
 	InterfaceId InvalidInterface;                  // set when State == InvalidInput
 	std::vector<std::size_t> StaleLoads;            // indices into the input loads whose body this structure issued but has removed: skipped, never InvalidInput (2026-10-15)
+	PhaseTimings Timings;                          // field-wise sum of the Components' Timings, in component order; all 0.0 unless built with LOADPATH_PROFILE, and always 0.0 on InvalidInput (see "Profiling timers")
 };
 class IStandingAuthority {
 public:
@@ -745,6 +746,9 @@ struct AuthorityResult {
 	AuthorityOptions Options;                    // the options judged under; a Previous under other options is unmatched (stage 2)
 	InterfaceId InvalidInterface{};
 	std::vector<std::size_t> StaleLoads;            // indices into the input loads whose body this structure issued but has removed: skipped, never InvalidInput (2026-10-15)
+	PhaseTimings ElasticTimings;                  // the components solved in this call, a reused one adding nothing; an abandoned reuse attempt (merging readings failed, the judge re-solved) counts its solve too
+	double CertificateSeconds = 0.0;             // time inside certificate consults; 0.0 when none ran
+	double JudgeSeconds = 0.0;                   // the whole call, so at least ElasticTimings.TotalSeconds + CertificateSeconds when profiled
 };
 
 class IStructuralAuthority {
@@ -1223,7 +1227,7 @@ design, because every cost item logged so far (the combined authority's per-comp
 the cascade's quadratic scans, the dense per-component LDLT, the certificate's interior point)
 is a guess until timed on structures ten and a hundred times the fixtures.
 
-### 6a. The scale measurement (`geometry/Warehouse.h`, `tests/ScaleMeasurementTest.cpp`, `Measure.Scale.*`)
+### 6a. The scale measurement (`geometry/Warehouse.h`, `tests/ScaleTestSupport.h`, `tests/ScaleMeasurementTest.cpp`, `Measure.Scale.*`)
 
 A generator a step up from the wall, built from the slice-5 pieces only (boxes, `FaceContact`,
 running-bond walls), and timing rows that say what the engine costs before anything is
@@ -1269,7 +1273,9 @@ benchmark it stands in for.
 The measurement rows, `Measure.Scale.*` (excluded from every tier by `Scripts/Test.ps1`, run
 one per process from a copy of the Release exe, never as a tier, because two of them do not
 finish on the dense solver): for each of the 10 × 8 wall, a 40 × 32 wall (1,296 bricks), the
-shed, the half warehouse and the warehouse (Release only), build; time the elastic authority
+shed, the half warehouse and the warehouse (Release only), build (the subject builders and their
+closed-form body counts live in `tests/ScaleTestSupport.h`, shared with
+`Measure.Profile.ReadingsDigest`); time the elastic authority
 alone, the certificate alone and `Judge` at rest; on copies time one `ICascade::Run` after
 removing one post and after removing wall 0's base course; print one row. Asserted: the live
 body count equals the closed form, `Judge` at rest reads Stands (not for the warehouse), two
@@ -1456,3 +1462,47 @@ Measured: the 40 × 32 wall's certificate 118 s to 34 s, the half warehouse's 89
 
 **3d, a verdict-only option.** As ruled in DESIGN §10 "stage 3 opening", last and only if the
 warm-cascade target still needs it after 3a–3c (measurement in SCALE.md).
+
+## Profiling timers (`PhaseTimings.h`, 2026-10-15, DESIGN §10 "profiling timers")
+
+```cpp
+struct PhaseTimings {                     // seconds; every field 0.0 unless built with LOADPATH_PROFILE
+	double AssemblySeconds = 0.0;         // stiffness and load assembly, the ungrounded finiteness check
+	double AnalysisSeconds = 0.0;         // sparse symbolic analysis (ordering); 0.0 on the dense path
+	double FactorizationSeconds = 0.0;    // the sparse numeric factor or the blocked dense factor
+	double SolveSeconds = 0.0;            // back-substitution, null basis and load projection
+	double CheckSeconds = 0.0;            // the sparse smallest-eigenvalue check; 0.0 on the dense path
+	double ReadoutSeconds = 0.0;          // interface readings, the rigid fall and the mechanism fill
+	double TotalSeconds = 0.0;            // the whole component solve
+};
+```
+
+`PhaseTimings` sits on each solved `StandingComponent` and, summed field-wise in component
+order, on `StandingResult::Timings`; `AuthorityResult` carries the elastic sum of the
+components solved in that call as `ElasticTimings`, the time inside certificate consults as
+`CertificateSeconds`, and the whole call as `JudgeSeconds`. A reused component adds nothing.
+
+- **The phases cover only part of `TotalSeconds`.** The pivot rank scan, finiteness checks,
+  active-set updates, release restoration, cohesive dissipation and the mechanism power test
+  count only in the total, so the phase sum is at most the total.
+- **An abandoned reuse attempt counts.** When a matchable `Previous` is tried, the dirty
+  components are solved, and merging the readings then fails, the judge re-solves from scratch;
+  `ElasticTimings` holds both solves, since both were spent in this call.
+- **InvalidInput.** An elastic `InvalidInput` result carries zero `Timings` (it is built fresh,
+  without the components' timings) even though time was spent. The combined authority keeps
+  whatever it accumulated before that point, and `JudgeSeconds` always covers the whole call.
+- **Profiled sparse factor time reads high.** The profiled build splits Eigen's `compute()`
+  into `analyzePattern` and `factorize` to time the analysis apart; the ordering is computed
+  once but the permuted copy of K is built twice, the second booked to `FactorizationSeconds`,
+  so it overstates the normal build by one sparse-matrix copy.
+
+**The `-Profile` build.** A compile-time switch, not a runtime option: CMake option
+`LOADPATH_PROFILE` (off by default) defines `LOADPATH_PROFILE=1` for the library and the tests;
+preset `msvc-profile` (build presets `profile-debug`, `profile-release`) builds into
+`build/msvc-profile`; `-Profile` on `Scripts/Build.ps1` and `Scripts/Test.ps1` selects it. The
+fields exist in both builds so the layout never changes. **The normal build reads no clock** and
+leaves every field 0.0 (`src/PhaseClock.h`'s `ScopedPhase` is empty there). Timings feed no
+decision and no reuse comparison, so **answers are bit-identical across the two builds**: proved
+by the profiled build passing the default suite and by `Measure.Profile.ReadingsDigest` printing
+the same digest of every bit of the `AuthorityResult` (except `Revision`, `Lineage`, `Options`
+and `StaleLoads`) in both. Pinned by `Profile.Timings.*` (ANCHORS.md).

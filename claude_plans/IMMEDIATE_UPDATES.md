@@ -28,15 +28,10 @@ section 1, then 2, then 3, then the parked items in section 4. Remove an item wh
 
 Warehouse, Release, 2026-10-15: cold elastic solve 419 ms (442 to 530 ms in the profile), judge
 the same plus about 1.5 ms; warm re-judge after a removal about 140 to 150 ms. The solve is
-single-threaded, and every component converges in one active-set pass at rest.
+single-threaded, and every component converges in one active-set pass at rest. The phases can be
+read at any time from the profiling build (`-Profile`, `LOADPATH_PROFILE`; landed 2026-10-15).
 
-1. **Permanent profiling timers.** A CMake option `LOADPATH_PROFILE`, off by default, a
-   `-Profile` switch on the scripts building into `build/msvc-profile`, and a phase-timing struct
-   (assembly, analysis, factorization, solves, eigenvalue check, active-set passes) on the elastic
-   result and the judge. Tests: the profiled build fills it, the normal build reads zero, and
-   answers are bit-identical with profiling on or off. Kept in the code for debugging; never
-   needed for a normal run.
-2. **Parallel component solves, from the owner's ideas file** ("Multi-threaded component solves,
+1. **Parallel component solves, from the owner's ideas file** ("Multi-threaded component solves,
    and thread safety"). Independent components share no load path, so they solve at the same time.
    - **Threads come from the host**: the library takes a "parallel for" callback and never creates
      threads itself. In Unreal the adapter passes the engine's task system (the adapter stays off

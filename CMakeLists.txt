@@ -12,6 +12,7 @@ endif()
 
 option(LOADPATH_BUILD_TESTS "Build the doctest suite" ON)
 option(LOADPATH_WARNINGS_AS_ERRORS "Treat warnings as errors" ON)
+option(LOADPATH_PROFILE "Fill the phase timings on solver results; the normal build reads no clock" OFF)
 
 # Compiler contract: host-neutral C++20, no exceptions, no RTTI, precise floating point.
 # These are the constraints an Unreal module imposes, enforced here so the port is a copy.
@@ -27,6 +28,9 @@ else()
 		-Wall -Wextra -Wpedantic -Wconversion -Wshadow
 		-fno-exceptions -fno-rtti -ffp-contract=off
 		$<$<BOOL:${LOADPATH_WARNINGS_AS_ERRORS}>:-Werror>)
+endif()
+if(LOADPATH_PROFILE)
+	target_compile_definitions(loadpath_contract INTERFACE LOADPATH_PROFILE=1)
 endif()
 
 # The engine.

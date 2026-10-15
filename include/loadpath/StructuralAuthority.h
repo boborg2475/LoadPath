@@ -2,6 +2,7 @@
 
 #include "loadpath/CollapseCertificate.h"
 #include "loadpath/Handles.h"
+#include "loadpath/PhaseTimings.h"
 #include "loadpath/StandingAuthority.h"
 #include "loadpath/Structure.h"
 
@@ -71,6 +72,13 @@ struct AuthorityResult
 	AuthorityOptions Options;
 	// Ascending indices into the input loads whose body this structure issued but has since removed; those loads were skipped.
 	std::vector<std::size_t> StaleLoads;
+	// The components solved in this call; a reused component adds nothing.
+	// An abandoned reuse attempt (merging readings failed and the judge re-solved) counts its solve too, since that time was spent in this call.
+	PhaseTimings ElasticTimings;
+	// Time inside certificate consults; 0.0 when none ran.
+	double CertificateSeconds = 0.0;
+	// The whole call, so at least ElasticTimings.TotalSeconds + CertificateSeconds when profiled.
+	double JudgeSeconds = 0.0;
 };
 
 // Judge keeps no state between calls, never mutates the structure and is deterministic for a given structure.

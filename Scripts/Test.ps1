@@ -7,14 +7,17 @@
 # order (doctest --first/--last), balanced by per-test durations cached in the build folder.
 # The default run shards automatically; a -tc run shards only when -Jobs is given. -Jobs 1 runs serially.
 # Exit code is doctest's (serial) or 1 when any shard failed or crashed (sharded).
+# -Profile builds and runs the phase-timing build (build/msvc-profile, LOADPATH_PROFILE=ON); everything else is the same.
 param([ValidateSet("Debug","Release")][string]$Config = "Debug",
       [int]$Jobs = 0,
+      [switch]$Profile,
       [Parameter(ValueFromRemainingArguments = $true)][string[]]$DoctestArgs)
 $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent $PSScriptRoot
-& "$PSScriptRoot\Build.ps1" -Config $Config
+$BuildDir = if ($Profile) { "$Root\build\msvc-profile" } else { "$Root\build\msvc" }
+& "$PSScriptRoot\Build.ps1" -Config $Config -Profile:$Profile
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-$Exe = "$Root\build\msvc\tests\$Config\loadpath_tests.exe"
+$Exe = "$BuildDir\tests\$Config\loadpath_tests.exe"
 if ($null -eq $DoctestArgs) { $DoctestArgs = @() }
 
 function Write-ExcludedCounts {
@@ -37,7 +40,7 @@ function Invoke-Sharded([string[]]$FilterArgs, [int]$ShardCount, [bool]$ReportEx
     }
     $ShardCount = [Math]::Max(1, [Math]::Min($ShardCount, $Names.Count))
 
-    $CachePath = "$Root\build\msvc\tests\$Config\test-durations.tsv"
+    $CachePath = "$BuildDir\tests\$Config\test-durations.tsv"
     $Cache = @{}
     if (Test-Path $CachePath) {
         foreach ($Line in Get-Content $CachePath) {

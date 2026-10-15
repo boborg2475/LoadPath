@@ -351,8 +351,10 @@ the profile table records for the shed and half warehouse; that table predates 3
 Every verdict Stands. "Warm" is the post-removed cascade with the first judge as `Previous` (4 of
 5 components reused).
 
-Where the warehouse's cold elastic solve spends its time (profiled separately, 442 to 530 ms per
-run with the instrumentation): factorization about 185 ms (40%, `SimplicialLDLT` at about
+Where the warehouse's cold elastic solve spends its time (profiled separately with ad hoc
+timers, 442 to 530 ms per
+run with that instrumentation; the `-Profile` build now reads the same phases at any time):
+factorization about 185 ms (40%, `SimplicialLDLT` at about
 1.9 G multiply-adds/s); assembly about 175 ms (building the triplet list, both triangles into an
 unreserved vector, about 100 ms; `setFromTriplets` about 74 ms); `analyzePattern` about 41 ms;
 the eigenvalue check about 32 ms. Every component converges in one active-set pass at rest, the

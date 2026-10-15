@@ -1,5 +1,6 @@
 #include "loadpath/StructuralAuthority.h"
 
+#include "PhaseClock.h"
 #include "StaticsCommon.h"
 
 #include <algorithm>
@@ -170,15 +171,24 @@ public:
 
 	AuthorityResult Judge(const Structure& Model, std::span<const BodyLoad> Loads, const AuthorityOptions& Options, const AuthorityResult* Previous) const override
 	{
-		std::vector<std::size_t> Stale;
-		const std::vector<BodyLoad> Live = statics::WithoutStaleLoads(Model, Loads, Stale);
-		AuthorityResult Result = JudgeLive(Model, Live, Options, Previous);
-		Result.StaleLoads = std::move(Stale);
+		PhaseTimings Elastic;
+		double CertificateSeconds = 0.0;
+		double JudgeSeconds = 0.0;
+		AuthorityResult Result = profile::Timed(JudgeSeconds, [&] {
+			std::vector<std::size_t> Stale;
+			const std::vector<BodyLoad> Live = statics::WithoutStaleLoads(Model, Loads, Stale);
+			AuthorityResult Judged = JudgeLive(Model, Live, Options, Previous, Elastic, CertificateSeconds);
+			Judged.StaleLoads = std::move(Stale);
+			return Judged;
+		});
+		Result.ElasticTimings = Elastic;
+		Result.CertificateSeconds = CertificateSeconds;
+		Result.JudgeSeconds = JudgeSeconds;
 		return Result;
 	}
 
 private:
-	AuthorityResult JudgeLive(const Structure& Model, std::span<const BodyLoad> Loads, const AuthorityOptions& Options, const AuthorityResult* Previous) const
+	AuthorityResult JudgeLive(const Structure& Model, std::span<const BodyLoad> Loads, const AuthorityOptions& Options, const AuthorityResult* Previous, PhaseTimings& Elastic, double& CertificateSeconds) const
 	{
 		if (!SameVector(Options.Standing.Gravity, Options.Certificate.Gravity) || !statics::AreCertificateOptionsValid(Options.Certificate) || !statics::AreStandingOptionsValid(Options.Standing))
 		{
@@ -190,7 +200,7 @@ private:
 		const bool bMatchable = Previous != nullptr && SameOptions(Previous->Options, Options) && Previous->Lineage == Model.Lineage() && Previous->Revision <= Model.Revision() && AreLoadsAttributable(Model, Loads);
 		if (bMatchable)
 		{
-			std::optional<AuthorityResult> Reused = JudgeAgainst(Model, Loads, Options, Previous);
+			std::optional<AuthorityResult> Reused = JudgeAgainst(Model, Loads, Options, Previous, Elastic, CertificateSeconds);
 			if (Reused)
 			{
 				Reused->Options = Options;
@@ -198,13 +208,13 @@ private:
 				return std::move(*Reused);
 			}
 		}
-		AuthorityResult Result = std::move(*JudgeAgainst(Model, Loads, Options, nullptr));
+		AuthorityResult Result = std::move(*JudgeAgainst(Model, Loads, Options, nullptr, Elastic, CertificateSeconds));
 		Result.Options = Options;
 		Result.Lineage = Model.Lineage();
 		return Result;
 	}
 
-	std::optional<AuthorityResult> JudgeAgainst(const Structure& Model, std::span<const BodyLoad> Loads, const AuthorityOptions& Options, const AuthorityResult* Previous) const
+	std::optional<AuthorityResult> JudgeAgainst(const Structure& Model, std::span<const BodyLoad> Loads, const AuthorityOptions& Options, const AuthorityResult* Previous, PhaseTimings& Elastic, double& CertificateSeconds) const
 	{
 		const ComponentPartition& Partition = Model.Components();
 		const std::size_t Count = Partition.FreeBodies.size();
@@ -250,6 +260,7 @@ private:
 		if (DirtyCount > 0 || Previous == nullptr)
 		{
 			Whole = Standing->Solve(Model, Loads, Options.Standing, Only);
+			profile::Accumulate(Elastic, Whole.Timings);
 			if (Whole.State == StandingState::InvalidInput)
 			{
 				return Invalid(Whole.InvalidInterface);
@@ -285,7 +296,7 @@ private:
 		if (!Pending.empty())
 		{
 			std::sort(Ask.begin(), Ask.end(), [](BodyId A, BodyId B) { return A.Index < B.Index; });
-			CertificateResult Kinematic = Certificate->Decide(Model, Loads, Options.Certificate, Ask);
+			CertificateResult Kinematic = profile::Timed(CertificateSeconds, [&] { return Certificate->Decide(Model, Loads, Options.Certificate, Ask); });
 			std::size_t Next = 0;
 			for (const std::size_t K : Pending)
 			{

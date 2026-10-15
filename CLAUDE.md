@@ -90,13 +90,19 @@ powershell -NoProfile -ExecutionPolicy Bypass -File Scripts/Test.ps1 -tc="Model.
 ```
 
 `-Config Release` builds and runs the optimised build. `Scripts/Build.ps1` builds without
-running. **The default run is sharded**: `Test.ps1` splits it across processes (half the logical
-cores, at most 8; `-Jobs N` overrides, `-Jobs 1` runs serially), each running a contiguous range
-of the same filtered order, balanced by per-test durations cached in the build folder. A `-tc`
+running. `-Profile` on either script builds the phase-timing build instead (preset `msvc-profile`,
+`LOADPATH_PROFILE=ON`, in `build/msvc-profile`), which fills the `PhaseTimings` on solver results;
+the normal build reads no clock and leaves them 0.0.
+
+**The default run is sharded**: `Test.ps1` splits it across processes (half the logical
+cores, at most 8; `-Jobs N` overrides, `-Jobs 1` runs serially), each running a contiguous
+range of the same filtered order, balanced by per-test durations cached in the build folder. A `-tc`
 run stays serial unless `-Jobs` is given. Same tests, same totals; the Release default takes
-about 20 s instead of about 60 s. Never shard `Slow.*`: its budget rows assert on wall time. **The exit code is meaningful**: non-zero when any assertion fails, and the summary
-prints to stdout. The suite is expected to run in seconds; a test that needs more than about a
-second goes behind a `Slow.` prefix, which `Scripts/Test.ps1` excludes from the default run (it
+about 20 s instead of about 60 s. Never shard `Slow.*`: its budget rows assert on wall time.
+
+**The exit code is meaningful**: non-zero when any assertion fails, and the summary prints
+to stdout. The suite is expected to run in seconds; a test that needs more than about a second
+goes behind a `Slow.` prefix, which `Scripts/Test.ps1` excludes from the default run (it
 prints how many it skipped). A case that is slow only in Debug puts `LOADPATH_SLOW_IN_DEBUG`
 (`tests/SlowInDebug.h`) in front of its name: Debug skips it under `Slow.`, Release runs it under
 its real prefix, so the Release default run is part of validating any such case. **The `Slow.*` tier
@@ -116,6 +122,7 @@ cost 8 to 10 minutes per change:
 | dev-expert | its prefix while iterating, then the Release default run once at the end |
 | orchestrator | the `Slow.*` tier and the two cheap `Measure.Scale` rows in Release, once, before the review |
 | review-expert | the Release default run once, in the scratch worktree; another tier only when a result looks off |
+| orchestrator | `Test.ps1 -Profile -Config Release -tc="Profile.*"` at every slice close, and the `Measure.Profile.ReadingsDigest` row in both builds (digests must match) whenever a change touches `src/PhaseClock.h` or an instrumented call; profiled-only assertions are mutation-proven with `Mutate.ps1 -Profile` |
 | orchestrator | the Debug default run once, before the commit |
 
 **The scratch worktree** (`Scripts/Scratch.ps1`, at `..\LoadPath-scratch`) is a persistent git

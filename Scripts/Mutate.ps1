@@ -3,6 +3,7 @@
 #   Scripts/Mutate.ps1 -File src/StaticsCommon.cpp -Find "!Model.IsLive(" -Replace "Model.IsLive(" -Tests "Statics.StaleLoads.*"
 # -Find must occur exactly once in the file. -Tests is a doctest -tc filter (comma-separated patterns).
 # The scratch worktree is synced to this working tree first unless -NoSync is given.
+# -Profile builds and runs the phase-timing build (build/msvc-profile), for assertions that only run there.
 # Exit code: 0 caught, 1 survived, 2 usage or setup error, 3 the mutant does not compile.
 param([Parameter(Mandatory = $true)][string]$File,
       [Parameter(Mandatory = $true)][string]$Find,
@@ -10,7 +11,8 @@ param([Parameter(Mandatory = $true)][string]$File,
       [Parameter(Mandatory = $true)][string]$Tests,
       [ValidateSet("Debug","Release")][string]$Config = "Release",
       [string]$Scratch = "",
-      [switch]$NoSync)
+      [switch]$NoSync,
+      [switch]$Profile)
 $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent $PSScriptRoot
 if ($Scratch -eq "") { $Scratch = Join-Path (Split-Path -Parent $Root) "LoadPath-scratch" }
@@ -36,13 +38,14 @@ try {
     [IO.File]::WriteAllText($Target, $Mutant, (New-Object System.Text.UTF8Encoding($HasBom)))
     New-Item -ItemType Directory -Force -Path "$Scratch\build" | Out-Null
     Write-Output "[Mutate.ps1] $File`: '$Find' -> '$Replace'"
-    & "$Scratch\Scripts\Build.ps1" -Config $Config *> "$Scratch\build\mutate-build.log"
+    & "$Scratch\Scripts\Build.ps1" -Config $Config -Profile:$Profile *> "$Scratch\build\mutate-build.log"
     if ($LASTEXITCODE -ne 0) {
         Select-String -Path "$Scratch\build\mutate-build.log" -Pattern 'error' | Select-Object -First 5 | ForEach-Object { $_.Line }
         Write-Output "[Mutate.ps1] DOES NOT COMPILE: rewrite the mutant (full log: $Scratch\build\mutate-build.log)"
         $Verdict = 3
     } else {
-        $Output = & "$Scratch\build\msvc\tests\$Config\loadpath_tests.exe" "-tc=$Tests" --no-colors
+        $BuildDir = if ($Profile) { "msvc-profile" } else { "msvc" }
+        $Output = & "$Scratch\build\$BuildDir\tests\$Config\loadpath_tests.exe" "-tc=$Tests" --no-colors
         $Code = $LASTEXITCODE
         $Output | Where-Object { $_ -match '^\[doctest\] (test cases|assertions)' } | Write-Output
         if ($Output -match 'test cases:\s*0 \|') {

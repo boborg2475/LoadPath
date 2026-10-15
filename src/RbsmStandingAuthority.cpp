@@ -1,6 +1,7 @@
 #include "loadpath/StandingAuthority.h"
 
 #include "EigenInclude.h"
+#include "PhaseClock.h"
 #include "StaticsCommon.h"
 
 #include <algorithm>
@@ -825,8 +826,9 @@ InterfaceReading ReadJoint(const Joint& J, const JointState& State, const Eigen:
 	return Reading;
 }
 
-std::vector<InterfaceReading> ReadAll(const Problem& P, const std::vector<JointState>& States, const Eigen::VectorXd& X, bool& bOverstressed)
+std::vector<InterfaceReading> ReadAll(const Problem& P, const std::vector<JointState>& States, const Eigen::VectorXd& X, bool& bOverstressed, PhaseTimings& Timings)
 {
+	const profile::ScopedPhase Readout(Timings.ReadoutSeconds);
 	std::vector<InterfaceReading> Readings;
 	for (std::size_t I = 0; I < P.Joints.size(); ++I)
 	{
@@ -894,16 +896,17 @@ struct SparseAttempt
 	std::optional<Eigen::VectorXd> ScaledX;
 };
 
-SparseAttempt SolveSparseFullRank(const Problem& P, const std::vector<JointState>& States, const Eigen::VectorXd& Load, double PivotToleranceRelative)
+SparseAttempt SolveSparseFullRank(const Problem& P, const std::vector<JointState>& States, const Eigen::VectorXd& Load, double PivotToleranceRelative, PhaseTimings& Timings)
 {
 	SparseAttempt Attempt;
-	const SparseMatrix K = AssembleScaledSparseStiffness(P, States);
+	const SparseMatrix K = profile::Timed(Timings.AssemblySeconds, [&] { return AssembleScaledSparseStiffness(P, States); });
 	if (!IsAllFinite(K))
 	{
 		Attempt.bNonFinite = true;
 		return Attempt;
 	}
-	const SparseFactor Factor(K);
+	SparseFactor Factor;
+	profile::AnalyseAndFactorise(Factor, K, Timings);
 	if (Factor.info() != Eigen::Success)
 	{
 		return Attempt;
@@ -913,9 +916,9 @@ SparseAttempt SolveSparseFullRank(const Problem& P, const std::vector<JointState
 	const bool bFullRank = std::all_of(Pivots.data(), Pivots.data() + Pivots.size(), [&](double Pivot) {
 		return std::isfinite(Pivot) && Pivot > PivotToleranceRelative * LargestPivot;
 	});
-	if (bFullRank && SmallestEigenvalueEstimate(K, Factor) > SparseAcceptanceMargin * PivotToleranceRelative * LargestPivot)
+	if (bFullRank && profile::Timed(Timings.CheckSeconds, [&] { return SmallestEigenvalueEstimate(K, Factor); }) > SparseAcceptanceMargin * PivotToleranceRelative * LargestPivot)
 	{
-		Attempt.ScaledX = Factor.solve(Load);
+		Attempt.ScaledX = profile::Timed(Timings.SolveSeconds, [&]() -> Eigen::VectorXd { return Factor.solve(Load); });
 	}
 	return Attempt;
 }
@@ -939,19 +942,19 @@ enum class StepOutcome : std::uint8_t
 	Finished
 };
 
-StepOutcome AdvanceActiveSet(const Problem& P, const Eigen::VectorXd& X, const std::vector<Eigen::VectorXd>& NeutralMotions, bool& bOverstressed, std::vector<JointState>& States, StandingResult& Result)
+StepOutcome AdvanceActiveSet(const Problem& P, const Eigen::VectorXd& X, const std::vector<Eigen::VectorXd>& NeutralMotions, bool& bOverstressed, std::vector<JointState>& States, StandingResult& Result, PhaseTimings& Timings)
 {
 	std::vector<JointState> Next = States;
 	const UpdateOutcome Outcome = UpdateActiveSet(P, X, NeutralMotions, Next);
 	if (Outcome.bUndecided)
 	{
-		Result.Readings = ReadAll(P, States, X, bOverstressed);
+		Result.Readings = ReadAll(P, States, X, bOverstressed, Timings);
 		Result.State = StandingState::Undecided;
 		return StepOutcome::Finished;
 	}
 	if (!Outcome.bStatusChanged && Outcome.bHeldSettled)
 	{
-		Result.Readings = ReadAll(P, States, X, bOverstressed);
+		Result.Readings = ReadAll(P, States, X, bOverstressed, Timings);
 		Result.State = bOverstressed ? StandingState::Overstressed : StandingState::Stands;
 		return StepOutcome::Finished;
 	}
@@ -983,7 +986,7 @@ StandingResult FallRigid(const Problem& P, const StandingOptions& Options)
 	return Result;
 }
 
-StandingResult SolveProblem(const Problem& P, const StandingOptions& Options)
+StandingResult SolveProblem(const Problem& P, const StandingOptions& Options, PhaseTimings& Timings)
 {
 	StandingResult Result;
 	std::vector<JointState> States(P.Joints.size());
@@ -991,19 +994,19 @@ StandingResult SolveProblem(const Problem& P, const StandingOptions& Options)
 	bool bOverstressed = false;
 	if (P.DofCount == 0)
 	{
-		Result.Readings = ReadAll(P, States, X, bOverstressed);
+		Result.Readings = ReadAll(P, States, X, bOverstressed, Timings);
 		Result.State = bOverstressed ? StandingState::Overstressed : StandingState::Stands;
 		return Result;
 	}
 	const bool bGravity = Options.Gravity.X != 0.0 || Options.Gravity.Y != 0.0 || Options.Gravity.Z != 0.0;
 	if (!P.bGrounded && !P.bHostLoaded && bGravity)
 	{
-		if (!IsScaledStiffnessFinite(P, States))
+		if (!profile::Timed(Timings.AssemblySeconds, [&] { return IsScaledStiffnessFinite(P, States); }))
 		{
 			Result.State = StandingState::InvalidInput;
 			return Result;
 		}
-		return FallRigid(P, Options);
+		return profile::Timed(Timings.ReadoutSeconds, [&] { return FallRigid(P, Options); });
 	}
 	std::vector<JointState> FullRankStates;
 	Eigen::VectorXd FullRankX;
@@ -1012,11 +1015,11 @@ StandingResult SolveProblem(const Problem& P, const StandingOptions& Options)
 	for (int Iteration = 1; Iteration <= Options.MaxActiveSetIterations; ++Iteration)
 	{
 		Result.ActiveSetIterations = Iteration;
-		const Eigen::VectorXd Load = D * AssembleLoad(P, States);
+		const Eigen::VectorXd Load = profile::Timed(Timings.AssemblySeconds, [&]() -> Eigen::VectorXd { return D * AssembleLoad(P, States); });
 		std::vector<Eigen::VectorXd> NeutralMotions;
 		if (P.DofCount > Options.DenseDofLimit)
 		{
-			const SparseAttempt Attempt = SolveSparseFullRank(P, States, Load, Options.PivotToleranceRelative);
+			const SparseAttempt Attempt = SolveSparseFullRank(P, States, Load, Options.PivotToleranceRelative, Timings);
 			if (Iteration == 1 && Attempt.bNonFinite)
 			{
 				Result.State = StandingState::InvalidInput;
@@ -1028,32 +1031,32 @@ StandingResult SolveProblem(const Problem& P, const StandingOptions& Options)
 				FullRankStates = States;
 				FullRankX = X;
 				bHaveFullRank = true;
-				if (AdvanceActiveSet(P, X, NeutralMotions, bOverstressed, States, Result) == StepOutcome::Finished)
+				if (AdvanceActiveSet(P, X, NeutralMotions, bOverstressed, States, Result, Timings) == StepOutcome::Finished)
 				{
 					return Result;
 				}
 				continue;
 			}
 		}
-		const Eigen::MatrixXd K = D * AssembleStiffness(P, States) * D;
+		const Eigen::MatrixXd K = profile::Timed(Timings.AssemblySeconds, [&]() -> Eigen::MatrixXd { return D * AssembleStiffness(P, States) * D; });
 		if (Iteration == 1 && !IsAllFinite(K))
 		{
 			Result.State = StandingState::InvalidInput;
 			return Result;
 		}
-		const Factorisation F = FactoriseBlocked(K, Options.PivotToleranceRelative);
+		const Factorisation F = profile::Timed(Timings.FactorizationSeconds, [&] { return FactoriseBlocked(K, Options.PivotToleranceRelative); });
 		if (F.Rank < P.DofCount)
 		{
-			const std::vector<Eigen::VectorXd> Basis = NullBasis(F);
-			const Eigen::VectorXd Projection = ProjectOntoSpan(Basis, Load);
+			const std::vector<Eigen::VectorXd> Basis = profile::Timed(Timings.SolveSeconds, [&] { return NullBasis(F); });
+			const Eigen::VectorXd Projection = profile::Timed(Timings.SolveSeconds, [&] { return ProjectOntoSpan(Basis, Load); });
 			if (!(Projection.norm() <= NeutralLoadToleranceRelative * Load.norm()))
 			{
 				const Eigen::VectorXd Motion = D * Projection;
-				X = D * SolveInRange(F, Load);
+				X = profile::Timed(Timings.SolveSeconds, [&]() -> Eigen::VectorXd { return D * SolveInRange(F, Load); });
 				const Restoration Outcome = RestoreInadmissibleReleases(P, Motion, bHaveFullRank ? &FullRankStates : nullptr, FullRankX, States);
 				if (Outcome == Restoration::Undecided)
 				{
-					Result.Readings = bHaveFullRank ? ReadAll(P, FullRankStates, FullRankX, bOverstressed) : ReadAll(P, States, X, bOverstressed);
+					Result.Readings = bHaveFullRank ? ReadAll(P, FullRankStates, FullRankX, bOverstressed, Timings) : ReadAll(P, States, X, bOverstressed, Timings);
 					Result.State = StandingState::Undecided;
 					return Result;
 				}
@@ -1062,13 +1065,13 @@ StandingResult SolveProblem(const Problem& P, const StandingOptions& Options)
 					const double PowerW = AssembleLoad(P, States).dot(Motion);
 					if (!(PowerW > CohesiveDissipationW(P, States, Motion)))
 					{
-						Result.Readings = bHaveFullRank ? ReadAll(P, FullRankStates, FullRankX, bOverstressed) : ReadAll(P, States, X, bOverstressed);
+						Result.Readings = bHaveFullRank ? ReadAll(P, FullRankStates, FullRankX, bOverstressed, Timings) : ReadAll(P, States, X, bOverstressed, Timings);
 						Result.State = StandingState::Undecided;
 						return Result;
 					}
-					Result.Readings = ReadAll(P, States, X, bOverstressed);
+					Result.Readings = ReadAll(P, States, X, bOverstressed, Timings);
 					Result.State = StandingState::Mechanism;
-					FillMechanism(P, Motion, Result);
+					profile::Timed(Timings.ReadoutSeconds, [&] { FillMechanism(P, Motion, Result); });
 					return Result;
 				}
 				continue;
@@ -1078,19 +1081,19 @@ StandingResult SolveProblem(const Problem& P, const StandingOptions& Options)
 				NeutralMotions.push_back(D * V);
 			}
 		}
-		X = D * SolveInRange(F, Load);
+		X = profile::Timed(Timings.SolveSeconds, [&]() -> Eigen::VectorXd { return D * SolveInRange(F, Load); });
 		if (F.Rank == P.DofCount)
 		{
 			FullRankStates = States;
 			FullRankX = X;
 			bHaveFullRank = true;
 		}
-		if (AdvanceActiveSet(P, X, NeutralMotions, bOverstressed, States, Result) == StepOutcome::Finished)
+		if (AdvanceActiveSet(P, X, NeutralMotions, bOverstressed, States, Result, Timings) == StepOutcome::Finished)
 		{
 			return Result;
 		}
 	}
-	Result.Readings = ReadAll(P, States, X, bOverstressed);
+	Result.Readings = ReadAll(P, States, X, bOverstressed, Timings);
 	Result.State = StandingState::Undecided;
 	return Result;
 }
@@ -1151,7 +1154,9 @@ StandingResult SolveComponents(const std::vector<Problem>& Problems, std::size_t
 			continue;
 		}
 		const Problem& P = Problems[I];
-		const StandingResult Component = SolveProblem(P, Options);
+		PhaseTimings Timings;
+		StandingResult Component = profile::Timed(Timings.TotalSeconds, [&] { return SolveProblem(P, Options, Timings); });
+		Component.Timings = Timings;
 		if (Component.State == StandingState::InvalidInput)
 		{
 			StandingResult Invalid;
@@ -1173,7 +1178,8 @@ StandingResult SolveComponents(const std::vector<Problem>& Problems, std::size_t
 		Result.ActiveSetIterations = std::max(Result.ActiveSetIterations, Component.ActiveSetIterations);
 		if (!P.FreeBodies.empty())
 		{
-			Result.Components.push_back(StandingComponent{P.FreeBodies, Component.State, Component.ActiveSetIterations, std::move(Slots)});
+			profile::Accumulate(Result.Timings, Component.Timings);
+			Result.Components.push_back(StandingComponent{P.FreeBodies, Component.State, Component.ActiveSetIterations, std::move(Slots), Component.Timings});
 		}
 	}
 	return Result;

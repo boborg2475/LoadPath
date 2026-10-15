@@ -1,6 +1,7 @@
 #pragma once
 
 #include "loadpath/Handles.h"
+#include "loadpath/PhaseTimings.h"
 #include "loadpath/Structure.h"
 #include "loadpath/Units.h"
 #include "loadpath/Vec3.h"
@@ -91,6 +92,7 @@ struct StandingComponent
 	int ActiveSetIterations = 0;
 	// Indices into StandingResult::Readings of this component's interfaces.
 	std::vector<std::size_t> ReadingSlots;
+	PhaseTimings Timings;
 };
 
 struct StandingResult
@@ -108,6 +110,8 @@ struct StandingResult
 	InterfaceId InvalidInterface;
 	// Ascending indices into the input loads whose body this structure issued but has since removed; those loads were skipped.
 	std::vector<std::size_t> StaleLoads;
+	// Field-wise sum of the Components timings, in component order.
+	PhaseTimings Timings;
 };
 
 // Solve keeps no state between calls, never mutates the structure and is deterministic for a given structure.
