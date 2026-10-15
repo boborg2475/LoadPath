@@ -276,32 +276,45 @@ TEST_CASE("Cascade.StackSlidingAtTheGroundIsReleasedAsOneCluster")
 	CHECK_FALSE(S.Model.IsLive(S.Upper));
 }
 
-TEST_CASE("Cascade.AFailedInnerSolveNeverReleasesTheBrickUnderACappedSlide")
+TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Cascade.AFailedInnerSolveNeverReleasesTheBrickUnderACappedSlide")
 {
 	StrengthProfile Capped = DryJoint(5.0);
 	Capped.MaxShearStrengthPa = 0.3 * WeightN() / (BrickLengthM * BrickWidthM);
-	Structure Model;
-	const ProfileId BedProfile = AddProfileOk(Model, DryJoint(5.0));
-	const ProfileId JointProfile = AddProfileOk(Model, Capped);
-	const BodyId Ground = AddGroundPlane(Model);
-	const BodyId Lower = AddBox(Model, BrickShape(0.0, 0));
-	const BodyId Upper = AddBox(Model, BrickShape(0.0, 1));
-	const InterfaceId Bed = AddInterfaceOk(Model, OnGroundPlane(Ground, Lower, BrickShape(0.0, 0), BedProfile));
-	AddInterfaceOk(Model, *StackedFaces(Lower, BrickShape(0.0, 0), Upper, BrickShape(0.0, 1), JointProfile));
-	CascadeOptions Options = Lateral(0.45);
-	Options.Authority.Certificate.MaxIterations = 7;
-	const CascadeVerdict V = RunCascade(Model, Options);
-	INFO(DescribeVerdict(V));
-	CHECK(Model.IsLive(Lower));
-	CHECK(Model.IsLive(Bed));
-	for (const FailedInterface& F : V.Failures)
+	int Runs = 0;
+	int Bad = 0;
+	for (int Step = 1; Step <= 40; ++Step)
 	{
-		CHECK_FALSE(SameHandle(F.Id, Bed));
+		const double Lambda = 0.025 * Step;
+		for (int Cap = 1; Cap <= 30; ++Cap)
+		{
+			Structure Model;
+			const ProfileId BedProfile = AddProfileOk(Model, DryJoint(5.0));
+			const ProfileId JointProfile = AddProfileOk(Model, Capped);
+			const BodyId Ground = AddGroundPlane(Model);
+			const BodyId Lower = AddBox(Model, BrickShape(0.0, 0));
+			const BodyId Upper = AddBox(Model, BrickShape(0.0, 1));
+			const InterfaceId Bed = AddInterfaceOk(Model, OnGroundPlane(Ground, Lower, BrickShape(0.0, 0), BedProfile));
+			AddInterfaceOk(Model, *StackedFaces(Lower, BrickShape(0.0, 0), Upper, BrickShape(0.0, 1), JointProfile));
+			CascadeOptions Options = Lateral(Lambda);
+			Options.Authority.Certificate.MaxIterations = Cap;
+			const CascadeVerdict V = RunCascade(Model, Options);
+			bool bOk = Model.IsLive(Lower) && Model.IsLive(Bed);
+			for (const FailedInterface& F : V.Failures)
+			{
+				bOk = bOk && !SameHandle(F.Id, Bed);
+			}
+			for (const ReleasedCluster& C : V.Clusters)
+			{
+				bOk = bOk && SameIdList(C.Bodies, {Upper});
+			}
+			INFO("lateral " << Lambda << ", MaxIterations " << Cap << ": " << DescribeVerdict(V));
+			CHECK(bOk);
+			Bad += bOk ? 0 : 1;
+			++Runs;
+		}
 	}
-	for (const ReleasedCluster& C : V.Clusters)
-	{
-		CHECK(SameIdList(C.Bodies, {Upper}));
-	}
+	MESSAGE(Runs << " runs, " << Bad << " release the lower brick or the bed");
+	CHECK(Runs == 1200);
 }
 
 TEST_CASE("Cascade.StackWithOnlyTheTopPastItsEdgeReleasesTheTopAlone")

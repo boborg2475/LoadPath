@@ -401,18 +401,23 @@ TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Certificate.Stall.TheSecondRungDecidesWhenOnly
 	CHECK(Got.LoadFactorLower <= 625.07665742313804 * (1.0 + 1.0e-9));
 }
 
-TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Certificate.Stall.ASingleRungFirstConvergesAtAMarginOf1e-5")
+TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Certificate.Stall.EachProductionMarginConvergesAlone")
 {
 	CertificateOptions Options = CertificateLateral(0.4);
 	Options.FeasibilityTolerance = UnreachableTolerance;
 	CHECK(Options.bStallRecovery);
 	const Structure Wall = Ec6Wall(4, 4);
-	for (const double Margin : {1.0e-9, 1.0e-6, 3.0e-6, 1.0e-5})
+	CertificateOptions Off = Options;
+	Off.bStallRecovery = false;
+	const CertificateResult Bare = DecideWith(Wall, Off);
+	INFO(std::setprecision(17) << "ec6 4 x 4 wall at lateral 0.4, tolerance 1e-15, no recovery: " << Bare.State << " in " << Bare.Iterations);
+	CHECK(Bare.State == CertificateState::Undecided);
+	for (const double Margin : {1.0e-5, 1.0e-3})
 	{
 		const double Margins[] = {Margin};
 		const CertificateResult Got = detail::DecideWithRecoveryMargins(Wall, {}, Options, Margins);
-		INFO(std::setprecision(17) << "ec6 4 x 4 wall at lateral 0.4, tolerance 1e-15, single margin " << Margin << ": " << Got.State << " in " << Got.Iterations << " [" << Got.LoadFactorLower << ", " << Got.LoadFactorUpper << "]");
-		CHECK(Got.State == (Margin < 1.0e-5 ? CertificateState::Undecided : CertificateState::Stands));
+		INFO(std::setprecision(17) << "single margin " << Margin << ": " << Got.State << " in " << Got.Iterations << " [" << Got.LoadFactorLower << ", " << Got.LoadFactorUpper << "]");
+		CHECK(Got.State == CertificateState::Stands);
 		CHECK(Got.Iterations <= Options.MaxIterations);
 	}
 }

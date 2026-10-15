@@ -30,7 +30,7 @@ struct CertificateOptions
 	double LoadFactorCap = 1.0e3;
 	// Relative, on the equilibrium residual and complementarity.
 	double FeasibilityTolerance = 1.0e-9;
-	// Interior-point iterations allowed per solve (inscribed, circumscribed, selection); a failed solve reads Undecided unless t_in >= 1.
+	// Interior-point iterations allowed per solve (inscribed, circumscribed, selection); with stall recovery on, a failed inscribed solve counts as t_in = 0; otherwise a failed solve reads Undecided unless t_in >= 1.
 	int MaxIterations = 200;
 	// A cone solve stops as at the cap once this many iterations pass without the largest of its three relative residuals (primal, dual, gap) falling below StallImprovement times that largest residual's best at the window's start, or the complementarity halving; 0 disables.
 	int StallWindow = 20;

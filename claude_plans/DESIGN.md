@@ -1982,8 +1982,8 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   1e-12 precision because every trusted t* must also sit inside the certificate's tight bracket
   [t at tolerance 1e-13, U] within 1e-12 (it does, to 9.4e-15). No real program is untrusted.
   (2) The stall fixtures' stated mechanism was false (see the corrected entry above); the tests are
-  renamed and a documented-edge test pins single rungs at 1e-9, 1e-6 and 3e-6 Undecided and 1e-5
-  Stands. (3) Two facet tests crashed the run when a REQUIRE failed (the no-exceptions doctest does
+  renamed and a documented-edge test pinned single rungs at 1e-9, 1e-6 and 3e-6 Undecided and 1e-5
+  Stands (withdrawn: the edge is not monotone, see "the work gate and the oracle (cold-review rulings)"). (3) Two facet tests crashed the run when a REQUIRE failed (the no-exceptions doctest does
   not stop the test); every index after a REQUIRE in the two certificate test files is now guarded.
   The default-tier oracle sibling gains the seeds that catch a dropped group polish and facet-slack
   boxes × 0.9; Beale's example also certifies through a mid-run switch to Bland.
@@ -2002,7 +2002,7 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   mechanism's normalised work (Demand · y, the motion at unit L1) above 1e-6, else Undecided on
   [0, U_out or t_out] with empty lists. Measured over the default suite: the genuine failed-inner
   mechanisms do +2.26e-3 to +5.86e-3, the bad ones −3.4e-11 to −7.4e-13 (zero-dissipation round-off),
-  so 1e-6 sits 2,200× under the smallest genuine one. The converged path is unchanged (its 2,098
+  so 1e-6 sat 2,200× under the smallest genuine one (on 1- to 3-brick components only; superseded by the relative gate, see "the work gate and the oracle (cold-review rulings)"). The converged path is unchanged (its 2,098
   selections do +6.1e-9 to +0.82; a mass-ratio-1e11 light block's correct mechanism does about
   −1e-11, so the gate would be wrong there). A property now requires every Collapses mechanism over
   the seeded and forced cases to do positive work, and a cascade test keeps the brick under the capped
@@ -2010,3 +2010,58 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   points found none) and needs an injection seam to pin; a negative U_out (impossible while the bound
   is rigorous, since t = 0 is feasible) would read Collapses [0, 0] rather than a fault; a starved
   selection reads a proven collapse as Undecided (documented, fail-closed).
+- *2026-10-14, orchestrator, the work gate and the oracle (cold-review rulings):* the review of
+  a922800 found the gate sound (387 forced failed-inner Collapses, none with negative work, a body
+  moving into a neighbour, or a set different from the converged reference; exactly 4 decided answers
+  changed) and sent back four items. **(1) The oracle trusted a wrong optimum:** a column with a
+  positive reduced cost and no single-row bound was skipped under a floor scaled by the largest
+  column, and the skipped term never reached the gap; on a 3 × 7 chain LP it trusted 1 against 51.
+  **Fixed, over three review rounds:** columns without a single-row bound get one by propagation
+  through rows (a row bounds x_j by its right side minus the bounded contributions of its
+  opposite-signed entries, to a fixpoint). Every bound is rounded outward: a single-row quotient is
+  rounded up, and a propagated limit gets a rounding allowance before its clamp at 0 and is rounded
+  up (the third round found a bound cancelling to 0 under round-to-nearest, trusting 0 against
+  21.3). The upper end is weak duality, uᵀb + Σ max(0, d_j) ub_j with d = c − Aᵀu, and each a·u
+  product enters its compensated sum exactly, with its fma remainder (compensation alone does not
+  recover a product's rounding; 1 − 3 fl(1/3) computed as 0 and the oracle trusted 1 against 2.85).
+  A column still unbounded with d_j > 0 untrusts the result, with no floor (a per-column 4-ulp floor
+  let a cycle of mixed-sign rows through at 1 against 78.7). Trust needs |upper end − cᵀx̂| within
+  1e-7 (1 + |t*|). Every real export stays trusted (626 Slow, 32 default; worst gap 2.76e-8). Known
+  limit: the residual floor is 4 ulp of the largest row, so the light block at mass ratios of 1e14
+  and above is trusted at 1000 against 2 (the loud direction; a per-row floor untrusts 448 of 626
+  real exports). **Scope ruling:** the oracle is a test referee, already not rigorous in floating
+  point (its basis solve and residual floor round to nearest). Further adversarial floating-point
+  constructions against it are out of scope unless one affects a real export; the property that
+  matters is that every trusted t* on a real program also sits inside the certificate's tight
+  bracket, which is checked independently. Revisit the ruling if tolerance-1e-13 probes stop
+  converging on real exports: the oracle would then be the only check there.
+  **(2) The stall edge is not an edge:** convergence is not monotone in the margin (16 generators:
+  1e-5 Stands, 3e-5 Undecided; 8 generators: 3e-6 Stands). The single-rung test now pins only the
+  two production margins, each converging alone, and the neither-rung fixture claims no room
+  beyond its measurements. **(3) The work gate was not scale-invariant:** the normalised work
+  Demand · y is divided by the whole component's force scale, so a genuine mechanism's work scales
+  with the moving mass fraction; a light block at mass ratio 2e5 did 6.88e-7 and read Undecided
+  (fail-closed, but a lost answer). **Ruling (adopted, amended 2026-10-15 by the second review):** the gate is relative and needs a
+  motion of real size. With w_R = Demand_R y_R over the component's rows, W = Σ w_R and S = Σ |w_R|,
+  Collapses on the failed-inner path needs ‖y‖₁ ≥ ½, S > 0 and W > 1e-6 S. Both tests depend on
+  neither mass nor force scale (the light block at 2e5 reads ‖y‖₁ 0.999998). The size test is the
+  load-bearing one: the selection normalises auxiliary |y| variables, not y, so y ≈ 0 is optimal when
+  no admissible motion does positive work, and every rejection the review saw (35 in the suite, about
+  1,260 in about 160,000 forced runs) had ‖y‖₁ 1.3e-11 to 1.2e-9, with S itself solver residual and
+  W / S carrying no information; all happened to have W < 0, which nothing guarantees, and
+  `FillMechanism` would scale a positive-noise y up to a full mechanism. Every acceptance had
+  ‖y‖₁ ≥ 0.9998. The W / S term rejects a motion of real size whose work is not positive; no case in
+  the suite or the review's sweeps reaches it (the zero-work faces at λ = μ have ‖y‖₁ 0.17 to 0.41 and
+  fall to the size test), so seam vectors drive it: a unit motion doing negative work, and a
+  zero-work face scaled to ‖y‖₁ ≥ ½ with W / S about 5e-11, both rejected. Accepted W / S is at least
+  0.0064 over the review's wider draws (seed 4523, draw 281); the light-block test drives the relative
+  form (the absolute form reddens it).
+  **What positive work proves, under tolerance:** in exact arithmetic it proves t*_in = 0. Under
+  tolerance the opening row's allowance ε (`FeasibilityTolerance`) proves only t*_in ≤ ε / W, and the
+  generator rows, held to an absolute 1e-9, add a δ Σ Bound_G / W term (why mechanisms past the
+  Foraboschi limit show U_in up to 55.6). The gate is therefore a guard against wrong motions, not
+  a proof of t*_in = 0; the Collapses itself rests on the rigorous U_out < 1. **(4)** Two stale header
+  comments corrected (`SolveMaxLp`, `MaxIterations`). The cascade test is a 1,200-run sweep (9 releases
+  of the lower brick without the gate) and a property checks every failed-inner Collapses over
+  draws 0–139 × `MaxIterations` 3–12 for positive work, no closing corner and the reference's set
+  (24 bad of 26 without the gate; 2 reach it with the gate on).

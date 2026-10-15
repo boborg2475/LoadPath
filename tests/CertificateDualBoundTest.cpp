@@ -944,3 +944,321 @@ TEST_CASE("Certificate.DualBound.TheOracleNeverTrustsAWrongOptimum")
 	}
 	MESSAGE(Trusted << " of 6 light-block exports trusted" << Untrusted.str());
 }
+
+TEST_CASE("Certificate.DualBound.TheOracleNeverTrustsAWrongOptimumOnABadlyScaledChain")
+{
+	int Wrong = 0;
+	for (const double K : {1.0e3, 1.0e5, 1.0e7})
+	{
+		for (const double D : {1.0e-14, 1.0e-12, 5.0e-11, 5.0e-9})
+		{
+			const std::vector<double> A = ColumnMajor({{1.0, 0.0, 0.0, 0.0, K, 1.0, 0.0}, {0.0, 1.0, 1.0, -1.0, 0.0, 0.0, 0.0}, {0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0}});
+			const lp::OracleResult O = lp::SolveMaxLp(3, 7, A, {1.0, 0.0, 1.0e10}, {1.0, 0.0, D, 0.0, 0.0, 0.0, 0.0});
+			const double Truth = 1.0 + D * 1.0e10;
+			const bool bRight = !O.bTrusted || std::abs(O.Optimum - Truth) <= 1.0e-7 * (1.0 + Truth);
+			INFO(std::setprecision(17) << "K " << K << ", D " << D << ": trusted " << O.bTrusted << ", t* " << O.Optimum << ", gap " << O.Gap << " (" << O.Why << "), true optimum " << Truth);
+			CHECK(bRight);
+			Wrong += bRight ? 0 : 1;
+		}
+	}
+	MESSAGE(Wrong << " of 12 chain points trusted at a wrong optimum");
+}
+
+namespace
+{
+struct CentredLightBlock
+{
+	Structure Model;
+	BodyId Heavy;
+	BodyId Light;
+};
+
+CentredLightBlock CentredLightBlockOnHeavy(double Ratio)
+{
+	CentredLightBlock S;
+	const BodyId Ground = AddGroundPlane(S.Model);
+	const Box Heavy{Vec3{0.0, 0.0, 0.5}, Vec3{0.5, 0.5, 0.5}, 1000.0};
+	S.Heavy = AddBox(S.Model, Heavy);
+	AddInterfaceOk(S.Model, OnGroundPlane(Ground, S.Heavy, Heavy, AddProfileOk(S.Model, DryJoint(0.8))));
+	const Box Light{Vec3{0.0, 0.0, 1.05}, Vec3{0.05, 0.05, 0.05}, 1000.0 / Ratio};
+	S.Light = AddBox(S.Model, Light);
+	const std::optional<InterfaceDesc> Contact = StackedFaces(S.Heavy, Heavy, S.Light, Light, AddProfileOk(S.Model, DryJoint(0.3)));
+	REQUIRE(Contact.has_value());
+	if (Contact)
+	{
+		AddInterfaceOk(S.Model, *Contact);
+	}
+	return S;
+}
+}
+
+TEST_CASE("Certificate.DualBound.AFailedInnerCollapseOfALightBlockIsDecidedAtMassRatio2e5")
+{
+	constexpr int Cap = 12;
+	for (const double Ratio : {1.0e2, 2.0e5})
+	{
+		const CentredLightBlock S = CentredLightBlockOnHeavy(Ratio);
+		const CertificateResult Reference = DecideWith(S.Model, CertificateLateral(0.5));
+		CertificateOptions Options = CertificateLateral(0.5);
+		Options.MaxIterations = Cap;
+		const detail::ProgramProbe Inner = detail::ProbeProgram(S.Model, {}, Options, 0, true);
+		const CertificateResult Got = DecideWith(S.Model, Options);
+		INFO(std::setprecision(17) << "ratio " << Ratio << ", MaxIterations " << Cap << ": inner converged " << Inner.bConverged << " t " << Inner.LoadFactor << "; " << Got.State << " [" << Got.LoadFactorLower << ", " << Got.LoadFactorUpper << "] in " << Got.Iterations << ", moving " << Got.UnconstrainedBodies.size() << "; reference " << Reference.State << " [" << Reference.LoadFactorLower << ", " << Reference.LoadFactorUpper << "], moving " << Reference.UnconstrainedBodies.size());
+		REQUIRE(Reference.State == CertificateState::Collapses);
+		REQUIRE(Reference.UnconstrainedBodies.size() == 1u);
+		REQUIRE(HasBody(Reference.UnconstrainedBodies, S.Light));
+		REQUIRE_FALSE(Inner.bConverged);
+		CHECK(Got.State == CertificateState::Collapses);
+		CHECK(Got.UnconstrainedBodies.size() == 1u);
+		CHECK(HasBody(Got.UnconstrainedBodies, S.Light));
+		CHECK_FALSE(HasBody(Got.UnconstrainedBodies, S.Heavy));
+	}
+}
+
+namespace
+{
+constexpr int FailedInnerDrawCount = 140;
+constexpr double PenetrationLimit = 1.0e-9;
+
+BoundCase FailedInnerDraw(int Draw)
+{
+	return SeededCase(Draw);
+}
+
+Vec3 PointVelocity(const Structure& Model, const std::vector<MechanismMotion>& Mechanism, BodyId Body, const Vec3& PointM)
+{
+	for (const MechanismMotion& M : Mechanism)
+	{
+		if (SameHandle(M.Body, Body))
+		{
+			const Vec3 C = Model.Body(Body).CentroidM;
+			const Vec3 Spin = Cross(M.RotationRad, Vec3{PointM.X - C.X, PointM.Y - C.Y, PointM.Z - C.Z});
+			return Vec3{M.TranslationM.X + Spin.X, M.TranslationM.Y + Spin.Y, M.TranslationM.Z + Spin.Z};
+		}
+	}
+	return Vec3{0.0, 0.0, 0.0};
+}
+
+double WorstPenetration(const Structure& Model, const std::vector<BodyId>& Bodies, const std::vector<MechanismMotion>& Mechanism)
+{
+	double Worst = 0.0;
+	for (const BodyId Id : Bodies)
+	{
+		for (const InterfaceId Each : Model.InterfacesOf(Id))
+		{
+			if (!Model.IsLive(Each))
+			{
+				continue;
+			}
+			const InterfaceRecord& R = Model.Interface(Each);
+			for (const double SU : {-1.0, 1.0})
+			{
+				for (const double SV : {-1.0, 1.0})
+				{
+					const Vec3 P{R.CentreM.X + SU * R.HalfExtentUM * R.AxisU.X + SV * R.HalfExtentVM * R.AxisV.X, R.CentreM.Y + SU * R.HalfExtentUM * R.AxisU.Y + SV * R.HalfExtentVM * R.AxisV.Y, R.CentreM.Z + SU * R.HalfExtentUM * R.AxisU.Z + SV * R.HalfExtentVM * R.AxisV.Z};
+					const Vec3 VA = PointVelocity(Model, Mechanism, R.BodyA, P);
+					const Vec3 VB = PointVelocity(Model, Mechanism, R.BodyB, P);
+					const double Opening = Dot(R.NormalAToB, Vec3{VB.X - VA.X, VB.Y - VA.Y, VB.Z - VA.Z});
+					Worst = std::max(Worst, -Opening);
+				}
+			}
+		}
+	}
+	return Worst;
+}
+
+bool SameBodySet(std::vector<BodyId> A, std::vector<BodyId> B)
+{
+	if (A.size() != B.size())
+	{
+		return false;
+	}
+	for (const BodyId X : A)
+	{
+		if (!HasBody(B, X))
+		{
+			return false;
+		}
+	}
+	return true;
+}
+
+struct FailedInnerTally
+{
+	int Decided = 0;
+	int Bad = 0;
+};
+
+void CheckFailedInnerCollapses(const Structure& Model, const CertificateOptions& Options, const CertificateResult& Reference, const std::string& Label, FailedInnerTally& Tally)
+{
+	const CertificateResult R = DecideWith(Model, Options);
+	if (R.Components.size() != Reference.Components.size())
+	{
+		FAIL_CHECK("component count differs, " << Label);
+		return;
+	}
+	for (std::size_t K = 0; K < R.Components.size(); ++K)
+	{
+		const CertificateComponent& C = R.Components[K];
+		if (C.State != CertificateState::Collapses || detail::ProbeProgram(Model, {}, Options, K, true).bConverged)
+		{
+			continue;
+		}
+		++Tally.Decided;
+		const double WorkJ = MechanismWorkJ(Model, Options, {}, C.Mechanism);
+		const double Penetration = WorstPenetration(Model, C.Bodies, C.Mechanism);
+		const CertificateComponent& Ref = Reference.Components[K];
+		const bool bSameSet = Ref.State != CertificateState::Collapses || SameBodySet(C.UnconstrainedBodies, Ref.UnconstrainedBodies);
+		INFO(std::setprecision(17) << Label << ", component " << K << ": work " << WorkJ << " J, worst penetration " << Penetration << ", moving " << C.UnconstrainedBodies.size() << ", reference " << Ref.State << " moving " << Ref.UnconstrainedBodies.size());
+		CHECK(WorkJ > 0.0);
+		CHECK(Penetration <= PenetrationLimit);
+		CHECK(bSameSet);
+		Tally.Bad += (WorkJ > 0.0 && Penetration <= PenetrationLimit && bSameSet) ? 0 : 1;
+	}
+}
+}
+
+TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Certificate.DualBound.EveryFailedInnerCollapsesIsAnAdmissibleMechanism")
+{
+	FailedInnerTally Tally;
+	for (int Draw = 0; Draw < FailedInnerDrawCount; ++Draw)
+	{
+		const BoundCase Base = FailedInnerDraw(Draw);
+		const CertificateResult Reference = DecideWith(Base.Model, Base.Options);
+		for (int Cap = 3; Cap <= 12; ++Cap)
+		{
+			CertificateOptions Options = Base.Options;
+			Options.MaxIterations = Cap;
+			std::ostringstream Label;
+			Label << Base.Name << ", draw " << Draw << ", MaxIterations " << Cap;
+			CheckFailedInnerCollapses(Base.Model, Options, Reference, Label.str(), Tally);
+		}
+	}
+	MESSAGE(FailedInnerDrawCount << " draws x MaxIterations 3-12: " << Tally.Decided << " failed-inner Collapses, " << Tally.Bad << " bad mechanisms");
+	CHECK(Tally.Decided > 0);
+}
+
+TEST_CASE("Slow.Certificate.DualBound.EveryFailedInnerCollapseOfACohesiveStackIsAnAdmissibleMechanism")
+{
+	FailedInnerTally Tally;
+	for (const double CohesionPa : {1.0e3, 1.0e5, 1.0e7})
+	{
+		for (const double MaxShearPa : {100.0, 1.0e4})
+		{
+			for (const double ShiftM : {0.0, 0.02, 0.04, 0.06, 0.08})
+			{
+				StrengthProfile Joint = DryJoint(0.7);
+				Joint.ShearCohesionPa = CohesionPa;
+				Joint.MaxShearStrengthPa = MaxShearPa;
+				const TwoBrickStack S = MakeTwoBrickStack(Joint, ShiftM);
+				for (const double Lambda : {0.3, 0.8, 1.5})
+				{
+					const CertificateOptions Base = CertificateLateral(Lambda, 0.875 * Lambda / 1.5);
+					const CertificateResult Reference = DecideWith(S.Model, Base);
+					for (int Cap = 1; Cap <= 30; ++Cap)
+					{
+						CertificateOptions Options = Base;
+						Options.MaxIterations = Cap;
+						std::ostringstream Label;
+						Label << "cohesion " << CohesionPa << " Pa, max shear " << MaxShearPa << " Pa, shift " << ShiftM << " m, lambda " << Lambda << ", MaxIterations " << Cap;
+						CheckFailedInnerCollapses(S.Model, Options, Reference, Label.str(), Tally);
+					}
+				}
+			}
+		}
+	}
+	MESSAGE("cohesive two-brick stacks x MaxIterations 1-30: " << Tally.Decided << " failed-inner Collapses, " << Tally.Bad << " bad mechanisms");
+	CHECK(Tally.Decided > 0);
+}
+
+TEST_CASE("Certificate.DualBound.TheFailedInnerGateRejectsANearZeroMotionAndNonPositiveWork")
+{
+	const double Demand[] = {0.3, 0.0, -1.0, 0.0, 0.0, 0.0};
+	const double Tiny[] = {0.5e-10, 0.0, -0.2e-10, 0.1e-10, 0.0, 0.0};
+	CHECK_FALSE(detail::FailedInnerMechanismIsAdmissible(Demand, Tiny, 6));
+	const double LightDemand[] = {0.5, 0.0, -1.0, 0.0, 0.0, 0.0};
+	const double LightBlock[] = {0.7, 0.0, 0.2, 0.1, 0.0, 0.0};
+	CHECK(detail::FailedInnerMechanismIsAdmissible(LightDemand, LightBlock, 6));
+	const double ZeroWorkFace[] = {0.28, 0.0, 0.084 - 8.4e-12, 0.006, 0.0, 0.0};
+	CHECK_FALSE(detail::FailedInnerMechanismIsAdmissible(Demand, ZeroWorkFace, 6));
+	const double Upward[] = {0.0, 0.0, 1.0, 0.0, 0.0, 0.0};
+	CHECK_FALSE(detail::FailedInnerMechanismIsAdmissible(Demand, Upward, 6));
+	const double QuarterDemand[] = {0.25, 0.0, -1.0, 0.0, 0.0, 0.0};
+	const double NearZeroWork[] = {1.0, 0.0, 0.25 - std::ldexp(1.0, -35), 0.0, 0.0, 0.0};
+	CHECK_FALSE(detail::FailedInnerMechanismIsAdmissible(QuarterDemand, NearZeroWork, 6));
+}
+
+TEST_CASE("Certificate.DualBound.TheOracleNeverTrustsAWrongOptimumOnAPropagationCycle")
+{
+	int Wrong = 0;
+	for (const double R : {1.0e12, 1.0e15, 1.0e17})
+	{
+		for (const double Delta : {std::ldexp(1.0, -52), std::ldexp(7.0, -53)})
+		{
+			const std::vector<double> A = ColumnMajor({{1.0, -1.0, 0.0}, {-1.0, 2.0, 1.0}});
+			const lp::OracleResult O = lp::SolveMaxLp(2, 3, A, {1.0, R}, {1.0, -(1.0 - Delta), 0.0});
+			const double Truth = 1.0 + Delta * (R + 1.0);
+			const bool bRight = !O.bTrusted || std::abs(O.Optimum - Truth) <= 1.0e-7 * (1.0 + Truth);
+			INFO(std::setprecision(17) << "R " << R << ", delta " << Delta << ": trusted " << O.bTrusted << ", t* " << O.Optimum << ", gap " << O.Gap << " (" << O.Why << "), true optimum " << Truth);
+			CHECK(bRight);
+			Wrong += bRight ? 0 : 1;
+		}
+	}
+	MESSAGE(Wrong << " of 6 cycle points trusted at a wrong optimum");
+}
+
+TEST_CASE("Certificate.DualBound.TheOracleNeverTrustsAWrongOptimumWhenAReducedCostRoundsToZero")
+{
+	int Wrong = 0;
+	for (const double K : {3.0, 7.0})
+	{
+		const double C1 = 1.0 / K;
+		for (const double R : {1.0e11, 1.0e12, 1.0e14, 1.0e16, 1.0e17})
+		{
+			const std::vector<double> A = ColumnMajor({{K, -1.0, 0.0}, {0.0, 1.0, 1.0}});
+			const lp::OracleResult O = lp::SolveMaxLp(2, 3, A, {K, R}, {1.0, -C1, 0.0});
+			const double Truth = 1.0 + R * std::fma(-K, C1, 1.0) / K;
+			const bool bRight = !O.bTrusted || std::abs(O.Optimum - Truth) <= 1.0e-7 * (1.0 + Truth);
+			std::ostringstream Line;
+			Line << std::setprecision(17) << "K " << K << ", R " << R << ": trusted " << O.bTrusted << ", t* " << O.Optimum << ", gap " << O.Gap << " (" << O.Why << "), true optimum " << Truth;
+			MESSAGE(Line.str());
+			INFO(Line.str());
+			CHECK(bRight);
+			Wrong += bRight ? 0 : 1;
+		}
+	}
+	MESSAGE(Wrong << " of 10 reduced-cost points trusted at a wrong optimum");
+}
+
+TEST_CASE("Certificate.DualBound.TheOracleNeverTrustsAWrongOptimumWhenARoundedBoundCancels")
+{
+	int Wrong = 0;
+	int Feasible = 0;
+	for (const double B : {1.0e12, 1.0e14, 1.0e15, 1.0e17, 1.0e18, 7.0e18})
+	{
+		for (const double K : {3.0, 7.0, 11.0})
+		{
+			for (const double Zc : {-1.0e12, -1.0e15})
+			{
+				const double F = B / K;
+				const double Remainder = std::fma(-K, F, B);
+				if (!(Remainder > 0.0))
+				{
+					continue;
+				}
+				const double Truth = Remainder / K;
+				const std::vector<double> A = ColumnMajor({{1.0, -1.0, 0.0, 0.0}, {0.0, K, 2.0 * K, 1.0}});
+				const lp::OracleResult O = lp::SolveMaxLp(2, 4, A, {-F, B}, {1.0, 0.0, 0.0, Zc});
+				const bool bRight = !O.bTrusted || std::abs(O.Optimum - Truth) <= 1.0e-7 * (1.0 + Truth);
+				std::ostringstream Line;
+				Line << std::setprecision(17) << "B " << B << ", K " << K << ", Zc " << Zc << ": trusted " << O.bTrusted << ", t* " << O.Optimum << ", gap " << O.Gap << " (" << O.Why << "), true optimum " << Truth;
+				MESSAGE(Line.str());
+				INFO(Line.str());
+				CHECK(bRight);
+				++Feasible;
+				Wrong += bRight ? 0 : 1;
+			}
+		}
+	}
+	MESSAGE(Wrong << " of " << Feasible << " feasible cancelled-bound points trusted at a wrong optimum");
+}

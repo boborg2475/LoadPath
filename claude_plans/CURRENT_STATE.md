@@ -32,9 +32,9 @@ stacks, Paterson–Zwick, Couplet–Heyman at Milankovitch's 0.107478 with hinge
 the certificate's associative 31.07°, the cascade on the arch below least thickness, the dry
 wall at t / H within 1 % (10 × 8 and 4 × 5), the bonded 4 × 5 wall at its monolith factor
 `(t/H)(1 + f_t A_base / W) = 2.971` to 1 %, two screws at twice their published shear and
-withdrawal whatever the joint area. Default suite 401 cases in Debug and 450 in Release as of
+withdrawal whatever the joint area. Default suite 406 cases in Debug and 457 in Release as of
 2026-10-14 (325 and 347 at the 6b close) (the arch, pile, arch-cascade, fuzz, small-wall and multi-panel factor anchors
-run only in Release under `LOADPATH_SLOW_IN_DEBUG`; twenty-one `Slow.*` cases run in Release at
+run only in Release under `LOADPATH_SLOW_IN_DEBUG`; twenty-two `Slow.*` cases run in Release at
 every slice close, and the
 cheap `Measure.Scale.*` rows after them); the `Deferred.*` tier holds the physical wedge pin
 (it belonged to slice 7, which the owner dropped on 2026-10-12; the pin stays as the record of
@@ -388,7 +388,7 @@ the non-associative answer) and the two hanging-component cases (slice 6), red b
   of 10 fallbacks, 16 to 50 s, before 1e-3 converged); mechanism deflation was not prototyped. The bound is polished (2026-10-14, DESIGN §10 "the dual-polish ruling"): left from it, `LoadFactorUpper` stays the primal (reporting min(cap, U_out) is blocked by the light block at mass ratio 1e8, U_out 7.54 against t 1.89, whose equilibrium duals no polish reaches); the bounded-LP oracle (tests/LpOracle.h, through `detail::ExportProgram`) skips the two
   largest wall programs (over 500,000 entries; the dense oracle takes minutes there) and the
   light-block family (at mass ratios of 1e10 and above the first oracle trusted a wrong optimum,
-  1000 against 2; its trust test is now strict and it untrusts them); about 77 REQUIRE-on-size sites in other test files are not followed by a guard, so a failing REQUIRE there can crash the run and lose every later result (the no-exceptions doctest does not stop the test); the light-block model is duplicated (Slice4AnchorsTest and CertificateDualBoundTest); the failed-inner path's converged-outer gate (t_out < 1 ≤ U_out) has no fixture and needs an injection seam to pin; a negative U_out would read Collapses [0, 0] rather than a fault;
+  1000 against 2; its trust test is now strict and it untrusts them at 1e10 to 1e13, but from 1e14 to 1e18 the residual floor, 4 ulp of the largest row, still lets it trust t* = 1000 against the analytic 2 on the inscribed and circumscribed exports; that is the loud direction (a high t* fails every consumer check) and no consumer uses those ratios, but a row-local floor is owed: a per-row 4-ulp floor untrusts 448 of 626 real exports); about 77 REQUIRE-on-size sites in other test files are not followed by a guard, so a failing REQUIRE there can crash the run and lose every later result (the no-exceptions doctest does not stop the test); the light-block model is duplicated (Slice4AnchorsTest and CertificateDualBoundTest); the failed-inner path's converged-outer gate (t_out < 1 ≤ U_out) has no fixture and needs an injection seam to pin; a negative U_out would read Collapses [0, 0] rather than a fault;
   `Certificate.Mechanics.StandsSurvivesAnOuterSolveThatDoesNotConverge` asserts U at least a pinned
   primal 2e-9 below it, at solver tolerance 1e-9. A Collapses now needs the circumscribed dual bound below 1
   (2026-10-14, DESIGN §10 "does a Collapses mechanism prove its own collapse"); left from that
@@ -397,7 +397,7 @@ the non-associative answer) and the two hanging-component cases (slice 6), red b
   leave the released motion incompatible at a dropped body's joints (the harmonic stack's U 1e-11 to
   1.7e7 on the listed set); the selection's kinematic rows hold to an absolute 1e-9 not scaled to the
   crushing bound (U_in up to 55.6 on the Foraboschi wall past its limit); at mass ratios of 1e11 and
-  above the selection's velocity does about -1e-11 of work; none changes a verdict. The dense selection takes 20 to 27 s on the full wall; the
+  above the selection's velocity does about -1e-11 of work; on the converged path none changes a verdict, but on the failed-inner path the centred light block (the review's sweep, 2026-10-15) reads Undecided at ratio 1e6, lateral 0.5, for `MaxIterations` 1 to 10 and Collapses from 11, and the failed-inner decisions at ratios 1e6 to 1e10 depend on the cap the same way (at 1e9, lateral 0.35, the inner solve converges at cap 12): lost answers at small caps, fail-closed. The oracle's check that cᵀx̂ does not sit above its own upper end is driven by no test (dropping the absolute value passes `Certificate.*` and `Cascade.*`). Its exact products in uᵀb and in the reduced-cost-times-bound sum are driven by no test either (only the reduced cost's is). Its outward-rounded bounds have two halves (the rounded-up single-row quotient, the propagation allowance) and the rounded-bound test reddens only when both are dropped; neither is pinned alone, and under the oracle's scope ruling (DESIGN §10) no further adversarial case is owed unless a real export is affected. The work gate's sign and threshold are driven only by seam vectors, never by a natural case (DESIGN §10 "the work gate and the oracle"). The dense selection takes 20 to 27 s on the full wall; the
   hinging list wanders between 17 and 33 joints on the 57-body wall; The
   Foraboschi fixture's limits with the paper's f_c 1.21 MPa are about 25.0, 40.0 and 57.1 kN at
   40, 80 and 140 kN, 4.6, 0.5 and 2.3 % above Portioli's model (23.9, 39.8 and 55.8 kN);
@@ -479,11 +479,6 @@ the non-associative answer) and the two hanging-component cases (slice 6), red b
 - `RemoveBody`, `InterfacesOf` and the live counts scan every slot (O(n)); fine for slice 1,
   but a per-body adjacency list is needed before a solver calls `InterfacesOf` in a loop
   (slice 6, 15,042 joints).
-- Doctest runs with `DOCTEST_CONFIG_NO_EXCEPTIONS_BUT_WITH_ALL_ASSERTS`, so `REQUIRE` does not
-  abort the test case: a test that dereferences or indexes after a failed `REQUIRE` keeps going
-  and can crash the runner instead of reporting. Sweep the suite for that pattern (for example
-  `CliTest.cpp`'s `REQUIRE_FALSE(Loaded.Ok())` and the `REQUIRE`s in `MakeHandBuilt`) and add an
-  early return where the next line depends on the check (flagged by test-expert, slice 1b).
 - Slice 1b items left open after the second ratification round:
   - Underflow reads as the nearest value only because MSVC's `from_chars` stores it alongside
     `result_out_of_range`. The standard says the value is left unmodified; there the reader's NaN

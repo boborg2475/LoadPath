@@ -47,4 +47,8 @@ double ProbeDualBoundWithFacetPivotLimit(const Structure& Model, std::span<const
 
 // The production Decide over every component, with Margins replacing the stall-recovery margins for this call.
 CertificateResult DecideWithRecoveryMargins(const Structure& Model, std::span<const BodyLoad> Loads, const CertificateOptions& Options, std::span<const double> Margins);
+
+// The failed-inner gate over a component's Rows entries: admits only when sum |v| >= 0.5, S = sum |d v| > 0 and d.v > 1e-6 S.
+// The selection normalises auxiliary |v| variables, not v, so v near 0 is its optimum when no admissible motion does positive work.
+bool FailedInnerMechanismIsAdmissible(const double* Demand, const double* Velocity, int Rows);
 }

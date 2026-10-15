@@ -41,7 +41,7 @@ struct OracleResult
 	std::vector<double> X;
 	// The certificate's sign convention: Y = -u for the textbook dual u (min b^T u, A^T u >= c), so A^T Y + c <= 0 at the optimum.
 	std::vector<double> Y;
-	// Positive reduced costs times the ColumnBounds bounds: the true optimum lies in [Optimum, Optimum + Gap] when trusted.
+	// max(0, U - Optimum) for the weak-duality upper end U = u^T b + sum max(0, d_j) ub_j; trust requires |U - Optimum| <= 1e-7 (1 + |t*|).
 	double Gap = 0.0;
 	int Pivots = 0;
 	bool bUsedBland = false;
@@ -104,6 +104,14 @@ inline void NeumaierAdd(double& Sum, double& Carry, double Term)
 	Sum = Next;
 }
 
+// Adds A*B exactly: the product's own rounding error goes in through fma, which compensation alone cannot recover.
+inline void NeumaierAddProduct(double& Sum, double& Carry, double A, double B)
+{
+	const double Product = A * B;
+	NeumaierAdd(Sum, Carry, Product);
+	NeumaierAdd(Sum, Carry, std::fma(A, B, -Product));
+}
+
 template <class L, class R>
 double CompensatedDot(const L& Left, const R& Right)
 {
@@ -117,6 +125,7 @@ double CompensatedDot(const L& Left, const R& Right)
 }
 
 // Each column's upper bound from the rows whose entries all share their right-hand side's sign (b = 0 rows count in either sign); +inf where no such row covers it.
+// All bounds are rounded outward so a rounded bound never falls below the true supremum.
 inline Eigen::VectorXd ColumnBounds(const Eigen::Map<const Eigen::MatrixXd>& A, const Eigen::Map<const Eigen::VectorXd>& B)
 {
 	Eigen::VectorXd Bounds = Eigen::VectorXd::Constant(A.cols(), std::numeric_limits<double>::infinity());
@@ -132,9 +141,54 @@ inline Eigen::VectorXd ColumnBounds(const Eigen::Map<const Eigen::MatrixXd>& A, 
 			{
 				if (A(I, J) != 0.0)
 				{
-					Bounds(J) = std::min(Bounds(J), B(I) / A(I, J));
+					Bounds(J) = std::min(Bounds(J), std::nextafter(B(I) / A(I, J), std::numeric_limits<double>::infinity()));
 				}
 			}
+		}
+	}
+	return Bounds;
+}
+
+// Fills each +inf column bound by propagation through any row: x_j <= (s b_i - sum over s a_ik < 0 of s a_ik ub_k) / |a_ij| with s = sign(a_ij); finite bounds are never changed.
+inline Eigen::VectorXd PropagatedBounds(const Eigen::Map<const Eigen::MatrixXd>& A, const Eigen::Map<const Eigen::VectorXd>& B, Eigen::VectorXd Bounds)
+{
+	for (Eigen::Index Round = 0; Round <= A.cols(); ++Round)
+	{
+		bool bChanged = false;
+		for (Eigen::Index J = 0; J < A.cols(); ++J)
+		{
+			if (std::isfinite(Bounds(J)))
+			{
+				continue;
+			}
+			for (Eigen::Index I = 0; I < A.rows(); ++I)
+			{
+				if (A(I, J) == 0.0)
+				{
+					continue;
+				}
+				const double S = A(I, J) > 0.0 ? 1.0 : -1.0;
+				double Limit = S * B(I);
+				double Magnitude = std::abs(B(I));
+				for (Eigen::Index K = 0; K < A.cols(); ++K)
+				{
+					if (K != J && S * A(I, K) < 0.0)
+					{
+						Limit -= S * A(I, K) * Bounds(K);
+						Magnitude += std::abs(A(I, K) * Bounds(K));
+					}
+				}
+				if (std::isfinite(Limit))
+				{
+					Limit += 4.0 * double(A.cols() + 2) * std::numeric_limits<double>::epsilon() * Magnitude;
+					Bounds(J) = std::min(Bounds(J), std::nextafter(std::max(0.0, Limit) / std::abs(A(I, J)), std::numeric_limits<double>::infinity()));
+					bChanged = true;
+				}
+			}
+		}
+		if (!bChanged)
+		{
+			break;
 		}
 	}
 	return Bounds;
@@ -236,7 +290,8 @@ inline bool RunPhase(Tableau& Tab, bool bPhase1, int PivotCap, std::string& Why)
 }
 }
 
-// A is dense column-major, Rows x Columns; phase 2 pivots on a seeded perturbation of b, and a result is trusted only when the final basis, re-solved by full-pivot LU against the exact b, has every row residual (negatives clamped to zero) and every reduced cost within 1e-9 relative with no floor, and its positive reduced costs times the column bounds of ColumnBounds sum to at most 1e-13 (1 + |t*|).
+// A is dense column-major, Rows x Columns; trusted only when each clamped row residual is within 1e-9 of its row's scale plus 4 ulp of the LARGEST row's scale (so a light block at mass ratio 1e14 or more can be trusted wrongly, a known limit), and every reduced cost d_j > 0, summed from exact products, has a finite propagated column bound.
+// Trust also needs the weak-duality upper end u^T b + sum max(0, d_j) ub_j within 1e-7 (1 + |t*|) of c^T x in either direction.
 inline OracleResult SolveMaxLp(int Rows, int Columns, const std::vector<double>& A, const std::vector<double>& B, const std::vector<double>& C)
 {
 	using namespace detail;
@@ -434,33 +489,39 @@ inline OracleResult SolveMaxLp(int Rows, int Columns, const std::vector<double>&
 		}
 	}
 	const Eigen::VectorXd ReducedScale = Cv.cwiseAbs() + Original.cwiseAbs().transpose() * U.cwiseAbs();
-	const double ReducedFloor = RoundingRelative * ReducedScale.maxCoeff();
-	const Eigen::VectorXd Bounds = ColumnBounds(Original, Bv);
+	const Eigen::VectorXd Bounds = PropagatedBounds(Original, Bv, ColumnBounds(Original, Bv));
 	const double Optimum = CompensatedDot(Cv, X);
-	double Gap = 0.0;
-	double GapCarry = 0.0;
+	double Upper = 0.0;
+	double UpperCarry = 0.0;
+	for (Eigen::Index I = 0; I < M; ++I)
+	{
+		NeumaierAddProduct(Upper, UpperCarry, U(I), Bv(I));
+	}
 	for (Eigen::Index J = 0; J < N; ++J)
 	{
-		const double Reduced = Cv(J) - CompensatedDot(Original.col(J), U);
-		if (Reduced <= 0.0)
+		double Reduced = Cv(J);
+		double ReducedCarry = 0.0;
+		for (Eigen::Index I = 0; I < M; ++I)
+		{
+			NeumaierAddProduct(Reduced, ReducedCarry, -Original(I, J), U(I));
+		}
+		Reduced += ReducedCarry;
+		if (!(Reduced > 0.0))
 		{
 			continue;
 		}
 		if (!std::isfinite(Bounds(J)))
 		{
-			if (Reduced > ReducedFloor)
-			{
-				Out.Why = "unbounded column " + std::to_string(J) + " with reduced cost " + Scientific(Reduced) + " against scale " + Scientific(ReducedScale(J));
-				return Out;
-			}
-			continue;
+			Out.Why = "unbounded column " + std::to_string(J) + " with reduced cost " + Scientific(Reduced) + " against scale " + Scientific(ReducedScale(J));
+			return Out;
 		}
-		NeumaierAdd(Gap, GapCarry, Reduced * Bounds(J));
+		NeumaierAddProduct(Upper, UpperCarry, Reduced, Bounds(J));
 	}
-	Gap += GapCarry;
-	if (!(Gap <= GapRelative * (1.0 + std::abs(Optimum))))
+	Upper += UpperCarry;
+	const double Gap = std::max(0.0, Upper - Optimum);
+	if (!(std::abs(Upper - Optimum) <= GapRelative * (1.0 + std::abs(Optimum))))
 	{
-		Out.Why = "objective gap: positive reduced costs times column bounds sum to " + Scientific(Gap) + " against t* " + Scientific(Optimum);
+		Out.Why = "objective gap: the dual upper end u^T b + sum max(0, d_j) ub_j is " + Scientific(Upper) + " against t* " + Scientific(Optimum);
 		return Out;
 	}
 	Out.bTrusted = true;

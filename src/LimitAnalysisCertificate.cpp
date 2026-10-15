@@ -38,7 +38,8 @@ constexpr double UnitRoundoff = std::numeric_limits<double>::epsilon() / 2.0;
 constexpr double LightBodyLoad = 1.0e-6;
 constexpr std::array<double, 2> RecoveryMargins{1.0e-5, 1.0e-3};
 constexpr double AtCapRelative = 1.0e-6;
-constexpr double FailedInnerMinimumWork = 1.0e-6;
+constexpr double FailedInnerMinimumRelativeWork = 1.0e-6;
+constexpr double FailedInnerMinimumMotionL1 = 0.5;
 
 struct Site
 {
@@ -533,6 +534,11 @@ double DemandDot(const Component& C, const double* Y)
 		Sum += Demand[R] * Y[R];
 	}
 	return Sum;
+}
+
+bool HasPositiveRelativeWork(const Component& C, const double* Y)
+{
+	return detail::FailedInnerMechanismIsAdmissible(C.Demand.data(), Y, C.Rows);
 }
 
 Eigen::VectorXd ApplyTranspose(const Component& C, const Program& P, const Eigen::VectorXd& Y)
@@ -2266,7 +2272,7 @@ ComponentVerdict DecideComponent(const Component& C, const CertificateOptions& O
 				V.State = CertificateState::Undecided;
 				return V;
 			}
-			if (bInnerFailed && !(DemandDot(C, Velocity.data()) > FailedInnerMinimumWork))
+			if (bInnerFailed && !HasPositiveRelativeWork(C, Velocity.data()))
 			{
 				V.State = CertificateState::Undecided;
 				return V;
@@ -2483,6 +2489,20 @@ double ProbeDualBoundWithFacetPivotLimit(const Structure& Model, std::span<const
 CertificateResult DecideWithRecoveryMargins(const Structure& Model, std::span<const BodyLoad> Loads, const CertificateOptions& Options, std::span<const double> Margins)
 {
 	return DecideAll(Model, Loads, Options, {}, Margins);
+}
+
+bool FailedInnerMechanismIsAdmissible(const double* Demand, const double* Velocity, int Rows)
+{
+	double Work = 0.0;
+	double Scale = 0.0;
+	double MotionL1 = 0.0;
+	for (int R = 0; R < Rows; ++R)
+	{
+		MotionL1 += std::abs(Velocity[R]);
+		Work += Demand[R] * Velocity[R];
+		Scale += std::abs(Demand[R] * Velocity[R]);
+	}
+	return MotionL1 >= FailedInnerMinimumMotionL1 && Scale > 0.0 && Work > FailedInnerMinimumRelativeWork * Scale;
 }
 }
 
