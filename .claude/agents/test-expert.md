@@ -69,8 +69,10 @@ compile error, a bad fixture or the wrong axis governing.
 
 If it passes immediately, **stop**. Either the behaviour already exists or the test asserts
 nothing. Investigate and report. A characterisation test that is legitimately green on arrival
-must be **proven to bite**: mutate the production code so it should fail, rebuild, show the
-failure, revert, confirm green, and report the output.
+must be **proven to bite** with `Scripts/Mutate.ps1 -File <src file> -Find "<text>" -Replace
+"<mutant>" -Tests "<your prefix>*"`: it mutates the file in the scratch worktree only, builds,
+runs your tests and restores the file. Report its CAUGHT line. Never hand-edit production code
+in this tree to make a mutant.
 
 ## Report back
 
@@ -80,8 +82,8 @@ failure, revert, confirm green, and report the output.
 - **The exact failure output**, quoted
 - Anything you noticed and deliberately left alone
 
-## Release runs are part of validation
+## Run your prefix only
 
-Cases marked `LOADPATH_SLOW_IN_DEBUG` (the arch and pile anchors) run only in Release, so a
-slice touching the certificate or the combined authority is validated with both
-`Scripts/Test.ps1` and `Scripts/Test.ps1 -Config Release`; report both summaries.
+Run your own prefix (`-tc`) to see red; add `-Config Release` when your cases are marked
+`LOADPATH_SLOW_IN_DEBUG`. The full tiers run once each, later, by dev-expert, the orchestrator and
+the reviewer (CLAUDE.md, "Each tier runs once per change").

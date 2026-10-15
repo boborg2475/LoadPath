@@ -8,18 +8,6 @@ section 1, then section 2, then the parked items in section 3. Remove an item wh
 
 ## 1. Workflow
 
-### In progress (approved 2026-10-15)
-
-- **Warm scratch copy.** `Scripts/Scratch.ps1` keeps `C:\Users\bobby\Documents\LoadPath-scratch`
-  in sync (no `.git`, no `build`, timestamps kept) with its own warm build folder, so reviews,
-  mutants and measurements build incrementally (about 1 min) instead of from nothing (5 to 10 min).
-- **Each tier once per change.** Test and dev agents run their feature prefixes plus the Release
-  default once; the Slow tier runs once, at review; Debug runs once, before the commit. A
-  reviewer re-runs a tier only when something looks off. Goes into CLAUDE.md and the agent briefs.
-- **Mutation script.** `Scripts/Mutate.ps1` applies a single-occurrence find/replace in the
-  scratch copy, builds, runs the named tests, reports caught or survived, restores the file and
-  touches it so the next build recompiles it.
-
 ### Not yet approved (owner to decide)
 
 - **Slim DESIGN.md.** It is over 2,100 lines, mostly dated §10 rulings, and every agent reads it

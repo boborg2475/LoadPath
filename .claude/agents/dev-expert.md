@@ -56,8 +56,10 @@ report it; do not add it.
 
 ## Then run the tests
 
-Run the new test green, then the whole suite (`Scripts/Test.ps1` with no filter; it runs in
-seconds). Report actual output. If something fails, say so with the output.
+Run the new test green with your prefix (`-tc`) while iterating. When done, run the Release
+default run **once** (`Scripts/Test.ps1 -Config Release`, sharded, about 20 s). Do not run Debug
+or `Slow.*`: the orchestrator runs each of those once (CLAUDE.md, "Each tier runs once per
+change"). Report actual output. If something fails, say so with the output.
 
 Refactoring is encouraged once green, with the tests as the net. Re-run afterwards.
 
@@ -73,6 +75,6 @@ Work is not finished until it has been reviewed.
 
 ## Release runs are part of validation
 
-Cases marked `LOADPATH_SLOW_IN_DEBUG` (the arch and pile anchors) run only in Release, so a
-slice touching the certificate or the combined authority is validated with both
-`Scripts/Test.ps1` and `Scripts/Test.ps1 -Config Release`; report both summaries.
+Cases marked `LOADPATH_SLOW_IN_DEBUG` (the arch and pile anchors) run only in Release, which is
+why your one full run is the Release default run. Any mutant you need goes through
+`Scripts/Mutate.ps1` in the scratch worktree, never a hand edit in this tree.

@@ -107,6 +107,25 @@ with the other two prefixes. The two cheap rows, `Measure.Scale.WallTenByEight` 
 `Measure.Scale.Shed` (about 2 s together in Release), run at every slice close with the Slow
 tier so the harness cannot rot.
 
+**Each tier runs once per change** (owner, 2026-10-15). Repeating the same tier in every agent
+cost 8 to 10 minutes per change:
+
+| Who | Runs |
+|---|---|
+| test-expert | its own prefix (`-tc`), to see red; mutation proofs through `Scripts/Mutate.ps1` |
+| dev-expert | its prefix while iterating, then the Release default run once at the end |
+| orchestrator | the `Slow.*` tier and the two cheap `Measure.Scale` rows in Release, once, before the review |
+| review-expert | the Release default run once, in the scratch worktree; another tier only when a result looks off |
+| orchestrator | the Debug default run once, before the commit |
+
+**The scratch worktree** (`Scripts/Scratch.ps1`, at `..\LoadPath-scratch`) is a persistent git
+worktree with its own warm build folder. Sync it, then build and run there, for reviews,
+mutants and measurements, so nothing locks or dirties this tree and builds stay incremental.
+`-Rev <commit>` syncs a specific commit instead of the working tree. **Mutants go through
+`Scripts/Mutate.ps1`**, which applies one find/replace in the scratch worktree, builds, runs the
+named tests, prints CAUGHT or SURVIVED and restores the file byte for byte; never hand-edit a
+source file in this tree to make a mutant.
+
 **Deliberately red tests live under the `Deferred.` prefix.** A test that pins an answer the
 current implementation cannot yet give (owed to a later slice, named in the test's second
 segment, e.g. `Deferred.Slice4.*`) stays red there and the script excludes it from the default

@@ -25,9 +25,13 @@ Do not re-verify findings closed in an earlier round.
 
 ## Verify first
 
-Read the actual diff (`git diff`, `git show`) and **run the suite yourself** with
-`powershell -NoProfile -ExecutionPolicy Bypass -File Scripts/Test.ps1`. It runs in seconds; run all of it. The exit code
-and the printed summary are both meaningful. Anything durable you build to check a claim is
+Read the actual diff (`git diff`, `git show`) and **run the suite yourself, once, in the scratch
+worktree**: `powershell -NoProfile -ExecutionPolicy Bypass -File Scripts/Scratch.ps1` (add
+`-Rev <commit>` to review a commit), then `Scripts/Test.ps1 -Config Release` inside
+`..\LoadPath-scratch`. The exit code and the printed summary are both meaningful. The
+orchestrator gives you the `Slow.*` and Debug results; re-run a tier only when a result looks
+off, and say why. Mutants go through `Scripts/Mutate.ps1` (it edits only the scratch worktree
+and restores the file). Anything durable you build to check a claim is
 handed back as a test specification for test-expert, never left in the scratchpad.
 
 ## Check, in order
@@ -65,6 +69,5 @@ blocks, and what happens next.
 
 ## Release runs are part of validation
 
-Cases marked `LOADPATH_SLOW_IN_DEBUG` (the arch and pile anchors) run only in Release, so a
-slice touching the certificate or the combined authority is validated with both
-`Scripts/Test.ps1` and `Scripts/Test.ps1 -Config Release`; report both summaries.
+Cases marked `LOADPATH_SLOW_IN_DEBUG` (the arch and pile anchors) run only in Release, which is
+why your one run is the Release default run. Report its summary.
