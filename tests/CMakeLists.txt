@@ -55,7 +55,9 @@ add_executable(loadpath_tests
 	CascadeScanTest.cpp
 	FactorPanelBoundaryTest.cpp
 	Slice2bAnchorsTest.cpp
-	Slice4AnchorsTest.cpp)
+	Slice4AnchorsTest.cpp
+	ConcurrencyTest.cpp
+	StaleLoadTest.cpp)
 target_link_libraries(loadpath_tests PRIVATE loadpath doctest)
 target_include_directories(loadpath_tests PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_include_directories(loadpath_tests SYSTEM PRIVATE ${CMAKE_SOURCE_DIR}/third_party/eigen)

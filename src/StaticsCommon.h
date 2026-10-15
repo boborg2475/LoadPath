@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <array>
 #include <cstddef>
+#include <span>
 #include <vector>
 
 namespace loadpath::statics
@@ -55,6 +56,9 @@ JointGeometry MakeJointGeometry(const Structure& Model, InterfaceId Id, const st
 using loadpath::ComponentPartition;
 
 ComponentPartition PartitionFreeBodies(const Structure& Model);
+
+// Drops loads on bodies this structure issued but has since removed, appending their input indices to Stale; unknown handles are kept so validation still rejects them.
+std::vector<BodyLoad> WithoutStaleLoads(const Structure& Model, std::span<const BodyLoad> Loads, std::vector<std::size_t>& Stale);
 
 // -1 when both bodies are grounded.
 int ComponentOf(const ComponentPartition& Partition, const InterfaceRecord& Record);

@@ -1,3 +1,4 @@
+#include "BitwiseTestSupport.h"
 #include "BrickFixtures.h"
 #include "CascadeTestSupport.h"
 #include "EventRegionTestSupport.h"
@@ -512,7 +513,23 @@ TEST_CASE("Authority.Judge.InvalidOptionsAreInvalidWhateverIsClean")
 	}
 }
 
-TEST_CASE("Authority.Judge.ALoadOnADeadBodyIsInvalidWhateverIsClean")
+TEST_CASE("Authority.Judge.ALoadOnANeverIssuedBodyIsInvalidWhateverIsClean")
+{
+	ThreeComponents F = MakeThreeComponents();
+	const BodyId Live = F.Parts[0][1];
+	const BodyId NeverIssued{Live.Index, Live.Generation + 1u};
+	REQUIRE_FALSE(F.Model.IsKnown(NeverIssued));
+	const std::unique_ptr<IStructuralAuthority> Authority = MakeAuthority();
+	const AuthorityResult V1 = Authority->Judge(F.Model, F.Loads, AuthorityOptions{}, nullptr);
+	REQUIRE(V1.Worst != ComponentVerdict::InvalidInput);
+	std::vector<BodyLoad> Loads = F.Loads;
+	Loads.push_back(BodyLoad{NeverIssued, Vec3{1.0, 0.0, 0.0}, F.Model.Body(Live).CentroidM});
+	const AuthorityResult Got = Authority->Judge(F.Model, Loads, AuthorityOptions{}, &V1);
+	INFO("got: " << DescribeAuthority(Got));
+	CHECK(Got.Worst == ComponentVerdict::InvalidInput);
+}
+
+TEST_CASE("Authority.Judge.ALoadOnADeadBodyIsSkippedWhateverIsClean")
 {
 	ThreeComponents F = MakeThreeComponents();
 	const BodyId Dead = F.Parts[0][1];
@@ -525,7 +542,17 @@ TEST_CASE("Authority.Judge.ALoadOnADeadBodyIsInvalidWhateverIsClean")
 	Loads.push_back(BodyLoad{Dead, Vec3{1.0, 0.0, 0.0}, DeadCentreM});
 	const AuthorityResult Got = Authority->Judge(F.Model, Loads, AuthorityOptions{}, &V1);
 	INFO("got: " << DescribeAuthority(Got));
-	CHECK(Got.Worst == ComponentVerdict::InvalidInput);
+	CHECK(Got.Worst == V1.Worst);
+	CHECK(Got.StaleLoads == std::vector<std::size_t>{F.Loads.size()});
+	REQUIRE(Got.Components.size() == V1.Components.size());
+	for (std::size_t I = 0; I < Got.Components.size(); ++I)
+	{
+		CHECK(Got.Components[I].Elastic == V1.Components[I].Elastic);
+		CHECK(Got.Components[I].bReused);
+	}
+	const AuthorityResult Want = Authority->Judge(F.Model, F.Loads, AuthorityOptions{}, &V1);
+	INFO("want: " << DescribeAuthority(Want));
+	CHECK(bitwise::Same(Got, Want));
 }
 
 TEST_CASE("Authority.Judge.ReusesCleanComponentsFromThePreviousVerdict")

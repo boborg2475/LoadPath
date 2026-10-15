@@ -106,6 +106,8 @@ struct StandingResult
 	int ActiveSetIterations = 0;
 	// Set when State is InvalidInput and an interface is the cause.
 	InterfaceId InvalidInterface;
+	// Ascending indices into the input loads whose body this structure issued but has since removed; those loads were skipped.
+	std::vector<std::size_t> StaleLoads;
 };
 
 // Solve keeps no state between calls, never mutates the structure and is deterministic for a given structure.

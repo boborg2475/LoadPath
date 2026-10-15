@@ -114,6 +114,7 @@ public:
 	Result<InterfaceId> AddInterface(const InterfaceDesc&);
 	bool RemoveBody(BodyId);                 // false for an unknown or already removed id
 	bool IsLive(BodyId) const;  bool IsLive(InterfaceId) const;  bool IsValid(ProfileId) const;
+	bool IsKnown(BodyId) const;  bool IsKnown(InterfaceId) const;  // issued by this structure, live or removed (public 2026-10-15)
 	const BodyDesc& Body(BodyId) const;      // a dead or unknown id reads MassKg = NaN (fail closed)
 	const InterfaceRecord& Interface(InterfaceId) const;
 	const StrengthProfile& Profile(ProfileId) const;
@@ -124,7 +125,7 @@ public:
 	std::uint64_t Revision() const;
 	std::uint64_t LastTouched(BodyId Id) const;
 	std::uint64_t Lineage() const;
-	const ComponentPartition& Components() const;   // cached partition, reset by every successful mutation (stage 1b-ii)
+	const ComponentPartition& Components() const;   // cached partition, reset by every successful mutation (stage 1b-ii); safe for concurrent const callers (2026-10-15)
 };
 ```
 
@@ -260,6 +261,7 @@ struct StandingResult {
 	std::vector<StandingComponent> Components;     // per component: bodies, State, ActiveSetIterations, ReadingSlots into Readings; empty on InvalidInput (stage 1b-ii)
 	int ActiveSetIterations = 0;
 	InterfaceId InvalidInterface;                  // set when State == InvalidInput
+	std::vector<std::size_t> StaleLoads;            // indices into the input loads whose body this structure issued but has removed: skipped, never InvalidInput (2026-10-15)
 };
 class IStandingAuthority {
 public:
@@ -308,7 +310,9 @@ never mutates the structure. The host may call it on any thread.
   then the last full-rank solve's, and an interface's utilisation can read +inf there where the
   Mechanism path read a finite value). Never Stands, never a release.
 - **InvalidInput**: a live interface whose profile has a stiffness that is not finite and `> 0`;
-  a load on a dead body; a non-finite load or gravity. `InvalidInterface` names the first.
+  a load on a handle this structure never issued; a non-finite load or gravity. `InvalidInterface`
+  names the first. A load on a body the structure issued but has removed is skipped and listed in
+  `StaleLoads`; the result equals the solve without it (2026-10-15).
 
 ### The model (orchestrator rulings, 2026-10-11)
 
@@ -520,6 +524,7 @@ struct CertificateResult {
 	int Iterations = 0;                            // maximum over components
 	InterfaceId InvalidInterface{};
 	std::vector<CertificateComponent> Components;  // one per decided component in partition order, its Bodies as the partition lists them; empty on InvalidInput (carried from 6b, item 2 amendment)
+	std::vector<std::size_t> StaleLoads;            // indices into the input loads whose body this structure issued but has removed: skipped, never InvalidInput (2026-10-15)
 };
 
 struct CertificateComponent {                  // one decided component's verdict: the fields mean what CertificateResult's aggregate fields mean, restricted to its bodies; bounds capped at LoadFactorCap
@@ -605,8 +610,8 @@ upper bound; reporting `min(cap, U_out)` instead is open (CURRENT_STATE).
 direction a slide flips Stands → Undecided at `μ` and Undecided → Collapses at `μ / cos(π/G)`,
 on a mid-edge direction at `μ cos(π/G)` and `μ`), when the inscribed solve failed (its recovery re-solves included) and, with recovery on, the circumscribed solve gives no rigorous `U_out < 1` (bounds `[0, t_out or U_out]`, or `[0, cap]` with recovery off), when
 `t_in < 1` and the circumscribed solve failed with recovery off or with `U_out ≥ cap` (bounds
-`[0, cap]`), or when the mechanism selection below failed; `InvalidInput` on the slice-2 rules (dead-body load,
-non-finite load or gravity) plus `ConeGenerators` odd or under 4, a `LoadFactorCap` below 1, and non-finite or non-positive
+`[0, cap]`), or when the mechanism selection below failed; `InvalidInput` on the slice-2 rules (a load on a never-issued handle,
+non-finite load or gravity; a load on a removed body is skipped and listed in `StaleLoads`) plus `ConeGenerators` odd or under 4, a `LoadFactorCap` below 1, and non-finite or non-positive
 options, with `InvalidInterface` left default. On dry joints the cones are homogeneous, so `t`
 is exactly 0 or the cap; finite load factors come only from bonded, cohesive or crushing bounds
 (`ft A L / (W (λh − L))` for tension tipping, `c A / (W (sin θ − μ cos θ))` for cohesive sliding,
@@ -739,6 +744,7 @@ struct AuthorityResult {
 	std::uint64_t Lineage = 0;                   // Structure::Lineage() of the judged structure; a Previous from another lineage is unmatched (stage 2 fix)
 	AuthorityOptions Options;                    // the options judged under; a Previous under other options is unmatched (stage 2)
 	InterfaceId InvalidInterface{};
+	std::vector<std::size_t> StaleLoads;            // indices into the input loads whose body this structure issued but has removed: skipped, never InvalidInput (2026-10-15)
 };
 
 class IStructuralAuthority {
@@ -906,6 +912,7 @@ struct CascadeVerdict {
 	std::vector<InterfaceReading> Readings;      // the final judge's readings, every live interface
 	std::vector<ComponentReport> Components;     // the final judge's components
 	InterfaceId InvalidInterface{};
+	std::vector<std::size_t> StaleLoads;            // indices into the input loads whose body this structure issued but has removed: skipped, never InvalidInput (2026-10-15)
 };
 
 class ICascade {
@@ -922,7 +929,8 @@ std::unique_ptr<ICascade> MakeCascade(std::unique_ptr<IStructuralAuthority>);
 
 Options first: `CrackBandFraction` must be finite in `[0, 1]` and `MaxPasses ≥ 1`, else
 `InvalidInput`; the authority options are validated by the authority. A load on a body dead at
-entry is `InvalidInput` (the authority's rule). Then, with `Pass = HighestPass() + 1`:
+entry is skipped and listed in `CascadeVerdict::StaleLoads`; a load on a body released during
+the run is dropped from later passes and not listed. Then, with `Pass = HighestPass() + 1`:
 
 1. **Judge** with the combined authority on the live structure and the loads of live bodies (a
    load on a released body left with it). `InvalidInput` ends the run as `InvalidInput`.
@@ -1345,9 +1353,9 @@ warehouse's elastic solve 59 s to 5.9 s, the 32 × 40 wall finishing in 24 s).
   still validated; any entry that is not a live free body reads InvalidInput, DESIGN §10).
   `Structure::Components()` returns the cached `ComponentPartition`
   (include/loadpath/ComponentPartition.h), reset by every successful AddBody, AddInterface,
-  RemoveBody, Crack and Sever; it is mutable state behind a const method, so one `Structure`
-  shared across threads is not safe to query concurrently (nothing in the library promised
-  that before either). Pinned by `Authority.Judge.SolvesTheElasticFieldOnceAndConsultsOnlyTheUndecided`,
+  RemoveBody, Crack and Sever; the fill is guarded by an internal mutex, so any number of threads may make const calls on one
+  `Structure` at once with identical answers; mutation still needs exclusive access (2026-10-15,
+  pinned by `Concurrency.ConcurrentReadersOfOneStructureAgreeWithASerialRun`). Pinned by `Authority.Judge.SolvesTheElasticFieldOnceAndConsultsOnlyTheUndecided`,
   `Statics.StandingResult.ReportsEveryComponent`, `Certificate.Decide.AComponentFilterReadsAsTheComponentAlone`,
   `Structure.Components.IsCachedUntilAMutation` and the equivalence guard
   `Authority.Judge.MatchesSolvingEachComponentAlone` (40 seeded multi-part structures, 161

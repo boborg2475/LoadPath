@@ -1184,6 +1184,16 @@ class RbsmStandingAuthority final : public IStandingAuthority
 public:
 	StandingResult Solve(const Structure& Model, std::span<const BodyLoad> Loads, const StandingOptions& Options, std::span<const BodyId> Only) const override
 	{
+		std::vector<std::size_t> Stale;
+		const std::vector<BodyLoad> Live = statics::WithoutStaleLoads(Model, Loads, Stale);
+		StandingResult Result = SolveLive(Model, Live, Options, Only);
+		Result.StaleLoads = std::move(Stale);
+		return Result;
+	}
+
+private:
+	StandingResult SolveLive(const Structure& Model, std::span<const BodyLoad> Loads, const StandingOptions& Options, std::span<const BodyId> Only) const
+	{
 		InterfaceId Offending = InterfaceId::Invalid();
 		std::vector<bool> Chosen;
 		const bool bInvalid = FindInvalidInput(Model, Loads, Options, Offending);

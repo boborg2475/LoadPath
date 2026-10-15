@@ -6,6 +6,7 @@
 #include "loadpath/StructuralAuthority.h"
 #include "loadpath/Structure.h"
 
+#include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <span>
@@ -72,6 +73,8 @@ struct CascadeVerdict
 	// The final judge's components.
 	std::vector<ComponentReport> Components;
 	InterfaceId InvalidInterface{};
+	// Ascending indices into the input loads whose body this structure issued but has since removed; those loads were skipped.
+	std::vector<std::size_t> StaleLoads;
 };
 
 // Run mutates the structure it is given (stamps, removals) and lists every change in the verdict.

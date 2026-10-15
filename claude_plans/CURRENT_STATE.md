@@ -32,8 +32,8 @@ stacks, Paterson–Zwick, Couplet–Heyman at Milankovitch's 0.107478 with hinge
 the certificate's associative 31.07°, the cascade on the arch below least thickness, the dry
 wall at t / H within 1 % (10 × 8 and 4 × 5), the bonded 4 × 5 wall at its monolith factor
 `(t/H)(1 + f_t A_base / W) = 2.971` to 1 %, two screws at twice their published shear and
-withdrawal whatever the joint area. Default suite 406 cases in Debug and 457 in Release as of
-2026-10-14 (325 and 347 at the 6b close) (the arch, pile, arch-cascade, fuzz, small-wall and multi-panel factor anchors
+withdrawal whatever the joint area. Default suite 415 cases in Debug and 468 in Release as of
+2026-10-15 (325 and 347 at the 6b close) (the arch, pile, arch-cascade, fuzz, small-wall and multi-panel factor anchors
 run only in Release under `LOADPATH_SLOW_IN_DEBUG`; twenty-two `Slow.*` cases run in Release at
 every slice close, and the
 cheap `Measure.Scale.*` rows after them); the `Deferred.*` tier holds the physical wedge pin
@@ -217,9 +217,9 @@ the non-associative answer) and the two hanging-component cases (slice 6), red b
      residual, never a false Stands; two start vectors or an eigen-residual check would close
      it); the symbolic analysis is redone every active-set iteration (`analyzePattern` once per
      `SolveProblem`); `K * V` relies on both triangles being stored;
-   - `Structure::Components()` is mutable state behind a const method (no thread-safety
-     promise exists anywhere; log it when one is made); `StandingComponent::ReadingSlots` is
-     read by nothing in the library;
+   - `StandingComponent::ReadingSlots` is read by nothing in the library; the `detail::` probe
+     seams (`ProbeProgram`, `DecideWithRecoveryMargins` and the rest) do not skip stale loads, so a
+     load on a removed body still reads InvalidInput there, unlike `Decide` (untested, test-only); DESIGN §10's "`StaleLoads` is filled even when the result is `InvalidInput`" is pinned by no test (spec: the stale-load fixture with a NaN force on the live load 0, all four entry points, InvalidInput and `StaleLoads` = {1});
    - certificate: uncaught mutants recorded in ANCHORS: the retry's `LargestDiagonal` without
      the coupling term (dense and bordered), the bordered regularisation's size (× 100 green),
      the NaN-only part of the positivity scan, either bordered pivot guard alone (they back
@@ -240,7 +240,7 @@ the non-associative answer) and the two hanging-component cases (slice 6), red b
      (8 s, below `DenseRowLimit`) gained nothing from 3c.
    Then the overview artifact (Version 7) and this file's snapshot are the last close items.
  **Slice 8,
-   the Unreal adapter, is on hold by owner directive (2026-10-11): do not start it.** The
+   the Unreal adapter, is on hold by owner directive (2026-10-11): do not start it.** When it starts: `Structure.h` now includes `<mutex>` (the component cache's lock); MSVC 17.10 and later made `std::mutex`'s constructor constexpr, which crashes in `lock()` if the host process loaded an older `msvcp140.dll`, so the module needs `_DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR` or a platform lock. The cache's copy-construction and copy-assignment locks are untested (a thread-sanitizer-free race test cannot see that window; removing the copy lock passed 10 of 10). The
    remaining slice-2 anchors (item 2) can run alongside slice 6.
    Slice 3 and 4b items still open (none host-unsafe; the unsafe one, the wedge band, is under
    Deferred):

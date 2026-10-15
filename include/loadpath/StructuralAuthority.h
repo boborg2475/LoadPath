@@ -5,6 +5,7 @@
 #include "loadpath/StandingAuthority.h"
 #include "loadpath/Structure.h"
 
+#include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <span>
@@ -68,6 +69,8 @@ struct AuthorityResult
 	std::uint64_t Lineage = 0;
 	// The options this result was judged under; a Previous judged under any other options reuses nothing.
 	AuthorityOptions Options;
+	// Ascending indices into the input loads whose body this structure issued but has since removed; those loads were skipped.
+	std::vector<std::size_t> StaleLoads;
 };
 
 // Judge keeps no state between calls, never mutates the structure and is deterministic for a given structure.

@@ -50,6 +50,22 @@ JointGeometry MakeJointGeometry(const Structure& Model, InterfaceId Id, const st
 	return J;
 }
 
+std::vector<BodyLoad> WithoutStaleLoads(const Structure& Model, std::span<const BodyLoad> Loads, std::vector<std::size_t>& Stale)
+{
+	std::vector<BodyLoad> Kept;
+	Kept.reserve(Loads.size());
+	for (std::size_t I = 0; I < Loads.size(); ++I)
+	{
+		if (Model.IsKnown(Loads[I].Body) && !Model.IsLive(Loads[I].Body) && IsFinite(Loads[I].ForceN) && IsFinite(Loads[I].PointM))
+		{
+			Stale.push_back(I);
+			continue;
+		}
+		Kept.push_back(Loads[I]);
+	}
+	return Kept;
+}
+
 ComponentPartition PartitionFreeBodies(const Structure& Model)
 {
 	const std::vector<BodyId> Bodies = Model.LiveBodies();

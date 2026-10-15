@@ -2381,7 +2381,11 @@ class LimitAnalysisCertificate final : public ICollapseCertificate
 public:
 	CertificateResult Decide(const Structure& Model, std::span<const BodyLoad> Loads, const CertificateOptions& Options, std::span<const BodyId> Only) const override
 	{
-		return DecideAll(Model, Loads, Options, Only, RecoveryMargins);
+		std::vector<std::size_t> Stale;
+		const std::vector<BodyLoad> Live = statics::WithoutStaleLoads(Model, Loads, Stale);
+		CertificateResult Result = DecideAll(Model, Live, Options, Only, RecoveryMargins);
+		Result.StaleLoads = std::move(Stale);
+		return Result;
 	}
 };
 }

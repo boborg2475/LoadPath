@@ -9,6 +9,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <mutex>
 #include <optional>
 #include <vector>
 
@@ -46,6 +47,9 @@ public:
 	bool IsLive(BodyId Id) const;
 	bool IsLive(InterfaceId Id) const;
 	bool IsValid(ProfileId Id) const;
+	// Known means the handle was issued here at some point, whether or not it is still live.
+	bool IsKnown(BodyId Id) const;
+	bool IsKnown(InterfaceId Id) const;
 
 	// A dead or unknown id reads a NaN mass, never zero, so it fails closed.
 	const BodyDesc& Body(BodyId Id) const;
@@ -98,14 +102,25 @@ private:
 		std::vector<std::uint32_t> Incident;
 	};
 
+	// Copies carry the filled partition; the lock makes concurrent const reads of one structure race-free.
+	struct ComponentCache
+	{
+		ComponentCache() = default;
+		ComponentCache(const ComponentCache& Other);
+		ComponentCache(ComponentCache&& Other) noexcept;
+		ComponentCache& operator=(const ComponentCache& Other);
+		ComponentCache& operator=(ComponentCache&& Other) noexcept;
+		~ComponentCache() = default;
+
+		mutable std::mutex Lock;
+		std::optional<ComponentPartition> Value;
+	};
+
 	struct InterfaceSlot
 	{
 		InterfaceRecord Record;
 	};
 
-	// Known means the handle was issued at some point, whether or not it is still live.
-	bool IsKnown(BodyId Id) const;
-	bool IsKnown(InterfaceId Id) const;
 	void TouchInterface(const InterfaceRecord& Record);
 	ModelError ValidateInterface(const InterfaceDesc& Desc, Vec3& UnitNormal) const;
 
@@ -116,6 +131,6 @@ private:
 	std::uint32_t HighestStamp = 0;
 	std::uint64_t CurrentRevision = 0;
 	LineageToken Token;
-	mutable std::optional<ComponentPartition> CachedComponents;
+	mutable ComponentCache CachedComponents;
 };
 }

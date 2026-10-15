@@ -101,9 +101,8 @@ struct InvalidCase
 };
 
 const InvalidCase InvalidCases[] = {
-	{"load on a removed body", [](TwoBrickStack& S, std::vector<BodyLoad>& Loads, CertificateOptions&) {
-		 S.Model.RemoveBody(S.Upper);
-		 Loads.push_back(BodyLoad{S.Upper, Vec3{0.0, 0.0, -1.0}, BrickShape(0.0, 1).CentreM});
+	{"load on a wrong-generation handle", [](TwoBrickStack& S, std::vector<BodyLoad>& Loads, CertificateOptions&) {
+		 Loads.push_back(BodyLoad{BodyId{S.Upper.Index, S.Upper.Generation + 1u}, Vec3{0.0, 0.0, -1.0}, BrickShape(0.0, 1).CentreM});
 	 }},
 	{"load on a never-issued body", [](TwoBrickStack&, std::vector<BodyLoad>& Loads, CertificateOptions&) { Loads.push_back(BodyLoad{BodyId{1000u, 1u}, Vec3{0.0, 0.0, -1.0}, Vec3{}}); }},
 	{"NaN load force", [](TwoBrickStack& S, std::vector<BodyLoad>& Loads, CertificateOptions&) { Loads.push_back(BodyLoad{S.Upper, Vec3{0.0, 0.0, NaN}, BrickShape(0.0, 1).CentreM}); }},

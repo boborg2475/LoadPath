@@ -6,6 +6,7 @@
 #include "loadpath/Units.h"
 #include "loadpath/Vec3.h"
 
+#include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <span>
@@ -73,6 +74,8 @@ struct CertificateResult
 	InterfaceId InvalidInterface{};
 	// One entry per decided component in partition order, its Bodies as the partition lists them; empty on InvalidInput.
 	std::vector<CertificateComponent> Components;
+	// Ascending indices into the input loads whose body this structure issued but has since removed; those loads were skipped.
+	std::vector<std::size_t> StaleLoads;
 };
 
 // Decide keeps no state between calls, never mutates the structure and is deterministic for a given structure.

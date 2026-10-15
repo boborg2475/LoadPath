@@ -75,9 +75,8 @@ const InvalidCase InvalidCases[] = {
 	{"zero tangential stiffness", WithStiffness(1.0e10, 0.0), [](BrickStack& S, std::vector<BodyLoad>&, StandingOptions&, InterfaceId& Expected) { Expected = S.Joints[0]; }},
 	{"negative normal stiffness", WithStiffness(-1.0e10, 1.0e10), [](BrickStack& S, std::vector<BodyLoad>&, StandingOptions&, InterfaceId& Expected) { Expected = S.Joints[0]; }},
 	{"negative tangential stiffness", WithStiffness(1.0e10, -1.0e10), [](BrickStack& S, std::vector<BodyLoad>&, StandingOptions&, InterfaceId& Expected) { Expected = S.Joints[0]; }},
-	{"load on a removed body", DryJoint(0.7), [](BrickStack& S, std::vector<BodyLoad>& Loads, StandingOptions&, InterfaceId&) {
-		 S.Model.RemoveBody(S.Bricks[1]);
-		 Loads.push_back(BodyLoad{S.Bricks[1], Vec3{0.0, 0.0, -1.0}, StackedBrickCentroidM(1)});
+	{"load on a wrong-generation handle", DryJoint(0.7), [](BrickStack& S, std::vector<BodyLoad>& Loads, StandingOptions&, InterfaceId&) {
+		 Loads.push_back(BodyLoad{BodyId{S.Bricks[1].Index, S.Bricks[1].Generation + 1u}, Vec3{0.0, 0.0, -1.0}, StackedBrickCentroidM(1)});
 	 }},
 	{"load on a never-issued body", DryJoint(0.7), [](BrickStack&, std::vector<BodyLoad>& Loads, StandingOptions&, InterfaceId&) {
 		 Loads.push_back(BodyLoad{BodyId{1000u, 1u}, Vec3{0.0, 0.0, -1.0}, Vec3{}});

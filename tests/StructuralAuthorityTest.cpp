@@ -461,9 +461,8 @@ TEST_CASE("Statics.Combined.GravityMismatchIsInvalidInput")
 TEST_CASE("Statics.Combined.ElasticInvalidInputPropagates")
 {
 	BrickOnGround F = MakeBrickOnGround(DryJoint(0.7));
-	const BodyId Dead = AddBox(F.Model, BrickShape(1.0));
-	CHECK(F.Model.RemoveBody(Dead));
-	const std::vector<BodyLoad> Loads{BodyLoad{Dead, Vec3{1.0, 0.0, 0.0}, BrickShape(1.0).CentreM}};
+	const BodyId Live = AddBox(F.Model, BrickShape(1.0));
+	const std::vector<BodyLoad> Loads{BodyLoad{Live, Vec3{std::nan(""), 0.0, 0.0}, BrickShape(1.0).CentreM}};
 	const AuthorityResult Result = JudgeWith(F.Model, AuthorityOptions{}, Loads);
 	INFO(DescribeResult(Result));
 	CHECK(SolveWith(F.Model, StandingOptions{}, Loads).State == StandingState::InvalidInput);

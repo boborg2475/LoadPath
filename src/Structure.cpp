@@ -6,6 +6,8 @@
 #include <atomic>
 #include <cmath>
 #include <limits>
+#include <mutex>
+#include <utility>
 
 namespace loadpath
 {
@@ -57,6 +59,38 @@ std::uint64_t MintLineage()
 {
 	return NextLineage.fetch_add(1, std::memory_order_relaxed);
 }
+}
+
+Structure::ComponentCache::ComponentCache(const ComponentCache& Other)
+{
+	const std::lock_guard<std::mutex> Guard(Other.Lock);
+	Value = Other.Value;
+}
+
+Structure::ComponentCache::ComponentCache(ComponentCache&& Other) noexcept
+	: Value(std::move(Other.Value))
+{
+	Other.Value.reset();
+}
+
+Structure::ComponentCache& Structure::ComponentCache::operator=(const ComponentCache& Other)
+{
+	if (this != &Other)
+	{
+		const std::lock_guard<std::mutex> Guard(Other.Lock);
+		Value = Other.Value;
+	}
+	return *this;
+}
+
+Structure::ComponentCache& Structure::ComponentCache::operator=(ComponentCache&& Other) noexcept
+{
+	if (this != &Other)
+	{
+		Value = std::move(Other.Value);
+		Other.Value.reset();
+	}
+	return *this;
 }
 
 Structure::LineageToken::LineageToken()
@@ -137,7 +171,7 @@ Result<BodyId> Structure::AddBody(const BodyDesc& Desc)
 		return {BodyId::Invalid(), ModelError::NegativeMass};
 	}
 	const BodyId Id{static_cast<std::uint32_t>(Bodies.size()), FirstGeneration};
-	CachedComponents.reset();
+	CachedComponents.Value.reset();
 	Bodies.push_back(BodySlot{Desc, true, ++CurrentRevision});
 	return {Id, ModelError::None};
 }
@@ -217,7 +251,7 @@ Result<InterfaceId> Structure::AddInterface(const InterfaceDesc& Desc)
 	Record.AreaM2 = 4.0 * Desc.HalfExtentUM * Desc.HalfExtentVM;
 	Record.Profile = Desc.Profile;
 	const InterfaceId Id{static_cast<std::uint32_t>(Interfaces.size()), FirstGeneration};
-	CachedComponents.reset();
+	CachedComponents.Value.reset();
 	Interfaces.push_back(InterfaceSlot{Record});
 	Bodies[Desc.BodyA.Index].Incident.push_back(Id.Index);
 	Bodies[Desc.BodyB.Index].Incident.push_back(Id.Index);
@@ -232,7 +266,7 @@ bool Structure::RemoveBody(BodyId Id)
 	{
 		return false;
 	}
-	CachedComponents.reset();
+	CachedComponents.Value.reset();
 	Bodies[Id.Index].bLive = false;
 	++CurrentRevision;
 	for (const std::uint32_t Slot : Bodies[Id.Index].Incident)
@@ -257,7 +291,7 @@ bool Structure::Crack(InterfaceId Id, std::uint32_t Pass)
 		return false;
 	}
 	InterfaceRecord& Record = Interfaces[Id.Index].Record;
-	CachedComponents.reset();
+	CachedComponents.Value.reset();
 	Record.State = InterfaceState::Cracked;
 	Record.CrackPass = Pass;
 	HighestStamp = std::max(HighestStamp, Pass);
@@ -273,7 +307,7 @@ bool Structure::Sever(InterfaceId Id, std::uint32_t Pass)
 		return false;
 	}
 	InterfaceRecord& Record = Interfaces[Id.Index].Record;
-	CachedComponents.reset();
+	CachedComponents.Value.reset();
 	Record.State = InterfaceState::Severed;
 	Record.SeverPass = Pass;
 	HighestStamp = std::max(HighestStamp, Pass);
@@ -425,10 +459,11 @@ std::vector<InterfaceId> Structure::InterfacesOf(BodyId Id) const
 
 const ComponentPartition& Structure::Components() const
 {
-	if (!CachedComponents)
+	const std::lock_guard<std::mutex> Guard(CachedComponents.Lock);
+	if (!CachedComponents.Value)
 	{
-		CachedComponents = statics::PartitionFreeBodies(*this);
+		CachedComponents.Value = statics::PartitionFreeBodies(*this);
 	}
-	return *CachedComponents;
+	return *CachedComponents.Value;
 }
 }

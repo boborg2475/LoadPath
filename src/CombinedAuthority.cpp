@@ -169,6 +169,16 @@ public:
 
 	AuthorityResult Judge(const Structure& Model, std::span<const BodyLoad> Loads, const AuthorityOptions& Options, const AuthorityResult* Previous) const override
 	{
+		std::vector<std::size_t> Stale;
+		const std::vector<BodyLoad> Live = statics::WithoutStaleLoads(Model, Loads, Stale);
+		AuthorityResult Result = JudgeLive(Model, Live, Options, Previous);
+		Result.StaleLoads = std::move(Stale);
+		return Result;
+	}
+
+private:
+	AuthorityResult JudgeLive(const Structure& Model, std::span<const BodyLoad> Loads, const AuthorityOptions& Options, const AuthorityResult* Previous) const
+	{
 		if (!SameVector(Options.Standing.Gravity, Options.Certificate.Gravity) || !statics::AreCertificateOptionsValid(Options.Certificate) || !statics::AreStandingOptionsValid(Options.Standing))
 		{
 			AuthorityResult Result = Invalid(InterfaceId{});
@@ -193,7 +203,6 @@ public:
 		return Result;
 	}
 
-private:
 	std::optional<AuthorityResult> JudgeAgainst(const Structure& Model, std::span<const BodyLoad> Loads, const AuthorityOptions& Options, const AuthorityResult* Previous) const
 	{
 		const ComponentPartition& Partition = Model.Components();

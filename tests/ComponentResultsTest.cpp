@@ -691,11 +691,9 @@ TEST_CASE("Certificate.Components.InvalidInputHasNoEntries")
 		CHECK(Got.Components.empty());
 	}
 	{
-		INFO("a load on a dead body");
-		const BodyId Dead = F.Pushed[0];
-		F.Model.RemoveBody(Dead);
+		INFO("a load on a never-issued body");
 		std::vector<BodyLoad> Loads = F.Loads;
-		Loads.push_back(BodyLoad{Dead, Vec3{1.0, 0.0, 0.0}, Vec3{}});
+		Loads.push_back(BodyLoad{BodyId{F.Pushed[0].Index, F.Pushed[0].Generation + 1u},Vec3{1.0, 0.0, 0.0}, Vec3{}});
 		const CertificateResult Got = Certificate->Decide(F.Model, Loads, CertificateOptions{}, {});
 		CHECK(Got.State == CertificateState::InvalidInput);
 		CHECK(Got.Components.empty());

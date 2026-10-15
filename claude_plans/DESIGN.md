@@ -2065,3 +2065,19 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   of the lower brick without the gate) and a property checks every failed-inner Collapses over
   draws 0–139 × `MaxIterations` 3–12 for positive work, no closing corner and the reference's set
   (24 bad of 26 without the gate; 2 reach it with the gate on).
+- *2026-10-15, orchestrator, stale loads and concurrent readers (owner-ranked ideas, first item):*
+  **Stale loads.** One load on a dead body made the whole solve `InvalidInput`; in a game loop a load
+  on a just-released piece is normal, not a host bug. **Ruling:** a load whose body this structure
+  issued but has since removed is skipped, and its index in the input span is reported in
+  `StaleLoads` (ascending) on `StandingResult`, `CertificateResult`, `AuthorityResult` and
+  `CascadeVerdict`; the rest of the result equals, bit for bit, the solve without that load. A handle
+  this structure never issued, or a non-finite force or point, stays `InvalidInput`: that is a host
+  bug worth surfacing. The cascade still drops loads on bodies it released during the run without
+  reporting them; its `StaleLoads` lists the loads whose body was dead when `Run` was called.
+  Handles carry no lineage, so a handle from another structure whose index and generation happen to
+  be in range reads as issued here; that limit predates this ruling. This supersedes the stage-2 amendment's "a load on a dead body throws the reuse away": a stale load is filtered before the reuse check, so reuse holds. A non-finite load is `InvalidInput` whatever body it names, a removed one included (second ruling, from the review). `StaleLoads` is filled even when the result is `InvalidInput`. **Concurrent readers.**
+  `Structure::Components()` filled a mutable cache from a const method, a data race for two threads
+  reading one structure, which DESIGN §2.4's off-game-thread solve can trigger. **Ruling:** concurrent
+  const access to one `Structure` is data-race-free and gives identical answers; mutation still needs
+  exclusive access; `Structure` stays copyable and movable, uses no exceptions, and the library still
+  creates no threads.

@@ -423,6 +423,16 @@ public:
 
 	CascadeVerdict Run(Structure& Model, std::span<const BodyLoad> Loads, const CascadeOptions& Options, const AuthorityResult* Previous) const override
 	{
+		std::vector<std::size_t> Stale;
+		const std::vector<BodyLoad> Live = statics::WithoutStaleLoads(Model, Loads, Stale);
+		CascadeVerdict Verdict = RunLive(Model, Live, Options, Previous);
+		Verdict.StaleLoads = std::move(Stale);
+		return Verdict;
+	}
+
+private:
+	CascadeVerdict RunLive(Structure& Model, std::span<const BodyLoad> Loads, const CascadeOptions& Options, const AuthorityResult* Previous) const
+	{
 		CascadeVerdict Verdict;
 		Verdict.FirstPass = Model.HighestPass() + 1;
 		Verdict.LastPass = Verdict.FirstPass - 1;
@@ -491,7 +501,6 @@ public:
 		}
 	}
 
-private:
 	std::unique_ptr<IStructuralAuthority> Authority;
 };
 }
