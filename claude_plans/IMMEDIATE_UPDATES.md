@@ -36,12 +36,20 @@ validated against before features are added. Both run alongside test-expert.
 The approval step landed 2026-10-15 (CLAUDE.md, "The owner approves every test plan"; plans in
 `claude_plans/test_plans/`). What remains:
 
-1. **End-to-end validation tests.** Whole-structure scenarios through the public API (build the
+Owner, 2026-10-16: every structural test and plan comes with before and expected-after
+pictures, and a quick way to build, see and test structures (DESIGN §10, 2026-10-16).
+
+1. **The scenario workbench.** Scenario files (boxes and walls with automatic joints, steps,
+   expected outcome) under `data/scenarios/`, a library loader and runner, a viewer export, a CLI
+   command and `Scripts/Scenario.ps1`, and one generic test over every file. Its own tests go
+   through the plan step first.
+2. **End-to-end validation tests.** Whole-structure scenarios through the public API (build the
    structure, judge it, run the cascade, remove pieces, read who stands and what releases),
    checked against expected outcomes. A feature is validated against them before it lands. Start
    with an inventory of what already does this (the `Measure.Scale` rows, the anchors from papers
    and codes, the cascade fuzz families, the warehouse and shed), then test-expert proposes the
-   missing scenarios for the owner to approve, as the first plan under the new step.
+   missing scenarios for the owner to approve, as the first plan under the new step. They become
+   the workbench's first scenario files; the plan's pictures come from the probe until then.
 
 ## 4. Parked (owner, 2026-10-15): not before sections 1 to 3
 

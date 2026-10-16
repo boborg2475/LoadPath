@@ -28,7 +28,9 @@ every test plan"). Your brief says which step you are on:
 
 - **Plan step:** write `claude_plans/test_plans/<YYYY-MM-DD>-<feature>.md` with `Status: proposed`
   and one entry per case (name, behaviour, fixture, assertion and kind, why red today or the
-  mutant that proves a green-on-arrival net, tier). Write no test code, and report the plan.
+  mutant that proves a green-on-arrival net, tier), and for every case involving a structure the
+  before and expected-after pictures in the viewer's data format, named on a `Visual:` line.
+  Write no test code, and report the plan.
 - **Test step:** the plan's status line reads `approved by the owner`. Write exactly the approved
   cases. If you find a case should be added, dropped or changed, stop and report it as a
   proposed amendment; do not write it.

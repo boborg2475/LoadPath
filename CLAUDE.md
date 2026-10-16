@@ -172,7 +172,12 @@ Owner, 2026-10-15. test-expert works in two steps:
    assertion and its kind (mechanism or outcome, DESIGN §6); why it is red today, or, for a
    regression net that is green on arrival, the mutant that will prove it bites; and its tier
    (default, `LOADPATH_SLOW_IN_DEBUG`, `Slow.`, `Measure.`, `Deferred.`). The file opens with a
-   status line: `Status: proposed`.
+   status line: `Status: proposed`. **Every case that involves a structure has pictures** (owner,
+   2026-10-16): the structure before and the expected state after, as entries in the 3D viewer's
+   data format, named on a `Visual:` line under the case; the orchestrator publishes the viewer
+   page and the plan goes to the owner with its link. Only non-geometric cases (parsers, option
+   checks) go without, and the entry says so. Once the scenario workbench exists (DESIGN §10,
+   2026-10-16) a structural case is a scenario file, and its pictures come from the file.
 2. **Tests, after approval.** The orchestrator relays the plan to the owner and waits. The owner
    approves it, edits it or rejects cases; the orchestrator records that on the status line
    (`Status: approved by the owner, <date>`, with any edits applied to the entries). Only then

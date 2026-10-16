@@ -2160,3 +2160,31 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
     decided with the certificate's consults. Shared state, completely: besides the
     `Components()` cache, Eigen 3.4 keeps a function-local static for cache sizes (thread-safe
     first initialisation, read-only afterwards).
+- *2026-10-16, owner, visuals and the scenario workbench:* every test plan entry and every test
+  that involves a structure comes with a picture of the structure before and of the expected
+  state after (released pieces highlighted, removed pieces ghosted, clusters coloured).
+  Non-geometric tests (parsers, option checks) are the only exception, and a plan says so. The
+  owner also asked for a quick way to build structures, see them and run a test against them.
+  *Orchestrator design:* a **scenario file** per case under `data/scenarios/`, in the JSON the
+  library already reads:
+  - **build**: named boxes (size, centre, material, grounded, a `repeat` for rows), running-bond
+    walls (the existing generator), later arches; masses from material densities.
+  - **joints found automatically**: every pair of boxes touching on a face (`FaceContact`) gets an
+    interface; its catalogue row comes from the first matching rule, an explicit body pair before
+    a material pair, with fasteners (screws, count) on a rule. A touching pair with no rule is an
+    error naming the pair, so no joint is ever guessed.
+  - **steps**: judge, remove named bodies, apply loads or a lateral fraction of g, run the cascade.
+  - **expect**: final state, the released bodies and their clusters by name (name patterns allowed
+    for walls), and that everything else stands; a scenario owed to later work carries
+    `"deferred": "<slice or item>"`.
+  - **one loader and runner in the library** (`include/loadpath/Scenario.h`), because buildings
+    are data, not code; **one viewer export** writing the existing viewer's JSON (before, the
+    engine's after, and the expected after when they differ); the CLI gains `scenario <file>
+    [--viz <out>]`; `Scripts/Scenario.ps1` builds, runs one file or all, and collects the viewer
+    page and its data; the orchestrator publishes the page as an artifact.
+  - **one generic test**: `E2E.Scenarios.EveryScenarioFileMeetsItsExpectation` runs every
+    non-deferred file (a subcase per file, so a failure names the file); `Deferred.Scenarios.*`
+    runs the deferred ones. Adding an end-to-end test is then writing one short file and looking
+    at its picture, and the picture exists before the test is ever run.
+  The workbench's own tests go through the owner-approved plan step like any other; the 17 cases
+  of the e2e plan become its first scenario files once both plans are approved.
