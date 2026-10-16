@@ -2,6 +2,10 @@ Status: proposed
 
 # End-to-end validation suite: test plan (2026-10-15)
 
+Before and expected-after pictures for every case below are in the E2E plan viewer page,
+https://claude.ai/artifact/E4f4zBNCHNXr2u3zRZzazp (one entry per row). Each case lists its entries on its
+`Visual:` line.
+
 The owner's ask (IMMEDIATE_UPDATES §3): whole-structure scenarios through the public API (build a
 structure or load it from a file, judge it, run the cascade, remove pieces, apply loads), checked
 against outcomes the owner can defend: who stands, what cracks, what falls and in which clusters.
@@ -70,6 +74,8 @@ brick" is the EC6 bed with cohesion and tension set to zero and μ 0.7. Debug ti
 
 ### 3.1 `E2E.Colonnade.RemovingAPostDropsOnlyTheBeamsItCarried` (must-have)
 
+Visual: colonnade-dry-minus-post2, colonnade-dry-minus-post0
+
 - **Behaviour:** removing one post of a dry post-and-beam colonnade releases the beams that rested
   on it, each as its own cluster, and nothing else.
 - **Fixture:** five timber posts 0.2 × 0.2 × 2.0 m at 2.2 m centres on a grounded slab; four beams
@@ -87,6 +93,8 @@ brick" is the EC6 bed with cohesion and tension set to zero and μ 0.7. Debug ti
 
 ### 3.2 `E2E.Arch.LosingTheKeystoneLeavesOnlyTheHaunchesFrictionHolds` (must-have)
 
+Visual: arch-keystone-intact, arch-keystone-minus-crown-pair, arch-keystone-minus-one-crown-voussoir
+
 - **Behaviour:** an arch that stands loses its crown voussoirs, and exactly the part of each
   half-arch that cannot stand as a free chain falls; the result is mirror symmetric.
 - **Fixture:** the Couplet–Heyman semicircle of `tests/ArchFixtures.h` at t/R = 0.15 (above the
@@ -101,11 +109,13 @@ brick" is the EC6 bed with cohesion and tension set to zero and μ 0.7. Debug ti
   (R_i sin φ ≤ x̄ ≤ R_o sin φ) and the joint does not slide (cot φ ≤ μ). The longest such chain ends
   at the 54.484° joint: one voussoir higher, cot 54.484° = 0.714 exceeds μ = 0.7. So 12 voussoirs
   stand on each side and 36 fall (37 in the one-voussoir row).
-- **Today:** green (the engine releases those 36, one per side per pass, 18 passes). Mutant: scale
+- **Today:** green (the engine releases those 36, one per side per pass: 18 passes for the two-voussoir row, 19 for one). Mutant: scale
   the friction coefficient the certificate reads by 1.05, which moves the frontier one voussoir.
 - **Tier:** `LOADPATH_SLOW_IN_DEBUG`, about 0.5 s Release (the largest case).
 
 ### 3.3 `E2E.Wall.RemovingANonStructuralBrickReleasesNothing` (must-have)
+
+Visual: wall-ec6-minus-top-end-brick, wall-ec6-minus-mid-brick, wall-dry-minus-top-end-brick
 
 - **Behaviour:** pulling a brick that carries nothing releases nothing, cracks nothing, and the wall
   stands.
@@ -121,6 +131,8 @@ brick" is the EC6 bed with cohesion and tension set to zero and μ 0.7. Debug ti
 
 ### 3.4 `E2E.Colonnade.ScrewedBearingsBridgeALostPostAboveTheWithdrawalThreshold` (must-have)
 
+Visual: colonnade-screwed-2-screws-minus-post2, colonnade-screwed-3-screws-minus-post2
+
 - **Behaviour:** fastening the beams to the posts lets the frame bridge a lost interior post once
   the screws can hold the cantilever, and not before.
 - **Fixture:** the colonnade of 3.1 with every beam-on-post joint made by `FastenerProfile` of the
@@ -133,19 +145,21 @@ brick" is the EC6 bed with cohesion and tension set to zero and μ 0.7. Debug ti
   overturns about the bearing's inner edge with moment W·a = 543.6 N × 1.0 m against
   n · F_ax · L/2 = n × 5240 N × 0.04975 m, so it holds when n ≥ 2.08. F-RON-02 (tied: the loss is
   bridged) is the published precedent.
-- **Today:** green for both rows (the n = 2 crack ratio reads 1.048 against the closed form's
+- **Today:** green for both rows (the n = 2 crack ratio reads 1.042 against the closed form's
   1.04). Mutants: withdrawal × 0 in `FastenerProfile` (the n = 3 row falls); withdrawal × 1.2 (the
   n = 2 row stands).
 - **Tier:** default, about 40 ms Release, 1.6 s Debug.
 
 ### 3.5 `E2E.Colonnade.AScrewedEndBayTipsWithItsPost` (must-have)
 
+Visual: two-bay-screwed-2-screws-minus-middle-post, two-bay-screwed-3-screws-minus-middle-post, two-bay-dry-minus-middle-post
+
 - **Behaviour:** when a fastened joint holds, the pieces it joins fall together.
 - **Fixture:** a two-bay colonnade (three posts, two beams) with screwed beam-on-post joints, n = 2
   and n = 3; remove the middle post.
 - **Assertion (outcome):** two clusters, {post0, beam0} and {post2, beam1}, pass 1; the ground is all
   that remains. Contrast row: the same frame with Bearing joints releases {beam0} and {beam1} and
-  leaves both end posts standing (not probed; the same statics as 3.1).
+  leaves both end posts standing (confirmed by the picture run, 2026-10-16).
 - **Expected, and why:** closed form. Post and beam together have their centroid about 0.68 m from
   the post's centre line, far outside its 0.1 m half-width, and the post base carries no tension,
   so the pair tips about the base edge facing the gap; with dry bearings the beam tips alone off a
@@ -155,6 +169,8 @@ brick" is the EC6 bed with cohesion and tension set to zero and μ 0.7. Debug ti
 - **Tier:** default, about 10 ms Release.
 
 ### 3.6 `E2E.Wall.BondedWallPushedPastItsLimitFallsAsOneSlab` (must-have)
+
+Visual: bonded-wall-push-0-98, bonded-wall-push-1-02
 
 - **Behaviour:** a mortared wall under a lateral push just past its limit cracks at the base, then
   overturns as one piece; just below the limit nothing happens.
@@ -173,6 +189,8 @@ brick" is the EC6 bed with cohesion and tension set to zero and μ 0.7. Debug ti
 
 ### 3.7 `E2E.Wall.DryWallPushedPastThicknessOverHeightFallsEntirely` (must-have)
 
+Visual: dry-wall-push-0-98, dry-wall-push-1-05
+
 - **Behaviour:** a dry-laid wall under a lateral push past t/H falls entirely; below it, nothing
   falls.
 - **Fixture:** the wall of 3.6 in dry brick (μ 0.7 > t/H). Rows: 0.98 t/H and 1.05 t/H (t/H =
@@ -186,6 +204,8 @@ brick" is the EC6 bed with cohesion and tension set to zero and μ 0.7. Debug ti
 - **Tier:** `LOADPATH_SLOW_IN_DEBUG`, about 40 ms Release.
 
 ### 3.8 `E2E.Bearing.AnOverloadedTimberBearingDropsTheBeamAndSparesThePiers` (must-have)
+
+Visual: timber-bearing-load-0-8, timber-bearing-load-1-2
 
 - **Behaviour:** in a timber beam on brick piers, a heavy load crushes the weaker timber bearing,
   so the beam falls and the brickwork stands.
@@ -204,6 +224,8 @@ brick" is the EC6 bed with cohesion and tension set to zero and μ 0.7. Debug ti
 
 ### 3.9 `E2E.Shed.LosingOneSideOfPostsDropsTheRoofBayByBay` (must-have)
 
+Visual: shed-minus-side-posts
+
 - **Behaviour:** at building scale, when every post along one side goes, each bay's roof falls as
   one piece and nothing else moves.
 - **Fixture:** `ShedSpec()` from tests/WarehouseTestSupport.h (12 × 8 brick walls, 10 courses, two
@@ -221,6 +243,8 @@ brick" is the EC6 bed with cohesion and tension set to zero and μ 0.7. Debug ti
 
 ### 3.10 `E2E.Shed.LosingOnePostLeavesTheScrewedRoofStanding` (must-have; judgement call)
 
+Visual: shed-minus-middle-post, shed-minus-corner-post
+
 - **Behaviour:** losing a single post does not bring the shed's roof down, because the screwed
   planks carry the beam ends that lost their support.
 - **Fixture:** `ShedSpec()`. Rows: remove the middle post on wall 0's side; remove a corner post.
@@ -235,6 +259,8 @@ brick" is the EC6 bed with cohesion and tension set to zero and μ 0.7. Debug ti
 - **Tier:** `LOADPATH_SLOW_IN_DEBUG`, about 0.1 s Release.
 
 ### 3.11 `E2E.Cantilever.TheCounterweightHoldsTheBeamAndItsRemovalTipsIt` (must-have)
+
+Visual: cantilever-no-counterweight, cantilever-16kg-counterweight, cantilever-4kg-counterweight, cantilever-16kg-counterweight-removed
 
 - **Behaviour:** a beam overhanging its post stands only while a counterweight keeps the combined
   centroid over the post, and falls with whatever rides on it.
@@ -251,6 +277,8 @@ brick" is the EC6 bed with cohesion and tension set to zero and μ 0.7. Debug ti
 
 ### 3.12 `E2E.File.ALoadedColonnadeFallsLikeTheBuiltOne` (must-have)
 
+Visual: file-colonnade-intact, file-colonnade-minus-post2
+
 - **Behaviour:** a structure loaded from a checked-in file gives the same outcome as the same
   structure built in code, and its end state survives a save and reload.
 - **Fixture:** a new data file, `data/structures/colonnade.json` (data, so TDD-exempt): the dry
@@ -265,6 +293,8 @@ brick" is the EC6 bed with cohesion and tension set to zero and μ 0.7. Debug ti
 - **Tier:** default, about 10 ms Release.
 
 ### 3.13 `Deferred.Slice6.DryWallLosingItsLintelKeepsTheBricksOverThePiers` (must-have; red today)
+
+Visual: dry-lintel-intact, dry-lintel-removed-expected, dry-lintel-removed-today
 
 - **Behaviour:** removing the lintel of a dry-laid wall drops the masonry over the opening and
   leaves the bricks that sit wholly on the piers.
@@ -291,6 +321,8 @@ brick" is the EC6 bed with cohesion and tension set to zero and μ 0.7. Debug ti
 
 ### 3.14 `E2E.Wall.BondedWallStandsOverItsOpeningWithoutTheLintel` (nice-to-have; judgement call)
 
+Visual: bonded-lintel-intact, bonded-lintel-removed
+
 - **Behaviour:** in a mortared wall, a modest opening stays bridged by the bond after its lintel is
   taken out.
 - **Fixture:** the wall of 3.13 with EC6 rows.
@@ -303,6 +335,8 @@ brick" is the EC6 bed with cohesion and tension set to zero and μ 0.7. Debug ti
 - **Tier:** `LOADPATH_SLOW_IN_DEBUG`, about 30 ms Release.
 
 ### 3.15 `E2E.Wall.DryWallWithAGapInItsBaseReleasesNothing` (nice-to-have; judgement call)
+
+Visual: dry-wall-minus-two-base-bricks, dry-two-brick-lintel-removed
 
 - **Behaviour:** a dry wall with two adjacent base bricks knocked out (or a two-brick opening with
   its lintel removed) drops nothing.
@@ -320,6 +354,8 @@ brick" is the EC6 bed with cohesion and tension set to zero and μ 0.7. Debug ti
 
 ### 3.16 `E2E.Property.BuildOrderChangesNoOutcome` (nice-to-have)
 
+Visual: build-order-shuffled-screwed-colonnade
+
 - **Behaviour:** the outcome depends on the structure, not on the order its bodies and joints were
   added.
 - **Fixture:** the cheap fixtures above (3.1, 3.4, 3.5, 3.8, 3.11), each rebuilt under 8 seeded
@@ -328,11 +364,13 @@ brick" is the EC6 bed with cohesion and tension set to zero and μ 0.7. Debug ti
   name, equal the unshuffled run's; the failing seed and fixture are printed.
 - **Expected, and why:** the physics has no notion of insertion order. The oracle is the unshuffled
   run itself, which is legitimate here because the property is invariance, not correctness.
-- **Today:** unknown; I did not probe it. A degenerate fixture (a tie the selection breaks by slot
-  order) could be red, which would itself be a finding to report rather than to hide.
+- **Today:** green. The picture run (2026-10-16) rebuilt the 12 rows of 3.1, 3.4, 3.5, 3.8 and
+  3.11 under 8 seeded shuffles each: 96 of 96 matched the unshuffled outcome by name.
 - **Tier:** `LOADPATH_SLOW_IN_DEBUG`, about 0.5 s Release.
 
 ### 3.17 `E2E.Corner.InterlockingRaisesTheOverturningLoad` (nice-to-have)
+
+Visual: corner-straight-joint-push, corner-interlocked-push
 
 - **Behaviour:** a façade bonded into its return wall at the corner resists a push that topples the
   same façade with a straight joint at the corner.
@@ -345,8 +383,9 @@ brick" is the EC6 bed with cohesion and tension set to zero and μ 0.7. Debug ti
 - **Expected, and why:** A is B-WAL-01 (a free wall at t/H). B is F-STR-02 (Casapulla et al. 2024:
   interlocking raises the collapse multiplier); the published case gives the direction but not the
   size, so 1.1 t/H is an engineering choice the owner should accept or change.
-- **Today:** unknown (not probed; needs a corner builder in the test support, since the geometry
-  layer has none).
+- **Today:** green for both rows with a corner built for the pictures (straight joint: the 39
+  façade bricks fall as one cluster and the return stands; interlocked: nothing falls). The test
+  still needs a corner builder in its support code, since the geometry layer has none.
 - **Tier:** `LOADPATH_SLOW_IN_DEBUG`, about 0.3 s Release (estimate).
 
 ## 4. How the suite runs
@@ -397,7 +436,9 @@ brick" is the EC6 bed with cohesion and tension set to zero and μ 0.7. Debug ti
 3. **The dry-wall lintel (3.13).** Today the engine drops 34 bricks in 26 clusters, including
    bricks sitting wholly on the piers. Keep it as a `Deferred.` red case for the owed
    least-joint-movement selection, or bring that selection forward? It is the clearest
-   player-visible over-release I found.
+   player-visible over-release I found. Also: the assertion names only the four course-6 bricks as
+   released; the six above them (courses 7 to 9) rest only on falling bricks and must fall too.
+   Assert them as well? (Recommended: yes.)
 4. **A dry wall pushed over (3.7) falls as one cluster.** F-VIR-01 says a cohesionless chimney
    "crumbles course by course". The plan asserts only that every brick falls and leaves the cluster
    count to the host (Chaos fragments a released cluster on impact). Should the suite pin more
