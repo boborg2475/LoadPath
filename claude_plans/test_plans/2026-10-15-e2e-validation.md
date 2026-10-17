@@ -1,4 +1,4 @@
-Status: proposed
+Status: approved 2026-10-17 (owner: "create the tests according to your plans"; the recommendations below are the answers)
 
 # End-to-end validation suite: test plan (2026-10-15)
 
@@ -459,3 +459,15 @@ Visual: corner-straight-joint-push, corner-interlocked-push
    arrive), or stay built in code?
 10. **Scope.** 13 must-haves and 4 nice-to-haves. Approve, cut, or add (for example a two-storey
     frame, or the full warehouse in Release only, at about 0.6 s per cascade).
+
+## 6. Owner answers (2026-10-17)
+
+The owner approved the plan and asked for the tests to be written now; a case that does not meet
+its expectation is not made to pass and the engine is not changed for it, unless the test itself
+is wrong. A red case goes under `Deferred.<area>.*` with the expectation unchanged.
+
+1. 3.10: the shed stands. 2. 3.15: require Stands; it is `Deferred.` until it reads Stands.
+3. 3.13: stays `Deferred.`; also assert the six bricks in courses 7 to 9 fall. 4. 3.7: assert
+every brick falls, not the cluster count. 5. 3.2: accepted, final set and symmetry only.
+6. Characteristic fastener values. 7. Crushing drops the beam. 8. 3.14 included.
+9. Fixtures stay in code; the scenario workbench converts them later. 10. All 17 cases.

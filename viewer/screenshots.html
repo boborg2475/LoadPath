@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>LoadPath E2E screenshots</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Public+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* The still companion to index.html: one entry per recorded test, its before and after frames side by side, and the run's numbers under them. */
+:root {
+  color-scheme: light;
+  --bg: #eef0f2; --panel: #f8f9fa; --ink: #1d2329; --muted: #5b6670; --line: #cfd5da; --stage: #e3e7ea;
+  --accent: #d9601c; --sever: #b3262d; --stand: #2f7d5b; --undecided: #8a6d12;
+  --f-display: "Barlow Condensed", "Arial Narrow", sans-serif;
+  --f-body: "Public Sans", system-ui, sans-serif;
+  --f-data: "JetBrains Mono", ui-monospace, "Cascadia Mono", monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #14181c; --panel: #1b2025; --ink: #e4e8eb; --muted: #95a1ab; --line: #2c343b; --stage: #101418;
+    --accent: #f0782f; --sever: #e2545a; --stand: #4fb386; --undecided: #d1aa3c; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #14181c; --panel: #1b2025; --ink: #e4e8eb; --muted: #95a1ab; --line: #2c343b; --stage: #101418;
+  --accent: #f0782f; --sever: #e2545a; --stand: #4fb386; --undecided: #d1aa3c; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 15px; line-height: 1.5; }
+[hidden] { display: none !important; }
+img { max-width: 100%; display: block; }
+a { color: var(--accent); }
+.wrap { max-width: 1280px; margin: 0 auto; padding-inline: 16px; padding-block: 24px 48px; display: grid; gap: 20px; }
+.eyebrow { font-family: var(--f-data); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+h1 { font-family: var(--f-display); font-weight: 700; font-size: clamp(30px, 4vw, 42px); line-height: 1.05; margin: 4px 0 8px; text-wrap: balance; }
+h2 { font-family: var(--f-display); font-weight: 600; font-size: 22px; line-height: 1.15; margin: 0; text-wrap: balance; }
+.lede { max-width: 72ch; color: var(--muted); margin: 0; }
+.generated { font-family: var(--f-data); font-size: 12px; color: var(--muted); margin: 6px 0 0; }
+.filters { display: flex; flex-wrap: wrap; gap: 8px; }
+.filters button { font: 500 13px var(--f-data); color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 999px; padding: 4px 12px; cursor: pointer; }
+.filters button[aria-pressed="true"] { border-color: var(--ink); }
+.pill { font-family: var(--f-data); font-size: 12px; font-weight: 500; text-transform: uppercase; letter-spacing: .06em; }
+.pill.passed, .pill.stands { color: var(--stand); } .pill.failed { color: var(--sever); } .pill.deferred, .pill.undecided { color: var(--undecided); } .pill.collapses { color: var(--accent); } .pill.other { color: var(--muted); }
+#list { display: grid; gap: 16px; }
+.entry { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 16px; display: grid; gap: 12px; min-width: 0; }
+.entry.failed { border-left: 4px solid var(--sever); }
+.head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 16px; }
+.test { font-family: var(--f-data); font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+.summary { margin: 0; max-width: 90ch; color: var(--muted); font-size: 14px; }
+.frames { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 360px), 1fr)); gap: 8px; }
+figure { margin: 0; min-width: 0; background: var(--stage); border: 1px solid var(--line); }
+figcaption { font: 500 11px var(--f-data); text-transform: uppercase; letter-spacing: .08em; color: var(--muted); padding: 6px 8px; border-top: 1px solid var(--line); }
+.missing { aspect-ratio: 8 / 7; display: grid; place-items: center; color: var(--muted); font: 12px var(--f-data); }
+.metrics { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px 16px; margin: 0; }
+.metrics div { min-width: 0; }
+.metrics dt { font: 500 11px var(--f-data); text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+.metrics dd { margin: 0; font-family: var(--f-data); font-size: 15px; font-variant-numeric: tabular-nums; }
+details { font-size: 14px; }
+summary { cursor: pointer; color: var(--muted); font-family: var(--f-data); font-size: 12px; }
+.lists { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 12px; margin-top: 8px; }
+.lists ul { margin: 4px 0 0; padding-left: 18px; font-family: var(--f-data); font-size: 12px; overflow-wrap: anywhere; }
+.lists h3 { font: 600 12px var(--f-data); text-transform: uppercase; letter-spacing: .06em; margin: 0; }
+.open { font-family: var(--f-data); font-size: 12px; }
+.empty { color: var(--muted); margin: 4px 0 0; font-size: 13px; }
+</style>
+</head>
+<body>
+<script type="application/json" id="lp-shots">null</script>
+<div class="wrap">
+  <header>
+    <div class="eyebrow">LoadPath · end-to-end tests · stills</div>
+    <h1>LoadPath E2E screenshots</h1>
+    <p class="lede">The before and after frames each test recorded, captured from the 3D viewer once its animation has finished, with the run's numbers underneath. Open an entry in the viewer to orbit it and replay the collapse.</p>
+    <p class="generated" id="generated"></p>
+  </header>
+  <div class="filters" id="filters" role="group" aria-label="Filter by test status"></div>
+  <main id="list"></main>
+</div>
+<script>
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;" }[c]));
+const stateClass = s => ({ Stands: "stands", Collapses: "collapses", Undecided: "undecided" }[s] || "other");
+const fmtMs = v => v == null ? "—" : v < 10 ? v.toFixed(2) + " ms" : v < 100 ? v.toFixed(1) + " ms" : Math.round(v) + " ms";
+const data = JSON.parse(document.getElementById("lp-shots").textContent || "null") || { generated: null, entries: [] };
+const viewer = data.viewer || "index.html";
+const g = data.generated;
+if (g) document.getElementById("generated").innerHTML = `Generated ${esc(g.when)} from commit ${esc(g.commit)}: ${g.passed} passed, ${g.failed} failed, ${g.deferred} deferred. <a href="${esc(viewer)}">Open the 3D viewer</a>`;
+function frame(src, caption) {
+  return `<figure>${src ? `<img src="${src}" alt="${esc(caption)}" loading="lazy">` : `<div class="missing">no screenshot</div>`}<figcaption>${esc(caption)}</figcaption></figure>`;
+}
+function names(items, empty) {
+  return items.length ? `<ul>${items.map(i => `<li>${esc(i)}</li>`).join("")}</ul>` : `<p class="empty">${empty}</p>`;
+}
+function entry(e) {
+  return `<article class="entry ${e.status}" data-status="${e.status}" id="${esc(e.slug)}">
+    <div class="head"><h2>${esc(e.title)}</h2><span class="pill ${e.status}">${e.status}</span></div>
+    <div class="test">${esc(e.test)}</div>
+    <p class="summary">${esc(e.summary)}</p>
+    <div class="frames">${frame(e.before_img, "Before")}${frame(e.after_img, e.after_label)}</div>
+    <dl class="metrics">
+      <div><dt>Verdict before</dt><dd><span class="pill ${stateClass(e.verdict)}">${esc(e.verdict ?? "?")}</span></dd></div>
+      <div><dt>State after</dt><dd><span class="pill ${stateClass(e.state)}">${esc(e.state ?? "?")}</span></dd></div>
+      <div><dt>Passes</dt><dd>${e.passes ?? "—"}</dd></div>
+      <div><dt>Bodies released</dt><dd>${e.released.length}</dd></div>
+      <div><dt>Clusters</dt><dd>${e.clusters}</dd></div>
+      <div><dt>Joints severed</dt><dd>${e.severed.length}</dd></div>
+      <div><dt>Joints cracked</dt><dd>${e.cracked.length}</dd></div>
+      <div><dt>Engine time</dt><dd>${fmtMs(e.elapsed_ms)}</dd></div>
+    </dl>
+    <details><summary>Released bodies and broken joints</summary>
+      <div class="lists">
+        <div><h3>Released</h3>${names(e.released, "Nothing released.")}</div>
+        <div><h3>Severed</h3>${names(e.severed, "No joint severed.")}</div>
+        <div><h3>Cracked, still holding</h3>${names(e.cracked, "No joint cracked.")}</div>
+      </div>
+    </details>
+    <a class="open" href="${esc(viewer)}#${esc(e.slug)}">Open in the 3D viewer, with the animation →</a>
+  </article>`;
+}
+const list = document.getElementById("list");
+list.innerHTML = data.entries.length ? data.entries.map(entry).join("") : `<p class="empty">No screenshots recorded. Regenerate with Scripts/Visuals.ps1.</p>`;
+const counts = data.entries.reduce((c, e) => (c[e.status] = (c[e.status] || 0) + 1, c), {});
+const bar = document.getElementById("filters");
+const filters = [["all", data.entries.length], ...["failed", "passed", "deferred"].filter(s => counts[s]).map(s => [s, counts[s]])];
+bar.innerHTML = filters.map(([s, n], i) => `<button type="button" data-s="${s}" aria-pressed="${i === 0}">${s} · ${n}</button>`).join("");
+bar.addEventListener("click", ev => {
+  const b = ev.target.closest("button[data-s]"); if (!b) return;
+  for (const x of bar.children) x.setAttribute("aria-pressed", String(x === b));
+  for (const a of list.querySelectorAll("article")) a.hidden = b.dataset.s !== "all" && a.dataset.status !== b.dataset.s;
+});
+</script>
+</body>
+</html>

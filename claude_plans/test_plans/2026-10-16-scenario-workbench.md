@@ -1,11 +1,13 @@
-Status: proposed
+Status: approved 2026-10-17 (owner: "create the tests according to your plans"; the recommendations below are the answers)
 
 # Scenario workbench: test plan (2026-10-16)
 
 The owner's ask (DESIGN §10, "2026-10-16, owner, visuals and the scenario workbench"): build a
 structure quickly in a short file, see it, and run a test against it. This plan covers the
 workbench itself: the file format, the loader, automatic joints, the runner, expectations, the
-viewer export, the CLI command, and the generic test that runs every file. The physics cases that
+viewer export, the CLI command, the generic test that runs every file, and (amendment, 2026-10-17)
+the pictures every E2E test records for itself, with `Scripts/Visuals.ps1` collecting them into
+the E2E page. The physics cases that
 become its first files are the e2e plan's (2026-10-15); they are not repeated here.
 
 Nothing exists yet, so every case below is red today: the header `include/loadpath/Scenario.h`
@@ -167,7 +169,9 @@ source, like every other row.
   runner hands it (DESIGN §7: tests run against the interface).
 - `CompareExpectation(const ScenarioExpect&, const ScenarioOutcome&) -> ExpectationReport`, a pure
   function over names.
-- `WriteViewerJson(const Scenario&, const ScenarioOutcome&, std::string_view Slug) -> std::string`.
+- `WriteViewerJson(const Scenario&, const ScenarioOutcome&, std::string_view Slug) -> std::string`,
+  built on `WriteViewerJson(const ViewerScene&)`, the one format writer, which code-based E2E
+  tests also use (see "Visuals from the tests").
 - `RunCli` gains the `scenario` command. It reads and writes through a small file interface the
   caller supplies, so the CLI tests use an in-memory map and `cli/Main.cpp` uses the disk.
 
@@ -176,7 +180,8 @@ source, like every other row.
 Prefixes: `Scenario.Load.*`, `Scenario.Joints.*`, `Scenario.Build.*`, `Scenario.Steps.*`,
 `Scenario.Expect.*`, `Scenario.Viewer.*` in `tests/ScenarioTest.cpp` (split by area if it grows);
 `Cli.Scenario.*` in `tests/CliTest.cpp`; `Catalogue.Materials.*` in `tests/CatalogueTest.cpp`;
-the generic tests in `tests/ScenarioFilesTest.cpp`. Fixtures are inline JSON in the test, except
+the generic tests in `tests/ScenarioFilesTest.cpp`; the visuals cases where their section says.
+Fixtures are inline JSON in the test, except
 the generic tests, which read `data/scenarios/`. Every case is `default` tier unless it says
 otherwise, and all of them together run in well under a second in Release.
 
@@ -591,6 +596,181 @@ of the e2e plan need it)
   usable viewer slug and doctest subcase name.
 - Assertion (mechanism): every name matches; a failure names the file.
 
+### Visuals from the tests (amendment, 2026-10-17)
+
+Every E2E test writes its own pictures, so the E2E page always matches the real suite. Today the
+page comes from a scratchpad probe that rebuilds fixtures by hand and does not follow new tests.
+
+- **One format writer.** `WriteViewerJson(const ViewerScene&)` in the library. A `ViewerScene`
+  holds the structure, each body's box (centre, half extents, rotation), name and material, the
+  removed bodies, the verdict before, the engine's after, an optional expected after, and the
+  slug, title and test name. The scenario overload (V1) builds a `ViewerScene` and calls it.
+- **One helper**, `tests/VisualSupport.h`: `RecordVisual(TestName, ViewerScene)`. With
+  `LOADPATH_VISUALS=<dir>` set it writes `<dir>/<slug>.json`; unset or empty, it returns before
+  building anything and does no file I/O. Its core, `RecordVisualTo(optional dir, file interface,
+  ...)`, returns an error instead of failing, so the cases below can test it; the wrapper turns an
+  error into an `ADD_FAIL_CHECK` naming the test. Files go through the CLI's small file interface,
+  so the tests use an in-memory map.
+- **Callers record before they assert.** A test calls `RecordVisual` after the run and before its
+  first `CHECK`, never after a `REQUIRE`: this build defines
+  `DOCTEST_CONFIG_NO_EXCEPTIONS_BUT_WITH_ALL_ASSERTS`, so a failed `REQUIRE` ends the process and a
+  picture recorded after it is lost. Review checks the order.
+- **Which cases are E2E.** Every case named `E2E.*`, plus every case in `tests/EndToEndTest.cpp` or
+  `tests/ScenarioFilesTest.cpp` whatever its prefix, so e2e 3.13
+  (`Deferred.Slice6.DryWallLosingItsLintel...`) and `Deferred.Scenarios.*` count without a naming
+  rule. `Visuals.ps1` lists them with doctest's `-ltc`, once with `-tc="E2E.*"` and once with
+  `-sf`, and takes the union.
+
+Prefixes: `Visuals.Record.*` and `Visuals.Scenarios.*` in `tests/VisualSupportTest.cpp`, two more
+`Scenario.Viewer.*` cases in `tests/ScenarioTest.cpp`, and `Visuals.Script.*` in
+`Scripts/Visuals.Tests.ps1`, a plain PowerShell test script (no Pester) that feeds the script's
+functions fixture inputs and runs in about a second. The doctest cases are default tier. The
+script cases are outside `Test.ps1`: they run whenever `Visuals.ps1` changes (test-expert to see
+red, dev-expert at the end, review-expert once). All are red today: none of the pieces exist.
+
+Most of these cases check files, names and order, not a structure, and their `Visual:` line says
+so. Where a structure is the fixture, it is an existing entry.
+
+**W1. `Visuals.Record.WritesNothingWhenTheVariableIsUnset`** (must-have)
+- Behaviour: with no directory the helper does no file I/O, so a normal run pays nothing and stays
+  deterministic.
+- Fixture: the colonnade scene; the core given no directory and an in-memory file interface that
+  counts every call; the environment reader given unset, empty and `C:\v`.
+- Assertion (mechanism): zero calls of any kind on the file interface and no error; the reader
+  returns no directory for unset and empty, and `C:\v` for the third.
+- Red today: the helper does not exist.
+- Visual: none: counts file calls (the scene is `colonnade-middle-post`).
+
+**W2. `Visuals.Record.WritesOneEntryPerCallWithExpectedOnlyWhenItDiffers`** (must-have)
+- Behaviour: with a directory set, each call writes one file `<dir>/<slug>.json` holding the
+  structure before, the engine's after, and the expected after only when it differs; the bytes are
+  the library writer's, so there is one format.
+- Fixture: the in-memory interface, directory `v`; two calls from one test: the colonnade scene
+  with an expected equal to the engine's after (slug `a`), and with E2's wrong expectation
+  (slug `b`).
+- Assertion (mechanism): exactly two files, `v/a.json` and `v/b.json`; each equals
+  `WriteViewerJson` of its scene with the test name set, byte for byte; parsed back, each has
+  `test`, `slug`, `before`, `after`; `expected` is absent from `a` and present in `b`.
+- Red today: as W1.
+- Visual: `colonnade-middle-post`, `colonnade-wrong-expectation`.
+
+**W3. `Visuals.Record.ASlugThatIsNotFileNameSafeIsAnError`** (must-have)
+- Behaviour: a slug is lowercase letters, digits and dashes (G5's rule), so it is a safe file name
+  and a viewer slug; anything else is refused before a file is written.
+- Fixture: slugs empty, `Colonnade`, `a b`, `a/b`, `a\b`, `..`, `a_b`, `a.json`; and
+  `arch-keystone-intact-2`.
+- Assertion (mechanism): each bad slug returns an error naming the slug and the test, with no write
+  on the file interface; the good one writes.
+- Red today: as W1.
+- Visual: none: names only.
+
+**W4. `Visuals.Record.ASlugUsedByTwoTestsIsAnErrorNamingBoth`** (must-have)
+- Behaviour: two tests cannot share a picture. The same test writing its slug again rewrites it,
+  because doctest reruns a case body once per subcase.
+- Fixture: the in-memory interface; `E2E.A` writes `x`, then `E2E.B` writes `x`; separately
+  `E2E.A` writes `x` twice.
+- Assertion (mechanism): B's call returns an error containing `x`, `E2E.A` and `E2E.B`, and
+  `v/x.json` still holds A's bytes; A's repeat returns no error and leaves one file. The check
+  reads the `test` field of the existing file, so it holds across processes; `Visuals.ps1` empties
+  the folder first (W13), so a stale file cannot collide.
+- Red today: as W1.
+- Visual: none: names only.
+
+**W5. `Visuals.Record.AFailingTestStillWritesItsPicture`** (must-have)
+- Behaviour: the helper never judges the outcome. A scene whose engine after disagrees with its
+  expected after, which is what a red test records, is written with both, and the helper adds no
+  failure, so a red case is visible on the page.
+- Fixture: the colonnade scene with E2's wrong expectation, through the core.
+- Assertion (mechanism): one file written, with `expected`, and no error returned (the wrapper adds
+  a failure only for an error). End to end, W12 shows a red case keeps its picture.
+- Red today: as W1.
+- Visual: `colonnade-wrong-expectation`.
+
+**W6. `Visuals.Scenarios.TheGenericTestWritesOneEntryPerFile`** (must-have)
+- Behaviour: G1 to G4 record one picture per scenario file, slug the file name without `.json`,
+  test name the generic test's own, through the same helper, so file cases and code cases make
+  identical pictures.
+- Fixture: G1's body as a function over a folder read through the file interface; an in-memory
+  folder holding the example and the E2 file; directory `v`.
+- Assertion (mechanism): `v/colonnade-middle-post.json` and `v/colonnade-wrong-expectation.json`
+  exist, each equal byte for byte to `WriteViewerJson` of that file's scenario and outcome (the
+  bytes C4's `--viz` writes), each with `test` `E2E.Scenarios.EveryScenarioFileMeetsItsExpectation`;
+  the unmet file is written too, with `expected`, and the function reports it unmet.
+- Red today: G1 does not exist.
+- Visual: `colonnade-middle-post`, `colonnade-wrong-expectation`.
+
+**W7. `Scenario.Viewer.TheScenarioExportIsTheSceneExport`** (must-have)
+- Behaviour: there is one writer: the scenario overload gives the same bytes as the scene overload
+  on the same structure and outcome.
+- Fixture: the example, run; a `ViewerScene` filled by hand in the test from the loaded bodies'
+  boxes, names and materials and the outcome.
+- Assertion (mechanism): the two strings are equal.
+- Red today: neither overload exists.
+- Visual: `colonnade-middle-post`.
+
+**W8. `Scenario.Viewer.ARotatedBoxExportsItsRotation`** (must-have: the arch case needs it)
+- Behaviour: a rotated box exports its rotation `q` and its own half extents, so a voussoir is
+  drawn where it is.
+- Fixture: a `ViewerScene` of one box, half extents [0.2, 0.1, 0.05], rotated 30° about y.
+- Assertion (mechanism): `q` is (cos 15°, 0, sin 15°, 0) in the viewer's component order, to 1e-12;
+  `h` is the half extents.
+- Red today: as W7.
+- Visual: `arch-keystone-intact` (on the E2E plan page).
+
+**W9. Code-based E2E cases record their pictures** (must-have; a rule on other cases, not a test)
+- Behaviour: every E2E case in code calls `RecordVisual` with the slugs on its e2e-plan `Visual:`
+  line: 3.2 (`arch-keystone-intact`, `arch-keystone-minus-crown-pair`,
+  `arch-keystone-minus-one-crown-voussoir`), 3.12 (`file-colonnade-intact`,
+  `file-colonnade-minus-post2`), 3.16 (`build-order-shuffled-screwed-colonnade`, one picture of the
+  first shuffle, not one per shuffle), and 3.9 and 3.10 while the shed stays in code.
+- Assertion: none of its own. The W10 guard fails naming any of them that writes nothing, and a
+  mistyped test name trips the same guard.
+- Red today: the cases are not written yet; each is written with its call.
+- Visual: the slugs above, on the E2E plan page.
+
+**W10. `Visuals.Script.TheGuardNamesEveryE2ECaseThatWroteNoEntry`** (must-have)
+- Behaviour: `Visuals.ps1` fails, naming each executed E2E case that wrote no entry, so no E2E case
+  can be added without a picture. G2, G3 and G4 are exempt by name: they legitimately run zero
+  files, and W6 already makes them write one entry per file.
+- Fixture: function inputs: executed cases `E2E.A`, `E2E.B`, `Deferred.Slice6.C` and G4; entries
+  from `E2E.A` and `Deferred.Slice6.C`; then entries from all three; then an empty case list.
+- Assertion (outcome): the first fails with a message naming `E2E.B` and no other case; the second
+  passes; the empty list fails with `no E2E cases found`, so a wrong filter cannot pass vacuously.
+  On failure the script still writes the page, so the gap is visible, and exits 1.
+- Red today: the script does not exist.
+- Visual: none: names only.
+
+**W11. `Visuals.Script.TheIndexIsOrderedByTestNameAndMarksStatus`** (must-have)
+- Behaviour: `data/index.json` lists every entry ordered by test name, then slug, each marked
+  `passed`, `failed` or `deferred` from its case's result.
+- Fixture: entries `E2E.B`/`b1`, `E2E.A`/`a2`, `E2E.A`/`a1`, `Deferred.Slice6.C`/`c1`,
+  `Deferred.Slice6.D`/`d1`; results A passed, B failed, C failed, D passed.
+- Assertion (outcome): order `c1`, `d1`, `a1`, `a2`, `b1` (ordinal, so `Deferred.` sorts before
+  `E2E.`); statuses `deferred`, `passed`, `passed`, `passed`, `failed`. A `Deferred.` case is
+  `deferred` while red; one that passes is `passed`, and the script prints
+  `Deferred.Slice6.D passes: move it out of Deferred`.
+- Red today: as W10.
+- Visual: none: names only.
+
+**W12. `Visuals.Script.ARedCaseKeepsItsPictureOnThePage`** (must-have)
+- Behaviour: a failing or aborted case does not stop the run or lose any picture: each case runs in
+  its own process, and its exit code is its status.
+- Fixture: a fake runner (a function input): `E2E.A` writes an entry and exits 0, `E2E.B` writes
+  one and exits 1, `E2E.C` writes one and aborts (a failed `REQUIRE`).
+- Assertion (outcome): all three entries are in the index, A `passed`, B and C `failed`; the script
+  exits 0 because the guard passes (the page is a picture; the test tiers are the gate) and prints
+  `1 passed, 2 failed, 0 deferred`.
+- Red today: as W10.
+- Visual: none: names only.
+
+**W13. `Visuals.Script.TheDataFolderIsEmptiedBeforeTheRun`** (nice-to-have)
+- Behaviour: entries from an earlier run are deleted before the cases run, so a removed test's
+  picture leaves the page and cannot trip W4.
+- Fixture: a temporary data folder holding `old.json` from a case no longer listed.
+- Assertion (outcome): after the run function, `old.json` is gone and not in the index.
+- Red today: as W10.
+- Visual: none: names only.
+
 ## 3. How it runs and how it is used
 
 **Adding an end-to-end test:**
@@ -599,7 +779,8 @@ of the e2e plan need it)
 2. Run `Scripts/Scenario.ps1 -File data/scenarios/<slug>.json`. It builds `loadpath_cli` (Release)
    if needed, runs `scenario <file> --viz`, writes the page and its data to
    `build/scenarios/` (`index.html`, `data/<slug>.json`, `data/index.json`), and prints the result
-   and the page path. `-All` runs every file and collects one page; `-Out <dir>` writes elsewhere.
+   and the page path. `-Out <dir>` writes elsewhere. (`-All` is replaced by `Visuals.ps1`, below,
+   which draws every file through G1 to G4; open question 8.)
 3. Look at the picture: before, the engine's after, and the expected after when they differ.
 4. The owner approves the file (in a plan or directly); it is then in the suite, because G1 picks
    up every file. No C++ is written.
@@ -620,10 +801,38 @@ waits for a sweep-and-prune contact finder.
 voussoirs (`tests/ArchFixtures.h`, e2e 3.2), wedges and inclined planes, the Orduña pile; and
 cases whose subject is not a scenario's outcome: e2e 3.12 (the structure file round trip) and
 3.16 (build-order invariance, a property over shuffles). They stay as `E2E.*` cases in
-`tests/EndToEndTest.cpp`, pictured by the probe as today. An `arch` build item (the fixture's
+`tests/EndToEndTest.cpp`, each recording its own pictures (W9). An `arch` build item (the fixture's
 geometry moved into the geometry layer, with oriented boxes in the export) is the natural next
 addition. The shed cases (e2e 3.9, 3.10) can be written as files once walls along y and `omit`
 exist, but the shed is easier kept in code until open question 5 is answered.
+
+**The E2E picture page: `Scripts/Visuals.ps1`.**
+
+1. Builds Release (`Scripts/Build.ps1 -Config Release`).
+2. Empties `build/visuals/data` (W13), lists the E2E cases (every `E2E.*` case plus every case in
+   the two E2E files), and runs each in its own `loadpath_tests` process with
+   `LOADPATH_VISUALS=build/visuals/data`; the exit code is the case's status (W12).
+3. Applies the guard (W10): any E2E case with no entry is named and the script exits 1, after
+   still writing the page so the gap shows.
+4. Writes `data/index.json` (W11), copies `viewer/index.html` next to it, and prints the folder and
+   the counts passed, failed and deferred. `-Out <dir>` writes elsewhere.
+
+It costs the E2E budget plus one process start per case: a few seconds in Release. Every publish
+run is also the script's end-to-end smoke.
+
+**Publishing.** After every feature lands (review passed, committed), the orchestrator runs
+`Visuals.ps1` and publishes its output folder to the E2E page: one fixed artifact URL, https://claude.ai/artifact/SLuMLdeb5UNZh382sBvYgd
+(first published 2026-10-17, with `screenshots.html` as a second page beside it), never changed, so the owner's link always shows the current suite. A script
+cannot publish to claude.ai, so this step is the orchestrator's. The scratchpad probe
+(`e2e_viz_gen\viz_probe.cpp`) retires once every code-based E2E case records its own pictures.
+In a plan, before its test exists, a code case's pictures still come from a probe; a file case's
+come from `Scenario.ps1 -File`.
+
+**CLAUDE.md row**, added to "Each tier runs once per change" when these tests are written:
+
+| Who | Runs |
+|---|---|
+| orchestrator | `Scripts/Visuals.ps1` once after a feature lands, then publishes `build/visuals/` to the fixed E2E page URL; the run fails if an E2E case wrote no picture. `Scripts/Visuals.Tests.ps1` runs only when `Visuals.ps1` changes |
 
 ## 4. Open questions for the owner
 
@@ -645,3 +854,20 @@ exist, but the shed is easier kept in code until open question 5 is answered.
 6. **Per-step expectations** (an `expect` on a `cascade` or `judge` step, for "intact stands, then
    after the removal ..."). Recommendation: leave out; the final `released` list already fails if
    an earlier cascade releases something unexpected, and T4's `judge` covers a checkpoint verdict.
+7. **Should `Visuals.ps1` later cover non-E2E structural tests** (the cascade, standing and
+   authority fixtures)? Recommendation: not now. Any test may call `RecordVisual` and its pictures
+   appear on the page, but the guard covers only E2E cases. Requiring pictures from the ~400 unit
+   cases would bloat the page and cost a feature of its own; widen it once the E2E page has proved
+   useful.
+8. **Drop `Scenario.ps1 -All`?** Recommendation: yes. `Visuals.ps1` draws every scenario file
+   through G1 to G4 along with the code cases, so two page builders would only drift. Keep `-File`
+   for authoring one file without rebuilding the tests. Open question 4's "`-All` labels it
+   deferred" then applies to `Visuals.ps1` (W11).
+
+## 5. Owner answers (2026-10-17)
+
+The owner approved the plan; every recommendation in section 4 is the answer (1 exactly one of
+`centre` and `min`; 2 a `materials` table plus file-local materials; 3 one file per row; 4 exit
+codes 0, 1, 2; 5 no `warehouse` item yet; 6 no per-step expectations; 7 the guard covers E2E
+cases only; 8 `Scenario.ps1 -All` is dropped). Tests are written to the plan; a case red because
+the engine disagrees is not made to pass.

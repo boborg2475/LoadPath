@@ -1,0 +1,458 @@
+<title>LoadPath E2E tests</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Public+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a test-bench console. Scenario rail on the left, a split before/after stage, a readout strip under it. */
+:root {
+  --bg: #eef0f2;
+  --panel: #f8f9fa;
+  --ink: #1d2329;
+  --muted: #5b6670;
+  --line: #cfd5da;
+  --stage: #e3e7ea;
+  --accent: #d9601c;       /* released bodies: safety orange */
+  --sever: #b3262d;        /* severed joints */
+  --stand: #2f7d5b;        /* stands */
+  --undecided: #8a6d12;    /* undecided */
+  --body: #a9b3bb;         /* resting block */
+  --ground: #7d878f;
+  --f-display: "Barlow Condensed", "Arial Narrow", sans-serif;
+  --f-body: "Public Sans", system-ui, sans-serif;
+  --f-data: "JetBrains Mono", ui-monospace, "Cascadia Mono", monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #14181c; --panel: #1b2025; --ink: #e4e8eb; --muted: #95a1ab; --line: #2c343b; --stage: #101418;
+    --accent: #f0782f; --sever: #e2545a; --stand: #4fb386; --undecided: #d1aa3c; --body: #6d7881; --ground: #3d464e;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #14181c; --panel: #1b2025; --ink: #e4e8eb; --muted: #95a1ab; --line: #2c343b; --stage: #101418;
+  --accent: #f0782f; --sever: #e2545a; --stand: #4fb386; --undecided: #d1aa3c; --body: #6d7881; --ground: #3d464e;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 15px; line-height: 1.5; }
+.wrap { padding-inline: 20px; padding-block: 24px 40px; max-width: 1500px; margin: 0 auto; display: grid; gap: 20px; }
+header.top { display: grid; gap: 6px; }
+.eyebrow { font-family: var(--f-data); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+h1 { font-family: var(--f-display); font-weight: 700; font-size: clamp(30px, 4vw, 44px); line-height: 1.05; margin: 0; letter-spacing: .01em; text-wrap: balance; }
+.lede { max-width: 72ch; color: var(--muted); margin: 0; }
+.bench { display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: 20px; align-items: start; }
+@media (max-width: 900px) { .bench { grid-template-columns: minmax(0, 1fr); } }
+nav.rail { display: grid; gap: 8px; }
+nav.rail button {
+  all: unset; cursor: pointer; display: grid; gap: 2px; padding: 10px 12px; border: 1px solid var(--line);
+  background: var(--panel); border-radius: 4px;
+}
+nav.rail button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+nav.rail button[aria-current="true"] { border-color: var(--ink); box-shadow: inset 3px 0 0 var(--ink); }
+nav.rail .t { font-family: var(--f-display); font-weight: 600; font-size: 18px; line-height: 1.15; }
+nav.rail .s { font-family: var(--f-data); font-size: 11.5px; color: var(--muted); display: flex; gap: 8px; flex-wrap: wrap; }
+.pill { display: inline-block; padding: 0 6px; border-radius: 3px; font-family: var(--f-data); font-size: 11.5px; line-height: 18px; border: 1px solid currentColor; }
+.pill.stands { color: var(--stand); } .pill.collapses { color: var(--accent); } .pill.undecided { color: var(--undecided); } .pill.other { color: var(--muted); }
+.pill.passed { color: var(--stand); } .pill.failed { color: var(--sever); } .pill.deferred { color: var(--undecided); }
+.generated { font-family: var(--f-data); font-size: 12px; color: var(--muted); }
+.generated a { color: var(--accent); }
+body.capture .top, body.capture nav.rail, body.capture .controls, body.capture .readout,
+body.capture .failures, body.capture .note, body.capture .scenario-head, body.capture .views .hint { display: none; }
+body.capture .wrap { padding: 0; max-width: none; }
+body.capture .bench { grid-template-columns: minmax(0, 1fr); gap: 0; }
+body.capture .views { border: 0; border-radius: 0; }
+body.capture .views canvas { height: 100vh; }
+main.stage { display: grid; gap: 14px; min-width: 0; }
+.scenario-head { display: grid; gap: 4px; }
+.scenario-head h2 { font-family: var(--f-display); font-weight: 600; font-size: 28px; margin: 0; line-height: 1.1; }
+.scenario-head code { font-family: var(--f-data); font-size: 12.5px; color: var(--muted); word-break: break-all; }
+.scenario-head p { margin: 0; max-width: 80ch; }
+.views { position: relative; border: 1px solid var(--line); border-radius: 4px; background: var(--stage); overflow: hidden; }
+.views canvas { display: block; width: 100%; height: clamp(320px, 58vh, 640px); touch-action: none; }
+.views .tag { position: absolute; top: 10px; font-family: var(--f-display); font-weight: 600; font-size: 15px; letter-spacing: .06em; text-transform: uppercase; padding: 2px 8px; background: var(--panel); border: 1px solid var(--line); border-radius: 3px; }
+.views .tag.before { left: 10px; } .views .tag.after { left: calc(50% + 10px); }
+.views.stacked .tag.after { left: 10px; top: calc(50% + 10px); }
+.views .divider { position: absolute; top: 0; bottom: 0; left: 50%; width: 1px; background: var(--line); }
+.views.stacked .divider { top: 50%; bottom: auto; left: 0; right: 0; width: auto; height: 1px; }
+.views .hint { position: absolute; right: 10px; bottom: 8px; font-family: var(--f-data); font-size: 11px; color: var(--muted); }
+.controls { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; }
+.controls label { font-family: var(--f-data); font-size: 12px; color: var(--muted); display: flex; gap: 8px; align-items: center; }
+.controls input[type="range"] { width: 200px; accent-color: var(--accent); }
+.controls button { font: 500 13px var(--f-body); padding: 6px 12px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); border-radius: 3px; cursor: pointer; }
+.controls button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12.5px; color: var(--muted); }
+.legend span { display: inline-flex; gap: 6px; align-items: center; }
+.legend [hidden] { display: none; }
+.sw { width: 12px; height: 12px; border-radius: 2px; display: inline-block; }
+.readout { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+.readout div { background: var(--panel); padding: 10px 12px; display: grid; gap: 2px; min-width: 0; }
+.readout dt { font-family: var(--f-data); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.readout dd { margin: 0; font-family: var(--f-data); font-size: 14px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.failures { overflow-x: auto; }
+.failures table { border-collapse: collapse; font-family: var(--f-data); font-size: 12.5px; font-variant-numeric: tabular-nums; min-width: 420px; }
+.failures th, .failures td { text-align: left; padding: 5px 14px 5px 0; border-bottom: 1px solid var(--line); }
+.failures th { color: var(--muted); font-weight: 500; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; }
+.note { font-size: 13px; color: var(--muted); max-width: 80ch; margin: 0; }
+.empty { padding: 40px; text-align: center; color: var(--muted); }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div class="eyebrow">LoadPath · rigid-block statics · end-to-end tests</div>
+    <h1>LoadPath E2E tests</h1>
+    <p class="lede">Every entry is recorded by a test while it runs, so this page always shows the suite as it is. Each shows the structure before the run, the engine's state after the cascade, and the state the test expects when the two differ. The mark on each entry says whether its test passed, failed or is deferred to later work. Released bodies move along the collapse mechanism the certificate computed, coloured one colour per falling piece; removed bodies are dashed ghosts; severed joints are red.</p>
+    <p class="generated" id="generated"></p>
+  </header>
+
+  <div class="bench">
+    <nav class="rail" id="rail" aria-label="Scenarios"></nav>
+    <main class="stage" id="stage">
+      <div class="scenario-head">
+        <h2 id="s-title">Loading runs</h2>
+        <code id="s-test"></code>
+        <p id="s-summary"></p>
+      </div>
+      <div class="views" id="views">
+        <canvas id="cv" aria-label="Before and after views of the structure"></canvas>
+        <div class="divider"></div>
+        <div class="tag before">Before</div>
+        <div class="tag after" id="tag-after">After</div>
+        <div class="hint">drag to orbit · scroll to zoom · right-drag to pan</div>
+      </div>
+      <div class="controls">
+        <label for="motion">Release motion <input type="range" id="motion" min="0" max="1" step="0.01" value="1"></label>
+        <button type="button" id="play">Replay release</button>
+        <button type="button" id="reset">Reset view</button>
+        <div class="legend">
+          <span><i class="sw" style="background:var(--body)"></i>resting block</span>
+          <span><i class="sw" style="background:var(--accent)"></i>released (one colour per falling piece)</span>
+          <span><i class="sw" style="background:var(--sever)"></i><span id="legend-sever">severed joint</span></span>
+          <span><i class="sw" style="background:var(--ground)"></i>ground</span>
+          <span id="legend-removed"><i class="sw" style="border:1px dashed var(--muted)"></i>removed before the run</span>
+          <span id="legend-unasserted"><i class="sw" style="border:2px solid var(--undecided)"></i>not asserted by the test</span>
+          <span id="legend-load"><i class="sw" style="background:var(--ink);height:3px"></i>applied load / sideways acceleration</span>
+        </div>
+      </div>
+      <dl class="readout" id="readout"></dl>
+      <div class="failures" id="failures"></div>
+      <p class="note" id="note"></p>
+      <p class="note">The load factor is the certificate's multiplier on every applied load at once, gravity included: at or above 1 the structure stands, below 1 it collapses. On dry joints it reads either about 0 or the cap of 1000, since friction alone has no strength scale.</p>
+    </main>
+  </div>
+</div>
+
+<script type="application/json" id="lp-data">null</script>
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+               "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/" } }
+</script>
+<script type="module">
+import * as THREE from "three";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const $ = id => document.getElementById(id);
+const fmt = (x, d = 4) => (typeof x === "number" && isFinite(x)) ? (Math.abs(x) >= 1e4 || (Math.abs(x) < 1e-3 && x !== 0) ? x.toExponential(3) : +x.toPrecision(d) + "") : String(x);
+const stateClass = s => { s = String(s || "").toLowerCase(); return s.includes("stand") ? "stands" : s.includes("collapse") || s.includes("mechanism") ? "collapses" : s.includes("undecided") ? "undecided" : "other"; };
+
+const canvas = $("cv");
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+renderer.setScissorTest(true);
+const camera = new THREE.PerspectiveCamera(35, 1, 0.01, 5000);
+camera.up.set(0, 0, 1);
+const controls = new OrbitControls(camera, canvas);
+controls.enableDamping = true;
+
+const sceneBefore = new THREE.Scene();
+const sceneAfter = new THREE.Scene();
+for (const s of [sceneBefore, sceneAfter]) {
+  s.add(new THREE.HemisphereLight(0xffffff, 0x445566, 1.1));
+  const d = new THREE.DirectionalLight(0xffffff, 1.4); d.position.set(3, -5, 8); s.add(d);
+}
+
+let current = null, built = null, motion = 1, animStart = null;
+
+function colorOf(token) { return new THREE.Color(css(token)); }
+
+function clearScene(s) {
+  for (const o of [...s.children]) if (!o.isLight) { s.remove(o); o.traverse(c => { c.geometry?.dispose?.(); c.material?.dispose?.(); }); }
+}
+
+const boxGeo = new THREE.BoxGeometry(2, 2, 2);
+const edgeGeo = new THREE.EdgesGeometry(boxGeo);
+
+function bodyMatrix(b, dt = [0, 0, 0], dr = [0, 0, 0]) {
+  const q = new THREE.Quaternion(b.q ? b.q[1] : 0, b.q ? b.q[2] : 0, b.q ? b.q[3] : 0, b.q ? b.q[0] : 1);
+  const ang = Math.hypot(dr[0], dr[1], dr[2]);
+  if (ang > 0) q.premultiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(dr[0] / ang, dr[1] / ang, dr[2] / ang), ang));
+  const m = new THREE.Matrix4();
+  m.compose(new THREE.Vector3(b.c[0] + dt[0], b.c[1] + dt[1], b.c[2] + dt[2]), q, new THREE.Vector3(b.h[0], b.h[1], b.h[2]));
+  return m;
+}
+
+function buildGroup(bodies, color, { edges, opacity = 1, dashed = false } = {}) {
+  const g = new THREE.Group();
+  if (!bodies.length) return g;
+  const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.85, metalness: 0.0, transparent: opacity < 1, opacity, depthWrite: opacity >= 1 });
+  const mesh = new THREE.InstancedMesh(boxGeo, mat, bodies.length);
+  bodies.forEach((b, i) => mesh.setMatrixAt(i, bodyMatrix(b)));
+  mesh.instanceMatrix.needsUpdate = true;
+  if (!dashed) g.add(mesh);
+  if (edges) {
+    const lm = dashed ? new THREE.LineDashedMaterial({ color: colorOf("--muted"), dashSize: 0.02, gapSize: 0.015 }) : new THREE.LineBasicMaterial({ color: colorOf("--ink"), transparent: true, opacity: 0.28 });
+    for (const b of bodies) { const l = new THREE.LineSegments(edgeGeo, lm); l.applyMatrix4(bodyMatrix(b)); if (dashed) l.computeLineDistances(); g.add(l); }
+  }
+  g.userData.mesh = mesh;
+  return g;
+}
+
+function extentOf(bodies) {
+  const box = new THREE.Box3();
+  for (const b of bodies) {
+    const r = Math.hypot(b.h[0], b.h[1], b.h[2]);
+    box.expandByPoint(new THREE.Vector3(b.c[0] - r, b.c[1] - r, b.c[2] - r));
+    box.expandByPoint(new THREE.Vector3(b.c[0] + r, b.c[1] + r, b.c[2] + r));
+  }
+  return box;
+}
+
+function build(sc) {
+  clearScene(sceneBefore); clearScene(sceneAfter);
+  const byId = new Map(sc.bodies.map(b => [b.id, b]));
+  const removedBefore = new Set(sc.removed_before_run || []);
+  const after = sc.after || {};
+  const released = new Map();
+  for (const cl of after.clusters || []) for (const id of cl.bodies || []) released.set(id, (cl.motion || {})[id] || null);
+  const removedAfter = new Set(after.removed || []);
+  for (const id of removedAfter) if (!released.has(id)) released.set(id, null);
+
+  const grounded = sc.bodies.filter(b => b.grounded && b.h);
+  const live = sc.bodies.filter(b => !b.grounded && !removedBefore.has(b.id));
+  const edges = sc.bodies.length <= 500;
+  const structural = live.length ? live : sc.bodies;
+  const ext = extentOf(structural);
+  const size = ext.getSize(new THREE.Vector3());
+  const span = Math.max(size.x, size.y, size.z, 0.1);
+
+  const groundSlab = b => ({ ...b });
+  const addGround = s => {
+    if (grounded.length) s.add(buildGroup(grounded.map(groundSlab), colorOf("--ground"), { edges }));
+    const plane = new THREE.Mesh(new THREE.PlaneGeometry(span * 4, span * 4), new THREE.MeshStandardMaterial({ color: colorOf("--stage"), roughness: 1 }));
+    plane.position.set((ext.min.x + ext.max.x) / 2, (ext.min.y + ext.max.y) / 2, Math.min(ext.min.z, ...grounded.map(b => b.c[2] - b.h[2]), 0) - 1e-4);
+    s.add(plane);
+  };
+  addGround(sceneBefore); addGround(sceneAfter);
+
+  sceneBefore.add(buildGroup(live, colorOf("--body"), { edges }));
+  const ghosts = [...removedBefore].map(id => byId.get(id)).filter(Boolean);
+  if (ghosts.length) { sceneBefore.add(buildGroup(ghosts, colorOf("--muted"), { edges: true, dashed: true })); sceneAfter.add(buildGroup(ghosts, colorOf("--muted"), { edges: true, dashed: true })); }
+
+  const standing = live.filter(b => !released.has(b.id));
+  sceneAfter.add(buildGroup(standing, colorOf("--body"), { edges }));
+
+  const movers = live.filter(b => released.has(b.id));
+  const moverGroup = new THREE.Group();
+  const mm = new THREE.MeshStandardMaterial({ color: colorOf("--accent"), roughness: 0.7 });
+  const moverMesh = movers.length ? new THREE.InstancedMesh(boxGeo, mm, movers.length) : null;
+  if (moverMesh) {
+    const palette = [css("--accent"), "#2b6cb0", "#7b3fa0", "#1f8a70", "#c2185b", "#8d6e00"];
+    const clusterOf = new Map();
+    (after.clusters || []).forEach((cl, k) => (cl.bodies || []).forEach(id => clusterOf.set(id, k)));
+    mm.color.set(0xffffff);
+    movers.forEach((b, i) => moverMesh.setColorAt(i, new THREE.Color(palette[(clusterOf.get(b.id) ?? 0) % palette.length])));
+    moverMesh.instanceColor.needsUpdate = true;
+    moverGroup.add(moverMesh);
+  }
+  const moverEdges = [];
+  if (edges) for (const b of movers) { const l = new THREE.LineSegments(edgeGeo, new THREE.LineBasicMaterial({ color: colorOf("--ink"), transparent: true, opacity: 0.35 })); moverGroup.add(l); moverEdges.push(l); }
+  sceneAfter.add(moverGroup);
+
+  let maxT = 0;
+  for (const b of movers) { const m = released.get(b.id); if (m && m.t) maxT = Math.max(maxT, Math.hypot(...m.t)); }
+  const reach = span * 0.18;
+  const motions = movers.map(b => {
+    const m = released.get(b.id);
+    if (m && (m.t || m.r)) {
+      const k = maxT > 0 ? reach / maxT : reach;
+      return { t: (m.t || [0, 0, 0]).map(v => v * k), r: (m.r || [0, 0, 0]).map(v => v * Math.min(k, 0.6 / Math.max(1e-9, Math.hypot(...(m.r || [0, 0, 0]))))) };
+    }
+    return { t: [0, 0, -reach], r: [0, 0, 0] };
+  });
+
+  const unasserted = new Set(after.unasserted || []);
+  const outline = (b, M, mat) => { const ls = []; for (const k of [1.02, 1.04, 1.06]) { const l = new THREE.LineSegments(edgeGeo, mat); const S = new THREE.Matrix4().makeScale(k, k, k); l.matrix.copy(M).multiply(S); l.matrixAutoUpdate = false; ls.push(l); } return ls; };
+  const amber = new THREE.LineBasicMaterial({ color: colorOf("--undecided") });
+  for (const b of standing) if (unasserted.has(b.id)) for (const l of outline(b, bodyMatrix(b), amber)) sceneAfter.add(l);
+  const moverOutlines = movers.map(b => unasserted.has(b.id) ? outline(b, bodyMatrix(b), amber) : []);
+  for (const ls of moverOutlines) for (const l of ls) moverGroup.add(l);
+
+  const ink = colorOf("--ink");
+  const arrowLen = span * 0.2;
+  const addArrow = (dir, origin) => { for (const s of [sceneBefore, sceneAfter]) s.add(new THREE.ArrowHelper(dir, origin, arrowLen, ink, arrowLen * 0.25, arrowLen * 0.12)); };
+  for (const ld of sc.loads || []) {
+    const f = new THREE.Vector3(...ld.force_n); if (f.lengthSq() === 0) continue; f.normalize();
+    const tip = new THREE.Vector3(...ld.point);
+    addArrow(f, tip.clone().addScaledVector(f, -arrowLen));
+  }
+  if (sc.lateral && (sc.lateral[0] || sc.lateral[1])) {
+    const d = new THREE.Vector3(sc.lateral[0], sc.lateral[1], 0).normalize();
+    const c = ext.getCenter(new THREE.Vector3());
+    addArrow(d, new THREE.Vector3(c.x, c.y, ext.max.z + span * 0.05).addScaledVector(d, -arrowLen / 2));
+  }
+
+  const sever = colorOf("--sever");
+  const iById = new Map((sc.interfaces || []).map(i => [i.id, i]));
+  const severed = new Set();
+  for (const f of after.failures || []) if (f.severed !== false) severed.add(f.interface);
+  for (const cl of after.clusters || []) for (const id of cl.severed || []) severed.add(id);
+  const discR = span * 0.012;
+  for (const id of severed) {
+    const it = iById.get(id); if (!it) continue;
+    const disc = new THREE.Mesh(new THREE.SphereGeometry(discR, 14, 10), new THREE.MeshBasicMaterial({ color: sever }));
+    disc.position.set(...it.p); sceneAfter.add(disc);
+  }
+
+  built = { sc, movers, motions, moverMesh, moverEdges, moverOutlines, ext, span };
+  setMotion(motion);
+  frame();
+  return built;
+}
+
+function setMotion(s) {
+  if (!built || !built.moverMesh) return;
+  built.movers.forEach((b, i) => {
+    const m = built.motions[i];
+    const M = bodyMatrix(b, m.t.map(v => v * s), m.r.map(v => v * s));
+    built.moverMesh.setMatrixAt(i, M);
+    if (built.moverEdges[i]) { built.moverEdges[i].matrix.copy(M); built.moverEdges[i].matrixAutoUpdate = false; }
+    const ks = [1.02, 1.04, 1.06];
+    (built.moverOutlines[i] || []).forEach((l, j) => l.matrix.copy(M).multiply(new THREE.Matrix4().makeScale(ks[j], ks[j], ks[j])));
+  });
+  built.moverMesh.instanceMatrix.needsUpdate = true;
+}
+
+function frame() {
+  const { ext, span } = built;
+  const c = ext.getCenter(new THREE.Vector3());
+  controls.target.copy(c);
+  const dist = span * 1.7;
+  camera.position.set(c.x + dist * 0.75, c.y - dist * 0.95, c.z + dist * 0.55);
+  camera.near = span / 500; camera.far = span * 200; camera.updateProjectionMatrix();
+  controls.update();
+}
+
+function layout() {
+  const r = canvas.getBoundingClientRect();
+  const w = Math.max(1, r.width), h = Math.max(1, r.height);
+  renderer.setSize(w, h, false);
+  const stacked = w < 640;
+  $("views").classList.toggle("stacked", stacked);
+  return { w, h, stacked };
+}
+
+function render() {
+  const { w, h, stacked } = layout();
+  const bg = colorOf("--stage");
+  const vw = stacked ? w : w / 2, vh = stacked ? h / 2 : h;
+  camera.aspect = vw / vh; camera.updateProjectionMatrix();
+  for (const [i, s] of [[0, sceneBefore], [1, sceneAfter]]) {
+    const x = stacked ? 0 : i * vw, y = stacked ? (1 - i) * vh : 0;
+    renderer.setViewport(x, y, vw, vh); renderer.setScissor(x, y, vw, vh);
+    renderer.setClearColor(bg); renderer.clear();
+    renderer.render(s, camera);
+  }
+}
+
+function loop(t) {
+  if (animStart !== null) {
+    const p = Math.min(1, (t - animStart) / 1600);
+    const e = p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
+    motion = e; $("motion").value = e; setMotion(e);
+    if (p >= 1) animStart = null;
+  }
+  controls.update();
+  render();
+  requestAnimationFrame(loop);
+}
+
+function readout(sc) {
+  const a = sc.after || {}, b = sc.before || {};
+  const judgeOnly = a.released_by_engine === false;
+  const expected = String(a.source || "").startsWith("expected") || a.expected_only === true;
+  $("tag-after").textContent = judgeOnly ? "After · mechanism, nothing released" : expected ? "After · expected by the test" : "After · engine";
+  $("legend-sever").textContent = judgeOnly ? "hinging joint" : "severed joint";
+  const releasedCount = new Set([...(a.clusters || []).flatMap(c => c.bodies || []), ...(a.removed || [])]).size;
+  const rows = [
+    ["Test", sc.status ? `<span class="pill ${sc.status}">${sc.status}</span>` : "n/a"],
+    ["After shows", expected ? "the test's expected outcome (drawn)" : "the engine's cascade"],
+    ["Bodies", sc.bodies.filter(x => !x.grounded).length],
+    ["Before", `<span class="pill ${stateClass(b.verdict)}">${b.verdict ?? "n/a"}</span>`],
+    ["After", `<span class="pill ${stateClass(a.state)}">${a.state ?? "n/a"}</span>`],
+    ["Load factor", b.lambda ? `[${fmt(b.lambda[0])}, ${fmt(b.lambda[1])}]` : "n/a"],
+    ["Passes", a.passes ?? "n/a"],
+    ["Released", judgeOnly ? "none (verdict only)" : releasedCount],
+    [judgeOnly ? "Hinging joints" : "Severed joints", judgeOnly ? (a.clusters || []).reduce((n, c) => n + (c.severed || []).length, 0) : (a.failures || []).filter(f => f.severed !== false).length],
+    ["Engine time", a.elapsed_ms != null ? `${fmt(a.elapsed_ms, 3)} ms` : "n/a"],
+  ];
+  if (sc.lateral) rows.splice(3, 0, ["Lateral λ", `(${sc.lateral.map(v => fmt(v)).join(", ")})`]);
+  $("readout").innerHTML = rows.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join("");
+  const fl = a.failures || [];
+  $("failures").innerHTML = fl.length ? `<table><thead><tr><th>Joint</th><th>Pass</th><th>Axis</th><th>Ratio</th><th>Severed</th></tr></thead><tbody>${fl.slice(0, 40).map(f => `<tr><td>${f.interface}</td><td>${f.pass ?? ""}</td><td>${f.axis ?? ""}</td><td>${fmt(f.ratio)}</td><td>${f.severed === false ? "no" : "yes"}</td></tr>`).join("")}</tbody></table>${fl.length > 40 ? `<p class="note">${fl.length - 40} more not shown.</p>` : ""}` : "";
+  $("note").textContent = sc.note || "";
+  $("legend-removed").hidden = !(sc.removed_before_run || []).length;
+  $("legend-unasserted").hidden = !((a.unasserted || []).length);
+  $("legend-load").hidden = !((sc.loads || []).length || (sc.lateral && (sc.lateral[0] || sc.lateral[1])));
+}
+
+function select(i, runs) {
+  current = runs[i];
+  document.querySelectorAll("#rail button").forEach((b, j) => b.setAttribute("aria-current", j === i ? "true" : "false"));
+  $("s-title").textContent = current.title;
+  $("s-test").textContent = current.test ? `test ${current.test}` : "";
+  $("s-summary").textContent = current.summary || "";
+  readout(current);
+  build(current);
+  try { localStorage.setItem("lp-viz-scenario", current.slug); } catch (e) {}
+}
+
+async function main() {
+  let runs = [];
+  let generated = null;
+  try {
+    const embedded = JSON.parse($("lp-data").textContent || "null");
+    if (embedded && Array.isArray(embedded.runs)) {
+      runs = embedded.runs; generated = embedded.generated || null;
+    } else {
+      const idx = await (await fetch("data/index.json")).json();
+      runs = await Promise.all(idx.map(async s => (await fetch(`data/${s}.json`)).json()));
+    }
+  } catch (e) {
+    runs = [];
+  }
+  if (!runs.length) {
+    $("s-title").textContent = "No recorded runs";
+    $("s-summary").textContent = "This page holds no test recordings. Regenerate it with Scripts/Visuals.ps1, which runs the end-to-end tests with recording switched on.";
+    return;
+  }
+  if (generated) $("generated").textContent = `Generated ${generated.when} from commit ${generated.commit}: ${generated.passed} passed, ${generated.failed} failed, ${generated.deferred} deferred.`;
+  if (generated && generated.screenshots) $("generated").insertAdjacentHTML("beforeend", ` <a href="screenshots.html">Before-and-after screenshots</a>`);
+  $("rail").innerHTML = runs.map((r, i) => `<button type="button" data-i="${i}"><span class="t">${r.title}</span><span class="s">${r.status ? `<span class="pill ${r.status}">${r.status}</span>` : ""}<span class="pill ${stateClass(r.before?.verdict)}">${r.before?.verdict ?? "?"}</span>→<span class="pill ${stateClass(r.after?.state)}">${r.after?.state ?? "?"}</span><span>${r.bodies.filter(b => !b.grounded).length} bodies</span></span></button>`).join("");
+  $("rail").addEventListener("click", e => { const b = e.target.closest("button[data-i]"); if (b) select(+b.dataset.i, runs); });
+  let start = 0;
+  try { const s = localStorage.getItem("lp-viz-scenario"); const j = runs.findIndex(r => r.slug === s); if (j >= 0) start = j; } catch (e) {}
+  const hash = location.hash.slice(1); if (hash) { const j = runs.findIndex(r => r.slug === hash); if (j >= 0) start = j; }
+  select(start, runs);
+  window.addEventListener("hashchange", () => { const j = runs.findIndex(r => r.slug === location.hash.slice(1)); if (j >= 0) select(j, runs); });
+  requestAnimationFrame(loop);
+}
+
+if (new URLSearchParams(location.search).has("capture")) document.body.classList.add("capture");
+$("motion").addEventListener("input", e => { animStart = null; motion = +e.target.value; setMotion(motion); });
+$("play").addEventListener("click", () => { motion = 0; setMotion(0); animStart = matchMedia("(prefers-reduced-motion: reduce)").matches ? null : performance.now(); if (animStart === null) { motion = 1; $("motion").value = 1; setMotion(1); } });
+$("reset").addEventListener("click", () => built && frame());
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => current && build(current));
+new MutationObserver(() => current && build(current)).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+main();
+</script>
