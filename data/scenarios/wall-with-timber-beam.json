@@ -1,0 +1,15 @@
+{
+  "title": "An EC6 wall with a timber beam along its top",
+  "summary": "A 4 x 4 running-bond EC6 wall carries a C24 beam on five bearing joints; it stands.",
+  "build": [
+    { "name": "ground", "size": [1.2, 0.6, 0.2], "centre": [0.43, 0, -0.1], "grounded": true },
+    { "wall": "wall", "courses": 4, "bricks": 4, "on": "ground", "material": "clay_brick",
+      "bed": "clay_gp_mortar_bed_ec6", "perpend": "clay_gp_mortar_perpend_ec6" },
+    { "name": "beam", "size": [0.86, 0.1025, 0.15], "centre": [0.43, 0, 0.335], "material": "c24" }
+  ],
+  "joints": [
+    { "materials": ["c24", "clay_brick"], "row": "c24_bearing_perp_to_grain" }
+  ],
+  "steps": ["cascade"],
+  "expect": {}
+}

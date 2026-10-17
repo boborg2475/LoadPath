@@ -1103,11 +1103,15 @@ struct FastenerRow {                    // a discrete fastener: nail, screw, bol
 	double BearingNormalStiffnessPaPerM;    // the bearing member's normal stiffness (bearing_normal_stiffness_gpa_per_m × 1e9)
 };
 
+struct MaterialRow { std::string Name, Source, Note; double DensityKgPerM3 = 0; };   // kg/m³, published value unconverted
+
 struct Catalogue {
 	std::vector<JointRow> Joints;
 	std::vector<FastenerRow> Fasteners;
+	std::vector<MaterialRow> Materials;                            // the optional "materials" table: name, density_kg_per_m3 (> 0), source, note
 	const JointRow* FindJoint(std::string_view Name) const;        // nullptr when absent
 	const FastenerRow* FindFastener(std::string_view Name) const;
+	const MaterialRow* FindMaterial(std::string_view Name) const;
 };
 
 struct CatalogueResult { Catalogue Value; FileError Error; bool Ok() const; };   // FileError as StructureFile.h
@@ -1550,3 +1554,61 @@ decision and no reuse comparison, so **answers are bit-identical across the two 
 by the profiled build passing the default suite and by `Measure.Profile.ReadingsDigest` printing
 the same digest of every bit of the `AuthorityResult` (except `Revision`, `Lineage`, `Options`
 and `StaleLoads`) in both. Pinned by `Profile.Timings.*` (ANCHORS.md).
+
+## The scenario workbench (`Scenario.h`, `Viewer.h`, `Cli.h`, 2026-10-17)
+
+The file format, its fields, the rules and the expectations are specified in
+[test_plans/2026-10-16-scenario-workbench.md](test_plans/2026-10-16-scenario-workbench.md) §1 and §5
+(boxes take exactly one of `centre` and `min`). The library side:
+
+```cpp
+// Scenario.h
+ScenarioLoadResult LoadScenario(std::string_view Json, const Catalogue& Rows);   // Value + FileError; a refused file loads nothing
+ScenarioOutcome    RunScenario(Scenario& Value, const ICascade& Cascade, const IStructuralAuthority& Authority);
+ScenarioOutcome    RunScenario(Scenario& Value);                                  // the standard combined authority and cascade
+ExpectationReport  CompareExpectation(const ScenarioExpect& Expect, const ScenarioOutcome& Outcome);   // pure, over names
+PatternExpansion   ExpandPattern(std::string_view Pattern, std::span<const std::string> Names);       // '*' and [a-b]; no match is an error
+ViewerScene        ViewerSceneOf(const Scenario& Value, const ScenarioOutcome& Outcome, std::string_view Slug);
+std::string        WriteViewerJson(const Scenario& Value, const ScenarioOutcome& Outcome, std::string_view Slug);
+
+// Viewer.h: the one writer of viewer/index.html's data format
+std::string WriteViewerJson(const ViewerScene& Scene);
+
+// Cli.h
+class IFileStore { Read(path) -> optional<string>; Write(path, contents) -> bool; List(dir) -> sorted names; };
+int RunCli(std::span<const std::string_view> Args, IFileStore& Files, std::string& Out, std::string& Err);
+```
+
+- **Loading.** Bodies take slots in file order (a `repeat` makes `name.0` .. `name.<n-1>`; a wall's
+  bricks follow in course then brick order, omitted bricks never built). A wall is built by
+  `geometry::BuildRunningBondWall` into a scratch structure and copied across, so its joints are the
+  generator's; every other face-touching pair (`geometry::FaceContact`, 1e-9 m) gets one joint from
+  the first matching `between` rule, else the first matching `materials` rule. One profile per joint
+  row and per (fastener row, count, area); `Scenario::ProfileNames` names each by row. Mass is
+  density × 8 hx hy hz (grounded 0); `ground` is the built-in material of grounded boxes. An `expect`
+  body removed by a step that comes before any `cascade` step is a load error (it can never be
+  released); one removed later is a run error when the step runs.
+- **Running.** `Before` is a judge of the structure as built, at default gravity. Each step runs in
+  order on `Value.Model`; a cascade gets the accumulated loads and the current gravity (both
+  `Standing` and `Certificate`) with `Previous = nullptr`, exactly as a direct `ICascade::Run` call
+  would. Clusters concatenate, passes sum, the state is the last cascade's (or judge's) name;
+  `Cracked` lists `<a>/<b>` for each crack (not sever) event. A step that cannot run (removing or
+  loading a body already gone) sets `RunError` and stops the run. `ElapsedMs` times the steps.
+- **Comparing.** Lines, in this order when present: `run error: ...`, `state: expected X, engine Y`,
+  `released, not expected: a, b`, `expected to fall, still standing: a, b`, the partition line
+  `expected {a} {b, c}; engine {...}` (sorted, `either` bodies left out), `passes: expected N,
+  engine M`, `cracked, not expected: ...`, `expected to crack, not cracked: ...`. Met means no lines.
+- **Viewer export.** Keys in a fixed order: `slug`, `title`, `test` (when set), `summary`, `units`,
+  `gravity`, `lateral`, `loads`, `bodies` (`id`, `name`, `c`, `h`, `q` as (w, x, y, z), `grounded`,
+  `mass_kg`, `material`), `interfaces` (every interface ever added, with `state_after`),
+  `removed_before_run`, `before.verdict`, `after` (`state`, `passes`, `clusters` with `motion`,
+  `failures`, `removed`, `elapsed_ms` only when timed), and `expected` only when it differs from the
+  engine's after. Numbers are shortest round-trip, so the export of a run is byte-identical run to
+  run. `ViewerSceneOf` leaves `ElapsedMs` unset and sets `Expected` only when the file's expectation
+  is not met.
+- **CLI.** `loadpath_cli scenario <file> [--viz <out.json>] [--catalogue <path>]`: the catalogue
+  defaults to `catalogue.json` in the scenario folder's parent. Prints the title, `built B bodies (G
+  grounded), J joints`, one `step N <kind>: ...` line per step, then `expectation met` or
+  `expectation not met` and the report lines. Exit 0 met, 1 not met (or a run error), 2 the file
+  cannot be run (usage, unreadable file or catalogue, `<file>:<line>: <message>` for a load error).
+  The one-argument structure command is unchanged.

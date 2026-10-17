@@ -1,3 +1,4 @@
+<meta charset="utf-8">
 <title>LoadPath E2E tests</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -101,7 +102,7 @@ main.stage { display: grid; gap: 14px; min-width: 0; }
   <header class="top">
     <div class="eyebrow">LoadPath · rigid-block statics · end-to-end tests</div>
     <h1>LoadPath E2E tests</h1>
-    <p class="lede">Every entry is recorded by a test while it runs, so this page always shows the suite as it is. Each shows the structure before the run, the engine's state after the cascade, and the state the test expects when the two differ. The mark on each entry says whether its test passed, failed or is deferred to later work. Released bodies move along the collapse mechanism the certificate computed, coloured one colour per falling piece; removed bodies are dashed ghosts; severed joints are red.</p>
+    <p class="lede">Every entry is recorded by a test while it runs, so this page always shows the suite as it is. Each shows the structure before the run and the engine's state after the cascade; when the test expects something else, a button switches the after view to the expected outcome. The mark on each entry says whether its test passed, failed or is deferred to later work. Released bodies move along the collapse mechanism the certificate computed, coloured one colour per falling piece; removed bodies are dashed ghosts; severed joints are red.</p>
     <p class="generated" id="generated"></p>
   </header>
 
@@ -124,6 +125,7 @@ main.stage { display: grid; gap: 14px; min-width: 0; }
         <label for="motion">Release motion <input type="range" id="motion" min="0" max="1" step="0.01" value="1"></label>
         <button type="button" id="play">Replay release</button>
         <button type="button" id="reset">Reset view</button>
+        <button type="button" id="toggle-expected" aria-pressed="false" hidden>Show the expected outcome</button>
         <div class="legend">
           <span><i class="sw" style="background:var(--body)"></i>resting block</span>
           <span><i class="sw" style="background:var(--accent)"></i>released (one colour per falling piece)</span>
@@ -190,6 +192,19 @@ function bodyMatrix(b, dt = [0, 0, 0], dr = [0, 0, 0]) {
   const m = new THREE.Matrix4();
   m.compose(new THREE.Vector3(b.c[0] + dt[0], b.c[1] + dt[1], b.c[2] + dt[2]), q, new THREE.Vector3(b.h[0], b.h[1], b.h[2]));
   return m;
+}
+
+// Body b carried by its cluster's rigid motion m (reference centre m.c) scaled by s: rotate about m.c, then translate.
+function rigidMatrix(b, m, s) {
+  const r = m.r.map(v => v * s);
+  const ang = Math.hypot(r[0], r[1], r[2]);
+  const rot = ang > 0 ? new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(r[0] / ang, r[1] / ang, r[2] / ang), ang) : new THREE.Quaternion();
+  const q = new THREE.Quaternion(b.q ? b.q[1] : 0, b.q ? b.q[2] : 0, b.q ? b.q[3] : 0, b.q ? b.q[0] : 1).premultiply(rot);
+  const p = new THREE.Vector3(b.c[0] - m.c[0], b.c[1] - m.c[1], b.c[2] - m.c[2]).applyQuaternion(rot);
+  p.add(new THREE.Vector3(m.c[0] + s * m.t[0], m.c[1] + s * m.t[1], m.c[2] + s * m.t[2]));
+  const M = new THREE.Matrix4();
+  M.compose(p, q, new THREE.Vector3(b.h[0], b.h[1], b.h[2]));
+  return M;
 }
 
 function buildGroup(bodies, color, { edges, opacity = 1, dashed = false } = {}) {
@@ -269,16 +284,24 @@ function build(sc) {
   if (edges) for (const b of movers) { const l = new THREE.LineSegments(edgeGeo, new THREE.LineBasicMaterial({ color: colorOf("--ink"), transparent: true, opacity: 0.35 })); moverGroup.add(l); moverEdges.push(l); }
   sceneAfter.add(moverGroup);
 
+  // Each cluster moves as one rigid body: its motion_body's {t, r} applied about that body's centre.
+  const reference = new Map();
+  for (const cl of after.clusters || []) {
+    const refId = cl.motion_body ?? (cl.bodies || [])[0];
+    const m = (cl.motion || {})[refId];
+    const ref = byId.get(refId);
+    for (const id of cl.bodies || []) reference.set(id, m && ref ? { c: ref.c, t: m.t || [0, 0, 0], r: m.r || [0, 0, 0] } : null);
+  }
   let maxT = 0;
-  for (const b of movers) { const m = released.get(b.id); if (m && m.t) maxT = Math.max(maxT, Math.hypot(...m.t)); }
+  for (const b of movers) { const g = reference.get(b.id); if (g) maxT = Math.max(maxT, Math.hypot(...g.t)); }
   const reach = span * 0.18;
+  const k = maxT > 0 ? reach / maxT : reach;
   const motions = movers.map(b => {
-    const m = released.get(b.id);
-    if (m && (m.t || m.r)) {
-      const k = maxT > 0 ? reach / maxT : reach;
-      return { t: (m.t || [0, 0, 0]).map(v => v * k), r: (m.r || [0, 0, 0]).map(v => v * Math.min(k, 0.6 / Math.max(1e-9, Math.hypot(...(m.r || [0, 0, 0]))))) };
-    }
-    return { t: [0, 0, -reach], r: [0, 0, 0] };
+    const g = reference.get(b.id);
+    if (!g) return { c: b.c, t: [0, 0, -reach], r: [0, 0, 0] };
+    const ang = Math.hypot(...g.r);
+    const kc = ang > 0 ? Math.min(k, 0.6 / ang) : k;
+    return { c: g.c, t: g.t.map(v => v * kc), r: g.r.map(v => v * kc) };
   });
 
   const unasserted = new Set(after.unasserted || []);
@@ -323,8 +346,7 @@ function build(sc) {
 function setMotion(s) {
   if (!built || !built.moverMesh) return;
   built.movers.forEach((b, i) => {
-    const m = built.motions[i];
-    const M = bodyMatrix(b, m.t.map(v => v * s), m.r.map(v => v * s));
+    const M = rigidMatrix(b, built.motions[i], s);
     built.moverMesh.setMatrixAt(i, M);
     if (built.moverEdges[i]) { built.moverEdges[i].matrix.copy(M); built.moverEdges[i].matrixAutoUpdate = false; }
     const ks = [1.02, 1.04, 1.06];
@@ -412,9 +434,26 @@ function select(i, runs) {
   $("s-title").textContent = current.title;
   $("s-test").textContent = current.test ? `test ${current.test}` : "";
   $("s-summary").textContent = current.summary || "";
-  readout(current);
-  build(current);
+  showView();
   try { localStorage.setItem("lp-viz-scenario", current.slug); } catch (e) {}
+}
+
+let showExpected = new URLSearchParams(location.search).has("expected");
+
+function expectedView(sc) {
+  const e = sc.expected;
+  return { ...sc, after: { source: "expected by the test", state: e.state, passes: null, clusters: (e.clusters || []).map(c => ({ bodies: c.bodies || [] })), failures: [], removed: [], unasserted: e.either || [], elapsed_ms: null } };
+}
+
+function showView() {
+  const t = $("toggle-expected");
+  t.hidden = !current.expected;
+  const on = showExpected && !!current.expected;
+  t.setAttribute("aria-pressed", String(on));
+  t.textContent = on ? "Show the engine's outcome" : "Show the expected outcome";
+  const sc = on ? expectedView(current) : current;
+  readout(sc);
+  build(sc);
 }
 
 async function main() {
@@ -452,7 +491,8 @@ if (new URLSearchParams(location.search).has("capture")) document.body.classList
 $("motion").addEventListener("input", e => { animStart = null; motion = +e.target.value; setMotion(motion); });
 $("play").addEventListener("click", () => { motion = 0; setMotion(0); animStart = matchMedia("(prefers-reduced-motion: reduce)").matches ? null : performance.now(); if (animStart === null) { motion = 1; $("motion").value = 1; setMotion(1); } });
 $("reset").addEventListener("click", () => built && frame());
-matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => current && build(current));
-new MutationObserver(() => current && build(current)).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+$("toggle-expected").addEventListener("click", () => { showExpected = !showExpected; if (current) showView(); });
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => current && showView());
+new MutationObserver(() => current && showView()).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
 main();
 </script>

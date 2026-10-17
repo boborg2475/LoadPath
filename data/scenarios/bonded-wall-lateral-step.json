@@ -1,0 +1,12 @@
+{
+  "title": "A bonded wall pushed past its overturning limit",
+  "summary": "A 5 x 4 EC6 wall under a sideways acceleration of 1.02 times its bonded overturning factor 1.96463; the base beds crack and all 22 bricks fall as one slab.",
+  "tier": "slow_in_debug",
+  "build": [
+    { "name": "ground", "size": [1.2, 0.6, 0.2], "centre": [0.43, 0, -0.1], "grounded": true },
+    { "wall": "wall", "courses": 5, "bricks": 4, "on": "ground", "material": "clay_brick",
+      "bed": "clay_gp_mortar_bed_ec6", "perpend": "clay_gp_mortar_perpend_ec6" }
+  ],
+  "steps": [{ "lateral_g": [0, 2.0039223679186158] }, "cascade"],
+  "expect": { "released": [["wall.*"]], "cracked": ["wall.c0.*/ground"] }
+}

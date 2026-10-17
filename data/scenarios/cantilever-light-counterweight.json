@@ -1,0 +1,20 @@
+{
+  "title": "A cantilever with too light a counterweight",
+  "summary": "A C24 beam overhangs its post by 1.0 m with a 4 kg block on its back end, short of the 5.36 kg the lever rule needs; beam and block fall together and the post stands.",
+  "materials": [
+    { "name": "light_block", "density_kg_per_m3": 500 }
+  ],
+  "build": [
+    { "name": "ground", "size": [2.4, 1, 0.2], "centre": [0.4, 0, -0.1], "grounded": true },
+    { "name": "post", "size": [0.2, 0.2, 1.0], "centre": [0.1, 0, 0.5], "material": "c24" },
+    { "name": "beam", "size": [1.6, 0.2, 0.1], "centre": [0.4, 0, 1.05], "material": "c24" },
+    { "name": "counterweight", "size": [0.2, 0.2, 0.2], "centre": [-0.3, 0, 1.2], "material": "light_block" }
+  ],
+  "joints": [
+    { "materials": ["c24", "ground"], "row": "c24_bearing_perp_to_grain" },
+    { "materials": ["c24", "c24"], "row": "c24_bearing_perp_to_grain" },
+    { "materials": ["light_block", "c24"], "row": "c24_bearing_perp_to_grain" }
+  ],
+  "steps": ["cascade"],
+  "expect": { "released": [["beam", "counterweight"]] }
+}

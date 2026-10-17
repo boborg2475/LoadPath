@@ -61,12 +61,16 @@ add_executable(loadpath_tests
 	ParallelSolveTest.cpp
 	StaleLoadTest.cpp
 	ProfileTimingsTest.cpp
-	EndToEndTest.cpp)
+	EndToEndTest.cpp
+	ScenarioTest.cpp
+	ScenarioFilesTest.cpp
+	VisualSupportTest.cpp)
 target_link_libraries(loadpath_tests PRIVATE loadpath doctest)
 target_include_directories(loadpath_tests PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_include_directories(loadpath_tests SYSTEM PRIVATE ${CMAKE_SOURCE_DIR}/third_party/eigen)
 target_compile_definitions(loadpath_tests PRIVATE EIGEN_MPL2_ONLY)
 target_compile_definitions(loadpath_tests PRIVATE LOADPATH_CATALOGUE_PATH="${CMAKE_SOURCE_DIR}/data/catalogue.json")
 target_compile_definitions(loadpath_tests PRIVATE LOADPATH_DATA_PATH="${CMAKE_SOURCE_DIR}/data")
+target_compile_definitions(loadpath_tests PRIVATE LOADPATH_SCENARIO_DIR="${CMAKE_SOURCE_DIR}/data/scenarios")
 
 add_test(NAME loadpath_tests COMMAND loadpath_tests)

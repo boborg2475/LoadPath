@@ -300,3 +300,50 @@ TEST_CASE("Catalogue.Loader.ARefusedDocumentLoadsNoRows")
 		CHECK(Result.Value.Fasteners.empty());
 	}
 }
+
+TEST_CASE("Catalogue.Materials.RowsCarryTheirDensityAndRefuseBadOnes")
+{
+	const CatalogueResult Repository = LoadRepositoryCatalogue();
+	const MaterialRow* Brick = Repository.Value.FindMaterial("clay_brick");
+	const MaterialRow* Timber = Repository.Value.FindMaterial("c24");
+	REQUIRE(Brick != nullptr);
+	REQUIRE(Timber != nullptr);
+	CHECK(Brick->DensityKgPerM3 == 2000.0);
+	CHECK(Timber->DensityKgPerM3 == 420.0);
+	CHECK_FALSE(Brick->Source.empty());
+	CHECK_FALSE(Timber->Source.empty());
+	CHECK(Repository.Value.FindMaterial("oak") == nullptr);
+
+	const std::string Head = "{\n\"version\": 1,\n\"joints\": [],\n\"fasteners\": [],\n\"materials\": [\n"
+							 "{ \"name\": \"clay_brick\", \"density_kg_per_m3\": 2000, \"source\": \"s\", \"note\": \"n\" },\n";
+	const std::string Tail = "\n]\n}";
+	const std::string Good = Head + "{ \"name\": \"c24\", \"density_kg_per_m3\": 420, \"source\": \"s\", \"note\": \"n\" }" + Tail;
+	const CatalogueResult Loaded = LoadCatalogue(Good);
+	INFO("line " << Loaded.Error.Line << ": " << Loaded.Error.Message);
+	REQUIRE(Loaded.Ok());
+	REQUIRE(Loaded.Value.Materials.size() == 2);
+	CHECK(Loaded.Value.Materials[1].Name == "c24");
+	CHECK(Loaded.Value.Materials[1].DensityKgPerM3 == 420.0);
+
+	struct BadRow
+	{
+		const char* Row;
+		const char* MustName;
+	};
+	const BadRow Rows[] = {
+		{"{ \"name\": \"c24\", \"source\": \"s\", \"note\": \"n\" }", "density_kg_per_m3"},
+		{"{ \"name\": \"c24\", \"density_kg_per_m3\": 0, \"source\": \"s\", \"note\": \"n\" }", "density_kg_per_m3"},
+		{"{ \"name\": \"c24\", \"density_kg_per_m3\": -420, \"source\": \"s\", \"note\": \"n\" }", "density_kg_per_m3"},
+		{"{ \"name\": \"c24\", \"density_kg_per_m3\": 1e999, \"source\": \"s\", \"note\": \"n\" }", "out of range"},
+		{"{ \"name\": \"c24\", \"density_kg_per_m3\": 420, \"note\": \"n\" }", "source"},
+		{"{ \"name\": \"clay_brick\", \"density_kg_per_m3\": 2000, \"source\": \"s\", \"note\": \"n\" }", "duplicate name"},
+	};
+	for (const BadRow& Bad : Rows)
+	{
+		const CatalogueResult Result = LoadCatalogue(Head + Bad.Row + Tail);
+		INFO("row " << Bad.Row << "; line " << Result.Error.Line << ": " << Result.Error.Message);
+		CHECK_FALSE(Result.Ok());
+		CHECK(Result.Error.Line == 7);
+		CHECK_MESSAGE(Contains(Result.Error.Message, Bad.MustName), "the message must name " << Bad.MustName);
+	}
+}

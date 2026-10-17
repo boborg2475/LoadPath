@@ -2,6 +2,7 @@
 
 #include "ArchFixtures.h"
 #include "CatalogueTestSupport.h"
+#include "VisualSupport.h"
 
 #include "loadpath/Cascade.h"
 #include "loadpath/Catalogue.h"
@@ -17,6 +18,7 @@
 
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
@@ -51,6 +53,7 @@ struct SceneBox
 	std::array<double, 4> Rotation{1.0, 0.0, 0.0, 0.0};
 	bool bGrounded = false;
 	BodyId Id;
+	double MassKg = 0.0;
 };
 
 struct Scene
@@ -60,6 +63,8 @@ struct Scene
 	std::vector<BodyLoad> Loads;
 	Vec3 Gravity{0.0, 0.0, -GravityMPerS2};
 	NameSet RemovedBeforeRun;
+	// Judged once before the first removal, and only when recording pictures.
+	std::optional<ComponentVerdict> AsBuilt;
 };
 
 // One run kept whole (boxes, removals, gravity, verdict) so the visuals step can record it in one call.
@@ -68,8 +73,10 @@ struct CaseRun
 	std::string_view Slug;
 	std::vector<SceneBox> Boxes;
 	NameSet RemovedBeforeRun;
+	std::optional<ComponentVerdict> Before;
 	Vec3 Gravity;
 	CascadeVerdict Verdict;
+	double ElapsedMs = 0.0;
 };
 
 inline const Catalogue& Rows()
@@ -127,8 +134,14 @@ inline BodyId SceneBody(const Scene& S, std::string_view Name)
 	return BodyId{};
 }
 
+inline ComponentVerdict JudgeRemainder(const Scene& S);
+
 inline void RemoveBodyOf(Scene& S, BodyId Id)
 {
+	if (!S.AsBuilt && VisualsDirFromEnvironment())
+	{
+		S.AsBuilt = JudgeRemainder(S);
+	}
 	const std::string Name = NameIn(S, Id);
 	INFO("removing " << Name);
 	CHECK(S.Model.RemoveBody(Id));
@@ -146,6 +159,7 @@ inline void Record(Scene& S, BodyId Id, std::string Name, std::string Material, 
 	B.HalfExtentsM = HalfExtentsM;
 	B.bGrounded = S.Model.Body(Id).bGrounded;
 	B.Id = Id;
+	B.MassKg = S.Model.Body(Id).MassKg;
 	S.Boxes.push_back(std::move(B));
 }
 
@@ -469,6 +483,7 @@ inline WallScene BuildWall(bool bBonded, int Courses, int Bricks)
 	W.Wall = geometry::BuildRunningBondWall(W.S.Model, Spec);
 	CHECK(W.Wall.bComplete);
 	Record(W.S, W.Wall.Ground, "ground", "ground", Vec3{5.0, 5.0, 0.5});
+	W.S.Boxes.back().CentreM.Z = -0.5;
 	const double FullKg = BrickDensity * BrickXM * BrickYM * BrickZM;
 	for (std::size_t C = 0; C < W.Wall.Courses.size(); ++C)
 	{
@@ -506,7 +521,7 @@ struct ArchScene
 	double ThicknessM = 0.0;
 };
 
-// MakeSemicircularArch with voussoirs named v<index>, recorded as boxes rotated onto their bisectors.
+// MakeSemicircularArch with voussoirs named v<index>, each recorded as the largest box centred on its centroid that fits inside its wedge.
 inline ArchScene BuildArch(double Eta, double Friction)
 {
 	SemicircularArch Arch = MakeSemicircularArch(Eta, DryJoint(Friction));
@@ -526,7 +541,10 @@ inline ArchScene BuildArch(double Eta, double Friction)
 	{
 		const double HalfRad = 0.5 * (A.JointAnglesDeg[I + 1] - A.JointAnglesDeg[I]) * RadPerDegree;
 		const double BisectorRad = 0.5 * (A.JointAnglesDeg[I] + A.JointAnglesDeg[I + 1]) * RadPerDegree;
-		Record(A.S, A.Voussoirs[I], "v" + std::to_string(I), "stone voussoir", Vec3{ArchRadiusM * std::sin(HalfRad), 0.5 * ArchDepthM, 0.5 * A.ThicknessM});
+		const Vec3 C = A.S.Model.Body(A.Voussoirs[I]).CentroidM;
+		const double CentroidRadiusM = std::sqrt(C.X * C.X + C.Z * C.Z);
+		const double RadialHalfM = std::min(CentroidRadiusM - (ArchRadiusM - 0.5 * A.ThicknessM), (ArchRadiusM + 0.5 * A.ThicknessM) * std::cos(HalfRad) - CentroidRadiusM);
+		Record(A.S, A.Voussoirs[I], "v" + std::to_string(I), "stone voussoir", Vec3{(CentroidRadiusM - RadialHalfM) * std::tan(HalfRad), 0.5 * ArchDepthM, RadialHalfM});
 		A.S.Boxes.back().Rotation = {std::cos(0.5 * BisectorRad), 0.0, std::sin(0.5 * BisectorRad), 0.0};
 	}
 	return A;
@@ -550,6 +568,7 @@ inline ShedScene BuildShed(const geometry::WarehouseSpec& Base)
 	H.Shed = geometry::BuildWarehouse(H.S.Model, Spec);
 	CHECK(H.Shed.bComplete);
 	Record(H.S, H.Shed.Ground, "ground", "ground", Vec3{5.0, 5.0, 0.5});
+	H.S.Boxes.back().CentreM.Z = -0.5;
 	const double FullKg = Spec.DensityKgPerM3 * Spec.BrickM.X * Spec.BrickM.Y * Spec.BrickM.Z;
 	for (std::size_t Wall = 0; Wall < 4; ++Wall)
 	{
@@ -603,10 +622,17 @@ inline CaseRun Run(Scene& S, std::string_view Slug)
 	R.Slug = Slug;
 	R.Boxes = S.Boxes;
 	R.RemovedBeforeRun = S.RemovedBeforeRun;
+	R.Before = S.AsBuilt;
+	if (!R.Before && VisualsDirFromEnvironment())
+	{
+		R.Before = JudgeRemainder(S);
+	}
 	R.Gravity = S.Gravity;
 	CascadeOptions Options;
 	Options.Authority = OptionsFor(S);
+	const auto Start = std::chrono::steady_clock::now();
 	R.Verdict = MakeCascade(CombinedAuthority())->Run(S.Model, S.Loads, Options, nullptr);
+	R.ElapsedMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - Start).count();
 	return R;
 }
 
@@ -729,6 +755,7 @@ struct ExpectedOutcome
 	std::optional<int> Passes;
 	CascadeState State = CascadeState::Stands;
 	bool bNoFailures = false;
+	NameSet Either;
 };
 
 // Clusters by name, survivors (every free body neither removed nor released is live), the final state, and a Stands state re-judging Stands.
@@ -775,5 +802,111 @@ inline void CheckOutcome(const Scene& S, const CaseRun& R, const ExpectedOutcome
 	{
 		CHECK(JudgeRemainder(S) == ComponentVerdict::Stands);
 	}
+}
+
+struct VisualCaption
+{
+	std::string Title, Summary;
+};
+
+// Wording from claude_plans/test_plans/2026-10-15-e2e-validation.md section 3; a slug with no caption fails the check.
+inline VisualCaption CaptionFor(std::string_view Slug)
+{
+	static const std::vector<std::pair<std::string_view, VisualCaption>> Captions = {
+		{"colonnade-dry-minus-post2", {"3.1 Dry colonnade, middle post removed", "Five C24 posts carry four beams on dry bearings. Losing post 2, the two beams it carried each tip off as their own cluster; nothing else moves."}},
+		{"colonnade-dry-minus-post0", {"3.1 Dry colonnade, end post removed", "Five C24 posts carry four beams on dry bearings. Losing the end post, only the end beam tips."}},
+		{"arch-keystone-intact", {"3.2 Dry semicircular arch, intact", "A 62-voussoir arch at t/R 0.15, friction 0.7, above its least thickness: it stands."}},
+		{"arch-keystone-minus-crown-pair", {"3.2 Arch, two crown voussoirs removed", "Each half-arch becomes a free chain; the 12 voussoirs per side that stand by statics and friction stay, the 36 above fall."}},
+		{"arch-keystone-minus-one-crown-voussoir", {"3.2 Arch, one crown voussoir removed", "As the crown pair row: 12 voussoirs stand per side and the 37 above fall."}},
+		{"wall-ec6-minus-top-end-brick", {"3.3 EC6 wall, top-course end brick removed", "A 10 x 8 mortared running-bond wall loses a brick that carries nothing: nothing cracks or falls."}},
+		{"wall-ec6-minus-mid-brick", {"3.3 EC6 wall, mid-height brick removed", "A 10 x 8 mortared wall loses a middle brick its neighbours bridge by bond: nothing cracks or falls."}},
+		{"wall-dry-minus-top-end-brick", {"3.3 Dry wall, top-course end brick removed", "A 10 x 8 dry running-bond wall loses a brick that carries nothing: nothing falls."}},
+		{"colonnade-screwed-2-screws-minus-post2", {"3.4 Screwed colonnade, two screws, middle post removed", "Two EC5 screws per beam-on-post joint cannot hold a 1 m cantilever: the joints by the gap crack in tension, then beams 1 and 2 fall."}},
+		{"colonnade-screwed-3-screws-minus-post2", {"3.4 Screwed colonnade, three screws, middle post removed", "Three screws per joint hold the cantilever (2.08 needed): the frame bridges the lost post and nothing falls."}},
+		{"two-bay-screwed-2-screws-minus-middle-post", {"3.5 Two-bay screwed frame, two screws, middle post removed", "The screwed joints hold, so each end post tips with its beam about its dry base."}},
+		{"two-bay-screwed-3-screws-minus-middle-post", {"3.5 Two-bay screwed frame, three screws, middle post removed", "The screwed joints hold, so each end post tips with its beam about its dry base."}},
+		{"two-bay-dry-minus-middle-post", {"3.5 Two-bay dry frame, middle post removed", "Contrast row: with dry bearings each beam tips alone and both end posts stand."}},
+		{"bonded-wall-push-0-98", {"3.6 EC6 wall pushed at 0.98 of its limit", "A 5 x 4 mortared wall under a lateral push just below the bonded monolith limit: nothing cracks or falls."}},
+		{"bonded-wall-push-1-02", {"3.6 EC6 wall pushed at 1.02 of its limit", "Just past the limit the base beds crack in tension, then the wall overturns as one slab."}},
+		{"dry-wall-push-0-98", {"3.7 Dry wall pushed at 0.98 t/H", "A 5 x 4 dry wall under a lateral push just below t/H: nothing falls."}},
+		{"dry-wall-push-1-05", {"3.7 Dry wall pushed at 1.05 t/H", "Past t/H every brick falls; the cluster partition is not asserted."}},
+		{"timber-bearing-load-0-8", {"3.8 Timber beam on brick piers, bearing at 0.8", "A midspan load puts each timber bearing at 0.8 of f_c,90 A: nothing falls."}},
+		{"timber-bearing-load-1-2", {"3.8 Timber beam on brick piers, bearing at 1.2", "At 1.2 of f_c,90 A the timber bearings crush: the beam falls and all ten pier bricks stand."}},
+		{"shed-minus-side-posts", {"3.9 Shed, every post along one side removed", "Each bay's beams and screwed planks tip off the far posts as one cluster per bay; walls and far posts stand."}},
+		{"shed-minus-middle-post", {"3.10 Shed, one middle post removed", "The screwed planks carry the beam ends that lost their post: nothing falls."}},
+		{"shed-minus-corner-post", {"3.10 Shed, one corner post removed", "The screwed planks carry the beam ends that lost their post: nothing falls."}},
+		{"cantilever-no-counterweight", {"3.11 Cantilever, no counterweight", "A C24 beam overhanging its post by 1.0 m with nothing on its back end tips off."}},
+		{"cantilever-16kg-counterweight", {"3.11 Cantilever, 16 kg counterweight", "A 16 kg block keeps the combined centroid over the post: it stands."}},
+		{"cantilever-4kg-counterweight", {"3.11 Cantilever, 4 kg counterweight", "A 4 kg block is short of the 5.36 kg needed: beam and block fall together and the post stands."}},
+		{"cantilever-16kg-counterweight-removed", {"3.11 Cantilever, 16 kg counterweight removed", "With the counterweight taken off the beam tips."}},
+		{"file-colonnade-intact", {"3.12 Colonnade loaded from a file, intact", "data/structures/colonnade.json, the dry colonnade of 3.1: it stands."}},
+		{"file-colonnade-minus-post2", {"3.12 Colonnade loaded from a file, middle post removed", "Same answer as the built colonnade: beams 1 and 2 fall, each on its own."}},
+		{"dry-lintel-intact", {"3.13 Dry wall with a door opening and timber lintel", "A 10 x 8 dry wall over a four-brick opening spanned by a timber lintel: it stands."}},
+		{"dry-lintel-removed-expected", {"3.13 Dry wall, lintel removed", "The masonry over the opening falls; the bricks wholly on the piers stay. Bricks between are not asserted."}},
+		{"bonded-lintel-intact", {"3.14 EC6 wall with an opening and lintel", "The mortared wall of 3.13: it stands."}},
+		{"bonded-lintel-removed", {"3.14 EC6 wall, lintel removed", "The bond bridges the opening: nothing cracks or falls."}},
+		{"dry-wall-minus-two-base-bricks", {"3.15 Dry wall, two base bricks removed", "A 10 x 8 dry wall with two adjacent base bricks knocked out: nothing falls."}},
+		{"dry-two-brick-lintel-removed", {"3.15 Dry wall, two-brick opening, lintel removed", "The toothed jambs corbel over a two-brick opening: nothing falls."}},
+		{"build-order-shuffled-screwed-colonnade", {"3.16 Shuffled build order", "A fixture rebuilt with its bodies and joints added in a seeded shuffled order gives the same outcome."}},
+		{"corner-straight-joint-push", {"3.17 Dry corner with a straight joint, pushed", "A facade with a 10 mm gap at its corner topples under the outward push."}},
+		{"corner-interlocked-push", {"3.17 Dry corner, interlocked, pushed", "The facade bonded into its return resists the push that topples the straight-jointed one."}},
+	};
+	for (const auto& [Key, Caption] : Captions)
+	{
+		if (Key == Slug)
+		{
+			return Caption;
+		}
+	}
+	FAIL_CHECK("no caption for visual slug " << std::string(Slug));
+	return {std::string(Slug), {}};
+}
+
+// Records the run's picture when LOADPATH_VISUALS is set; call it after Run and before the first CHECK.
+inline void RecordVisual(const Scene& S, const CaseRun& R, const std::optional<ExpectedOutcome>& Expected = std::nullopt)
+{
+	if (!VisualsDirFromEnvironment())
+	{
+		return;
+	}
+	ViewerScene V;
+	V.Slug = std::string(R.Slug);
+	const VisualCaption Caption = CaptionFor(R.Slug);
+	V.Title = Caption.Title;
+	V.Summary = Caption.Summary;
+	V.Before = R.Before;
+	V.Model = S.Model;
+	for (const SceneBox& B : R.Boxes)
+	{
+		V.Boxes.push_back(ViewerBox{B.Id, B.Name, B.Material, B.CentreM, B.HalfExtentsM, B.Rotation, B.bGrounded, B.MassKg});
+	}
+	for (const std::string& Name : R.RemovedBeforeRun)
+	{
+		V.RemovedBeforeRun.push_back(SceneBody(S, Name));
+	}
+	V.Gravity = R.Gravity;
+	V.Loads = S.Loads;
+	V.After = {R.Verdict};
+	V.ElapsedMs = R.ElapsedMs;
+	if (Expected)
+	{
+		ViewerExpected E;
+		E.State = StateName(Expected->State);
+		for (const NameSet& Cluster : Expected->Clusters)
+		{
+			std::vector<BodyId> Ids;
+			for (const std::string& Name : Cluster)
+			{
+				Ids.push_back(SceneBody(S, Name));
+			}
+			E.Clusters.push_back(std::move(Ids));
+		}
+		for (const std::string& Name : Expected->Either)
+		{
+			E.Either.push_back(SceneBody(S, Name));
+		}
+		V.Expected = std::move(E);
+	}
+	test::RecordVisual(CurrentTestName(), V);
 }
 }

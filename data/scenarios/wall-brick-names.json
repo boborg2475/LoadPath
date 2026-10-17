@@ -1,0 +1,11 @@
+{
+  "title": "A small EC6 wall and its brick names",
+  "summary": "A 3-course, 4-brick running-bond wall in EC6 mortar on a ground slab; it stands.",
+  "build": [
+    { "name": "ground", "size": [1.2, 0.6, 0.2], "centre": [0.43, 0, -0.1], "grounded": true },
+    { "wall": "wall", "courses": 3, "bricks": 4, "on": "ground", "material": "clay_brick",
+      "bed": "clay_gp_mortar_bed_ec6", "perpend": "clay_gp_mortar_perpend_ec6" }
+  ],
+  "steps": ["cascade"],
+  "expect": {}
+}

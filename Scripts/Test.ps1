@@ -8,9 +8,12 @@
 # The default run shards automatically; a -tc run shards only when -Jobs is given. -Jobs 1 runs serially.
 # Exit code is doctest's (serial) or 1 when any shard failed or crashed (sharded).
 # -Profile builds and runs the phase-timing build (build/msvc-profile, LOADPATH_PROFILE=ON); everything else is the same.
+# The Release default run also rebuilds the E2E picture page (Scripts/Visuals.ps1 -NoScreenshots, build/visuals/index.html,
+# about 11 s); an E2E case that wrote no picture fails the run. -NoVisuals skips it.
 param([ValidateSet("Debug","Release")][string]$Config = "Debug",
       [int]$Jobs = 0,
       [switch]$Profile,
+      [switch]$NoVisuals,
       [Parameter(ValueFromRemainingArguments = $true)][string[]]$DoctestArgs)
 $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent $PSScriptRoot
@@ -162,13 +165,23 @@ $ExcludePattern = '^-+(dt-)?(tce|test-case-exclude)=(.*)$'
 $CallerExcludes = @($DoctestArgs | Where-Object { $_ -match $ExcludePattern } | ForEach-Object { $_ -replace $ExcludePattern, '$3' })
 $Excludes = (@($CallerExcludes) + "Deferred.*,Slow.*,Measure.*") -join ','
 $Passed = @($DoctestArgs | Where-Object { $_ -notmatch $ExcludePattern })
+function Invoke-Visuals([int]$Code) {
+    if ($IsQuery -or $NoVisuals -or $Profile -or $Config -ne "Release") { return $Code }
+    $ErrorActionPreference = "Continue"
+    $Lines = @(& powershell -NoProfile -ExecutionPolicy Bypass -File "$PSScriptRoot\Visuals.ps1" -Config Release -NoScreenshots 2>&1 | ForEach-Object { "$_" })
+    $VisualsCode = $LASTEXITCODE
+    $Lines | Where-Object { $_ -match '^\[Visuals\.ps1\]|^  |passes: move it out of Deferred' } | Out-Host
+    if ($VisualsCode -ne 0 -and $Code -eq 0) { return 1 }
+    return $Code
+}
+
 if ($Jobs -eq 0) { $Jobs = $AutoJobs }
 if ($Jobs -gt 1 -and -not $IsQuery) {
     $Result = @(Invoke-Sharded (@($Passed) + "-tce=$Excludes") $Jobs $true)
     $Result[0..($Result.Count - 2)] | Write-Output
-    exit $Result[-1]
+    exit (Invoke-Visuals $Result[-1])
 }
 & $Exe @Passed "-tce=$Excludes" | Tee-Object -Variable Output
 $Code = $LASTEXITCODE
 if ((($Output | Out-String) -match '\|\s*[1-9][0-9]*\s+skipped')) { Write-ExcludedCounts }
-exit $Code
+exit (Invoke-Visuals $Code)

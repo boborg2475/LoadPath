@@ -43,11 +43,13 @@ add_library(loadpath STATIC
 	src/Handles.cpp
 	src/LimitAnalysisCertificate.cpp
 	src/RbsmStandingAuthority.cpp
+	src/Scenario.cpp
 	src/StaticsCommon.cpp
 	src/Structure.cpp
 	src/StructureFile.cpp
 	src/Units.cpp
 	src/Vec3.cpp
+	src/Viewer.cpp
 	src/geometry/BoxContacts.cpp
 	src/geometry/RunningBondWall.cpp
 	src/geometry/Warehouse.cpp)

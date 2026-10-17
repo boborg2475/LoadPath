@@ -1,23 +1,19 @@
-# Build the end-to-end picture pages: every test that records a picture (tests/VisualSupport.h) writes
-# one JSON file per entry into the folder named by LOADPATH_VISUALS; this script embeds them all in
-# viewer/index.html (the animated 3D viewer) and, unless -NoScreenshots, captures each entry's before and
-# after frames with headless Edge into viewer/screenshots.html. Both pages are self-contained files.
-#   Scripts/Visuals.ps1                       build Release, run E2E.* and Deferred.* with recording on, write both pages
-#   Scripts/Visuals.ps1 -NoScreenshots        the 3D viewer only (no Edge, a few seconds faster per entry)
-#   Scripts/Visuals.ps1 -Tests "Cascade.*"    record a different selection
-#   Scripts/Visuals.ps1 -Assemble -DataDir d -FailedTests a,b    pages only, from a run that already recorded into d
-# Each entry is marked passed, failed or deferred (Deferred.* tests are expected red).
-# Exit code: 1 when an executed E2E.* test recorded no picture (named), else 0; test failures do not change it.
+# Build the end-to-end picture pages. Every E2E case (each E2E.* case, plus every case in tests/EndToEndTest.cpp
+# and tests/ScenarioFilesTest.cpp) runs in its own loadpath_tests process with LOADPATH_VISUALS set, and writes
+# one JSON file per picture (tests/VisualSupport.h); this script embeds them in viewer/index.html (the animated
+# 3D viewer) and, unless -NoScreenshots, captures each entry's before and after frames with headless Edge into
+# viewer/screenshots.html. Both pages are self-contained files.
+#   Scripts/Visuals.ps1                  build Release, run every E2E case with recording on, write both pages
+#   Scripts/Visuals.ps1 -NoScreenshots   the 3D viewer only
+#   . Scripts/Visuals.ps1 -FunctionsOnly define the functions and return (Scripts/Visuals.Tests.ps1)
+# Each entry is marked passed, failed or deferred from its case's exit code (a red Deferred.* case is deferred).
+# Exit code: 1 when an executed E2E case wrote no picture (named; the page is still written), else 0.
 param([ValidateSet("Debug","Release")][string]$Config = "Release",
-      [string]$Tests = "E2E.*,Deferred.*",
       [string]$Out = "",
-      [switch]$Assemble,
-      [string]$DataDir = "",
-      [string[]]$FailedTests = @(),
-      [string[]]$RanTests = @(),
       [switch]$NoScreenshots,
       [int]$Parallel = 4,
-      [switch]$Profile)
+      [switch]$Profile,
+      [switch]$FunctionsOnly)
 $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent $PSScriptRoot
 $BuildDir = if ($Profile) { "$Root\build\msvc-profile" } else { "$Root\build\msvc" }
@@ -25,26 +21,92 @@ if ($Out -eq "") { $Out = "$Root\build\visuals" }
 $Utf8 = New-Object System.Text.UTF8Encoding($false)
 $Dash = [string][char]0x2013; $Dot = [string][char]0xB7
 
-# powershell -File passes a list as one comma-joined string.
-function Split-Names([string[]]$Names) { return @($Names | ForEach-Object { $_ -split ',' } | ForEach-Object { $_.Trim() } | Where-Object { $_ }) }
+# G2 to G5 of the scenario workbench plan: they run zero files legitimately or draw nothing.
+$PictureGuardExempt = @("E2E.Scenarios.EverySlowInDebugScenarioFileMeetsItsExpectation", "Slow.Scenarios.EverySlowScenarioFileMeetsItsExpectation",
+                        "Deferred.Scenarios.EveryDeferredScenarioFileMeetsItsExpectation", "E2E.Scenarios.FileNamesAreTheirSlugs")
 
-function Get-FailedTestNames([string[]]$Lines) {
-    $Failed = New-Object System.Collections.Generic.HashSet[string]
-    $Current = $null
-    foreach ($Line in $Lines) {
-        if ($Line -match '^TEST CASE:\s+(.+?)\s*$') { $Current = $Matches[1] }
-        elseif ($Line -match '^={20,}$') { $Current = $null }
-        elseif ($null -ne $Current -and $Line -match '(ERROR|FATAL ERROR): ') { [void]$Failed.Add($Current) }
-    }
-    return @($Failed)
-}
-
-function Get-TestNames([string]$Exe, [string]$Filter) {
-    $Listing = @(& $Exe "-tc=$Filter" -ltc --no-colors) | ForEach-Object { $_.TrimEnd("`r") }
+function Get-TestNames([string]$Exe, [string[]]$FilterArgs) {
+    $Listing = @(& $Exe @FilterArgs -ltc --no-colors) | ForEach-Object { $_.TrimEnd("`r") }
     $Start = [Array]::IndexOf($Listing, '[doctest] listing all test case names')
     $Names = @()
     for ($I = $Start + 2; $I -ge 2 -and $I -lt $Listing.Count -and $Listing[$I] -notmatch '^={20,}$'; $I++) { $Names += $Listing[$I] }
     return $Names
+}
+
+function Test-PictureGuard([string[]]$Cases, [string[]]$RecordedTests) {
+    $Cases = @($Cases | Where-Object { $_ })
+    if ($Cases.Count -eq 0) {
+        return [pscustomobject]@{ Passed = $false; Missing = @(); Message = "no E2E cases found: the case listing is empty or the filter is wrong" }
+    }
+    $Recorded = New-Object System.Collections.Generic.HashSet[string]
+    foreach ($Name in @($RecordedTests)) { [void]$Recorded.Add($Name) }
+    $Missing = @($Cases | Where-Object {
+        $Name = $_
+        $Exempt = @($PictureGuardExempt | Where-Object { $Name -ceq $_ -or $Name -ceq "Slow.$_" }).Count -gt 0
+        -not $Exempt -and -not $Recorded.Contains($Name)
+    })
+    if ($Missing.Count -eq 0) { return [pscustomobject]@{ Passed = $true; Missing = @(); Message = "" } }
+    $Message = "these E2E cases ran but wrote no picture (every E2E case must; tests/VisualSupport.h): " + ($Missing -join ", ")
+    return [pscustomobject]@{ Passed = $false; Missing = $Missing; Message = $Message }
+}
+
+function New-VisualIndex($Entries, [hashtable]$Results) {
+    $Sorted = New-Object System.Collections.Generic.List[object]
+    foreach ($E in @($Entries)) { $Sorted.Add($E) }
+    $Sorted.Sort([System.Comparison[object]] {
+        param($A, $B)
+        $ByTest = [string]::CompareOrdinal([string]$A.test, [string]$B.test)
+        if ($ByTest -ne 0) { return $ByTest }
+        return [string]::CompareOrdinal([string]$A.slug, [string]$B.slug)
+    })
+    $Messages = @()
+    $Reported = New-Object System.Collections.Generic.HashSet[string]
+    $Counts = [ordered]@{ passed = 0; failed = 0; deferred = 0 }
+    $Indexed = @()
+    foreach ($E in $Sorted) {
+        $Test = [string]$E.test
+        $Passed = $Results.ContainsKey($Test) -and [bool]$Results[$Test]
+        $Deferred = $Test -like "Deferred.*"
+        $Status = if ($Passed) { "passed" } elseif ($Deferred) { "deferred" } else { "failed" }
+        if ($Deferred -and $Passed -and $Reported.Add($Test)) { $Messages += "$Test passes: move it out of Deferred" }
+        $Counts[$Status]++
+        $Item = [ordered]@{ test = $Test; slug = [string]$E.slug; status = $Status }
+        if ($E.PSObject.Properties.Name -contains "text") { $Item.text = $E.text }
+        $Indexed += [pscustomobject]$Item
+    }
+    return [pscustomobject]@{ Entries = $Indexed; Messages = $Messages; Counts = $Counts }
+}
+
+function Read-VisualEntries([string]$DataDir) {
+    $Entries = @()
+    foreach ($File in (Get-ChildItem -Path $DataDir -Filter *.json | Where-Object { $_.Name -ne "index.json" })) {
+        $Text = [IO.File]::ReadAllText($File.FullName).Trim()
+        if ($Text -notmatch '^\{') { continue }
+        $Test = if ($Text -match '"test"\s*:\s*"((?:[^"\\]|\\.)*)"') { $Matches[1] } else { "" }
+        $Entries += [pscustomobject]@{ test = $Test; slug = $File.BaseName; text = $Text }
+    }
+    return $Entries
+}
+
+# Runner: { param($Case, $DataDir) ... } returns the case's exit code; each case is its own process, so an abort loses no other picture.
+function Invoke-VisualRun([string[]]$Cases, [string]$DataDir, [scriptblock]$Runner) {
+    if (Test-Path $DataDir) { Get-ChildItem -Path $DataDir -Force | Remove-Item -Recurse -Force }
+    New-Item -ItemType Directory -Force -Path $DataDir | Out-Null
+    $Results = @{}
+    foreach ($Case in @($Cases)) {
+        $Code = @(& $Runner $Case $DataDir)
+        $Results[$Case] = ($Code.Count -gt 0 -and [int]$Code[-1] -eq 0)
+    }
+    $Entries = Read-VisualEntries $DataDir
+    $Index = New-VisualIndex -Entries $Entries -Results $Results
+    $Guard = Test-PictureGuard -Cases $Cases -RecordedTests @($Entries | ForEach-Object { $_.test })
+    $Output = @()
+    $Output += $Index.Messages
+    $Output += ("[Visuals.ps1] {0} entries: {1} passed, {2} failed, {3} deferred" -f @($Index.Entries).Count, $Index.Counts.passed, $Index.Counts.failed, $Index.Counts.deferred)
+    if (-not $Guard.Passed) { $Output += "[Visuals.ps1] $($Guard.Message)" }
+    $IndexJson = "[" + ((@($Index.Entries) | ForEach-Object { '"' + $_.slug + '"' }) -join ",") + "]"
+    [IO.File]::WriteAllText((Join-Path $DataDir "index.json"), $IndexJson, $Utf8)
+    return [pscustomobject]@{ Index = $Index.Entries; Counts = $Index.Counts; Guard = $Guard; Output = $Output; ExitCode = $(if ($Guard.Passed) { 0 } else { 1 }) }
 }
 
 function Find-Edge {
@@ -62,12 +124,14 @@ function Invoke-Captures([string]$Edge, [string]$PageUrl, [string[]]$Slugs, [str
     $Index = 0
     while ($Pending.Count -gt 0 -or $Running.Count -gt 0) {
         while ($Pending.Count -gt 0 -and $Running.Count -lt $Parallel) {
-            $Slug = $Pending.Dequeue()
+            $Key = $Pending.Dequeue()
+            $Slug, $View = $Key -split '~'
+            $Query = if ($View) { "capture&$View" } else { "capture" }
             $ProfileDir = Join-Path $env:TEMP ("lp-visuals-edge-{0}-{1}" -f $PID, $Index++)
-            $Shot = "$ShotDir\$Slug.png"
+            $Shot = "$ShotDir\$($Key.Replace('~', '.')).png"
             $EdgeArgs = @("--headless=new", "--user-data-dir=`"$ProfileDir`"", "--no-first-run", "--use-angle=swiftshader",
                           "--enable-unsafe-swiftshader", "--hide-scrollbars", "--window-size=1600,700",
-                          "--virtual-time-budget=10000", "--screenshot=`"$Shot`"", "`"$PageUrl`?capture#$Slug`"")
+                          "--virtual-time-budget=10000", "--screenshot=`"$Shot`"", "`"$PageUrl`?$Query#$Slug`"")
             $Proc = Start-Process -FilePath $Edge -ArgumentList $EdgeArgs -PassThru -NoNewWindow -RedirectStandardError "$ProfileDir.err"
             $Running += [pscustomobject]@{ Proc = $Proc; Profile = $ProfileDir; Started = Get-Date }
         }
@@ -123,61 +187,11 @@ function Get-ShotEntry($Run, [string]$Status) {
         severed = @($Failures | Where-Object { $_.severed } | ForEach-Object { & $Describe $_ })
         cracked = @($Failures | Where-Object { -not $_.severed } | ForEach-Object { & $Describe $_ })
         elapsed_ms = $After.elapsed_ms; after_label = $Label; before_img = $null; after_img = $null
+        expected_state = if ($Run.expected) { $Run.expected.state } else { $null }
+        expected_released = @($Run.expected.clusters | Where-Object { $_ } | ForEach-Object { $_.bodies } | ForEach-Object { $Names[[int]$_] })
+        expected_img = $null
     }
 }
-
-$FailedTests = Split-Names $FailedTests
-$RanTests = Split-Names $RanTests
-
-if (-not $Assemble) {
-    & "$PSScriptRoot\Build.ps1" -Config $Config -Profile:$Profile
-    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-    $Exe = "$BuildDir\tests\$Config\loadpath_tests.exe"
-    $DataDir = "$Out\recordings"
-    if (Test-Path $DataDir) { Remove-Item -Recurse -Force $DataDir }
-    New-Item -ItemType Directory -Force -Path $DataDir | Out-Null
-    $env:LOADPATH_VISUALS = $DataDir
-    $Output = @(& $Exe "-tc=$Tests" --no-colors 2>&1 | ForEach-Object { "$_" })
-    Remove-Item Env:\LOADPATH_VISUALS
-    $Output | Where-Object { $_ -match '^\[doctest\] (test cases|assertions|Status)' } | Write-Output
-    $FailedTests = Get-FailedTestNames $Output
-    $RanTests = Get-TestNames $Exe $Tests
-}
-
-if ($DataDir -eq "" -or -not (Test-Path $DataDir)) {
-    Write-Output "[Visuals.ps1] no recordings folder ($DataDir)"
-    exit 2
-}
-
-$Failed = New-Object System.Collections.Generic.HashSet[string]
-foreach ($Name in $FailedTests) { [void]$Failed.Add($Name) }
-$Entries = @()
-$Recorded = New-Object System.Collections.Generic.HashSet[string]
-$Counts = @{ passed = 0; failed = 0; deferred = 0 }
-foreach ($File in (Get-ChildItem -Path $DataDir -Filter *.json | Sort-Object Name)) {
-    $Text = [IO.File]::ReadAllText($File.FullName).Trim()
-    if ($Text -notmatch '^\{') { Write-Output "[Visuals.ps1] skipped $($File.Name): not a JSON object"; continue }
-    $Test = if ($Text -match '"test"\s*:\s*"((?:[^"\\]|\\.)*)"') { $Matches[1] } else { "" }
-    [void]$Recorded.Add($Test)
-    $Status = if ($Test -like "Deferred.*") { "deferred" } elseif ($Failed.Contains($Test)) { "failed" } else { "passed" }
-    $Counts[$Status]++
-    $Entries += [pscustomobject]@{ Test = $Test; Slug = $File.BaseName; Status = $Status; Text = $Text
-                                   Json = '{"status":"' + $Status + '",' + $Text.Substring(1) }
-}
-$Entries = @($Entries | Sort-Object Test, Slug)
-
-$Missing = @($RanTests | Where-Object { $_ -like "E2E.*" -and -not $Recorded.Contains($_) })
-
-$Edge = if ($NoScreenshots) { $null } else { Find-Edge }
-if (-not $NoScreenshots -and -not $Edge) { Write-Output "[Visuals.ps1] Microsoft Edge not found; writing the 3D viewer without screenshots" }
-$Shots = [bool]$Edge -and $Entries.Count -gt 0
-
-$Commit = (& git -C $Root rev-parse --short HEAD 2>$null)
-$Dirty = if ((& git -C $Root status --porcelain 2>$null | Measure-Object).Count -gt 0) { "+uncommitted" } else { "" }
-$When = (Get-Date).ToString("yyyy-MM-dd HH:mm")
-$Generated = '{"when":"' + $When + '","commit":"' + $Commit + $Dirty + '","passed":' + $Counts.passed + ',"failed":' + $Counts.failed +
-             ',"deferred":' + $Counts.deferred + ',"screenshots":' + $Shots.ToString().ToLower() + '}'
-$Data = '{"generated":' + $Generated + ',"runs":[' + (($Entries | ForEach-Object { $_.Json }) -join ',') + ']}'
 
 function Write-Page([string]$TemplateName, [string]$Id, [string]$Json, [string]$Target) {
     $Template = [IO.File]::ReadAllText("$Root\viewer\$TemplateName")
@@ -187,6 +201,34 @@ function Write-Page([string]$TemplateName, [string]$Id, [string]$Json, [string]$
     [IO.File]::WriteAllText($Target, $Page, $Utf8)
 }
 
+if ($FunctionsOnly) { return }
+
+& "$PSScriptRoot\Build.ps1" -Config $Config -Profile:$Profile
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+$Exe = "$BuildDir\tests\$Config\loadpath_tests.exe"
+$Cases = @((Get-TestNames $Exe @("-tc=E2E.*")) + (Get-TestNames $Exe @("-sf=*EndToEndTest.cpp,*ScenarioFilesTest.cpp")) | Sort-Object -Unique)
+$CaseRunner = {
+    param([string]$Case, [string]$Dir)
+    $ErrorActionPreference = "Continue"
+    $env:LOADPATH_VISUALS = $Dir
+    try { & $Exe "-tc=$Case" --no-colors *> $null; return $LASTEXITCODE } finally { Remove-Item Env:\LOADPATH_VISUALS -ErrorAction SilentlyContinue }
+}
+$Run = Invoke-VisualRun -Cases $Cases -DataDir "$Out\data" -Runner $CaseRunner
+$Entries = @($Run.Index)
+
+$Edge = if ($NoScreenshots) { $null } else { Find-Edge }
+if (-not $NoScreenshots -and -not $Edge) { Write-Output "[Visuals.ps1] Microsoft Edge not found; writing the 3D viewer without screenshots" }
+$Shots = [bool]$Edge -and $Entries.Count -gt 0
+
+$ErrorActionPreference = "Continue"
+$Commit = (& git -C $Root rev-parse --short HEAD 2>$null)
+$Dirty = if ((& git -C $Root status --porcelain 2>$null | Measure-Object).Count -gt 0) { "+uncommitted" } else { "" }
+$ErrorActionPreference = "Stop"
+$When = (Get-Date).ToString("yyyy-MM-dd HH:mm")
+$Generated = '{"when":"' + $When + '","commit":"' + $Commit + $Dirty + '","passed":' + $Run.Counts.passed + ',"failed":' + $Run.Counts.failed +
+             ',"deferred":' + $Run.Counts.deferred + ',"screenshots":' + $Shots.ToString().ToLower() + '}'
+$Data = '{"generated":' + $Generated + ',"runs":[' + (($Entries | ForEach-Object { '{"status":"' + $_.status + '",' + $_.text.Substring(1) }) -join ',') + ']}'
+
 New-Item -ItemType Directory -Force -Path $Out | Out-Null
 Write-Page "index.html" "lp-data" $Data "$Out\index.html"
 
@@ -195,13 +237,16 @@ if ($Shots) {
     if (Test-Path $ShotDir) { Remove-Item -Recurse -Force $ShotDir }
     New-Item -ItemType Directory -Force -Path $ShotDir | Out-Null
     $Clock = [Diagnostics.Stopwatch]::StartNew()
-    Invoke-Captures $Edge ([Uri]"$Out\index.html").AbsoluteUri @($Entries | ForEach-Object { $_.Slug }) $ShotDir
+    $Keys = @($Entries | ForEach-Object { $_.slug }) + @($Entries | Where-Object { $_.text -match '"expected"\s*:' } | ForEach-Object { "$($_.slug)~expected" })
+    Invoke-Captures $Edge ([Uri]"$Out\index.html").AbsoluteUri $Keys $ShotDir
     $ShotEntries = @()
     $NoShot = @()
     foreach ($E in $Entries) {
-        $Item = Get-ShotEntry ($E.Text | ConvertFrom-Json) $E.Status
-        $Png = "$ShotDir\$($E.Slug).png"
-        if (Test-Path $Png) { $Halves = Split-Capture $Png; $Item.before_img = $Halves[0]; $Item.after_img = $Halves[1] } else { $NoShot += $E.Slug }
+        $Item = Get-ShotEntry ($E.text | ConvertFrom-Json) $E.status
+        $Png = "$ShotDir\$($E.slug).png"
+        if (Test-Path $Png) { $Halves = Split-Capture $Png; $Item.before_img = $Halves[0]; $Item.after_img = $Halves[1] } else { $NoShot += $E.slug }
+        $ExpectedPng = "$ShotDir\$($E.slug).expected.png"
+        if (Test-Path $ExpectedPng) { $Item.expected_img = (Split-Capture $ExpectedPng)[1] }
         $ShotEntries += New-Object psobject -Property $Item
     }
     $ShotJson = '{"generated":' + $Generated + ',"viewer":"index.html","entries":' + (ConvertTo-Json -InputObject @($ShotEntries) -Depth 4 -Compress) + '}'
@@ -210,10 +255,6 @@ if ($Shots) {
     if ($NoShot.Count -gt 0) { Write-Output "[Visuals.ps1] no screenshot captured for: $($NoShot -join ', ')" }
 }
 
-Write-Output ("[Visuals.ps1] {0} entries ({1} passed, {2} failed, {3} deferred) -> {4}\index.html" -f $Entries.Count, $Counts.passed, $Counts.failed, $Counts.deferred, $Out)
-if ($Missing.Count -gt 0) {
-    Write-Output "[Visuals.ps1] these E2E tests ran but recorded no picture (every E2E test must; tests/VisualSupport.h):"
-    $Missing | ForEach-Object { Write-Output "  $_" }
-    exit 1
-}
-exit 0
+$Run.Output | Write-Output
+Write-Output "[Visuals.ps1] $($Cases.Count) E2E cases run; page -> $Out\index.html"
+exit $Run.ExitCode

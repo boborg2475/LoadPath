@@ -98,9 +98,11 @@ the normal build reads no clock and leaves them 0.0.
 cores, at most 8; `-Jobs N` overrides, `-Jobs 1` runs serially), each running a contiguous
 range of the same filtered order, balanced by per-test durations cached in the build folder. A `-tc`
 run stays serial unless `-Jobs` is given. Same tests, same totals; the Release default takes
-about 20 s instead of about 60 s. Never shard `Slow.*`: its budget rows assert on wall time.
+about 20 s instead of about 60 s, then about 11 s more to rebuild the E2E picture page
+(`Scripts/Visuals.ps1 -NoScreenshots`; `-NoVisuals` skips it). Never shard `Slow.*`: its budget rows assert on wall time.
 
-**The exit code is meaningful**: non-zero when any assertion fails, and the summary prints
+**The exit code is meaningful**: non-zero when any assertion fails, or when a Release
+default run finds an E2E case that recorded no picture or a refused one (a buried box), and the summary prints
 to stdout. The suite is expected to run in seconds; a test that needs more than about a second
 goes behind a `Slow.` prefix, which `Scripts/Test.ps1` excludes from the default run (it
 prints how many it skipped). A case that is slow only in Debug puts `LOADPATH_SLOW_IN_DEBUG`
@@ -124,6 +126,7 @@ cost 8 to 10 minutes per change:
 | review-expert | the Release default run once, in the scratch worktree; another tier only when a result looks off |
 | orchestrator | `Test.ps1 -Profile -Config Release -tc="Profile.*"` at every slice close, and the `Measure.Profile.ReadingsDigest` row in both builds (digests must match) whenever a change touches `src/PhaseClock.h` or an instrumented call; profiled-only assertions are mutation-proven with `Mutate.ps1 -Profile` |
 | orchestrator | the Debug default run once, before the commit |
+| orchestrator | `Scripts/Visuals.ps1` (with screenshots) once after a feature lands, then publishes `build/visuals/index.html` with `screenshots.html` to the fixed E2E page, https://claude.ai/artifact/SLuMLdeb5UNZh382sBvYgd; `Scripts/Visuals.Tests.ps1` only when `Visuals.ps1` changes. Every Release default run already rebuilds the 3D page without screenshots |
 
 **The scratch worktree** (`Scripts/Scratch.ps1`, at `..\LoadPath-scratch`) is a persistent git
 worktree with its own warm build folder. Sync it, then build and run there, for reviews,

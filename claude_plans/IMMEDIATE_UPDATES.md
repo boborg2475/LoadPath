@@ -41,15 +41,16 @@ pictures, and a quick way to build, see and test structures (DESIGN §10, 2026-1
 
 1. **The scenario workbench.** Scenario files (boxes and walls with automatic joints, steps,
    expected outcome) under `data/scenarios/`, a library loader and runner, a viewer export, a CLI
-   command and `Scripts/Scenario.ps1`, and one generic test over every file. Its own tests go
-   through the plan step first.
+   command and `Scripts/Scenario.ps1`, and one generic test over every file. Landed 2026-10-17
+   (approved plan `test_plans/2026-10-16-scenario-workbench.md`; API.md "The scenario workbench");
+   every E2E case records its pictures and the page rebuilds on each Release default run.
+   Remaining: `Scripts/Scenario.ps1 -File` and the CURRENT_STATE workbench follow-ups.
 2. **End-to-end validation tests.** Whole-structure scenarios through the public API (build the
    structure, judge it, run the cascade, remove pieces, read who stands and what releases),
    checked against expected outcomes. A feature is validated against them before it lands. The
    plan was approved and its 17 tests written 2026-10-17 (`tests/EndToEndTest.cpp`: 15 `E2E.*`
-   green, 2 `Deferred.*` red by design). Remaining: each case records its pictures
-   (`RecordVisual`, workbench plan W9) and the cases move into scenario files once the workbench
-   exists.
+   green, 2 `Deferred.*` red by design). Each case records its pictures; remaining: the cases move into scenario files (CURRENT_STATE
+   workbench follow-up 2).
 
 ## 4. Parked (owner, 2026-10-15): not before sections 1 to 3
 

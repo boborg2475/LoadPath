@@ -194,13 +194,14 @@ Scene SceneFromFile(const LoadedStructure& Loaded)
 void CheckArchRemoval(std::size_t FirstRemoved, std::size_t LastRemoved, std::string_view Slug)
 {
 	ArchScene A = BuildArch(0.15, 0.7);
-	REQUIRE(A.Voussoirs.size() == 62);
-	const NameSet Want = ArchOracleSurvivors(A, FirstRemoved, LastRemoved, 0.7);
-	for (std::size_t V = FirstRemoved; V <= LastRemoved; ++V)
+	CHECK(A.Voussoirs.size() == 62);
+	const NameSet Want = A.Voussoirs.size() == 62 ? ArchOracleSurvivors(A, FirstRemoved, LastRemoved, 0.7) : NameSet{};
+	for (std::size_t V = FirstRemoved; V <= LastRemoved && V < A.Voussoirs.size(); ++V)
 	{
 		RemoveBodyOf(A.S, A.Voussoirs[V]);
 	}
 	const CaseRun R = Run(A.S, Slug);
+	RecordVisual(A.S, R);
 	INFO("visual " << std::string(Slug) << ": " << Canonical(A.S, R.Verdict));
 	INFO("survivors got " << Names(LiveFreeNames(A.S)) << " want " << Names(Want));
 	CHECK(LiveFreeNames(A.S) == Want);
@@ -210,10 +211,11 @@ void CheckArchRemoval(std::size_t FirstRemoved, std::size_t LastRemoved, std::st
 
 void CheckNothingReleased(Scene& S, std::string_view Slug)
 {
-	const CaseRun R = Run(S, Slug);
 	ExpectedOutcome Want;
 	Want.Passes = 0;
 	Want.bNoFailures = true;
+	const CaseRun R = Run(S, Slug);
+	RecordVisual(S, R, Want);
 	CheckOutcome(S, R, Want);
 }
 
@@ -228,6 +230,13 @@ void CheckLateralPush(bool bBonded, double Factor, std::string_view Slug)
 	const double Lambda = Factor * Limit;
 	W.S.Gravity = Vec3{0.0, Lambda * GravityMPerS2, -GravityMPerS2};
 	const CaseRun R = Run(W.S, Slug);
+	const NameSet AllBricks = FreeNamesWhere(W.S, [](const std::string&) { return true; });
+	ExpectedOutcome Pictured;
+	if (Factor >= 1.0)
+	{
+		Pictured.Clusters = {AllBricks};
+	}
+	RecordVisual(W.S, R, Pictured);
 	INFO("lambda_c " << Limit << ", lambda " << Lambda);
 	if (Factor < 1.0)
 	{
@@ -237,7 +246,6 @@ void CheckLateralPush(bool bBonded, double Factor, std::string_view Slug)
 		CheckOutcome(W.S, R, Want);
 		return;
 	}
-	const NameSet AllBricks = FreeNamesWhere(W.S, [](const std::string&) { return true; });
 	REQUIRE(AllBricks.size() == 22);
 	INFO("visual " << std::string(Slug) << ": " << Canonical(W.S, R.Verdict));
 	if (!bBonded)
@@ -262,20 +270,24 @@ void CheckLateralPush(bool bBonded, double Factor, std::string_view Slug)
 void CheckLintelRemovalKeepsThePierBricks(Scene& S)
 {
 	RemoveNamed(S, "lintel");
-	const CaseRun R = Run(S, DryLintelRemoved);
-	INFO("visual " << std::string(DryLintelRemoved) << ": " << Canonical(S, R.Verdict));
-	const NameSet Released = ReleasedNames(S, R.Verdict);
-	INFO("released " << Names(Released));
 	const NameSet MustFall = {"c6x2.50", "c6x3.50", "c6x4.50", "c6x5.50", "c7x3.00", "c7x4.00", "c7x5.00", "c8x3.50", "c8x4.50", "c9x4.00"};
-	for (const std::string& Name : MustFall)
-	{
-		INFO("must fall " << Name);
-		CHECK(Contains(Released, Name));
-	}
+	const CaseRun R = Run(S, DryLintelRemoved);
 	NameSet MustStand = FreeNamesWhere(S, [](const std::string& Name) { return Name.size() > 1 && Name[0] == 'c' && Name[1] >= '0' && Name[1] <= '5'; });
 	for (const char* Name : {"c6x0.50", "c6x7.50", "c7x0.25", "c7x7.75"})
 	{
 		MustStand.push_back(Name);
+	}
+	ExpectedOutcome Pictured;
+	Pictured.Clusters = {MustFall};
+	Pictured.Either = FreeNamesWhere(S, [&](const std::string& Name) { return !Contains(MustFall, Name) && !Contains(MustStand, Name); });
+	RecordVisual(S, R, Pictured);
+	INFO("visual " << std::string(DryLintelRemoved) << ": " << Canonical(S, R.Verdict));
+	const NameSet Released = ReleasedNames(S, R.Verdict);
+	INFO("released " << Names(Released));
+	for (const std::string& Name : MustFall)
+	{
+		INFO("must fall " << Name);
+		CHECK(Contains(Released, Name));
 	}
 	for (const std::string& Name : MustStand)
 	{
@@ -314,14 +326,18 @@ TEST_CASE("E2E.Colonnade.RemovingAPostDropsOnlyTheBeamsItCarried")
 		Scene S = BuildColonnade(4, 0);
 		RemoveNamed(S, "post2");
 		const CaseRun R = Run(S, ColonnadeDryMinusPost2);
-		CheckOutcome(S, R, ExpectedOutcome{{{"beam1"}, {"beam2"}}, 1u});
+		const ExpectedOutcome Want{{{"beam1"}, {"beam2"}}, 1u};
+		RecordVisual(S, R, Want);
+		CheckOutcome(S, R, Want);
 	}
 	SUBCASE("post 0")
 	{
 		Scene S = BuildColonnade(4, 0);
 		RemoveNamed(S, "post0");
 		const CaseRun R = Run(S, ColonnadeDryMinusPost0);
-		CheckOutcome(S, R, ExpectedOutcome{{{"beam0"}}, 1u});
+		const ExpectedOutcome Want{{{"beam0"}}, 1u};
+		RecordVisual(S, R, Want);
+		CheckOutcome(S, R, Want);
 	}
 }
 
@@ -348,21 +364,21 @@ TEST_CASE(LOADPATH_SLOW_IN_DEBUG "E2E.Wall.RemovingANonStructuralBrickReleasesNo
 	{
 		WallScene W = BuildWall(true, 10, 8);
 		RemoveWallBricks(W, 7.0, 8.0, 9, 10);
-		REQUIRE(W.S.RemovedBeforeRun.size() == 1);
+		CHECK(W.S.RemovedBeforeRun.size() == 1);
 		CheckNothingReleased(W.S, WallEc6MinusTopEndBrick);
 	}
 	SUBCASE("EC6, mid-height middle brick")
 	{
 		WallScene W = BuildWall(true, 10, 8);
 		RemoveWallBricks(W, 3.6, 4.4, 5, 6);
-		REQUIRE(W.S.RemovedBeforeRun.size() == 1);
+		CHECK(W.S.RemovedBeforeRun.size() == 1);
 		CheckNothingReleased(W.S, WallEc6MinusMidBrick);
 	}
 	SUBCASE("dry, top-course end brick")
 	{
 		WallScene W = BuildWall(false, 10, 8);
 		RemoveWallBricks(W, 7.0, 8.0, 9, 10);
-		REQUIRE(W.S.RemovedBeforeRun.size() == 1);
+		CHECK(W.S.RemovedBeforeRun.size() == 1);
 		CheckNothingReleased(W.S, WallDryMinusTopEndBrick);
 	}
 }
@@ -374,12 +390,14 @@ TEST_CASE(LOADPATH_SLOW_IN_DEBUG "E2E.Colonnade.ScrewedBearingsBridgeALostPostAb
 		Scene S = BuildColonnade(4, 2);
 		RemoveNamed(S, "post2");
 		const CaseRun R = Run(S, ColonnadeScrewed2MinusPost2);
+		const ExpectedOutcome Want{{{"beam1"}, {"beam2"}}, 2u, 2};
+		RecordVisual(S, R, Want);
 		const Cracks Cracked = CrackedJoints(S, R.Verdict);
 		INFO("cracked " << Names(Cracked.Pairs) << "; " << Canonical(S, R.Verdict));
 		CHECK(Cracked.Pairs == Sorted({"beam1-post1", "beam2-post3"}));
 		CHECK(Cracked.bAllPassOne);
 		CHECK(Cracked.bAllTension);
-		CheckOutcome(S, R, ExpectedOutcome{{{"beam1"}, {"beam2"}}, 2u, 2});
+		CheckOutcome(S, R, Want);
 	}
 	SUBCASE("three screws")
 	{
@@ -396,21 +414,27 @@ TEST_CASE("E2E.Colonnade.AScrewedEndBayTipsWithItsPost")
 		Scene S = BuildColonnade(2, 2);
 		RemoveNamed(S, "post1");
 		const CaseRun R = Run(S, TwoBayScrewed2MinusMiddlePost);
-		CheckOutcome(S, R, ExpectedOutcome{{{"post0", "beam0"}, {"post2", "beam1"}}, 1u});
+		const ExpectedOutcome Want{{{"post0", "beam0"}, {"post2", "beam1"}}, 1u};
+		RecordVisual(S, R, Want);
+		CheckOutcome(S, R, Want);
 	}
 	SUBCASE("three screws")
 	{
 		Scene S = BuildColonnade(2, 3);
 		RemoveNamed(S, "post1");
 		const CaseRun R = Run(S, TwoBayScrewed3MinusMiddlePost);
-		CheckOutcome(S, R, ExpectedOutcome{{{"post0", "beam0"}, {"post2", "beam1"}}, 1u});
+		const ExpectedOutcome Want{{{"post0", "beam0"}, {"post2", "beam1"}}, 1u};
+		RecordVisual(S, R, Want);
+		CheckOutcome(S, R, Want);
 	}
 	SUBCASE("dry bearings")
 	{
 		Scene S = BuildColonnade(2, 0);
 		RemoveNamed(S, "post1");
 		const CaseRun R = Run(S, TwoBayDryMinusMiddlePost);
-		CheckOutcome(S, R, ExpectedOutcome{{{"beam0"}, {"beam1"}}, 1u});
+		const ExpectedOutcome Want{{{"beam0"}, {"beam1"}}, 1u};
+		RecordVisual(S, R, Want);
+		CheckOutcome(S, R, Want);
 	}
 }
 
@@ -449,7 +473,9 @@ TEST_CASE("E2E.Bearing.AnOverloadedTimberBearingDropsTheBeamAndSparesThePiers")
 	{
 		Scene S = BuildTimberOnPiers(1.2);
 		const CaseRun R = Run(S, TimberBearingLoad12);
-		CheckOutcome(S, R, ExpectedOutcome{{{"beam"}}, 1u});
+		const ExpectedOutcome Want{{{"beam"}}, 1u};
+		RecordVisual(S, R, Want);
+		CheckOutcome(S, R, Want);
 	}
 }
 
@@ -461,7 +487,9 @@ TEST_CASE(LOADPATH_SLOW_IN_DEBUG "E2E.Shed.LosingOneSideOfPostsDropsTheRoofBayBy
 		RemoveNamed(H.S, Post);
 	}
 	const CaseRun R = Run(H.S, ShedMinusSidePosts);
-	CheckOutcome(H.S, R, ExpectedOutcome{{{"beam0", "beam2", "plank0", "plank1", "plank2"}, {"beam1", "beam3", "plank3", "plank4", "plank5"}}});
+	const ExpectedOutcome Want{{{"beam0", "beam2", "plank0", "plank1", "plank2"}, {"beam1", "beam3", "plank3", "plank4", "plank5"}}};
+	RecordVisual(H.S, R, Want);
+	CheckOutcome(H.S, R, Want);
 }
 
 TEST_CASE(LOADPATH_SLOW_IN_DEBUG "E2E.Shed.LosingOnePostLeavesTheScrewedRoofStanding")
@@ -471,14 +499,18 @@ TEST_CASE(LOADPATH_SLOW_IN_DEBUG "E2E.Shed.LosingOnePostLeavesTheScrewedRoofStan
 		ShedScene H = BuildShed(test::ShedSpec());
 		RemoveNamed(H.S, "post1");
 		const CaseRun R = Run(H.S, ShedMinusMiddlePost);
-		CheckOutcome(H.S, R, ExpectedOutcome{});
+		const ExpectedOutcome Want{};
+		RecordVisual(H.S, R, Want);
+		CheckOutcome(H.S, R, Want);
 	}
 	SUBCASE("corner post")
 	{
 		ShedScene H = BuildShed(test::ShedSpec());
 		RemoveNamed(H.S, "post0");
 		const CaseRun R = Run(H.S, ShedMinusCornerPost);
-		CheckOutcome(H.S, R, ExpectedOutcome{});
+		const ExpectedOutcome Want{};
+		RecordVisual(H.S, R, Want);
+		CheckOutcome(H.S, R, Want);
 	}
 }
 
@@ -488,7 +520,9 @@ TEST_CASE("E2E.Cantilever.TheCounterweightHoldsTheBeamAndItsRemovalTipsIt")
 	{
 		Scene S = BuildCantilever(Counterweight::None);
 		const CaseRun R = Run(S, CantileverNoCounterweight);
-		CheckOutcome(S, R, ExpectedOutcome{{{"beam"}}});
+		const ExpectedOutcome Want{{{"beam"}}};
+		RecordVisual(S, R, Want);
+		CheckOutcome(S, R, Want);
 	}
 	SUBCASE("16 kg")
 	{
@@ -499,14 +533,18 @@ TEST_CASE("E2E.Cantilever.TheCounterweightHoldsTheBeamAndItsRemovalTipsIt")
 	{
 		Scene S = BuildCantilever(Counterweight::Light);
 		const CaseRun R = Run(S, Cantilever4kg);
-		CheckOutcome(S, R, ExpectedOutcome{{{"beam", "counterweight"}}});
+		const ExpectedOutcome Want{{{"beam", "counterweight"}}};
+		RecordVisual(S, R, Want);
+		CheckOutcome(S, R, Want);
 	}
 	SUBCASE("16 kg removed")
 	{
 		Scene S = BuildCantilever(Counterweight::Heavy);
 		RemoveNamed(S, "counterweight");
 		const CaseRun R = Run(S, Cantilever16kgRemoved);
-		CheckOutcome(S, R, ExpectedOutcome{{{"beam"}}});
+		const ExpectedOutcome Want{{{"beam"}}};
+		RecordVisual(S, R, Want);
+		CheckOutcome(S, R, Want);
 	}
 }
 
@@ -519,7 +557,9 @@ TEST_CASE("E2E.File.ALoadedColonnadeFallsLikeTheBuiltOne")
 	CheckNothingReleased(S, FileColonnadeIntact);
 	RemoveNamed(S, "post2");
 	const CaseRun R = Run(S, FileColonnadeMinusPost2);
-	CheckOutcome(S, R, ExpectedOutcome{{{"beam1"}, {"beam2"}}, 1u});
+	const ExpectedOutcome Want{{{"beam1"}, {"beam2"}}, 1u};
+	RecordVisual(S, R, Want);
+	CheckOutcome(S, R, Want);
 	Scene Built = BuildColonnade(4, 0);
 	RemoveNamed(Built, "post2");
 	const CaseRun BuiltRun = Run(Built, ColonnadeDryMinusPost2);
@@ -569,7 +609,7 @@ TEST_CASE("Deferred.Wall.DryWallWithAGapInItsBaseReleasesNothing")
 	{
 		WallScene W = BuildWall(false, 10, 8);
 		RemoveWallBricks(W, 3.0, 5.0, 0, 1);
-		REQUIRE(W.S.RemovedBeforeRun.size() == 2);
+		CHECK(W.S.RemovedBeforeRun.size() == 2);
 		CheckNothingReleased(W.S, DryWallMinusTwoBaseBricks);
 	}
 	SUBCASE("two-brick opening, lintel removed")
@@ -582,6 +622,7 @@ TEST_CASE("Deferred.Wall.DryWallWithAGapInItsBaseReleasesNothing")
 
 TEST_CASE(LOADPATH_SLOW_IN_DEBUG "E2E.Property.BuildOrderChangesNoOutcome")
 {
+	bool bPictured = false;
 	for (const auto& [Fixture, Make] : ShuffleFixtures())
 	{
 		Scene Reference = Make(0);
@@ -589,7 +630,13 @@ TEST_CASE(LOADPATH_SLOW_IN_DEBUG "E2E.Property.BuildOrderChangesNoOutcome")
 		for (unsigned Seed = 1; Seed <= 8; ++Seed)
 		{
 			Scene Shuffled = Make(Seed);
-			const std::string Got = Canonical(Shuffled, Run(Shuffled, BuildOrderShuffled).Verdict);
+			const CaseRun ShuffledRun = Run(Shuffled, BuildOrderShuffled);
+			if (!bPictured)
+			{
+				RecordVisual(Shuffled, ShuffledRun);
+				bPictured = true;
+			}
+			const std::string Got = Canonical(Shuffled, ShuffledRun.Verdict);
 			INFO("fixture " << Fixture << ", seed " << Seed << "\n  want " << Want << "\n  got  " << Got);
 			CHECK(Got == Want);
 		}
@@ -604,6 +651,9 @@ TEST_CASE(LOADPATH_SLOW_IN_DEBUG "E2E.Corner.InterlockingRaisesTheOverturningLoa
 		Scene S = BuildCorner(false);
 		S.Gravity = Vec3{0.0, -Lambda * GravityMPerS2, -GravityMPerS2};
 		const CaseRun R = Run(S, CornerStraightJointPush);
+		ExpectedOutcome Pictured;
+		Pictured.Clusters = {FreeNamesWhere(S, [](const std::string& Name) { return StartsWith(Name, "f_"); })};
+		RecordVisual(S, R, Pictured);
 		INFO("visual " << std::string(CornerStraightJointPush) << ": " << Canonical(S, R.Verdict));
 		CHECK(ReleasedNames(S, R.Verdict) == FreeNamesWhere(S, [](const std::string& Name) { return StartsWith(Name, "f_"); }));
 		CHECK(LiveFreeNames(S) == FreeNamesWhere(S, [](const std::string& Name) { return StartsWith(Name, "r_"); }));
@@ -613,6 +663,7 @@ TEST_CASE(LOADPATH_SLOW_IN_DEBUG "E2E.Corner.InterlockingRaisesTheOverturningLoa
 		Scene S = BuildCorner(true);
 		S.Gravity = Vec3{0.0, -Lambda * GravityMPerS2, -GravityMPerS2};
 		const CaseRun R = Run(S, CornerInterlockedPush);
+		RecordVisual(S, R, ExpectedOutcome{});
 		INFO("visual " << std::string(CornerInterlockedPush) << ": " << Canonical(S, R.Verdict));
 		CHECK(R.Verdict.Clusters.empty());
 		CHECK(LiveFreeNames(S).size() == R.Boxes.size() - 1);

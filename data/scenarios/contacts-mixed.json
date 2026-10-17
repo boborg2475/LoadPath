@@ -1,0 +1,19 @@
+{
+  "title": "Mixed contacts: a perpend, two beds, a gap and an edge",
+  "summary": "Five EC6 bricks on a ground slab: a and b side by side, c across both, d 1 mm from b, e touching d only along an edge; seven joints, and nothing falls.",
+  "build": [
+    { "name": "ground", "size": [1.4, 0.8, 0.2], "centre": [0.4, 0.1, -0.1], "grounded": true },
+    { "name": "a", "size": [0.215, 0.1025, 0.065], "centre": [0.1075, 0, 0.0325], "material": "clay_brick" },
+    { "name": "b", "size": [0.215, 0.1025, 0.065], "centre": [0.3225, 0, 0.0325], "material": "clay_brick" },
+    { "name": "c", "size": [0.215, 0.1025, 0.065], "centre": [0.215, 0, 0.0975], "material": "clay_brick" },
+    { "name": "d", "size": [0.215, 0.1025, 0.065], "centre": [0.5385, 0, 0.0325], "material": "clay_brick" },
+    { "name": "e", "size": [0.215, 0.1025, 0.065], "centre": [0.7535, 0.1025, 0.0325], "material": "clay_brick" }
+  ],
+  "joints": [
+    { "materials": ["clay_brick", "clay_brick"], "plane": "side", "row": "clay_gp_mortar_perpend_ec6" },
+    { "materials": ["clay_brick", "clay_brick"], "plane": "bed", "row": "clay_gp_mortar_bed_ec6" },
+    { "materials": ["clay_brick", "ground"], "plane": "bed", "row": "clay_gp_mortar_bed_ec6" }
+  ],
+  "steps": ["cascade"],
+  "expect": {}
+}

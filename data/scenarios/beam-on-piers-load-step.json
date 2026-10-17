@@ -1,0 +1,19 @@
+{
+  "title": "An overloaded timber bearing drops the beam",
+  "summary": "Two five-brick EC6 piers carry a C24 beam; a load of 198261 N at the beam's centroid puts each bearing at 1.2 f_c,90 A, the beam falls and the piers stand.",
+  "build": [
+    { "name": "ground", "size": [2, 0.6, 0.2], "centre": [0.6, 0, -0.1], "grounded": true },
+    { "name": "pier0", "size": [0.215, 0.1025, 0.065], "centre": [0.1075, 0, 0.0325], "material": "clay_brick",
+      "repeat": { "count": 5, "step": [0, 0, 0.065] } },
+    { "name": "pier1", "size": [0.215, 0.1025, 0.065], "centre": [1.1075, 0, 0.0325], "material": "clay_brick",
+      "repeat": { "count": 5, "step": [0, 0, 0.065] } },
+    { "name": "beam", "size": [1.215, 0.1025, 0.15], "centre": [0.6075, 0, 0.4], "material": "c24" }
+  ],
+  "joints": [
+    { "materials": ["clay_brick", "ground"], "row": "clay_gp_mortar_bed_ec6" },
+    { "materials": ["clay_brick", "clay_brick"], "row": "clay_gp_mortar_bed_ec6" },
+    { "materials": ["c24", "clay_brick"], "row": "c24_bearing_perp_to_grain" }
+  ],
+  "steps": [{ "load": { "body": "beam", "force_n": [0, 0, -198260.55837251435] } }, "cascade"],
+  "expect": { "released": [["beam"]] }
+}

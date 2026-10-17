@@ -1,0 +1,17 @@
+{
+  "title": "Colonnade losing its middle post",
+  "summary": "Five dry timber posts carry four beams. The middle post goes; the two beams it carried fall, each on its own.",
+  "build": [
+    { "name": "ground", "size": [12, 2, 0.2], "centre": [4.4, 0, -0.1], "grounded": true },
+    { "name": "post", "size": [0.2, 0.2, 2.0], "centre": [0, 0, 1.0], "material": "c24",
+      "repeat": { "count": 5, "step": [2.2, 0, 0] } },
+    { "name": "beam", "size": [2.199, 0.2, 0.3], "centre": [1.1, 0, 2.15], "material": "c24",
+      "repeat": { "count": 4, "step": [2.2, 0, 0] } }
+  ],
+  "joints": [
+    { "materials": ["c24", "c24"], "row": "c24_bearing_perp_to_grain" },
+    { "materials": ["c24", "ground"], "row": "c24_bearing_perp_to_grain" }
+  ],
+  "steps": ["cascade", { "remove": ["post.2"] }, "cascade"],
+  "expect": { "released": [["beam.1"], ["beam.2"]] }
+}

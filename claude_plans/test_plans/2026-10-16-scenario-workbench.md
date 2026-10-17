@@ -76,7 +76,7 @@ Top level. Unknown keys are an error everywhere, as in the structure file.
 | `deferred` | string | absent | The slice or item that owes this answer. Empty string is an error. |
 | `tier` | `"default"`, `"slow_in_debug"`, `"slow"` | `"default"` | Which generic test runs the file (section 4). |
 | `materials` | array | `[]` | Materials local to this file: `{ "name", "density_kg_per_m3" }`. A name the catalogue already has is an error (no shadowing). |
-| `profiles` | array | `[]` | Joint rows local to this file: `{ "name", "from": <catalogue joint row>, ...overrides }`. Overrides use the catalogue's keys and units (`cohesion_mpa`, `tensile_mpa`, `friction`, `shear_cap_mpa`, ...); `"shear_cap_mpa": null` removes the cap. Converted to Pa once, by the loader. |
+| `profiles` | array | `[]` | Joint rows local to this file: `{ "name", "from": <catalogue joint row>, ...overrides }`. Overrides use the catalogue's keys and units (`cohesion_mpa`, `tensile_mpa`, `friction`, `shear_cap_mpa`; no others); `"shear_cap_mpa": null` removes the cap. Converted to Pa once, by the loader. |
 | `build` | array | required | Boxes and walls, below. |
 | `joints` | array | `[]` | Rules, below. |
 | `steps` | array | `["cascade"]` | Run in file order, below. |
@@ -100,16 +100,13 @@ A **wall** in `build` (the existing generator, `geometry::BuildRunningBondWall`)
 | `wall` | string | required | The wall's name; its bricks are `<wall>.c<course>.b<brick>`. |
 | `courses`, `bricks` | integer ≥ 1 | required | Bricks per even course; odd courses have one more piece (two half bricks at the ends). |
 | `origin` | [x, y, z] m | `[0, 0, 0]` | The wall's start, base level, centre line. |
-| `along` | `"x"` or `"y"` | `"x"` | |
-| `brick` | [l, t, h] m | `[0.215, 0.1025, 0.065]` | |
-| `bond` | `"running"` or `"stack"` | `"running"` | |
 | `on` | box name | required | A grounded box whose top is at the wall's base level (error otherwise). The base course's beds join it. |
 | `material` | string | required | For mass and for rules against other boxes. |
 | `bed`, `perpend` | joint row or file profile | required | The wall's own joints, as the generator makes them. |
 | `omit` | patterns | `[]` | Bricks never built: no body, no joint, no name an expectation may use, no ghost. A pattern matching no brick is an error. |
 
-Brick names count from 0: course 0 is the bottom, brick 0 is at the wall's start (lowest x, or
-lowest y for `along: "y"`). In running bond, odd courses run `b0` (half) to `b<bricks>` (half).
+Brick names count from 0: course 0 is the bottom, brick 0 is at the wall's start (lowest x). Walls
+run along x in running bond with 0.215 × 0.1025 × 0.065 m bricks (ruling 2026-10-17); odd courses run `b0` (half) to `b<bricks>` (half).
 
 A **rule** in `joints`. Every pair of boxes touching on a face (`FaceContact`, tolerance 1e-9 m)
 gets one joint, except pairs the generator already joined (two bricks of the same wall, or a base
@@ -135,7 +132,7 @@ A **step** is a bare string or an object with one key:
 | `"cascade"` | Runs the cascade (`MakeCascade(MakeCombinedAuthority(...))`, default `CascadeOptions`) with the current loads and gravity; its releases join the run's record. |
 | `"judge"` | One judge, nothing released; its verdict is printed and recorded. |
 | `{ "remove": [names or patterns] }` | Removes bodies. A name already removed or released when the step runs is a run error. |
-| `{ "load": { "body", "force_n": [x, y, z], "point": [x, y, z] } }` | Adds a load for every later judge and cascade. `point` defaults to the body's centroid. Loads accumulate. |
+| `{ "load": { "body", "force_n": [x, y, z] } }` | Adds a load, at the body's centroid, for every later judge and cascade. Loads accumulate. |
 | `{ "lateral_g": [ax, ay] }` | Sets the horizontal acceleration, as fractions of g, for every later judge and cascade: gravity becomes (ax g, ay g, −g). A later `lateral_g` replaces it. |
 
 `expect`:
@@ -871,3 +868,29 @@ The owner approved the plan; every recommendation in section 4 is the answer (1 
 codes 0, 1, 2; 5 no `warehouse` item yet; 6 no per-step expectations; 7 the guard covers E2E
 cases only; 8 `Scenario.ps1 -All` is dropped). Tests are written to the plan; a case red because
 the engine disagrees is not made to pass.
+
+## 6. Rulings while writing the tests (2026-10-17)
+
+- G5 (`E2E.Scenarios.FileNamesAreTheirSlugs`) checks names and draws nothing, so the W10 guard
+  exempts it by name with G2 to G4; W10's fixture lists it among the exempt cases.
+- test-expert's readings of the plan (its report of 2026-10-17: `elapsed_ms` only when timed,
+  `after` summed over every cascade, states as name strings, the message wording, the S3
+  tolerance row at 0.5e-9, profile rows identified by name, `Ground` as a built-in material)
+  stand as the plan's reading.
+- S2 against T3: naming a removed body in `expect` is a load error only when the removal comes
+  before every `cascade` step; a later removal loads, and if the body is already gone when that
+  step runs (released by an earlier cascade), the removal is a run error.
+- Review round 1 (2026-10-17): untested capability is removed rather than planned (the wall keys
+  `along`, `brick` and `bond`, the stiffness and compressive overrides, a `load` step's `point`).
+  Every error branch the loader keeps gets an S2 row; the CLI sketch (a file with no `expect`,
+  section 3) gets a case in `Cli.Scenario.*`. Each recorded cluster carries a per-body rigid
+  motion (`t_i = t_ref + r × (c_i − c_ref)`), proven by a `Scenario.Viewer.*` case, and
+  `RecordVisualTo` refuses a picture where a free box overlaps a grounded box, so a buried
+  structure fails the W10 guard. W10 also checks `Invoke-VisualRun` writes the page and exits 1.
+- A `REQUIRE` whose structure the picture needs (3.12's `Loaded.Ok()`) may precede the
+  recording; every other precondition before `RecordVisual` is a `CHECK`.
+- Owner, 2026-10-17: LoadPath is a statics engine with no collision detection; the page's
+  animation only extends each cluster's first-order mechanism, so pieces passing through the
+  ground, walls or each other while falling is expected and is not a defect. The pictures must get
+  right which pieces fall together (each cluster drawn rigid) and the structure as built (no free
+  box overlapping a grounded one before the run).

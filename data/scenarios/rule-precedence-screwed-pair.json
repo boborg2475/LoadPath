@@ -1,0 +1,18 @@
+{
+  "title": "A screwed pair tips together",
+  "summary": "One bay of the colonnade with only beam.0 and post.1 screwed (three screws); post.0 goes and the screwed beam and post tip as one cluster.",
+  "build": [
+    { "name": "ground", "size": [3.8, 2, 0.2], "centre": [1.1, 0, -0.1], "grounded": true },
+    { "name": "post", "size": [0.2, 0.2, 2.0], "centre": [0, 0, 1.0], "material": "c24",
+      "repeat": { "count": 2, "step": [2.2, 0, 0] } },
+    { "name": "beam", "size": [2.199, 0.2, 0.3], "centre": [1.1, 0, 2.15], "material": "c24",
+      "repeat": { "count": 1, "step": [2.2, 0, 0] } }
+  ],
+  "joints": [
+    { "materials": ["c24", "c24"], "row": "c24_bearing_perp_to_grain" },
+    { "between": ["beam.0", "post.1"], "row": "ec5_screw_8x60_steel_to_glulam", "count": 3 },
+    { "materials": ["c24", "ground"], "row": "c24_bearing_perp_to_grain" }
+  ],
+  "steps": [{ "remove": ["post.0"] }, "cascade"],
+  "expect": { "released": [["beam.0", "post.1"]] }
+}

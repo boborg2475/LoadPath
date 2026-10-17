@@ -156,6 +156,19 @@ bool ReadFastener(const JsonValue& Value, std::size_t Index, std::unordered_set<
 		Reader.Fields.String("source", Row.Source) && Reader.Fields.String("note", Row.Note);
 }
 
+bool ReadMaterial(const JsonValue& Value, std::size_t Index, std::unordered_set<std::string>& Seen, FileError& Error, MaterialRow& Row)
+{
+	if (Value.Type != JsonType::Object)
+	{
+		Error = {Value.Line, "material " + std::to_string(Index) + ": not an object"};
+		return false;
+	}
+	RowReader Reader(Value, "material", Index, Error);
+	return Reader.Name(Row.Name, Seen) && Reader.OnlyKeys({"name", "density_kg_per_m3", "source", "note"}) &&
+		Reader.Positive("density_kg_per_m3", 1.0, Row.DensityKgPerM3) && Reader.Fields.String("source", Row.Source) &&
+		Reader.Fields.String("note", Row.Note);
+}
+
 bool ReadVersion(const JsonValue& Root, FileError& Error)
 {
 	const JsonValue* Version = Find(Root, "version");
@@ -173,7 +186,7 @@ bool ReadVersion(const JsonValue& Root, FileError& Error)
 }
 
 template <typename RowType, typename ReadFn>
-bool ReadTable(ElementFields& Document, std::string_view Key, std::vector<RowType>& Out, FileError& Error, ReadFn Read)
+bool ReadTable(ElementFields& Document, std::string_view Key, std::vector<RowType>& Out, FileError& Error, ReadFn Read, bool bRequired = true)
 {
 	const JsonValue* Array = nullptr;
 	if (!Document.Elements(Key, Array))
@@ -182,7 +195,7 @@ bool ReadTable(ElementFields& Document, std::string_view Key, std::vector<RowTyp
 	}
 	if (Array == nullptr)
 	{
-		return Document.Fail("missing " + std::string(Key));
+		return !bRequired || Document.Fail("missing " + std::string(Key));
 	}
 	std::unordered_set<std::string> Seen;
 	for (std::size_t Index = 0; Index < Array->Items.size(); ++Index)
@@ -221,6 +234,11 @@ const FastenerRow* Catalogue::FindFastener(std::string_view Name) const
 	return FindRow(Fasteners, Name);
 }
 
+const MaterialRow* Catalogue::FindMaterial(std::string_view Name) const
+{
+	return FindRow(Materials, Name);
+}
+
 CatalogueResult LoadCatalogue(std::string_view Json)
 {
 	CatalogueResult Result;
@@ -233,7 +251,8 @@ CatalogueResult LoadCatalogue(std::string_view Json)
 	}
 	ElementFields Document(Root, "document", Result.Error);
 	if (!ReadVersion(Root, Result.Error) || !ReadTable(Document, "joints", Result.Value.Joints, Result.Error, ReadJoint) ||
-		!ReadTable(Document, "fasteners", Result.Value.Fasteners, Result.Error, ReadFastener))
+		!ReadTable(Document, "fasteners", Result.Value.Fasteners, Result.Error, ReadFastener) ||
+		!ReadTable(Document, "materials", Result.Value.Materials, Result.Error, ReadMaterial, false))
 	{
 		Result.Value = Catalogue{};
 	}

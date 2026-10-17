@@ -1,0 +1,12 @@
+{
+  "title": "An EC6 wall with an opening",
+  "summary": "A 6 x 6 running-bond EC6 wall with six bricks never built, leaving an opening three courses high; the bond bridges it and nothing falls.",
+  "build": [
+    { "name": "ground", "size": [1.6, 0.6, 0.2], "centre": [0.645, 0, -0.1], "grounded": true },
+    { "wall": "wall", "courses": 6, "bricks": 6, "on": "ground", "material": "clay_brick",
+      "bed": "clay_gp_mortar_bed_ec6", "perpend": "clay_gp_mortar_perpend_ec6",
+      "omit": ["wall.c[0-2].b[2-3]"] }
+  ],
+  "steps": ["cascade"],
+  "expect": {}
+}

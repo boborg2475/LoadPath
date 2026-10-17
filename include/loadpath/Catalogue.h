@@ -41,13 +41,22 @@ struct FastenerRow
 	double BearingNormalStiffnessPaPerM = 0;
 };
 
+struct MaterialRow
+{
+	std::string Name, Source, Note;
+	double DensityKgPerM3 = 0;
+};
+
 struct Catalogue
 {
 	std::vector<JointRow> Joints;
 	std::vector<FastenerRow> Fasteners;
+	// Empty when the document has no materials table.
+	std::vector<MaterialRow> Materials;
 	// nullptr when absent.
 	const JointRow* FindJoint(std::string_view Name) const;
 	const FastenerRow* FindFastener(std::string_view Name) const;
+	const MaterialRow* FindMaterial(std::string_view Name) const;
 };
 
 struct CatalogueResult

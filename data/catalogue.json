@@ -104,5 +104,19 @@
       "source": "https://www.svenskttra.se/siteassets/5-publikationer/pdfer/sw-design-of-timber-structures-vol3-2022.pdf ; https://www.swedishwood.com/siteassets/5-publikationer/pdfer/sw-design-of-timber-structures-vol2-2022.pdf (EN 1995-1-1 Table 7.1) ; https://www.coford.ie/media/coford/content/publications/TimberHandbook5Part130418.pdf (§7.1(3))",
       "note": "Swedish Wood Vol. 3 Ex 4.3: M16 bolt, f_u = 360 MPa, 8 mm outer steel plates (t = 0.5 d) on a 90 mm GL30c member (rho_k 390, rho_m 430 kg/m3), modes j/k: 12.9 kN (mode k). EN 1995-1-1 §8.2.3(1) defines those expressions per shear plane per fastener (the 0.5 in mode j is the central member split between its two planes), so 12.9 kN is per shear plane and the bolt carries 25.8 kN across its two planes. No withdrawal given. Slip modulus EN 1995-1-1 Table 7.1, bolts: K_ser = rho_m^1.5 d / 23 = 430^1.5 x 16 / 23 = 6203 N/mm, x 2 for steel-to-timber (§7.1(3)) = 12406 N/mm = 12.4 MN/m per shear plane per bolt. Bearing: the C24 3.75 MPa and 8.2 GPa/m of the member it bears on."
     }
+  ],
+  "materials": [
+    {
+      "name": "clay_brick",
+      "density_kg_per_m3": 2000,
+      "source": "EN 1991-1-1 Annex A, Table A.1 (masonry units) ; the brick fixtures of ANCHORS.md (B-CAT-01, 10 x 8 dry wall)",
+      "note": "Solid fired-clay brick at 2000 kg/m3, the density every brick fixture in this repository uses (B-CAT-01: a 0.215 x 0.1025 x 0.065 m brick of 2.8648 kg). A perforated unit is lighter and needs its own row."
+    },
+    {
+      "name": "c24",
+      "density_kg_per_m3": 420,
+      "source": "https://blueprints.readthedocs.io/en/stable/API%20reference/codes/eurocode/en_338_2016/chapter_5_classification_of_structural_timber/table_1/ (EN 338:2016 Table 1)",
+      "note": "C24 softwood mean density rho_mean = 420 kg/m3 (characteristic rho_k = 350). Mass is a mean quantity, so the mean is used."
+    }
   ]
 }

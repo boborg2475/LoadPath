@@ -50,7 +50,7 @@ h2 { font-family: var(--f-display); font-weight: 600; font-size: 22px; line-heig
 .head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 16px; }
 .test { font-family: var(--f-data); font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
 .summary { margin: 0; max-width: 90ch; color: var(--muted); font-size: 14px; }
-.frames { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 360px), 1fr)); gap: 8px; }
+.frames { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); gap: 8px; }
 figure { margin: 0; min-width: 0; background: var(--stage); border: 1px solid var(--line); }
 figcaption { font: 500 11px var(--f-data); text-transform: uppercase; letter-spacing: .08em; color: var(--muted); padding: 6px 8px; border-top: 1px solid var(--line); }
 .missing { aspect-ratio: 8 / 7; display: grid; place-items: center; color: var(--muted); font: 12px var(--f-data); }
@@ -98,7 +98,7 @@ function entry(e) {
     <div class="head"><h2>${esc(e.title)}</h2><span class="pill ${e.status}">${e.status}</span></div>
     <div class="test">${esc(e.test)}</div>
     <p class="summary">${esc(e.summary)}</p>
-    <div class="frames">${frame(e.before_img, "Before")}${frame(e.after_img, e.after_label)}</div>
+    <div class="frames">${frame(e.before_img, "Before")}${frame(e.after_img, e.after_label)}${e.expected_state ? frame(e.expected_img, "After · expected by the test") : ""}</div>
     <dl class="metrics">
       <div><dt>Verdict before</dt><dd><span class="pill ${stateClass(e.verdict)}">${esc(e.verdict ?? "?")}</span></dd></div>
       <div><dt>State after</dt><dd><span class="pill ${stateClass(e.state)}">${esc(e.state ?? "?")}</span></dd></div>
@@ -108,12 +108,14 @@ function entry(e) {
       <div><dt>Joints severed</dt><dd>${e.severed.length}</dd></div>
       <div><dt>Joints cracked</dt><dd>${e.cracked.length}</dd></div>
       <div><dt>Engine time</dt><dd>${fmtMs(e.elapsed_ms)}</dd></div>
+      ${e.expected_state ? `<div><dt>Expected state</dt><dd><span class="pill ${stateClass(e.expected_state)}">${esc(e.expected_state)}</span></dd></div><div><dt>Expected to fall</dt><dd>${(e.expected_released || []).length}</dd></div>` : ""}
     </dl>
     <details><summary>Released bodies and broken joints</summary>
       <div class="lists">
         <div><h3>Released</h3>${names(e.released, "Nothing released.")}</div>
         <div><h3>Severed</h3>${names(e.severed, "No joint severed.")}</div>
         <div><h3>Cracked, still holding</h3>${names(e.cracked, "No joint cracked.")}</div>
+        ${e.expected_state ? `<div><h3>Expected to fall</h3>${names(e.expected_released || [], "Nothing expected to fall.")}</div>` : ""}
       </div>
     </details>
     <a class="open" href="${esc(viewer)}#${esc(e.slug)}">Open in the 3D viewer, with the animation →</a>
