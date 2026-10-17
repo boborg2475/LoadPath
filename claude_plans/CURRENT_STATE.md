@@ -32,8 +32,11 @@ stacks, Paterson–Zwick, Couplet–Heyman at Milankovitch's 0.107478 with hinge
 the certificate's associative 31.07°, the cascade on the arch below least thickness, the dry
 wall at t / H within 1 % (10 × 8 and 4 × 5), the bonded 4 × 5 wall at its monolith factor
 `(t/H)(1 + f_t A_base / W) = 2.971` to 1 %, two screws at twice their published shear and
-withdrawal whatever the joint area. Default suite 429 cases in Debug and 484 in Release as of
-2026-10-15, sharded across six processes (about 110 s and 18 s) (325 and 347 at the 6b close) (the arch, pile, arch-cascade, fuzz, small-wall and multi-panel factor anchors
+withdrawal whatever the joint area. Default suite 434 cases in Debug and 499 in Release as of
+2026-10-17, sharded across six processes (about 118 s and 19 s), including the end-to-end
+validation gate `E2E.*` (15 cases, `tests/EndToEndTest.cpp`, the approved plan
+`test_plans/2026-10-15-e2e-validation.md`; an outcome there changes only by an approved plan
+amendment) (325 and 347 at the 6b close) (the arch, pile, arch-cascade, fuzz, small-wall and multi-panel factor anchors
 run only in Release under `LOADPATH_SLOW_IN_DEBUG`; twenty-two `Slow.*` cases run in Release at
 every slice close, and the
 cheap `Measure.Scale.*` rows after them); the `Deferred.*` tier holds the physical wedge pin
@@ -375,6 +378,7 @@ solves", amended after review). Still to do, in order:
 
 ## Deferred
 
+- **E2E suite red cases (2026-10-17, plan `test_plans/2026-10-15-e2e-validation.md`).** `tests/EndToEndTest.cpp` holds the 17 approved cases; 15 are `E2E.*` and green, two are red by design: `Deferred.Slice6.DryWallLosingItsLintelKeepsTheBricksOverThePiers` (34 bricks in 26 clusters on pass 1, the pier-top bricks c6x0.50, c6x7.50, c7x0.25, c7x7.75 included; turns green with the owed least-joint-movement selection, then moves to `E2E.Wall.*`) and `Deferred.Wall.DryWallWithAGapInItsBaseReleasesNothing` (nothing released but Undecided, elastic Mechanism against certificate Stands; turns green with the parked elastic-trust work, IMMEDIATE_UPDATES §4, then moves to `E2E.Wall.*` with `LOADPATH_SLOW_IN_DEBUG`, its plan tier). The prefix takes 3.3 s serial in Release against the plan's 3 s budget, and the arch case 1.2 s against 1 s per case. The pictures (`tests/VisualSupport.h`, `RecordVisual`) are owed by the workbench plan: each case keeps its slug constant and a `CaseRun` value to hand over.
 - The certificate's interior-optimum and stall defects are fixed (2026-10-13, DESIGN §10 opening
   and amendment; the retry shift escalates 1e-16 to 1e-12 of the full diagonal with 20 refinement
   passes after a shifted factor, and the stall window restarts when the complementarity halves);

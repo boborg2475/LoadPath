@@ -148,7 +148,8 @@ Visual: colonnade-screwed-2-screws-minus-post2, colonnade-screwed-3-screws-minus
 - **Today:** green for both rows (the n = 2 crack ratio reads 1.042 against the closed form's
   1.04). Mutants: withdrawal × 0 in `FastenerProfile` (the n = 3 row falls); withdrawal × 1.2 (the
   n = 2 row stands).
-- **Tier:** default, about 40 ms Release, 1.6 s Debug.
+- **Tier:** `LOADPATH_SLOW_IN_DEBUG` (1.5 s in Debug, over section 4's 1 s rule), about 40 ms
+  Release.
 
 ### 3.5 `E2E.Colonnade.AScrewedEndBayTipsWithItsPost` (must-have)
 
@@ -301,12 +302,16 @@ Visual: dry-lintel-intact, dry-lintel-removed-expected, dry-lintel-removed-today
 - **Fixture:** a 10 × 8 dry-brick running-bond wall built brick by brick, with a door opening four
   bricks wide (x 0.43 to 1.29 m) through courses 0 to 4, and a timber lintel 1.075 × 0.1025 ×
   0.065 m replacing course 5 over x 0.3225 to 1.3975 m (half a brick of bearing each side); the
-  lintel's joints are Bearing.
+  lintel's joints are Bearing. The jambs are toothed: in courses 1 and 3 the bricks centred on
+  the opening edges (x 0.43 and 1.29 m) stay, each reaching half a brick into the opening, so the
+  clear width there is 0.5375 to 1.1825 m (as in the approved picture).
 - **Assertion (outcome):** with the lintel, Stands. Lintel removed: the four course-6 bricks with no
   bed under them are released; every pier brick (courses 0 to 5) is live, and so are the bricks
   that sit wholly on pier bricks: the course-6 end bricks (x 0 to 0.215 m and its mirror) and the
   course-7 half bricks above them. Bricks whose centroid lands exactly on a support edge (running
-  bond's corbel steps) are not asserted either way.
+  bond's corbel steps) are not asserted either way. The four toothed jamb bricks in
+  courses 1 and 3 are pier bricks and are asserted live: the bricks of courses 2 and 4 load their
+  supported half (ruling 2026-10-17).
 - **Expected, and why:** lower-bound statics: a block resting wholly on standing blocks, under
   gravity alone, with dry joints, cannot be pulled down by blocks falling beside it. And the
   unsupported bricks must fall: the four courses above the opening cannot arch across 1.075 m,
@@ -341,7 +346,8 @@ Visual: dry-wall-minus-two-base-bricks, dry-two-brick-lintel-removed
 - **Behaviour:** a dry wall with two adjacent base bricks knocked out (or a two-brick opening with
   its lintel removed) drops nothing.
 - **Fixture:** 10 × 8 dry-brick wall. Rows: the two base bricks at x 0.645 to 1.075 m removed; the
-  wall of 3.13 with a two-brick opening (x 0.645 to 1.075 m) and its lintel removed.
+  wall of 3.13 with a two-brick opening (x 0.645 to 1.075 m), its jambs toothed as in 3.13 (one brick clear,
+  0.7525 to 0.9675 m, in courses 1 and 3) and its lintel removed.
 - **Assertion (outcome):** nothing released, no failures.
 - **Expected, and why:** engineering judgement: the bricks over the gap corbel or wedge between
   their neighbours, and the certificate finds a standing field.

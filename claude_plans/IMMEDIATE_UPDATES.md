@@ -45,11 +45,11 @@ pictures, and a quick way to build, see and test structures (DESIGN §10, 2026-1
    through the plan step first.
 2. **End-to-end validation tests.** Whole-structure scenarios through the public API (build the
    structure, judge it, run the cascade, remove pieces, read who stands and what releases),
-   checked against expected outcomes. A feature is validated against them before it lands. Start
-   with an inventory of what already does this (the `Measure.Scale` rows, the anchors from papers
-   and codes, the cascade fuzz families, the warehouse and shed), then test-expert proposes the
-   missing scenarios for the owner to approve, as the first plan under the new step. They become
-   the workbench's first scenario files; the plan's pictures come from the probe until then.
+   checked against expected outcomes. A feature is validated against them before it lands. The
+   plan was approved and its 17 tests written 2026-10-17 (`tests/EndToEndTest.cpp`: 15 `E2E.*`
+   green, 2 `Deferred.*` red by design). Remaining: each case records its pictures
+   (`RecordVisual`, workbench plan W9) and the cases move into scenario files once the workbench
+   exists.
 
 ## 4. Parked (owner, 2026-10-15): not before sections 1 to 3
 

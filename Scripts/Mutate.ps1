@@ -3,6 +3,7 @@
 #   Scripts/Mutate.ps1 -File src/StaticsCommon.cpp -Find "!Model.IsLive(" -Replace "Model.IsLive(" -Tests "Statics.StaleLoads.*"
 # -Find must occur exactly once in the file. -Tests is a doctest -tc filter (comma-separated patterns).
 # The scratch worktree is synced to this working tree first unless -NoSync is given.
+# -Detail also prints each failing test case, its subcase lines and the failed assertions.
 # -Profile builds and runs the phase-timing build (build/msvc-profile), for assertions that only run there.
 # Exit code: 0 caught, 1 survived, 2 usage or setup error, 3 the mutant does not compile.
 param([Parameter(Mandatory = $true)][string]$File,
@@ -12,6 +13,7 @@ param([Parameter(Mandatory = $true)][string]$File,
       [ValidateSet("Debug","Release")][string]$Config = "Release",
       [string]$Scratch = "",
       [switch]$NoSync,
+      [switch]$Detail,
       [switch]$Profile)
 $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent $PSScriptRoot
@@ -47,7 +49,8 @@ try {
         $BuildDir = if ($Profile) { "msvc-profile" } else { "msvc" }
         $Output = & "$Scratch\build\$BuildDir\tests\$Config\loadpath_tests.exe" "-tc=$Tests" --no-colors
         $Code = $LASTEXITCODE
-        $Output | Where-Object { $_ -match '^\[doctest\] (test cases|assertions)' } | Write-Output
+        $Shown = if ($Detail) { '^\[doctest\] (test cases|assertions)|^TEST CASE:|^\s+[A-Za-z0-9 ,.()-]+$|ERROR: ' } else { '^\[doctest\] (test cases|assertions)' }
+        $Output | Where-Object { $_ -match $Shown } | Write-Output
         if ($Output -match 'test cases:\s*0 \|') {
             Write-Output "[Mutate.ps1] no test case matches -Tests '$Tests'"
             $Verdict = 2

@@ -1,0 +1,32 @@
+{
+  "profiles": [
+    { "name": "c24_bearing_perp_to_grain", "compressive_pa": 3.75e6, "cohesion_pa": 0, "tensile_pa": 0, "friction": 0.3, "normal_stiffness_pa_per_m": 8.2e9, "tangential_stiffness_pa_per_m": 15.3e9 }
+  ],
+  "bodies": [
+    { "name": "ground", "mass_kg": 0, "centroid_m": [4.4, 0, -0.5], "grounded": true },
+    { "name": "post0", "mass_kg": 33.6, "centroid_m": [0, 0, 1.0], "grounded": false },
+    { "name": "post1", "mass_kg": 33.6, "centroid_m": [2.2, 0, 1.0], "grounded": false },
+    { "name": "post2", "mass_kg": 33.6, "centroid_m": [4.4, 0, 1.0], "grounded": false },
+    { "name": "post3", "mass_kg": 33.6, "centroid_m": [6.6, 0, 1.0], "grounded": false },
+    { "name": "post4", "mass_kg": 33.6, "centroid_m": [8.8, 0, 1.0], "grounded": false },
+    { "name": "beam0", "mass_kg": 55.4148, "centroid_m": [1.1, 0, 2.15], "grounded": false },
+    { "name": "beam1", "mass_kg": 55.4148, "centroid_m": [3.3, 0, 2.15], "grounded": false },
+    { "name": "beam2", "mass_kg": 55.4148, "centroid_m": [5.5, 0, 2.15], "grounded": false },
+    { "name": "beam3", "mass_kg": 55.4148, "centroid_m": [7.7, 0, 2.15], "grounded": false }
+  ],
+  "interfaces": [
+    { "a": "ground", "b": "post0", "normal": [0, 0, 1], "centre_m": [0, 0, 0], "u": [1, 0, 0], "v": [0, 1, 0], "half_u_m": 0.1, "half_v_m": 0.1, "profile": "c24_bearing_perp_to_grain" },
+    { "a": "ground", "b": "post1", "normal": [0, 0, 1], "centre_m": [2.2, 0, 0], "u": [1, 0, 0], "v": [0, 1, 0], "half_u_m": 0.1, "half_v_m": 0.1, "profile": "c24_bearing_perp_to_grain" },
+    { "a": "ground", "b": "post2", "normal": [0, 0, 1], "centre_m": [4.4, 0, 0], "u": [1, 0, 0], "v": [0, 1, 0], "half_u_m": 0.1, "half_v_m": 0.1, "profile": "c24_bearing_perp_to_grain" },
+    { "a": "ground", "b": "post3", "normal": [0, 0, 1], "centre_m": [6.6, 0, 0], "u": [1, 0, 0], "v": [0, 1, 0], "half_u_m": 0.1, "half_v_m": 0.1, "profile": "c24_bearing_perp_to_grain" },
+    { "a": "ground", "b": "post4", "normal": [0, 0, 1], "centre_m": [8.8, 0, 0], "u": [1, 0, 0], "v": [0, 1, 0], "half_u_m": 0.1, "half_v_m": 0.1, "profile": "c24_bearing_perp_to_grain" },
+    { "a": "post0", "b": "beam0", "normal": [0, 0, 1], "centre_m": [0.05025, 0, 2.0], "u": [1, 0, 0], "v": [0, 1, 0], "half_u_m": 0.04975, "half_v_m": 0.1, "profile": "c24_bearing_perp_to_grain" },
+    { "a": "post1", "b": "beam0", "normal": [0, 0, 1], "centre_m": [2.14975, 0, 2.0], "u": [1, 0, 0], "v": [0, 1, 0], "half_u_m": 0.04975, "half_v_m": 0.1, "profile": "c24_bearing_perp_to_grain" },
+    { "a": "post1", "b": "beam1", "normal": [0, 0, 1], "centre_m": [2.25025, 0, 2.0], "u": [1, 0, 0], "v": [0, 1, 0], "half_u_m": 0.04975, "half_v_m": 0.1, "profile": "c24_bearing_perp_to_grain" },
+    { "a": "post2", "b": "beam1", "normal": [0, 0, 1], "centre_m": [4.34975, 0, 2.0], "u": [1, 0, 0], "v": [0, 1, 0], "half_u_m": 0.04975, "half_v_m": 0.1, "profile": "c24_bearing_perp_to_grain" },
+    { "a": "post2", "b": "beam2", "normal": [0, 0, 1], "centre_m": [4.45025, 0, 2.0], "u": [1, 0, 0], "v": [0, 1, 0], "half_u_m": 0.04975, "half_v_m": 0.1, "profile": "c24_bearing_perp_to_grain" },
+    { "a": "post3", "b": "beam2", "normal": [0, 0, 1], "centre_m": [6.54975, 0, 2.0], "u": [1, 0, 0], "v": [0, 1, 0], "half_u_m": 0.04975, "half_v_m": 0.1, "profile": "c24_bearing_perp_to_grain" },
+    { "a": "post3", "b": "beam3", "normal": [0, 0, 1], "centre_m": [6.65025, 0, 2.0], "u": [1, 0, 0], "v": [0, 1, 0], "half_u_m": 0.04975, "half_v_m": 0.1, "profile": "c24_bearing_perp_to_grain" },
+    { "a": "post4", "b": "beam3", "normal": [0, 0, 1], "centre_m": [8.74975, 0, 2.0], "u": [1, 0, 0], "v": [0, 1, 0], "half_u_m": 0.04975, "half_v_m": 0.1, "profile": "c24_bearing_perp_to_grain" }
+  ]
+}
