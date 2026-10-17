@@ -126,7 +126,7 @@ cost 8 to 10 minutes per change:
 | review-expert | the Release default run once, in the scratch worktree; another tier only when a result looks off |
 | orchestrator | `Test.ps1 -Profile -Config Release -tc="Profile.*"` at every slice close, and the `Measure.Profile.ReadingsDigest` row in both builds (digests must match) whenever a change touches `src/PhaseClock.h` or an instrumented call; profiled-only assertions are mutation-proven with `Mutate.ps1 -Profile` |
 | orchestrator | the Debug default run once, before the commit |
-| orchestrator | `Scripts/Visuals.ps1` (with screenshots) once after a feature lands, then publishes `build/visuals/index.html` with `screenshots.html` to the fixed E2E page, https://claude.ai/artifact/SLuMLdeb5UNZh382sBvYgd; `Scripts/Visuals.Tests.ps1` only when `Visuals.ps1` changes. Every Release default run already rebuilds the 3D page without screenshots |
+| orchestrator | `Scripts/Visuals.ps1` (with screenshots) once after a feature lands, then publishes `build/visuals/index.html` with `screenshots.html` to the fixed E2E page, https://claude.ai/artifact/SLuMLdeb5UNZh382sBvYgd; `Scripts/Visuals.Tests.ps1` only when `Visuals.ps1` changes. Every Release default run already rebuilds the 3D page without screenshots. When an E2E case is added, changes its expectation or moves in or out of `Deferred.`, update its entry in `viewer/reasons.json` (why the expectation is right; for a deferred case why it is held red and what turns it green) in the same change |
 
 **The scratch worktree** (`Scripts/Scratch.ps1`, at `..\LoadPath-scratch`) is a persistent git
 worktree with its own warm build folder. Sync it, then build and run there, for reviews,

@@ -65,10 +65,18 @@ summary { cursor: pointer; color: var(--muted); font-family: var(--f-data); font
 .lists h3 { font: 600 12px var(--f-data); text-transform: uppercase; letter-spacing: .06em; margin: 0; }
 .open { font-family: var(--f-data); font-size: 12px; }
 .empty { color: var(--muted); margin: 4px 0 0; font-size: 13px; }
+.why { border-left: 4px solid var(--stand); padding: 4px 0 4px 12px; display: grid; gap: 6px; max-width: 90ch; }
+.why.deferred { border-left-color: var(--undecided); } .why.failed { border-left-color: var(--sever); }
+.why h3 { font-family: var(--f-display); font-weight: 600; font-size: 18px; margin: 0; }
+.why h4 { font: 600 11px var(--f-data); text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 0; }
+.why p { margin: 0; font-size: 14px; }
+.why ul { margin: 0; padding-left: 18px; font-size: 14px; }
+.why .names { font-family: var(--f-data); font-size: 12.5px; overflow-wrap: anywhere; }
 </style>
 </head>
 <body>
 <script type="application/json" id="lp-shots">null</script>
+<script type="application/json" id="lp-reasons">null</script>
 <div class="wrap">
   <header>
     <div class="eyebrow">LoadPath · end-to-end tests · stills</div>
@@ -93,6 +101,37 @@ function frame(src, caption) {
 function names(items, empty) {
   return items.length ? `<ul>${items.map(i => `<li>${esc(i)}</li>`).join("")}</ul>` : `<p class="empty">${empty}</p>`;
 }
+let reasons = { tests: {}, slugs: {} };
+try { reasons = JSON.parse(document.getElementById("lp-reasons").textContent || "null") || reasons; } catch (err) {}
+function nameList(list) {
+  return `<span class="names">${list.slice(0, 12).map(esc).join(", ")}${list.length > 12 ? `, and ${list.length - 12} more` : ""}</span>`;
+}
+function why(e) {
+  const r = { ...(reasons.tests || {})[e.test], ...(reasons.slugs || {})[e.slug] };
+  const heading = { passed: "Why it passed", deferred: "Why it is deferred", failed: "Why it failed" }[e.status] || "Result";
+  const parts = [`<h3>${heading}</h3>`];
+  if (e.status === "deferred" && r.deferred && e.expected_state) parts.push(`<p>${esc(r.deferred)}</p>`);
+  if (e.expected_state) {
+    const engine = new Set(e.engine_released || []), expected = new Set(e.expected_released || []), either = new Set(e.expected_either || []);
+    const extra = [...engine].filter(n => !expected.has(n) && !either.has(n)).sort();
+    const missing = [...expected].filter(n => !engine.has(n) && !either.has(n)).sort();
+    const rows = [];
+    if (extra.length) rows.push(`<li>Released by the engine, expected to stand (${extra.length}): ${nameList(extra)}</li>`);
+    if (missing.length) rows.push(`<li>Expected to fall, still standing (${missing.length}): ${nameList(missing)}</li>`);
+    if ((e.state || "") !== e.expected_state) rows.push(`<li>Final state: the engine says ${esc(e.state)}, the test expects ${esc(e.expected_state)}</li>`);
+    parts.push(rows.length ? `<h4>Where this entry differs from the test</h4><ul>${rows.join("")}</ul>` : `<p>The same pieces fall as the test expects; only how they group into falling clusters differs, which the test does not check.</p>`);
+  } else if (e.status === "passed") {
+    parts.push(`<p>The engine's outcome matches everything this test asserts.</p>`);
+  } else if (e.status === "deferred") {
+    parts.push(`<p>This entry matches what the test expects; the test is held red by another entry it records.</p>`);
+    if (r.deferred) parts.push(`<h4>Why the test is held red</h4><p>${esc(r.deferred)}</p>`);
+  } else {
+    parts.push(`<p>The test failed, but this entry carries no expected outcome to compare against; read the test output.</p>`);
+  }
+  if (e.status === "deferred" && r.green_when) parts.push(`<h4>Turns green when</h4><p>${esc(r.green_when)}</p>`);
+  if (r.basis) parts.push(`<h4>Why this is the expected outcome</h4><p>${esc(r.basis)}</p>`);
+  return `<section class="why ${esc(e.status)}">${parts.join("")}</section>`;
+}
 function entry(e) {
   return `<article class="entry ${e.status}" data-status="${e.status}" id="${esc(e.slug)}">
     <div class="head"><h2>${esc(e.title)}</h2><span class="pill ${e.status}">${e.status}</span></div>
@@ -110,6 +149,7 @@ function entry(e) {
       <div><dt>Engine time</dt><dd>${fmtMs(e.elapsed_ms)}</dd></div>
       ${e.expected_state ? `<div><dt>Expected state</dt><dd><span class="pill ${stateClass(e.expected_state)}">${esc(e.expected_state)}</span></dd></div><div><dt>Expected to fall</dt><dd>${(e.expected_released || []).length}</dd></div>` : ""}
     </dl>
+    ${why(e)}
     <details><summary>Released bodies and broken joints</summary>
       <div class="lists">
         <div><h3>Released</h3>${names(e.released, "Nothing released.")}</div>

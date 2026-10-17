@@ -1,0 +1,95 @@
+{
+  "_about": "Why each E2E result is what it is, shown on the picture pages. Keyed by test name; a slug key overrides its test's entry. basis: why the expected outcome is right (from the approved plan). deferred: why the test is held red. green_when: what turns it green. Edit with the plan: claude_plans/test_plans/2026-10-15-e2e-validation.md and 2026-10-16-scenario-workbench.md.",
+  "tests": {
+    "E2E.Colonnade.RemovingAPostDropsOnlyTheBeamsItCarried": {
+      "basis": "Closed form. A beam left on one dry bearing has its centroid about 1.05 m beyond that bearing and no tension to hold it, so it tips; a beam on two bearings stands. Dry bearings pass no moment, so the neighbouring bays are untouched (F-RON-02, untied: collapse confined to one bay)."
+    },
+    "E2E.Arch.LosingTheKeystoneLeavesOnlyTheHaunchesFrictionHolds": {
+      "basis": "An independent oracle in the test. A half-arch with a free top is an open chain: each joint carries exactly the weight above it. The chain stands up to a joint only while every joint below has the centroid of the part above inside it and does not slide (cot φ ≤ μ). The longest such chain ends at the 54.484° joint, since one voussoir higher cot 54.484° = 0.714 exceeds μ = 0.7. So 12 voussoirs stand on each side. The engine drops the rest one voussoir per pass inside one run; the test checks only the final set and its symmetry (owner answer 5)."
+    },
+    "E2E.Wall.RemovingANonStructuralBrickReleasesNothing": {
+      "basis": "Engineering judgement: a brick with nothing above it, or one whose neighbours bridge it by bond, carries no load another piece depends on. Nothing is released, nothing cracks, and the wall stands."
+    },
+    "E2E.Colonnade.ScrewedBearingsBridgeALostPostAboveTheWithdrawalThreshold": {
+      "basis": "Closed form from the catalogue's EC5 screw withdrawal. A beam left on one post overturns with moment 543.6 N × 1.0 m against n × 5240 N × 0.04975 m, so it holds when n ≥ 2.08: two screws let it fall, three hold it. F-RON-02 (tied: the loss is bridged) is the published precedent. Fastener values are characteristic, not mean (owner answer 6)."
+    },
+    "E2E.Colonnade.AScrewedEndBayTipsWithItsPost": {
+      "basis": "Closed form. Post and beam together have their centroid about 0.68 m from the post's centre line, far outside its 0.1 m half-width, and the post base carries no tension, so the screwed pair tips about the base edge facing the gap. With dry bearings the beam tips alone off a post that then stands."
+    },
+    "E2E.Wall.BondedWallPushedPastItsLimitFallsAsOneSlab": {
+      "basis": "The bonded monolith overturning formula, λ = (t/H)(1 + f_t A_base / W): below it (0.98) the wall stands; above it (1.02) the base beds crack and the whole wall falls as one slab, because every bed above carries less weight against the same bond. F-VIR-01: with modest joint tension a chimney falls as a single mass."
+    },
+    "E2E.Wall.DryWallPushedPastThicknessOverHeightFallsEntirely": {
+      "basis": "B-WAL-01: a free dry wall overturns about its toe at λ = t/H when μ > t/H. At 0.98 t/H it stands; at 1.05 t/H every brick falls. The test does not pin how many clusters it falls in (owner answer 4)."
+    },
+    "E2E.Bearing.AnOverloadedTimberBearingDropsTheBeamAndSparesThePiers": {
+      "basis": "Closed form from the catalogue: each timber bearing carries P/2 + W_beam/2 against f_c,90 A = 3.75 MPa × 0.0220 m² = 82.6 kN (EN 1995-1-1 §6.1.5), while the brick beds sit at about half their EC6 capacity. At 0.8 of the bearing capacity nothing happens; at 1.2 the bearings crush, the beam falls and the piers stand. That crushing releases what is above it is the 2026-10-15 crushing ruling (owner answer 7)."
+    },
+    "E2E.Shed.LosingOneSideOfPostsDropsTheRoofBayByBay": {
+      "basis": "Closed form. With the near posts gone, each bay's beams and screwed planks rest only on dry bearings atop the far posts, with their centroid well to the near side, so they tip about the far post tops, one cluster per bay. The bays share no joint and the frame does not touch the walls, so nothing else is affected."
+    },
+    "E2E.Shed.LosingOnePostLeavesTheScrewedRoofStanding": {
+      "basis": "Engineering judgement with a check: the free beam end hangs from three screwed planks that cantilever from the far beams; each plank joint sees about 85 N·m against about 1,050 N·m of capacity. A real screwed frame would sag here but stand (owner answer 1: it stands)."
+    },
+    "E2E.Cantilever.TheCounterweightHoldsTheBeamAndItsRemovalTipsIt": {
+      "basis": "The lever rule: the beam's centroid is 0.2 m past the post's edge, so the counterweight must be at least 5.36 kg to pull the combined centroid back over the post. 16 kg holds it (centroid at x = 0.019 m); 4 kg does not (0.239 m); removing the 16 kg block tips the beam."
+    },
+    "E2E.File.ALoadedColonnadeFallsLikeTheBuiltOne": {
+      "basis": "As 3.1, but the colonnade is loaded from data/structures/colonnade.json: the file must give exactly the outcome of the colonnade built in code, so buildings can arrive as data."
+    },
+    "Deferred.Slice6.DryWallLosingItsLintelKeepsTheBricksOverThePiers": {
+      "basis": "Lower-bound statics: a block resting wholly on standing blocks, under gravity alone with dry joints, cannot be pulled down by blocks falling beside it, so every pier brick and the bricks sitting wholly on them stay. The unsupported bricks must fall: the courses above the opening cannot arch across 1.075 m, because the thrust (about 380 N) exceeds the friction the light abutments can supply (about 120 N). So exactly the 10-brick triangle over the opening falls.",
+      "deferred": "The engine over-releases. With the lintel removed it drops 34 bricks in 26 clusters on pass 1, including four bricks sitting on the piers (c6x0.50, c6x7.50, c7x0.25, c7x7.75). It does release all ten bricks that must fall; the extra ones are the problem. The cascade picks which joints to break by the largest overload, not by the smallest movement that relieves it, so it breaks more than the physics needs.",
+      "green_when": "The owed least-joint-movement selection lands (the cascade releases the smallest set of pieces whose loss restores equilibrium). The test then moves to E2E.Wall.*."
+    },
+    "E2E.Wall.BondedWallStandsOverItsOpeningWithoutTheLintel": {
+      "basis": "Engineering judgement with a check: the four mortared courses above the opening act as a bonded deep beam, M = wL²/8 ≈ 75 N·m against about 115 N·m of capacity from the mortar's 0.033 MPa tension, so it stands even with the lintel gone. Builders fit a lintel anyway (owner answer 8: include it)."
+    },
+    "Deferred.Wall.DryWallWithAGapInItsBaseReleasesNothing": {
+      "basis": "Engineering judgement: the bricks over the gap corbel or wedge between their neighbours, so nothing should fall and the wall should read Stands. Owner answer 2: require Stands, not just nothing released.",
+      "deferred": "Nothing falls and no joint fails, but the engine's state is Undecided, not Stands. The elastic solve reads a mechanism while the certificate finds a standing field; when the two disagree the engine reports Undecided rather than trusting either.",
+      "green_when": "The parked \"trust the elastic answer\" work lands (IMMEDIATE_UPDATES §4), so the elastic solve no longer reads a false mechanism here. The test then moves to E2E.Wall.* (slow in Debug)."
+    },
+    "E2E.Property.BuildOrderChangesNoOutcome": {
+      "basis": "The physics has no notion of insertion order. The same twelve fixtures are built in eight shuffled body and contact orders, and every outcome must match the unshuffled run exactly. The picture shows one shuffle."
+    },
+    "E2E.Corner.InterlockingRaisesTheOverturningLoad": {
+      "basis": "Two dry walls meeting at a corner, pushed outward at 1.1 t/H. With a straight joint (a 10 mm gap) the façade is a free wall past its t/H limit and falls (B-WAL-01) while the return wall stands. With the corner bricks interlocked, the façade must lift the return wall's bricks to topple, so it stands (F-STR-02, Casapulla et al. 2024: interlocking raises the collapse multiplier; 1.1 t/H is an engineering choice)."
+    },
+    "E2E.Scenarios.EveryScenarioFileMeetsItsExpectation": {
+      "basis": "A scenario file under data/scenarios/ meets the expectation written in it. Each file's reason is below its own entry."
+    },
+    "E2E.Scenarios.EverySlowInDebugScenarioFileMeetsItsExpectation": {
+      "basis": "A scenario file marked slow in Debug meets the expectation written in it."
+    }
+  },
+  "slugs": {
+    "beam-on-piers-load-step": {
+      "basis": "As 3.8, written as a file: the load puts each timber bearing at 1.2 times its crushing capacity f_c,90 A, so the bearings crush, the beam falls and the brick piers, at about half their capacity, stand."
+    },
+    "bonded-wall-lateral-step": {
+      "basis": "As 3.6, written as a file: a sideways acceleration of 1.02 times the bonded overturning factor 1.96463 cracks the base beds and the whole 22-brick wall falls as one slab."
+    },
+    "cantilever-light-counterweight": {
+      "basis": "As 3.11, written as a file: a 4 kg block is short of the 5.36 kg the lever rule needs, so beam and block tip off the post together as one cluster and the post stands."
+    },
+    "colonnade-middle-post": {
+      "basis": "As 3.1, written as a file (the workbench plan's example): the two beams the middle post carried each tip off on their own; the dry bearings keep the other bays standing."
+    },
+    "contacts-mixed": {
+      "basis": "A check of automatic joints rather than physics: bricks side by side, one across two, one 1 mm away and one touching only along an edge get exactly seven joints (a gap or an edge contact is not a joint). Every brick is supported, so nothing falls."
+    },
+    "rule-precedence-screwed-pair": {
+      "basis": "As 3.5, written as a file: only beam.0 and post.1 are screwed (a body-pair rule beats the material rule), so when post.0 goes the screwed beam and post tip together as one cluster."
+    },
+    "wall-brick-names": {
+      "basis": "A check of the wall generator's brick names (wall.c<course>.b<brick>); a small mortared running-bond wall on the ground stands."
+    },
+    "wall-with-opening": {
+      "basis": "Six bricks are never built, leaving an opening three courses high; the mortared bond above bridges it (as 3.14's deep-beam check), so nothing falls."
+    },
+    "wall-with-timber-beam": {
+      "basis": "A timber beam resting on a mortared wall on five bearing joints is well inside every joint's capacity, so it stands."
+    }
+  }
+}

@@ -190,6 +190,8 @@ function Get-ShotEntry($Run, [string]$Status) {
         expected_state = if ($Run.expected) { $Run.expected.state } else { $null }
         expected_released = @($Run.expected.clusters | Where-Object { $_ } | ForEach-Object { $_.bodies } | ForEach-Object { $Names[[int]$_] })
         expected_img = $null
+        expected_either = @($Run.expected.either | Where-Object { $null -ne $_ } | ForEach-Object { $Names[[int]$_] })
+        engine_released = @(@($After.clusters | Where-Object { $_ } | ForEach-Object { $_.bodies }) + @($After.removed) | Where-Object { $null -ne $_ } | Sort-Object -Unique | ForEach-Object { $Names[[int]$_] })
     }
 }
 
@@ -198,6 +200,8 @@ function Write-Page([string]$TemplateName, [string]$Id, [string]$Json, [string]$
     $Placeholder = '<script type="application/json" id="' + $Id + '">null</script>'
     if (-not $Template.Contains($Placeholder)) { Write-Output "[Visuals.ps1] viewer/$TemplateName has no data placeholder"; exit 2 }
     $Page = $Template.Replace($Placeholder, '<script type="application/json" id="' + $Id + '">' + $Json.Replace('</', '<\/') + '</script>')
+    $Reasons = [IO.File]::ReadAllText("$Root\viewer\reasons.json")
+    $Page = $Page.Replace('<script type="application/json" id="lp-reasons">null</script>', '<script type="application/json" id="lp-reasons">' + $Reasons.Replace('</', '<\/') + '</script>')
     [IO.File]::WriteAllText($Target, $Page, $Utf8)
 }
 

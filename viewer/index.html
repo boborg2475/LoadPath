@@ -93,6 +93,14 @@ main.stage { display: grid; gap: 14px; min-width: 0; }
 .failures table { border-collapse: collapse; font-family: var(--f-data); font-size: 12.5px; font-variant-numeric: tabular-nums; min-width: 420px; }
 .failures th, .failures td { text-align: left; padding: 5px 14px 5px 0; border-bottom: 1px solid var(--line); }
 .failures th { color: var(--muted); font-weight: 500; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; }
+.why { border: 1px solid var(--line); border-left: 4px solid var(--stand); border-radius: 4px; background: var(--panel); padding: 12px 16px; display: grid; gap: 8px; max-width: 90ch; }
+.why.deferred { border-left-color: var(--undecided); } .why.failed { border-left-color: var(--sever); }
+.why h3 { font-family: var(--f-display); font-weight: 600; font-size: 19px; margin: 0; text-transform: none; letter-spacing: 0; }
+.why h4 { font: 600 11px var(--f-data); text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 0; }
+.why p { margin: 0; font-size: 14px; }
+.why ul { margin: 0; padding-left: 18px; font-size: 14px; }
+.why .names { font-family: var(--f-data); font-size: 12.5px; overflow-wrap: anywhere; }
+body.capture .why { display: none; }
 .note { font-size: 13px; color: var(--muted); max-width: 80ch; margin: 0; }
 .empty { padding: 40px; text-align: center; color: var(--muted); }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
@@ -136,6 +144,7 @@ main.stage { display: grid; gap: 14px; min-width: 0; }
           <span id="legend-load"><i class="sw" style="background:var(--ink);height:3px"></i>applied load / sideways acceleration</span>
         </div>
       </div>
+      <section class="why" id="why" aria-label="Why this result"></section>
       <dl class="readout" id="readout"></dl>
       <div class="failures" id="failures"></div>
       <p class="note" id="note"></p>
@@ -145,6 +154,7 @@ main.stage { display: grid; gap: 14px; min-width: 0; }
 </div>
 
 <script type="application/json" id="lp-data">null</script>
+<script type="application/json" id="lp-reasons">null</script>
 <script type="importmap">
 { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/" } }
@@ -421,7 +431,7 @@ function readout(sc) {
   if (sc.lateral) rows.splice(3, 0, ["Lateral λ", `(${sc.lateral.map(v => fmt(v)).join(", ")})`]);
   $("readout").innerHTML = rows.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join("");
   const fl = a.failures || [];
-  $("failures").innerHTML = fl.length ? `<table><thead><tr><th>Joint</th><th>Pass</th><th>Axis</th><th>Ratio</th><th>Severed</th></tr></thead><tbody>${fl.slice(0, 40).map(f => `<tr><td>${f.interface}</td><td>${f.pass ?? ""}</td><td>${f.axis ?? ""}</td><td>${fmt(f.ratio)}</td><td>${f.severed === false ? "no" : "yes"}</td></tr>`).join("")}</tbody></table>${fl.length > 40 ? `<p class="note">${fl.length - 40} more not shown.</p>` : ""}` : "";
+  $("failures").innerHTML = fl.length ? `<table><thead><tr><th>Joint</th><th>Pass</th><th>Axis</th><th>Ratio</th><th>Severed</th></tr></thead><tbody>${fl.slice(0, 40).map(f => `<tr><td>${f.interface}</td><td>${f.pass ?? ""}</td><td>${f.axis ?? ""}</td><td>${f.ratio == null ? "n/a" : fmt(f.ratio)}</td><td>${f.severed === false ? "no" : "yes"}</td></tr>`).join("")}</tbody></table>${fl.length > 40 ? `<p class="note">${fl.length - 40} more not shown.</p>` : ""}` : "";
   $("note").textContent = sc.note || "";
   $("legend-removed").hidden = !(sc.removed_before_run || []).length;
   $("legend-unasserted").hidden = !((a.unasserted || []).length);
@@ -454,6 +464,64 @@ function showView() {
   const sc = on ? expectedView(current) : current;
   readout(sc);
   build(sc);
+  $("why").outerHTML = whyHtml(current);
+}
+
+let reasons = { tests: {}, slugs: {} };
+try { reasons = JSON.parse($("lp-reasons").textContent || "null") || reasons; } catch (e) {}
+
+const escHtml = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;" }[c]));
+
+// The comparison between the engine's after and the test's expected after, by body name.
+function differences(sc) {
+  const e = sc.expected;
+  if (!e) return null;
+  const name = new Map(sc.bodies.map(b => [b.id, b.name || `body ${b.id}`]));
+  const a = sc.after || {};
+  const engine = new Set([...(a.clusters || []).flatMap(c => c.bodies || []), ...(a.removed || [])]);
+  const expected = new Set((e.clusters || []).flatMap(c => c.bodies || []));
+  const either = new Set(e.either || []);
+  const names = ids => ids.map(id => name.get(id)).sort();
+  return {
+    extra: names([...engine].filter(id => !expected.has(id) && !either.has(id))),
+    missing: names([...expected].filter(id => !engine.has(id) && !either.has(id))),
+    state: (a.state || "") !== (e.state || "Stands") ? { engine: a.state, expected: e.state || "Stands" } : null,
+    expectedCount: expected.size, engineCount: engine.size,
+  };
+}
+
+function nameList(list) {
+  const shown = list.slice(0, 12).map(escHtml).join(", ");
+  return `<span class="names">${shown}${list.length > 12 ? `, and ${list.length - 12} more` : ""}</span>`;
+}
+
+function whyHtml(sc) {
+  const r = { ...(reasons.tests || {})[sc.test], ...(reasons.slugs || {})[sc.slug] };
+  const status = sc.status || "passed";
+  const heading = { passed: "Why it passed", deferred: "Why it is deferred", failed: "Why it failed" }[status] || "Result";
+  const d = differences(sc);
+  const parts = [`<h3>${heading}</h3>`];
+  if (status === "deferred" && r.deferred && d) parts.push(`<p>${escHtml(r.deferred)}</p>`);
+  if (d && (d.extra.length || d.missing.length || d.state)) {
+    const rows = [];
+    if (d.extra.length) rows.push(`<li>Released by the engine, expected to stand (${d.extra.length}): ${nameList(d.extra)}</li>`);
+    if (d.missing.length) rows.push(`<li>Expected to fall, still standing (${d.missing.length}): ${nameList(d.missing)}</li>`);
+    if (d.state) rows.push(`<li>Final state: the engine says ${escHtml(d.state.engine)}, the test expects ${escHtml(d.state.expected)}</li>`);
+    parts.push(`<h4>Where this entry differs from the test</h4><ul>${rows.join("")}</ul>`);
+    parts.push(`<p>Use “Show the expected outcome” to see what the test expects.</p>`);
+  } else if (d) {
+    parts.push(`<p>The same pieces fall as the test expects; only how they group into falling clusters differs, which the test does not check.</p>`);
+  } else if (status === "passed") {
+    parts.push(`<p>The engine's outcome matches everything this test asserts.</p>`);
+  } else if (status === "deferred") {
+    parts.push(`<p>This entry matches what the test expects; the test is held red by another entry it records.</p>`);
+    if (r.deferred) parts.push(`<h4>Why the test is held red</h4><p>${escHtml(r.deferred)}</p>`);
+  } else {
+    parts.push(`<p>The test failed, but this entry carries no expected outcome to compare against; read the test output.</p>`);
+  }
+  if (status === "deferred" && r.green_when) parts.push(`<h4>Turns green when</h4><p>${escHtml(r.green_when)}</p>`);
+  if (r.basis) parts.push(`<h4>Why this is the expected outcome</h4><p>${escHtml(r.basis)}</p>`);
+  return `<section class="why ${escHtml(status)}" id="why" aria-label="Why this result">${parts.join("")}</section>`;
 }
 
 async function main() {
