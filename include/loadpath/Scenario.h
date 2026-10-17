@@ -97,7 +97,7 @@ struct ScenarioOutcome
 	std::vector<std::string> Cracked;
 	std::vector<ScenarioStepRecord> Steps;
 	std::vector<CascadeVerdict> Verdicts;
-	// The judge of the structure as built, before any step.
+	// The judge of the structure as the before view draws it: every remove step applied, every load and lateral_g applied, no cascade run.
 	std::optional<ComponentVerdict> Before;
 	Vec3 Gravity{0.0, 0.0, -GravityMPerS2};
 	std::vector<BodyLoad> Loads;

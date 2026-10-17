@@ -2188,3 +2188,15 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
     at its picture, and the picture exists before the test is ever run.
   The workbench's own tests go through the owner-approved plan step like any other; the 17 cases
   of the e2e plan become its first scenario files once both plans are approved.
+- *2026-10-17, owner and orchestrator, what a picture's verdicts mean:* the owner asked why the
+  dry-wall lintel case read "Stands → Stands" while its engine over-releases 34 bricks. Every
+  removal entry did: the before verdict judged the structure as originally built, and the after
+  state is what is left once the cascade has released what falls. Ruled (owner approved): the
+  before verdict judges the structure exactly as the before view draws it, every remove step's
+  bodies removed and every load and `lateral_g` applied, with no cascade run, so a remove step
+  that comes after a cascade still counts and a cascade's releases never do
+  (`ScenarioOutcome::Before`, and the E2E pictures' `CaseRun::BeforeCascade`). The pages read
+  verdict → bodies that fall → what is left. A bonded wall pushed past its limit reads
+  Overstressed before the cascade (its joints are past capacity; it becomes a mechanism only once
+  the cascade cracks the base). The same day the owner confirmed LoadPath has no collision
+  detection: pieces passing through others in the page's animation are expected.

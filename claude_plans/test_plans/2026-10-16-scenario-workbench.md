@@ -468,8 +468,8 @@ of the e2e plan need it)
 - Assertion (mechanism): parsed back in the test with the library's JSON reader: `slug`, `title`,
   `summary`, `units: "m"`, `gravity`; 10 bodies with `c` and `h` equal to the boxes, `q` identity,
   `grounded`, `mass_kg`, `material`, `name`; 13 interfaces with `a`, `b`, `p`, `n`;
-  `removed_before_run` is `[post.2's slot]`; `before.verdict` is `Stands` (the judge of the
-  structure as built, before any step); `after.state` `Stands`, `after.passes` 1, two clusters
+  `removed_before_run` is `[post.2's slot]`; `before.verdict` is `Collapses` (the judge of the
+  structure as the before view draws it: every remove and load step applied, no cascade run); `after.state` `Stands`, `after.passes` 1, two clusters
   `[beam.1]` and `[beam.2]` by slot, each with its `motion`; no `expected` key.
 - Red today: nothing exists.
 - Visual: `colonnade-middle-post`.

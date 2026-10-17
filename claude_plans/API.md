@@ -1588,7 +1588,7 @@ int RunCli(std::span<const std::string_view> Args, IFileStore& Files, std::strin
   density × 8 hx hy hz (grounded 0); `ground` is the built-in material of grounded boxes. An `expect`
   body removed by a step that comes before any `cascade` step is a load error (it can never be
   released); one removed later is a run error when the step runs.
-- **Running.** `Before` is a judge of the structure as built, at default gravity. Each step runs in
+- **Running.** `Before` judges the structure as the before view draws it: every `remove` step's bodies removed, every `load` and `lateral_g` step applied, no cascade run. Each step runs in
   order on `Value.Model`; a cascade gets the accumulated loads and the current gravity (both
   `Standing` and `Certificate`) with `Previous = nullptr`, exactly as a direct `ICascade::Run` call
   would. Clusters concatenate, passes sum, the state is the last cascade's (or judge's) name;

@@ -52,6 +52,7 @@ nav.rail button:focus-visible { outline: 2px solid var(--accent); outline-offset
 nav.rail button[aria-current="true"] { border-color: var(--ink); box-shadow: inset 3px 0 0 var(--ink); }
 nav.rail .t { font-family: var(--f-display); font-weight: 600; font-size: 18px; line-height: 1.15; }
 nav.rail .s { font-family: var(--f-data); font-size: 11.5px; color: var(--muted); display: flex; gap: 8px; flex-wrap: wrap; }
+nav.rail .flow { white-space: nowrap; }
 .pill { display: inline-block; padding: 0 6px; border-radius: 3px; font-family: var(--f-data); font-size: 11.5px; line-height: 18px; border: 1px solid currentColor; }
 .pill.stands { color: var(--stand); } .pill.collapses { color: var(--accent); } .pill.undecided { color: var(--undecided); } .pill.other { color: var(--muted); }
 .pill.passed { color: var(--stand); } .pill.failed { color: var(--sever); } .pill.deferred { color: var(--undecided); }
@@ -110,7 +111,7 @@ body.capture .why { display: none; }
   <header class="top">
     <div class="eyebrow">LoadPath · rigid-block statics · end-to-end tests</div>
     <h1>LoadPath E2E tests</h1>
-    <p class="lede">Every entry is recorded by a test while it runs, so this page always shows the suite as it is. Each shows the structure before the run and the engine's state after the cascade; when the test expects something else, a button switches the after view to the expected outcome. The mark on each entry says whether its test passed, failed or is deferred to later work. Released bodies move along the collapse mechanism the certificate computed, coloured one colour per falling piece; removed bodies are dashed ghosts; severed joints are red.</p>
+    <p class="lede">Every entry is recorded by a test while it runs, so this page always shows the suite as it is. Each shows the structure before the run and the engine's state after the cascade; when the test expects something else, a button switches the after view to the expected outcome. The mark on each entry says whether its test passed, failed or is deferred to later work. Each entry reads verdict → bodies that fall → state: the verdict is the engine's judgement of the structure as the before view shows it, just before the cascade; the state is what is left standing once the cascade has released what falls. Released bodies move along the collapse mechanism the certificate computed, coloured one colour per falling piece; removed bodies are dashed ghosts; severed joints are red.</p>
     <p class="generated" id="generated"></p>
   </header>
 
@@ -139,7 +140,7 @@ body.capture .why { display: none; }
           <span><i class="sw" style="background:var(--accent)"></i>released (one colour per falling piece)</span>
           <span><i class="sw" style="background:var(--sever)"></i><span id="legend-sever">severed joint</span></span>
           <span><i class="sw" style="background:var(--ground)"></i>ground</span>
-          <span id="legend-removed"><i class="sw" style="border:1px dashed var(--muted)"></i>removed before the run</span>
+          <span id="legend-removed"><i class="sw" style="border:1px dashed var(--muted)"></i>removed before the cascade</span>
           <span id="legend-unasserted"><i class="sw" style="border:2px solid var(--undecided)"></i>not asserted by the test</span>
           <span id="legend-load"><i class="sw" style="background:var(--ink);height:3px"></i>applied load / sideways acceleration</span>
         </div>
@@ -420,11 +421,11 @@ function readout(sc) {
     ["Test", sc.status ? `<span class="pill ${sc.status}">${sc.status}</span>` : "n/a"],
     ["After shows", expected ? "the test's expected outcome (drawn)" : "the engine's cascade"],
     ["Bodies", sc.bodies.filter(x => !x.grounded).length],
-    ["Before", `<span class="pill ${stateClass(b.verdict)}">${b.verdict ?? "n/a"}</span>`],
-    ["After", `<span class="pill ${stateClass(a.state)}">${a.state ?? "n/a"}</span>`],
+    ["Verdict before the cascade", `<span class="pill ${stateClass(b.verdict)}">${b.verdict ?? "n/a"}</span>`],
+    ["What is left, after the cascade", `<span class="pill ${stateClass(a.state)}">${a.state ?? "n/a"}</span>`],
     ["Load factor", b.lambda ? `[${fmt(b.lambda[0])}, ${fmt(b.lambda[1])}]` : "n/a"],
     ["Passes", a.passes ?? "n/a"],
-    ["Released", judgeOnly ? "none (verdict only)" : releasedCount],
+    ["Bodies released", judgeOnly ? "none (verdict only)" : releasedCount],
     [judgeOnly ? "Hinging joints" : "Severed joints", judgeOnly ? (a.clusters || []).reduce((n, c) => n + (c.severed || []).length, 0) : (a.failures || []).filter(f => f.severed !== false).length],
     ["Engine time", a.elapsed_ms != null ? `${fmt(a.elapsed_ms, 3)} ms` : "n/a"],
   ];
@@ -524,6 +525,8 @@ function whyHtml(sc) {
   return `<section class="why ${escHtml(status)}" id="why" aria-label="Why this result">${parts.join("")}</section>`;
 }
 
+const releasedOf = r => new Set([...(r.after?.clusters || []).flatMap(c => c.bodies || []), ...(r.after?.removed || [])]).size;
+
 async function main() {
   let runs = [];
   let generated = null;
@@ -545,7 +548,7 @@ async function main() {
   }
   if (generated) $("generated").textContent = `Generated ${generated.when} from commit ${generated.commit}: ${generated.passed} passed, ${generated.failed} failed, ${generated.deferred} deferred.`;
   if (generated && generated.screenshots) $("generated").insertAdjacentHTML("beforeend", ` <a href="screenshots.html">Before-and-after screenshots</a>`);
-  $("rail").innerHTML = runs.map((r, i) => `<button type="button" data-i="${i}"><span class="t">${r.title}</span><span class="s">${r.status ? `<span class="pill ${r.status}">${r.status}</span>` : ""}<span class="pill ${stateClass(r.before?.verdict)}">${r.before?.verdict ?? "?"}</span>→<span class="pill ${stateClass(r.after?.state)}">${r.after?.state ?? "?"}</span><span>${r.bodies.filter(b => !b.grounded).length} bodies</span></span></button>`).join("");
+  $("rail").innerHTML = runs.map((r, i) => `<button type="button" data-i="${i}"><span class="t">${r.title}</span><span class="s">${r.status ? `<span class="pill ${r.status}">${r.status}</span>` : ""}<span class="flow"><span class="pill ${stateClass(r.before?.verdict)}">${r.before?.verdict ?? "?"}</span> → ${releasedOf(r)} fall → <span class="pill ${stateClass(r.after?.state)}">${r.after?.state ?? "?"}</span></span><span>${r.bodies.filter(b => !b.grounded).length} bodies</span></span></button>`).join("");
   $("rail").addEventListener("click", e => { const b = e.target.closest("button[data-i]"); if (b) select(+b.dataset.i, runs); });
   let start = 0;
   try { const s = localStorage.getItem("lp-viz-scenario"); const j = runs.findIndex(r => r.slug === s); if (j >= 0) start = j; } catch (e) {}

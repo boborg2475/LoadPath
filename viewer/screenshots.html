@@ -139,8 +139,8 @@ function entry(e) {
     <p class="summary">${esc(e.summary)}</p>
     <div class="frames">${frame(e.before_img, "Before")}${frame(e.after_img, e.after_label)}${e.expected_state ? frame(e.expected_img, "After · expected by the test") : ""}</div>
     <dl class="metrics">
-      <div><dt>Verdict before</dt><dd><span class="pill ${stateClass(e.verdict)}">${esc(e.verdict ?? "?")}</span></dd></div>
-      <div><dt>State after</dt><dd><span class="pill ${stateClass(e.state)}">${esc(e.state ?? "?")}</span></dd></div>
+      <div><dt>Verdict before the cascade</dt><dd><span class="pill ${stateClass(e.verdict)}">${esc(e.verdict ?? "?")}</span></dd></div>
+      <div><dt>What is left, after</dt><dd><span class="pill ${stateClass(e.state)}">${esc(e.state ?? "?")}</span></dd></div>
       <div><dt>Passes</dt><dd>${e.passes ?? "—"}</dd></div>
       <div><dt>Bodies released</dt><dd>${e.released.length}</dd></div>
       <div><dt>Clusters</dt><dd>${e.clusters}</dd></div>

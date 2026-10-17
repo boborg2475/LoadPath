@@ -63,8 +63,6 @@ struct Scene
 	std::vector<BodyLoad> Loads;
 	Vec3 Gravity{0.0, 0.0, -GravityMPerS2};
 	NameSet RemovedBeforeRun;
-	// Judged once before the first removal, and only when recording pictures.
-	std::optional<ComponentVerdict> AsBuilt;
 };
 
 // One run kept whole (boxes, removals, gravity, verdict) so the visuals step can record it in one call.
@@ -73,7 +71,8 @@ struct CaseRun
 	std::string_view Slug;
 	std::vector<SceneBox> Boxes;
 	NameSet RemovedBeforeRun;
-	std::optional<ComponentVerdict> Before;
+	// The remainder judged just before the cascade with removals, gravity and loads applied; set only when recording pictures.
+	std::optional<ComponentVerdict> BeforeCascade;
 	Vec3 Gravity;
 	CascadeVerdict Verdict;
 	double ElapsedMs = 0.0;
@@ -138,10 +137,6 @@ inline ComponentVerdict JudgeRemainder(const Scene& S);
 
 inline void RemoveBodyOf(Scene& S, BodyId Id)
 {
-	if (!S.AsBuilt && VisualsDirFromEnvironment())
-	{
-		S.AsBuilt = JudgeRemainder(S);
-	}
 	const std::string Name = NameIn(S, Id);
 	INFO("removing " << Name);
 	CHECK(S.Model.RemoveBody(Id));
@@ -622,10 +617,9 @@ inline CaseRun Run(Scene& S, std::string_view Slug)
 	R.Slug = Slug;
 	R.Boxes = S.Boxes;
 	R.RemovedBeforeRun = S.RemovedBeforeRun;
-	R.Before = S.AsBuilt;
-	if (!R.Before && VisualsDirFromEnvironment())
+	if (VisualsDirFromEnvironment())
 	{
-		R.Before = JudgeRemainder(S);
+		R.BeforeCascade = JudgeRemainder(S);
 	}
 	R.Gravity = S.Gravity;
 	CascadeOptions Options;
@@ -874,7 +868,7 @@ inline void RecordVisual(const Scene& S, const CaseRun& R, const std::optional<E
 	const VisualCaption Caption = CaptionFor(R.Slug);
 	V.Title = Caption.Title;
 	V.Summary = Caption.Summary;
-	V.Before = R.Before;
+	V.Before = R.BeforeCascade;
 	V.Model = S.Model;
 	for (const SceneBox& B : R.Boxes)
 	{

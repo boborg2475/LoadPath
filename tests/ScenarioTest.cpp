@@ -1045,6 +1045,45 @@ TEST_CASE("Scenario.Steps.LoadAndLateralStepsReachTheCascadeExactlyAsTheApiWould
 	}
 }
 
+TEST_CASE("Scenario.Steps.TheBeforeVerdictJudgesTheStructureAsTheBeforeViewDrawsIt")
+{
+	const auto FileText = [](std::string_view Name) {
+		std::ifstream File(std::string(LOADPATH_SCENARIO_DIR) + "/" + std::string(Name), std::ios::binary);
+		REQUIRE(File.good());
+		return std::string(std::istreambuf_iterator<char>(File), std::istreambuf_iterator<char>());
+	};
+	const auto BeforeOf = [](const std::string& Json) {
+		Scenario S = LoadScenarioOk(Json);
+		const ScenarioOutcome O = RunScenario(S);
+		INFO("run error: " << O.RunError);
+		REQUIRE(O.RunError.empty());
+		REQUIRE(O.Before.has_value());
+		return *O.Before;
+	};
+	SUBCASE("cascade, post.2 removed, cascade: the file as written")
+	{
+		CHECK(BeforeOf(FileText("colonnade-middle-post.json")) == ComponentVerdict::Collapses);
+	}
+	SUBCASE("post.2 removed, then cascade")
+	{
+		const std::string Json =
+			Replaced(FileText("colonnade-middle-post.json"), R"("steps": ["cascade", { "remove": ["post.2"] }, "cascade"])", R"("steps": [{ "remove": ["post.2"] }, "cascade"])");
+		CHECK(BeforeOf(Json) == ComponentVerdict::Collapses);
+	}
+	SUBCASE("lateral_g at 1.02 of the bonded factor: overstressed before the cascade cracks the base")
+	{
+		CHECK(BeforeOf(FileText("bonded-wall-lateral-step.json")) == ComponentVerdict::Overstressed);
+	}
+	SUBCASE("a load step: overloaded before the cascade releases the beam")
+	{
+		CHECK(BeforeOf(FileText("beam-on-piers-load-step.json")) == ComponentVerdict::Collapses);
+	}
+	SUBCASE("intact wall, cascade only")
+	{
+		CHECK(BeforeOf(FileText("wall-brick-names.json")) == ComponentVerdict::Stands);
+	}
+}
+
 TEST_CASE("Scenario.Steps.RemovingABodyAlreadyGoneIsARunError")
 {
 	Scenario S = LoadScenarioOk(Replaced(ColonnadeJson, R"(, "cascade"],)", R"(, "cascade", { "remove": ["beam.1"] }],)"));
@@ -1293,7 +1332,7 @@ TEST_CASE("Scenario.Viewer.TheExportCarriesBodiesBeforeAndAfter")
 	}
 	const double Post2 = static_cast<double>(BodyOrFail(S, "post.2").Index);
 	CHECK(Numbers(Field(Root, "removed_before_run")) == std::vector<double>{Post2});
-	CHECK(Field(Field(Root, "before"), "verdict").Text == "Stands");
+	CHECK(Field(Field(Root, "before"), "verdict").Text == "Collapses");
 	const detail::JsonValue& After = Field(Root, "after");
 	CHECK(Field(After, "state").Text == "Stands");
 	CHECK(Field(After, "passes").Number == 1.0);

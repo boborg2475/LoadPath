@@ -1507,7 +1507,26 @@ ScenarioOutcome RunScenario(Scenario& Value, const ICascade& Cascade, const IStr
 {
 	ScenarioOutcome Outcome;
 	Outcome.Names = Value.BodyNames;
-	Outcome.Before = Authority.Judge(Value.Model, {}, AuthorityOptions{}, nullptr).Worst;
+	{
+		Scenario Drawn = Value;
+		ScenarioOutcome Scratch;
+		for (std::size_t Index = 0; Index < Drawn.Steps.size(); ++Index)
+		{
+			const ScenarioStep& Step = Drawn.Steps[Index];
+			if (Step.Kind == ScenarioStepKind::Cascade || Step.Kind == ScenarioStepKind::Judge)
+			{
+				continue;
+			}
+			if (!RunStep(Drawn, Step, static_cast<int>(Index) + 1, Cascade, Authority, Scratch))
+			{
+				break;
+			}
+		}
+		AuthorityOptions Options;
+		Options.Standing.Gravity = Scratch.Gravity;
+		Options.Certificate.Gravity = Scratch.Gravity;
+		Outcome.Before = Authority.Judge(Drawn.Model, Scratch.Loads, Options, nullptr).Worst;
+	}
 	const auto Start = std::chrono::steady_clock::now();
 	for (std::size_t Index = 0; Index < Value.Steps.size(); ++Index)
 	{
