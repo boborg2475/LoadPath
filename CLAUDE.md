@@ -11,6 +11,8 @@ the break decision. Pieces never fail internally here: that is Chaos's job.
 Read it before implementing anything substantial. [claude_plans/CURRENT_STATE.md](claude_plans/CURRENT_STATE.md)
 is the living TODO list. [claude_plans/TRAPS.md](claude_plans/TRAPS.md) holds the footguns
 carried over from the old project; most of them cost a day each to learn.
+When a test result looks wrong, work through [claude_plans/DEBUG_PLAYBOOK.md](claude_plans/DEBUG_PLAYBOOK.md)
+and add what the case teaches to it.
 
 The old project is reference material, not a template. Read its `claude_plans/DESIGN.md`,
 `RBSM_DESIGN.md`, `GRAPHCUT_DESIGN.md` and `TRAPS.md` when a design question comes up; do not
