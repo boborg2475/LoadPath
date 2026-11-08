@@ -94,7 +94,9 @@ inline std::optional<ScenarioFileRun> RunScenarioFile(const IFileStore& Files, s
 	}
 	Run.bLoaded = true;
 	Run.Value = std::move(Loaded.Value);
-	Run.Outcome = RunScenario(Run.Value);
+	Settings Tunables;
+	Tunables.Debug.bRecordPasses = VisualsDir.has_value();
+	Run.Outcome = RunScenario(Run.Value, Tunables);
 	if (Run.Value.Expect)
 	{
 		Run.Report = CompareExpectation(*Run.Value.Expect, Run.Outcome);

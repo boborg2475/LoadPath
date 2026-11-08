@@ -4,3 +4,4 @@ out/
 .cache/
 *.user
 CMakeUserPresets.json
+data/settings.local.json

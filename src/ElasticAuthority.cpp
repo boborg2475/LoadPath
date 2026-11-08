@@ -34,9 +34,10 @@ bool SameVector(const Vec3& A, const Vec3& B)
 
 bool SameStanding(const StandingOptions& A, const StandingOptions& B)
 {
-	const auto& [AGravity, AIterations, APivot, ADense] = A;
-	const auto& [BGravity, BIterations, BPivot, BDense] = B;
-	return SameVector(AGravity, BGravity) && AIterations == BIterations && APivot == BPivot && ADense == BDense;
+	const auto& [AGravity, AIterations, APivot, ADense, AStick, AHeld, ADry, ANeutral, AAdmissible, AUnconstrained, ADebug] = A;
+	const auto& [BGravity, BIterations, BPivot, BDense, BStick, BHeld, BDry, BNeutral, BAdmissible, BUnconstrained, BDebug] = B;
+	return SameVector(AGravity, BGravity) && AIterations == BIterations && APivot == BPivot && ADense == BDense && AStick == BStick && AHeld == BHeld &&
+		ADry == BDry && ANeutral == BNeutral && AAdmissible == BAdmissible && AUnconstrained == BUnconstrained && ADebug == BDebug;
 }
 
 bool SameOptions(const AuthorityOptions& A, const AuthorityOptions& B)
@@ -322,6 +323,8 @@ private:
 		ComponentReport Report;
 		Report.Bodies = std::move(Part.Bodies);
 		Report.Elastic = Part.State;
+		Report.End = Part.End;
+		Report.Passes = std::move(Part.Passes);
 		switch (Part.State)
 		{
 		case StandingState::Stands: Report.Verdict = ComponentVerdict::Stands; break;

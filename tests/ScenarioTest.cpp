@@ -1531,3 +1531,93 @@ TEST_CASE("Scenario.Viewer.EveryClusterBodyCarriesTheRigidMotionOfItsCluster")
 	}
 	CHECK(MultiBodyClusters == 1);
 }
+
+TEST_CASE("Scenario.Viewer.PassesAreWrittenWhenRecordedAndOmittedWhenNot")
+{
+	Scenario Plain = LoadScenarioOk(ColonnadeJson);
+	const ScenarioOutcome PlainOutcome = RunScenario(Plain);
+	const Parsed P = Parse(WriteViewerJson(Plain, PlainOutcome, ColonnadeSlug));
+	REQUIRE(P.bOk);
+	CHECK_FALSE(HasKey(Field(P.Root, "after"), "pass_records"));
+	CHECK(Field(Field(P.Root, "after"), "passes").Number == 1.0);
+
+	Settings Tunables;
+	Tunables.Debug.bRecordPasses = true;
+	Scenario Recorded = LoadScenarioOk(ColonnadeJson);
+	const ScenarioOutcome RecordedOutcome = RunScenario(Recorded, Tunables);
+	const Parsed Q = Parse(WriteViewerJson(Recorded, RecordedOutcome, ColonnadeSlug));
+	REQUIRE(Q.bOk);
+	const detail::JsonValue& After = Field(Q.Root, "after");
+	CHECK(Field(After, "passes").Number == 1.0);
+	REQUIRE(HasKey(After, "pass_records"));
+	const detail::JsonValue& Records = Field(After, "pass_records");
+	std::size_t WantRecords = 0;
+	for (const CascadeVerdict& Verdict : RecordedOutcome.Verdicts)
+	{
+		WantRecords += Verdict.PassRecords.size();
+	}
+	CHECK(WantRecords >= 3u);
+	REQUIRE(Records.Items.size() == WantRecords);
+	if (Records.Items.size() != WantRecords)
+	{
+		return;
+	}
+	std::vector<std::vector<double>> RecordedClusters;
+	for (const detail::JsonValue& Record : Records.Items)
+	{
+		INFO("pass " << Field(Record, "pass").Number);
+		CHECK(Field(Record, "pass").Number >= 1.0);
+		const detail::JsonValue& Components = Field(Record, "components");
+		REQUIRE_FALSE(Components.Items.empty());
+		for (const detail::JsonValue& Component : Components.Items)
+		{
+			CHECK_FALSE(Field(Component, "bodies").Items.empty());
+			CHECK_FALSE(Field(Component, "verdict").Text.empty());
+			CHECK(Field(Component, "end").Text != "None");
+			const detail::JsonValue& Inner = Field(Component, "inner");
+			CHECK(Field(Component, "iterations").Number == static_cast<double>(Inner.Items.size()));
+			for (const detail::JsonValue& Iteration : Inner.Items)
+			{
+				CHECK(Field(Iteration, "iteration").Number >= 1.0);
+				for (const detail::JsonValue& Joint : Field(Iteration, "joints").Items)
+				{
+					CHECK(HasKey(Joint, "interface"));
+					CHECK(Field(Joint, "corners").Items.size() == 4u);
+					for (const detail::JsonValue& Corner : Field(Joint, "corners").Items)
+					{
+						CHECK((Corner.Text == "closed" || Corner.Text == "open" || Corner.Text == "slipping"));
+					}
+					CHECK(Field(Joint, "flipped").Items.size() == 4u);
+					CHECK(Field(Joint, "corner_n").Items.size() == 4u);
+					CHECK(Field(Joint, "corner_shear").Items.size() == 4u);
+					CHECK(Field(Joint, "corner_shear").Items[0].Items.size() == 3u);
+					CHECK(HasKey(Joint, "n"));
+					CHECK(Field(Joint, "shear").Items.size() == 3u);
+					CHECK(Field(Joint, "moment").Items.size() == 3u);
+					CHECK(HasKey(Joint, "utilisation"));
+					CHECK_FALSE(Field(Joint, "axis").Text.empty());
+				}
+			}
+		}
+		for (const detail::JsonValue& Reading : Field(Record, "readings").Items)
+		{
+			CHECK(HasKey(Reading, "interface"));
+			CHECK(Field(Reading, "corners").Items.size() == 4u);
+			CHECK(HasKey(Reading, "utilisation"));
+		}
+		for (const detail::JsonValue& Cluster : Field(Record, "clusters").Items)
+		{
+			CHECK(HasKey(Cluster, "motion"));
+			std::vector<double> Bodies = Numbers(Field(Cluster, "bodies"));
+			std::sort(Bodies.begin(), Bodies.end());
+			RecordedClusters.push_back(std::move(Bodies));
+		}
+		for (const detail::JsonValue& Failure : Field(Record, "failures").Items)
+		{
+			CHECK(HasKey(Failure, "interface"));
+			CHECK(HasKey(Failure, "severed"));
+		}
+	}
+	std::sort(RecordedClusters.begin(), RecordedClusters.end());
+	CHECK(RecordedClusters == ClusterBodies(Field(After, "clusters")));
+}

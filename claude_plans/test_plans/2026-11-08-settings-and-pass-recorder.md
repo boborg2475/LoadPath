@@ -1,3 +1,5 @@
+Status: proposed 2026-11-08; built at the owner's direction to work item 1 and review it on completion. Owner review of the plan and the item is pending.
+
 # Build-order item 1: settings file and pass recorder
 
 Owner decision 2026-11-08 ([decisions/2026-11-08-forced-collapse-and-core-suite.md](../decisions/2026-11-08-forced-collapse-and-core-suite.md) §3, §5). Owner reviews this item before item 2 starts. Three work packages; A and C are independent, B follows A.
@@ -128,10 +130,10 @@ carried from the elastic component. `SolveEnd` is filled whether or not recordin
 cheap and the debugging playbook needs it (the forced-collapse item will reuse it as the
 `ForcedReason`).
 
-**Viewer JSON** (`WriteViewerJson`): each `after` entry gains `"passes": [...]` when non-empty:
+**Viewer JSON** (`WriteViewerJson`): each `after` entry gains `"pass_records": [...]` (`passes` stays the integer pass count the page already reads) when non-empty:
 
 ```json
-"passes": [
+"pass_records": [
   { "pass": 1,
     "components": [ { "bodies": [...], "verdict": "Collapses", "end": "Mechanism", "iterations": 4,
                       "inner": [ { "iteration": 1,
@@ -176,7 +178,7 @@ shorthand override.
 
 ## C. Viewer: pass-by-pass replay (`viewer/index.html`)
 
-Reads `after.passes` when present. Adds, below the existing before/after panes:
+Reads `after.pass_records` when present. Adds, below the existing before/after panes:
 
 - An outer timeline scrubber over cascade passes (slider plus step back/forward buttons and the
   pass number). Selecting pass k draws the after pane at the state after pass k: bodies released

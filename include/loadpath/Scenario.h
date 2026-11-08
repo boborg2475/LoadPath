@@ -3,6 +3,7 @@
 #include "loadpath/Cascade.h"
 #include "loadpath/Catalogue.h"
 #include "loadpath/Handles.h"
+#include "loadpath/Settings.h"
 #include "loadpath/StandingAuthority.h"
 #include "loadpath/StructuralAuthority.h"
 #include "loadpath/Structure.h"
@@ -107,8 +108,10 @@ struct ScenarioOutcome
 	double ElapsedMs = 0.0;
 };
 
-// Mutates Value.Model step by step; the overload without engines makes the standard combined authority and cascade.
+// Mutates Value.Model step by step; the overloads without engines make the standard combined authority and cascade, and those without Settings use the compiled defaults.
+ScenarioOutcome RunScenario(Scenario& Value, const ICascade& Cascade, const IStructuralAuthority& Authority, const Settings& Tunables);
 ScenarioOutcome RunScenario(Scenario& Value, const ICascade& Cascade, const IStructuralAuthority& Authority);
+ScenarioOutcome RunScenario(Scenario& Value, const Settings& Tunables);
 ScenarioOutcome RunScenario(Scenario& Value);
 
 struct ExpectationReport

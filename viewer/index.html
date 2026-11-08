@@ -18,6 +18,7 @@
   --undecided: #8a6d12;    /* undecided */
   --body: #a9b3bb;         /* resting block */
   --ground: #7d878f;
+  --flip: #0b8fc0;         /* corner that changed state this iteration */
   --f-display: "Barlow Condensed", "Arial Narrow", sans-serif;
   --f-body: "Public Sans", system-ui, sans-serif;
   --f-data: "JetBrains Mono", ui-monospace, "Cascadia Mono", monospace;
@@ -25,13 +26,13 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --bg: #14181c; --panel: #1b2025; --ink: #e4e8eb; --muted: #95a1ab; --line: #2c343b; --stage: #101418;
-    --accent: #f0782f; --sever: #e2545a; --stand: #4fb386; --undecided: #d1aa3c; --body: #6d7881; --ground: #3d464e;
+    --accent: #f0782f; --sever: #e2545a; --stand: #4fb386; --undecided: #d1aa3c; --body: #6d7881; --ground: #3d464e; --flip: #4cc8f0;
     color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
   --bg: #14181c; --panel: #1b2025; --ink: #e4e8eb; --muted: #95a1ab; --line: #2c343b; --stage: #101418;
-  --accent: #f0782f; --sever: #e2545a; --stand: #4fb386; --undecided: #d1aa3c; --body: #6d7881; --ground: #3d464e;
+  --accent: #f0782f; --sever: #e2545a; --stand: #4fb386; --undecided: #d1aa3c; --body: #6d7881; --ground: #3d464e; --flip: #4cc8f0;
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
@@ -59,7 +60,7 @@ nav.rail .flow { white-space: nowrap; }
 .generated { font-family: var(--f-data); font-size: 12px; color: var(--muted); }
 .generated a { color: var(--accent); }
 body.capture .top, body.capture nav.rail, body.capture .controls, body.capture .readout,
-body.capture .failures, body.capture .note, body.capture .scenario-head, body.capture .views .hint { display: none; }
+body.capture .failures, body.capture .replay, body.capture .note, body.capture .scenario-head, body.capture .views .hint { display: none; }
 body.capture .wrap { padding: 0; max-width: none; }
 body.capture .bench { grid-template-columns: minmax(0, 1fr); gap: 0; }
 body.capture .views { border: 0; border-radius: 0; }
@@ -103,6 +104,32 @@ main.stage { display: grid; gap: 14px; min-width: 0; }
 .why .names { font-family: var(--f-data); font-size: 12.5px; overflow-wrap: anywhere; }
 body.capture .why { display: none; }
 .note { font-size: 13px; color: var(--muted); max-width: 80ch; margin: 0; }
+.replay { display: grid; gap: 12px; border: 1px solid var(--line); border-radius: 4px; background: var(--panel); padding: 12px 16px; min-width: 0; }
+.replay[hidden] { display: none; }
+.replay h3 { font-family: var(--f-display); font-weight: 600; font-size: 19px; margin: 0; }
+.replay .row { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; }
+.replay .step { font: 500 13px var(--f-body); padding: 4px 10px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); border-radius: 3px; cursor: pointer; }
+.replay .step:disabled { opacity: .45; cursor: default; }
+.replay .step:focus-visible, .replay select:focus-visible, .replay summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.replay input[type="range"] { flex: 1 1 220px; min-width: 140px; accent-color: var(--accent); }
+.replay .lbl { font-family: var(--f-data); font-size: 12.5px; font-variant-numeric: tabular-nums; margin: 0; }
+.replay .tablewrap { overflow-x: auto; }
+.replay table { border-collapse: collapse; font-family: var(--f-data); font-size: 12.5px; font-variant-numeric: tabular-nums; min-width: 480px; }
+.replay th, .replay td { text-align: left; padding: 5px 14px 5px 0; border-bottom: 1px solid var(--line); }
+.replay th { color: var(--muted); font-weight: 500; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; }
+.replay tbody tr { cursor: pointer; }
+.replay tbody tr[aria-selected="true"] td { box-shadow: inset 0 -2px 0 var(--accent); }
+.replay summary { cursor: pointer; font: 600 11.5px var(--f-data); text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+.replay details[open] > summary { margin-bottom: 10px; }
+.replay details > .row + .row { margin-top: 8px; }
+.replay select { font: 13px var(--f-body); background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 3px; padding: 3px 6px; max-width: 100%; }
+.replay label { font-family: var(--f-data); font-size: 12px; color: var(--muted); display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.glyph { width: 14px; height: 14px; display: inline-block; flex: none; }
+.inspect { border-top: 1px solid var(--line); padding-top: 10px; display: grid; gap: 6px; }
+.inspect h4 { font: 600 11px var(--f-data); text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 0; }
+.inspect dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 2px 14px; margin: 0; font-family: var(--f-data); font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.inspect dt { color: var(--muted); } .inspect dd { margin: 0; overflow-wrap: anywhere; }
+.inspect ul { margin: 0; padding-left: 18px; font-family: var(--f-data); font-size: 12.5px; }
 .empty { padding: 40px; text-align: center; color: var(--muted); }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
@@ -145,6 +172,36 @@ body.capture .why { display: none; }
           <span id="legend-load"><i class="sw" style="background:var(--ink);height:3px"></i>applied load / sideways acceleration</span>
         </div>
       </div>
+      <section class="replay" id="replay" aria-label="Pass-by-pass replay" hidden>
+        <div class="row"><h3>Cascade, pass by pass</h3><span class="lbl" id="rp-label"></span></div>
+        <div class="row">
+          <button type="button" class="step" id="rp-prev" aria-label="Previous pass">&lsaquo; Pass</button>
+          <input type="range" id="rp-pass" min="0" max="0" step="1" value="0" aria-label="Cascade pass">
+          <button type="button" class="step" id="rp-next" aria-label="Next pass">Pass &rsaquo;</button>
+        </div>
+        <p class="lbl" id="rp-summary"></p>
+        <div class="tablewrap" id="rp-components"></div>
+        <details id="rp-inner">
+          <summary>Elastic iterations of one component</summary>
+          <div class="row"><label for="rp-comp">Component <select id="rp-comp"></select></label></div>
+          <div class="row">
+            <button type="button" class="step" id="rp-iprev" aria-label="Previous iteration">&lsaquo; Iteration</button>
+            <input type="range" id="rp-iter" min="0" max="0" step="1" value="0" aria-label="Elastic iteration">
+            <button type="button" class="step" id="rp-inext" aria-label="Next iteration">Iteration &rsaquo;</button>
+            <span class="lbl" id="rp-iter-label"></span>
+          </div>
+        </details>
+        <div class="legend">
+          <span><svg class="glyph" viewBox="0 0 14 14"><circle cx="7" cy="7" r="4.5" style="fill:var(--body);stroke:var(--ink);stroke-width:1.5"/></svg>corner closed</span>
+          <span><svg class="glyph" viewBox="0 0 14 14"><circle cx="7" cy="7" r="4.5" style="fill:none;stroke:var(--ink);stroke-width:1.5"/></svg>corner open</span>
+          <span><svg class="glyph" viewBox="0 0 14 14"><circle cx="7" cy="7" r="4.5" style="fill:var(--accent);stroke:var(--ink);stroke-width:1.5"/></svg>corner slipping</span>
+          <span><svg class="glyph" viewBox="0 0 14 14"><circle cx="7" cy="7" r="6" style="fill:none;stroke:var(--flip);stroke-width:2"/><circle cx="7" cy="7" r="3" style="fill:var(--body);stroke:var(--ink);stroke-width:1"/></svg>flipped this iteration</span>
+          <span><i class="sw" style="background:var(--accent)"></i>released by this pass or earlier</span>
+          <span><i class="sw" style="border:2px dashed var(--sever)"></i>cracked joint</span>
+          <span><i class="sw" style="background:var(--sever);border-radius:50%"></i>severed joint (removed)</span>
+        </div>
+        <div class="inspect" id="rp-inspect" aria-live="polite"></div>
+      </section>
       <section class="why" id="why" aria-label="Why this result"></section>
       <dl class="readout" id="readout"></dl>
       <div class="failures" id="failures"></div>
@@ -189,7 +246,7 @@ let current = null, built = null, motion = 1, animStart = null;
 function colorOf(token) { return new THREE.Color(css(token)); }
 
 function clearScene(s) {
-  for (const o of [...s.children]) if (!o.isLight) { s.remove(o); o.traverse(c => { c.geometry?.dispose?.(); c.material?.dispose?.(); }); }
+  for (const o of [...s.children]) if (!o.isLight) { s.remove(o); o.traverse(c => { c.geometry?.dispose?.(); c.material?.map?.dispose?.(); c.material?.dispose?.(); }); }
 }
 
 const boxGeo = new THREE.BoxGeometry(2, 2, 2);
@@ -243,7 +300,8 @@ function extentOf(bodies) {
   return box;
 }
 
-function build(sc) {
+// opts.keepCamera leaves the view where the user put it; opts.overlay(ctx) adds the replay's extras to the after scene.
+function build(sc, opts = {}) {
   clearScene(sceneBefore); clearScene(sceneAfter);
   const byId = new Map(sc.bodies.map(b => [b.id, b]));
   const removedBefore = new Set(sc.removed_before_run || []);
@@ -275,7 +333,8 @@ function build(sc) {
   if (ghosts.length) { sceneBefore.add(buildGroup(ghosts, colorOf("--muted"), { edges: true, dashed: true })); sceneAfter.add(buildGroup(ghosts, colorOf("--muted"), { edges: true, dashed: true })); }
 
   const standing = live.filter(b => !released.has(b.id));
-  sceneAfter.add(buildGroup(standing, colorOf("--body"), { edges }));
+  const standingGroup = buildGroup(standing, colorOf("--body"), { edges });
+  sceneAfter.add(standingGroup);
 
   const movers = live.filter(b => released.has(b.id));
   const moverGroup = new THREE.Group();
@@ -284,7 +343,7 @@ function build(sc) {
   if (moverMesh) {
     const palette = [css("--accent"), "#2b6cb0", "#7b3fa0", "#1f8a70", "#c2185b", "#8d6e00"];
     const clusterOf = new Map();
-    (after.clusters || []).forEach((cl, k) => (cl.bodies || []).forEach(id => clusterOf.set(id, k)));
+    (after.clusters || []).forEach((cl, k) => (cl.bodies || []).forEach(id => clusterOf.set(id, cl.colour ?? k)));
     mm.color.set(0xffffff);
     movers.forEach((b, i) => moverMesh.setColorAt(i, new THREE.Color(palette[(clusterOf.get(b.id) ?? 0) % palette.length])));
     moverMesh.instanceColor.needsUpdate = true;
@@ -347,9 +406,10 @@ function build(sc) {
     disc.position.set(...it.p); sceneAfter.add(disc);
   }
 
-  built = { sc, movers, motions, moverMesh, moverEdges, moverOutlines, ext, span };
+  built = { sc, movers, motions, moverMesh, moverEdges, moverOutlines, ext, span, standing, standingMesh: standingGroup.userData.mesh || null, pickers: [] };
+  opts.overlay?.({ scene: sceneAfter, iById, byId, span, pickers: built.pickers });
   setMotion(motion);
-  frame();
+  if (!opts.keepCamera) frame();
   return built;
 }
 
@@ -363,6 +423,7 @@ function setMotion(s) {
     (built.moverOutlines[i] || []).forEach((l, j) => l.matrix.copy(M).multiply(new THREE.Matrix4().makeScale(ks[j], ks[j], ks[j])));
   });
   built.moverMesh.instanceMatrix.needsUpdate = true;
+  built.moverMesh.boundingSphere = null;
 }
 
 function frame() {
@@ -437,6 +498,263 @@ function readout(sc) {
   $("legend-load").hidden = !((sc.loads || []).length || (sc.lateral && (sc.lateral[0] || sc.lateral[1])));
 }
 
+/*
+ * Pass-by-pass replay over after.pass_records (claude_plans/test_plans/2026-11-08-settings-and-pass-recorder.md, sections B and C).
+ * The outer scrubber picks a cascade pass k and redraws the after pane as it stood once pass k had run; the inner one
+ * steps one component's elastic iterations and draws each joint's corner states. Entries without passes never get here.
+ */
+const passesOf = sc => { const p = sc?.after?.pass_records; return Array.isArray(p) && p.length ? p : null; };
+const replay = { sc: null, k: 0, comp: 0, iter: 0, pinned: null };
+const isCapture = () => document.body.classList.contains("capture");
+const passName = (P, j) => `pass ${P[j].pass ?? j + 1}`;
+const vecText = v => Array.isArray(v) ? `(${v.map(x => fmt(x, 3)).join(", ")})` : "n/a";
+const vecLen = v => Array.isArray(v) ? Math.hypot(...v) : NaN;
+const defaultComponent = p => Math.max(0, (p.components || []).findIndex(c => stateClass(c.verdict) !== "stands"));
+const CORNER_SIGNS = [[1, 1], [-1, 1], [-1, -1], [1, -1]]; // (+u,+v), (-u,+v), (-u,-v), (+u,-v)
+
+function resetReplay(sc, P) {
+  replay.sc = sc; replay.k = P.length - 1; replay.comp = defaultComponent(P[replay.k]); replay.iter = 0; replay.pinned = null;
+}
+
+// The after state once entries 0..k have run. The last entry is the recorded after itself, drawn untouched.
+function sceneAtPass(sc, P, k) {
+  if (k >= P.length - 1) return sc;
+  const colour = new Map();
+  (sc.after.clusters || []).forEach((cl, i) => (cl.bodies || []).forEach(id => colour.set(id, i)));
+  const clusters = [], failures = [];
+  for (let j = 0; j <= k; j++) {
+    for (const cl of P[j].clusters || []) clusters.push({ pass: P[j].pass, ...cl, colour: colour.get((cl.bodies || [])[0]) ?? clusters.length });
+    for (const f of P[j].failures || []) failures.push({ pass: P[j].pass, ...f });
+  }
+  return { ...sc, after: { ...sc.after, clusters, failures, removed: [...new Set(clusters.flatMap(c => c.bodies || []))] } };
+}
+
+// The entry that first released each body, and every entry that cracked or severed each joint.
+function causesOf(P) {
+  const released = new Map(), failed = new Map();
+  P.forEach((p, j) => {
+    for (const cl of p.clusters || []) for (const id of cl.bodies || []) if (!released.has(id)) released.set(id, j);
+    for (const f of p.failures || []) { if (!failed.has(f.interface)) failed.set(f.interface, []); failed.get(f.interface).push({ j, f }); }
+  });
+  return { released, failed };
+}
+
+// The joint's own frame; v completes (u, v, n) as right-handed, as the library builds it.
+function jointFrame(it) {
+  const n = new THREE.Vector3(...it.n).normalize(), u = new THREE.Vector3(...it.u).normalize();
+  const v = new THREE.Vector3().crossVectors(n, u).normalize();
+  const p = new THREE.Vector3(...it.p);
+  return { n, u, v, p, corner: (su, sv, s = 1) => p.clone().addScaledVector(u, su * it.hu * s).addScaledVector(v, sv * it.hv * s) };
+}
+
+function glyphTexture(state, flipped) {
+  const c = document.createElement("canvas"); c.width = c.height = 64;
+  const g = c.getContext("2d");
+  if (flipped) { g.beginPath(); g.arc(32, 32, 27, 0, 2 * Math.PI); g.lineWidth = 8; g.strokeStyle = css("--flip"); g.stroke(); }
+  g.beginPath(); g.arc(32, 32, flipped ? 15 : 20, 0, 2 * Math.PI);
+  if (state !== "open") { g.fillStyle = css(state === "slipping" ? "--accent" : "--body"); g.fill(); }
+  g.lineWidth = state === "open" ? 7 : 4; g.strokeStyle = css("--ink"); g.stroke();
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
+function replayOverlay(P, k, eff) {
+  return ({ scene, iById, span, pickers }) => {
+    const a = eff.after;
+    const severed = new Set();
+    for (const f of a.failures || []) if (f.severed !== false) severed.add(f.interface);
+    for (const cl of a.clusters || []) for (const id of cl.severed || []) severed.add(id);
+    const cracked = new Set((a.failures || []).filter(f => f.severed === false && !severed.has(f.interface)).map(f => f.interface));
+    const pickMat = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
+    const addPicker = (it, info) => {
+      const f = jointFrame(it);
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(2 * it.hu, 2 * it.hv), pickMat);
+      m.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(f.u, f.v, f.n)); m.position.copy(f.p);
+      m.visible = false; m.userData.joint = info; scene.add(m); pickers.push(m);
+    };
+    const loop = (it, mat, order) => {
+      const f = jointFrame(it);
+      const l = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(CORNER_SIGNS.map(([su, sv]) => f.corner(su, sv))), mat);
+      l.renderOrder = order; scene.add(l); return l;
+    };
+    const dash = new THREE.LineDashedMaterial({ color: colorOf("--sever"), dashSize: span * 0.008, gapSize: span * 0.006, depthTest: false });
+    for (const id of cracked) { const it = iById.get(id); if (it) { loop(it, dash, 10).computeLineDistances(); addPicker(it, { id, kind: "cracked" }); } }
+    for (const id of severed) { const it = iById.get(id); if (it) addPicker(it, { id, kind: "severed" }); }
+
+    if (!$("rp-inner").open) return;
+    const rec = (P[k].components || [])[replay.comp]?.inner?.[replay.iter];
+    if (!rec) return;
+    const outline = new THREE.LineBasicMaterial({ color: colorOf("--ink"), transparent: true, opacity: 0.45, depthTest: false });
+    const mats = new Map();
+    const mat = (s, fl) => { const key = s + fl; if (!mats.has(key)) mats.set(key, new THREE.SpriteMaterial({ map: glyphTexture(s, fl), depthTest: false, transparent: true })); return mats.get(key); };
+    for (const j of rec.joints || []) {
+      const it = iById.get(j.interface); if (!it) continue;
+      const f = jointFrame(it);
+      loop(it, outline, 11);
+      const size = Math.min(Math.max(Math.min(it.hu, it.hv) * 0.6, span * 0.014), span * 0.03);
+      // Drawn just inside the corners so the glyphs of neighbouring joints, which share corner points, stay apart.
+      CORNER_SIGNS.forEach(([su, sv], c) => {
+        const s = new THREE.Sprite(mat(String(j.corners?.[c] || "closed").toLowerCase(), !!j.flipped?.[c]));
+        s.position.copy(f.corner(su, sv, 0.85)); s.scale.set(size, size, 1); s.renderOrder = 12;
+        s.userData.joint = { id: j.interface, kind: "iteration", rec: j, corner: c };
+        scene.add(s); pickers.push(s);
+      });
+      addPicker(it, { id: j.interface, kind: "iteration", rec: j });
+    }
+  };
+}
+
+function drawReplay(keepCamera) {
+  const P = passesOf(current);
+  if (isCapture()) { build(current, { keepCamera }); return; }
+  const eff = sceneAtPass(current, P, replay.k);
+  build(eff, { keepCamera, overlay: replayOverlay(P, replay.k, eff) });
+  replayPanel(P);
+}
+
+function replayPanel(P) {
+  const k = replay.k, p = P[k], comps = p.components || [];
+  const name = new Map(current.bodies.map(b => [b.id, b.name || `body ${b.id}`]));
+  $("rp-pass").max = P.length - 1; $("rp-pass").value = k;
+  $("rp-prev").disabled = k <= 0; $("rp-next").disabled = k >= P.length - 1;
+  const fl = p.failures || [], cl = p.clusters || [];
+  const quiet = !fl.length && !cl.length;
+  $("rp-label").textContent = `${passName(P, k)} · ${k + 1} of ${P.length}${quiet && k === P.length - 1 ? " · the final judge, nothing more falls" : ""}`;
+  const fell = cl.reduce((n, c) => n + (c.bodies || []).length, 0), sev = fl.filter(f => f.severed !== false).length;
+  $("rp-summary").textContent = `This pass released ${fell} ${fell === 1 ? "body" : "bodies"} in ${cl.length} ${cl.length === 1 ? "piece" : "pieces"}, cracked ${fl.length - sev} ${fl.length - sev === 1 ? "joint" : "joints"} and severed ${sev}. The after view shows the structure once this pass has run.`;
+  const names = c => { const ids = c.bodies || []; return `${ids.length}: ${escHtml(ids.slice(0, 4).map(id => name.get(id)).join(", "))}${ids.length > 4 ? ", …" : ""}`; };
+  $("rp-components").innerHTML = comps.length
+    ? `<table><thead><tr><th>Component</th><th>Bodies</th><th>Verdict</th><th>End</th><th>Iterations</th></tr></thead><tbody>${comps.map((c, i) => `<tr data-c="${i}" aria-selected="${i === replay.comp}"><td>${i + 1}</td><td>${names(c)}</td><td><span class="pill ${stateClass(c.verdict)}">${escHtml(c.verdict ?? "n/a")}</span></td><td>${escHtml(c.end ?? "n/a")}</td><td>${c.iterations ?? (c.inner || []).length}</td></tr>`).join("")}</tbody></table>`
+    : `<p class="note">This pass judged no components.</p>`;
+  $("rp-comp").innerHTML = comps.map((c, i) => `<option value="${i}"${i === replay.comp ? " selected" : ""}>${i + 1} · ${(c.bodies || []).length} bodies · ${escHtml(c.verdict ?? "?")} · ${escHtml(c.end ?? "?")}</option>`).join("");
+  $("rp-comp").disabled = comps.length <= 1;
+  const inner = comps[replay.comp]?.inner || [], rec = inner[replay.iter];
+  $("rp-iter").max = Math.max(0, inner.length - 1); $("rp-iter").value = replay.iter; $("rp-iter").disabled = inner.length <= 1;
+  $("rp-iprev").disabled = replay.iter <= 0; $("rp-inext").disabled = replay.iter >= inner.length - 1;
+  const flips = rec ? (rec.joints || []).reduce((n, j) => n + (j.flipped || []).filter(Boolean).length, 0) : 0;
+  $("rp-iter-label").textContent = rec ? `iteration ${rec.iteration ?? replay.iter + 1} of ${inner.length} · ${(rec.joints || []).length} joints · ${flips} ${flips === 1 ? "corner" : "corners"} flipped` : "no iterations recorded for this component";
+  renderInspect();
+}
+
+function renderInspect(hover) {
+  const t = hover || replay.pinned, P = passesOf(current);
+  const el = $("rp-inspect");
+  if (!t || !P) { el.innerHTML = `<p class="note">Click a body in the after view for the pass that released it and the passes that cracked its joints. With the iterations open, hover or click a joint's corners for its forces.</p>`; return; }
+  el.innerHTML = t.body != null ? bodyInspect(P, t.body) : jointInspect(P, t.joint);
+}
+
+function failureText(P, j, f) {
+  return `${f.severed === false ? "cracked" : "severed"} in ${passName(P, j)}${f.axis ? `, ${escHtml(f.axis)}` : ""}${f.ratio != null ? `, ratio ${fmt(f.ratio)}` : ""}`;
+}
+
+function bodyInspect(P, id) {
+  const { released, failed } = causesOf(P);
+  const name = new Map(current.bodies.map(b => [b.id, b.name || `body ${b.id}`]));
+  const b = current.bodies.find(x => x.id === id) || {};
+  const j = released.get(id);
+  const fromCluster = (current.after.clusters || []).find(c => (c.bodies || []).includes(id));
+  const status = j != null ? `released in ${passName(P, j)}${j > replay.k ? " (still in place at the pass shown)" : ""}`
+    : fromCluster ? `released in pass ${fromCluster.pass ?? "?"}` : "not released in any recorded pass";
+  const joints = (current.interfaces || []).filter(it => (it.a === id || it.b === id) && failed.has(it.id));
+  const list = joints.map(it => `<li>joint ${it.id} to ${escHtml(name.get(it.a === id ? it.b : it.a))}: ${failed.get(it.id).map(({ j, f }) => failureText(P, j, f)).join("; ")}</li>`).join("");
+  return `<h4>Body ${id} · ${escHtml(name.get(id))}</h4><dl><dt>Release</dt><dd>${status}</dd>${b.mass_kg != null ? `<dt>Mass</dt><dd>${fmt(b.mass_kg)} kg</dd>` : ""}</dl>` +
+    (list ? `<h4>Its joints that cracked or severed</h4><ul>${list}</ul>` : `<p class="note">None of its joints cracked or severed.</p>`);
+}
+
+function jointInspect(P, info) {
+  const it = (current.interfaces || []).find(i => i.id === info.id) || {};
+  const name = new Map(current.bodies.map(b => [b.id, b.name || `body ${b.id}`]));
+  const { failed } = causesOf(P);
+  const rec = info.rec || (P[replay.k].readings || []).find(r => r.interface === info.id);
+  const where = info.kind === "iteration" ? `component ${replay.comp + 1}, iteration ${P[replay.k].components[replay.comp].inner[replay.iter].iteration ?? replay.iter + 1}` : `reading at ${passName(P, replay.k)}`;
+  const rows = [["Between", `${escHtml(name.get(it.a))} – ${escHtml(name.get(it.b))}`]];
+  const hist = failed.get(info.id);
+  rows.push(["Failure", hist ? hist.map(({ j, f }) => failureText(P, j, f)).join("; ") : "none recorded"]);
+  if (rec) {
+    rows.push(["Shown", where],
+      ["N", `${fmt(rec.n)} N (compression positive)`],
+      ["Shear", `${fmt(vecLen(rec.shear))} N ${vecText(rec.shear)}`],
+      ["Moment", `${fmt(vecLen(rec.moment))} N·m ${vecText(rec.moment)}`],
+      ["Utilisation", fmt(rec.utilisation)],
+      ["Axis", escHtml(rec.axis ?? "n/a")]);
+    if (rec.corners) rows.push(["Corners", rec.corners.map((s, c) => `${["+u+v", "−u+v", "−u−v", "+u−v"][c]} ${escHtml(s)}${rec.flipped?.[c] ? " (flipped)" : ""}${rec.corner_n ? ` ${fmt(rec.corner_n[c], 3)} N` : ""}`).join(" · ")]);
+  } else rows.push(["Forces", info.kind === "severed" ? "none: the joint is severed" : `no reading recorded at ${passName(P, replay.k)}`]);
+  return `<h4>Joint ${info.id}</h4><dl>${rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("")}</dl>`;
+}
+
+const raycaster = new THREE.Raycaster();
+// A ray through the after pane at the pointer, or null when the pointer is over the before pane.
+function rayAt(ev) {
+  const r = canvas.getBoundingClientRect(), x = ev.clientX - r.left, y = ev.clientY - r.top;
+  let nx, ny;
+  if (r.width < 640) { if (y < r.height / 2) return null; nx = x / r.width * 2 - 1; ny = 1 - (y - r.height / 2) / (r.height / 2) * 2; }
+  else { if (x < r.width / 2) return null; nx = (x - r.width / 2) / (r.width / 2) * 2 - 1; ny = 1 - y / r.height * 2; }
+  raycaster.setFromCamera(new THREE.Vector2(nx, ny), camera);
+  return raycaster;
+}
+
+// Corner glyphs draw on top, so they win outright; a joint rectangle wins only where it is not behind a body face.
+function pickAt(ev, withBodies) {
+  if (!built || $("replay").hidden || isCapture()) return null;
+  // A redraw since the last frame leaves new objects with identity world matrices until the next render.
+  const r = canvas.getBoundingClientRect();
+  camera.aspect = r.width < 640 ? r.width / Math.max(1, r.height / 2) : r.width / 2 / Math.max(1, r.height); camera.updateProjectionMatrix();
+  sceneAfter.updateMatrixWorld(); camera.updateMatrixWorld();
+  const rc = rayAt(ev); if (!rc) return null;
+  const hits = rc.intersectObjects(built.pickers, false);
+  const sprite = hits.find(h => h.object.isSprite);
+  if (sprite) return { joint: sprite.object.userData.joint };
+  const bodyHit = rc.intersectObjects([built.standingMesh, built.moverMesh].filter(Boolean), false)[0];
+  const plane = hits[0];
+  if (plane && (!bodyHit || plane.distance <= bodyHit.distance + built.span * 0.01)) return { joint: plane.object.userData.joint };
+  if (withBodies && bodyHit) return { body: (bodyHit.object === built.moverMesh ? built.movers : built.standing)[bodyHit.instanceId].id };
+  return null;
+}
+
+function stepPass(k) {
+  const P = passesOf(current); if (!P) return;
+  k = Math.max(0, Math.min(P.length - 1, k));
+  if (k === replay.k) return;
+  replay.k = k; replay.comp = defaultComponent(P[k]); replay.iter = 0;
+  drawReplay(true);
+}
+
+function stepIter(i) {
+  const P = passesOf(current); if (!P) return;
+  const n = ((P[replay.k].components || [])[replay.comp]?.inner || []).length;
+  i = Math.max(0, Math.min(n - 1, i));
+  if (i === replay.iter || n === 0) return;
+  replay.iter = i; drawReplay(true);
+}
+
+$("rp-pass").addEventListener("input", e => stepPass(+e.target.value));
+$("rp-prev").addEventListener("click", () => stepPass(replay.k - 1));
+$("rp-next").addEventListener("click", () => stepPass(replay.k + 1));
+$("rp-iter").addEventListener("input", e => stepIter(+e.target.value));
+$("rp-iprev").addEventListener("click", () => stepIter(replay.iter - 1));
+$("rp-inext").addEventListener("click", () => stepIter(replay.iter + 1));
+$("rp-comp").addEventListener("change", e => { replay.comp = +e.target.value; replay.iter = 0; drawReplay(true); });
+$("rp-components").addEventListener("click", e => {
+  const tr = e.target.closest("tr[data-c]"); if (!tr) return;
+  replay.comp = +tr.dataset.c; replay.iter = 0;
+  if ($("rp-inner").open) drawReplay(true); else $("rp-inner").open = true; // opening fires toggle, which redraws
+});
+$("rp-inner").addEventListener("toggle", () => current && passesOf(current) && !$("replay").hidden && drawReplay(true));
+let pointerDown = null, hoverQueued = null;
+canvas.addEventListener("pointerdown", e => { pointerDown = { x: e.clientX, y: e.clientY }; });
+canvas.addEventListener("pointerup", e => {
+  if (!pointerDown || Math.hypot(e.clientX - pointerDown.x, e.clientY - pointerDown.y) > 5) { pointerDown = null; return; }
+  pointerDown = null;
+  if ($("replay").hidden) return;
+  replay.pinned = pickAt(e, true); renderInspect();
+});
+canvas.addEventListener("pointermove", e => {
+  if (pointerDown || $("replay").hidden) return;
+  if (hoverQueued) { hoverQueued = e; return; }
+  hoverQueued = e;
+  requestAnimationFrame(() => { const t = pickAt(hoverQueued, false); hoverQueued = null; canvas.style.cursor = t ? "pointer" : ""; renderInspect(t || undefined); });
+});
+
 function select(i, runs) {
   current = runs[i];
   document.querySelectorAll("#rail button").forEach((b, j) => b.setAttribute("aria-current", j === i ? "true" : "false"));
@@ -462,7 +780,9 @@ function showView() {
   t.textContent = on ? "Show the engine's outcome" : "Show the expected outcome";
   const sc = on ? expectedView(current) : current;
   readout(sc);
-  build(sc);
+  const P = on ? null : passesOf(current);
+  $("replay").hidden = !P;
+  if (P) { if (replay.sc !== current) resetReplay(current, P); drawReplay(false); } else build(sc);
   $("why").outerHTML = whyHtml(current);
 }
 

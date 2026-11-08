@@ -35,6 +35,9 @@ struct ComponentReport
 	bool bReused = false;
 	// The loads on this component's bodies as judged, in the order given; a change to them dirties the component.
 	std::vector<BodyLoad> Loads;
+	// Carried from the elastic component; Passes is empty unless recording.
+	SolveEnd End = SolveEnd::None;
+	std::vector<ElasticPassRecord> Passes;
 };
 
 struct AuthorityOptions

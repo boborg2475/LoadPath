@@ -1,5 +1,6 @@
 #include "loadpath/Cascade.h"
 
+#include "loadpath/Settings.h"
 #include "loadpath/Units.h"
 #include "StaticsCommon.h"
 
@@ -435,6 +436,8 @@ private:
 		std::vector<BodyId> ReleasedThisRun;
 		AuthorityResult Last;
 		const AuthorityResult* Before = Previous;
+		const DebugSettings* Debug = Options.Authority.Standing.Debug;
+		const bool bRecord = Debug != nullptr && Debug->bRecordPasses;
 		while (true)
 		{
 			const std::uint32_t Pass = Model.HighestPass() + 1;
@@ -456,10 +459,17 @@ private:
 				return Verdict;
 			}
 			const std::size_t FailuresBefore = Verdict.Failures.size();
+			const std::size_t ClustersBefore = Verdict.Clusters.size();
 			const bool bReleased = Release(Model, Judged, Pass, Verdict, ReleasedThisRun);
 			const bool bCracked = CrackBand(Model, Judged, Pass, Options.CrackBandFraction, Verdict);
 			std::stable_sort(Verdict.Failures.begin() + static_cast<std::ptrdiff_t>(FailuresBefore), Verdict.Failures.end(),
 				[](const FailedInterface& A, const FailedInterface& B) { return A.Id.Index < B.Id.Index; });
+			if (bRecord)
+			{
+				Verdict.PassRecords.push_back(CascadePassRecord{Pass, Judged.Components, Judged.Readings,
+					{Verdict.Clusters.begin() + static_cast<std::ptrdiff_t>(ClustersBefore), Verdict.Clusters.end()},
+					{Verdict.Failures.begin() + static_cast<std::ptrdiff_t>(FailuresBefore), Verdict.Failures.end()}});
+			}
 			const ComponentVerdict Worst = Judged.Worst;
 			Last = std::move(Judged);
 			Before = &Last;
@@ -485,6 +495,10 @@ private:
 					}
 				}
 				AuthorityResult Rejudged = Authority->Judge(Model, CapLoads, Options.Authority, &Last);
+				if (bRecord)
+				{
+					Verdict.PassRecords.push_back(CascadePassRecord{Pass + 1, Rejudged.Components, Rejudged.Readings, {}, {}});
+				}
 				Verdict.Readings = std::move(Rejudged.Readings);
 				Verdict.Components = std::move(Rejudged.Components);
 				return Verdict;

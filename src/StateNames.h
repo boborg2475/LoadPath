@@ -56,4 +56,30 @@ inline const char* AxisText(GoverningAxis Axis)
 	}
 	return "Unknown";
 }
+
+inline const char* EndText(SolveEnd End)
+{
+	switch (End)
+	{
+	case SolveEnd::None: return "None";
+	case SolveEnd::Converged: return "Converged";
+	case SolveEnd::Mechanism: return "Mechanism";
+	case SolveEnd::RestoreFailedClosed: return "RestoreFailedClosed";
+	case SolveEnd::PowerCheckFailed: return "PowerCheckFailed";
+	case SolveEnd::IterationCap: return "IterationCap";
+	case SolveEnd::InvalidInput: return "InvalidInput";
+	}
+	return "Unknown";
+}
+
+inline const char* CornerStateText(CornerState State)
+{
+	switch (State)
+	{
+	case CornerState::Closed: return "closed";
+	case CornerState::Open: return "open";
+	case CornerState::Slipping: return "slipping";
+	}
+	return "unknown";
+}
 }

@@ -6,6 +6,7 @@
 
 #include "loadpath/Cascade.h"
 #include "loadpath/Catalogue.h"
+#include "loadpath/Settings.h"
 #include "loadpath/StructuralAuthority.h"
 #include "loadpath/Structure.h"
 #include "loadpath/StructureFile.h"
@@ -598,10 +599,18 @@ inline ShedScene BuildShed(const geometry::WarehouseSpec& Base)
 	return H;
 }
 
+inline const DebugSettings& RecordingDebug()
+{
+	static const DebugSettings Value{true};
+	return Value;
+}
+
+// Passes are recorded only when a picture is being recorded, so the plain suite's cost is unchanged.
 inline AuthorityOptions OptionsFor(const Scene& S)
 {
 	AuthorityOptions Options;
 	Options.Standing.Gravity = S.Gravity;
+	Options.Standing.Debug = VisualsDirFromEnvironment() ? &RecordingDebug() : nullptr;
 	return Options;
 }
 

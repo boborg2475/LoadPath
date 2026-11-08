@@ -1409,18 +1409,16 @@ void RecordCascade(const Scenario& Value, const CascadeVerdict& Verdict, Scenari
 	Outcome.Passes += Verdict.Passes;
 }
 
-bool RunStep(Scenario& Value, const ScenarioStep& Step, int Number, const ICascade& Cascade, const IStructuralAuthority& Authority, ScenarioOutcome& Outcome)
+bool RunStep(Scenario& Value, const ScenarioStep& Step, int Number, const ICascade& Cascade, const IStructuralAuthority& Authority, const Settings& Tunables, ScenarioOutcome& Outcome)
 {
 	ScenarioStepRecord Record;
-	AuthorityOptions Options;
-	Options.Standing.Gravity = Outcome.Gravity;
+	const AuthorityOptions Options{ToStandingOptions(Tunables, Outcome.Gravity)};
 	switch (Step.Kind)
 	{
 	case ScenarioStepKind::Cascade:
 	{
 		Record.Kind = "cascade";
-		CascadeOptions CascadeSettings;
-		CascadeSettings.Authority = Options;
+		const CascadeOptions CascadeSettings = ToCascadeOptions(Tunables, Outcome.Gravity);
 		Outcome.Verdicts.push_back(Cascade.Run(Value.Model, Outcome.Loads, CascadeSettings, nullptr));
 		RecordCascade(Value, Outcome.Verdicts.back(), Record, Outcome);
 		break;
@@ -1502,7 +1500,7 @@ ScenarioLoadResult LoadScenario(std::string_view Json, const Catalogue& Rows)
 	return Result;
 }
 
-ScenarioOutcome RunScenario(Scenario& Value, const ICascade& Cascade, const IStructuralAuthority& Authority)
+ScenarioOutcome RunScenario(Scenario& Value, const ICascade& Cascade, const IStructuralAuthority& Authority, const Settings& Tunables)
 {
 	ScenarioOutcome Outcome;
 	Outcome.Names = Value.BodyNames;
@@ -1516,19 +1514,18 @@ ScenarioOutcome RunScenario(Scenario& Value, const ICascade& Cascade, const IStr
 			{
 				continue;
 			}
-			if (!RunStep(Drawn, Step, static_cast<int>(Index) + 1, Cascade, Authority, Scratch))
+			if (!RunStep(Drawn, Step, static_cast<int>(Index) + 1, Cascade, Authority, Tunables, Scratch))
 			{
 				break;
 			}
 		}
-		AuthorityOptions Options;
-		Options.Standing.Gravity = Scratch.Gravity;
+		const AuthorityOptions Options{ToStandingOptions(Tunables, Scratch.Gravity)};
 		Outcome.Before = Authority.Judge(Drawn.Model, Scratch.Loads, Options, nullptr).Worst;
 	}
 	const auto Start = std::chrono::steady_clock::now();
 	for (std::size_t Index = 0; Index < Value.Steps.size(); ++Index)
 	{
-		if (!RunStep(Value, Value.Steps[Index], static_cast<int>(Index) + 1, Cascade, Authority, Outcome))
+		if (!RunStep(Value, Value.Steps[Index], static_cast<int>(Index) + 1, Cascade, Authority, Tunables, Outcome))
 		{
 			break;
 		}
@@ -1537,12 +1534,16 @@ ScenarioOutcome RunScenario(Scenario& Value, const ICascade& Cascade, const IStr
 	return Outcome;
 }
 
-ScenarioOutcome RunScenario(Scenario& Value)
+ScenarioOutcome RunScenario(Scenario& Value, const ICascade& Cascade, const IStructuralAuthority& Authority) { return RunScenario(Value, Cascade, Authority, Settings{}); }
+
+ScenarioOutcome RunScenario(Scenario& Value, const Settings& Tunables)
 {
 	const std::unique_ptr<IStructuralAuthority> Authority = MakeElasticAuthority(MakeRbsmStandingAuthority());
 	const std::unique_ptr<ICascade> Cascade = MakeCascade(MakeElasticAuthority(MakeRbsmStandingAuthority()));
-	return RunScenario(Value, *Cascade, *Authority);
+	return RunScenario(Value, *Cascade, *Authority, Tunables);
 }
+
+ScenarioOutcome RunScenario(Scenario& Value) { return RunScenario(Value, Settings{}); }
 
 ExpectationReport CompareExpectation(const ScenarioExpect& Expect, const ScenarioOutcome& Outcome)
 {

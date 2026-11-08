@@ -54,6 +54,16 @@ struct CascadeOptions
 	int MaxPasses = 32;
 };
 
+// One pass's judge and what it changed; the final judge that changed nothing is recorded too.
+struct CascadePassRecord
+{
+	std::uint32_t Pass = 0;
+	std::vector<ComponentReport> Components;
+	std::vector<InterfaceReading> Readings;
+	std::vector<ReleasedCluster> Clusters;
+	std::vector<FailedInterface> Failures;
+};
+
 struct CascadeVerdict
 {
 	CascadeState State = CascadeState::Undecided;
@@ -72,6 +82,8 @@ struct CascadeVerdict
 	InterfaceId InvalidInterface{};
 	// Ascending indices into the input loads whose body this structure issued but has since removed; those loads were skipped.
 	std::vector<std::size_t> StaleLoads;
+	// Empty unless Options.Authority.Standing.Debug->bRecordPasses.
+	std::vector<CascadePassRecord> PassRecords;
 };
 
 // Run mutates the structure it is given (stamps, removals) and lists every change in the verdict.

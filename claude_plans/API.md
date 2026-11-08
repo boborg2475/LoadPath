@@ -1249,9 +1249,79 @@ int RunCli(std::span<const std::string_view> Args, IFileStore& Files, std::strin
   engine's after. Numbers are shortest round-trip, so the export of a run is byte-identical run to
   run. `ViewerSceneOf` leaves `ElapsedMs` unset and sets `Expected` only when the file's expectation
   is not met.
-- **CLI.** `loadpath_cli scenario <file> [--viz <out.json>] [--catalogue <path>]`: the catalogue
-  defaults to `catalogue.json` in the scenario folder's parent. Prints the title, `built B bodies (G
+- **CLI.** `loadpath_cli scenario <file> [--viz <out.json>] [--catalogue <path>] [--settings <path>] [--overrides <path>]`: the catalogue
+  defaults to `catalogue.json` in the scenario folder's parent; the settings default to
+  `data/settings.json` (absent means the compiled defaults, which the shipped file equals) and the
+  overrides to `data/settings.local.json` (absent is fine). Prints the title, `built B bodies (G
   grounded), J joints`, one `step N <kind>: ...` line per step, then `expectation met` or
   `expectation not met` and the report lines. Exit 0 met, 1 not met (or a run error), 2 the file
-  cannot be run (usage, unreadable file or catalogue, `<file>:<line>: <message>` for a load error).
+  cannot be run (usage, unreadable file or catalogue, an explicit `--settings` file that cannot be read,
+  `<file>:<line>: <message>` for a load error or a bad settings or overrides key).
   The one-argument structure command is unchanged.
+
+## Settings (`Settings.h`, `data/settings.json`, 2026-11-08)
+
+The engine's tunables live in a committed defaults file plus an optional overrides file holding
+only the keys a user changed; reset discards the overrides ([decisions/2026-11-08-forced-collapse-and-core-suite.md](decisions/2026-11-08-forced-collapse-and-core-suite.md) §5,
+[test_plans/2026-11-08-settings-and-pass-recorder.md](test_plans/2026-11-08-settings-and-pass-recorder.md) A).
+
+```cpp
+struct SolverSettings  { int MaxActiveSetIterations = 50; double PivotToleranceRelative = 1e-10; int DenseDofLimit = 600;
+                         double StickMarginRelative = 1e-9, HeldForceToleranceRelative = 1e-12, DryNoiseFloorRelative = 1e-12,
+                         NeutralLoadToleranceRelative = 1e-12, AdmissibilityToleranceRelative = 1e-9, UnconstrainedComponent = 1e-6; };
+struct CascadeSettings { double CrackBandFraction = 0.5; int MaxPasses = 32; };
+struct DebugSettings   { bool bRecordPasses = false; };
+struct Settings        { SolverSettings Solver; CascadeSettings Cascade; DebugSettings Debug; };
+struct SettingsResult  { Settings Value; FileError Error; bool Ok() const; };
+
+SettingsResult  LoadSettings(std::string_view DefaultsJson);                                  // every key required, no unknown keys
+SettingsResult  ApplyOverrides(const Settings& Defaults, std::string_view OverridesJson);      // any subset, nested the same way
+StandingOptions ToStandingOptions(const Settings&, Vec3 Gravity);                             // Debug points into the Settings
+CascadeOptions  ToCascadeOptions(const Settings&, Vec3 Gravity);
+```
+
+- The file's keys are the struct fields in snake_case under `solver`, `cascade` and `debug`;
+  `Settings.DefaultsFileLoadsAndMatchesTheCompiledDefaults` pins the shipped file to the C++ defaults.
+- Fail closed: a missing key (defaults file only), an unknown key, a wrong type (an integer field
+  given a fraction included) or a non-finite number is an error whose message names the key by its
+  path (`solver.dense_dof_limit`) and whose `Line` is the offending line; a refused document loads
+  nothing (`Value` is the compiled defaults).
+- The six solver tolerances that were `constexpr` in `RbsmStandingAuthority.cpp` are now
+  `StandingOptions` fields with the same defaults, so a default-options solve is bit-identical to
+  before; `StandingOptions::Debug` (`const DebugSettings*`, null means no debug work) is the one hook
+  the pass recorder (package B) reads. `RunScenario` takes a `Settings` (overloads without one use
+  the compiled defaults) and builds every step's options through `ToStandingOptions` and `ToCascadeOptions`.
+
+## Pass recorder (`StandingAuthority.h`, `Cascade.h`, 2026-11-08, build-order item 1 package B)
+
+When `Options.Debug != nullptr && Options.Debug->bRecordPasses`, the elastic solver fills `StandingComponent::Passes`
+(one `ElasticPassRecord` per active-set iteration) and the cascade fills `CascadeVerdict::PassRecords` (one per pass,
+including the final judge that changed nothing); otherwise both stay empty and recording changes no answer
+(`Statics.Recorder.RecordingChangesNoAnswer` is bit-identity). `End` is filled whether or not recording is on.
+
+```cpp
+enum class CornerState : uint8_t { Closed, Open, Slipping };
+enum class SolveEnd : uint8_t { None, Converged, Mechanism, RestoreFailedClosed, PowerCheckFailed, IterationCap, InvalidInput };
+struct JointPassRecord {
+	InterfaceId Id; std::array<CornerState, 4> Corners;   // after this iteration's update
+	std::array<bool, 4> bFlipped;                          // differs from the previous iteration; all false on iteration 1
+	std::array<double, 4> CornerNormalN; std::array<Vec3, 4> CornerShearN;
+	double NormalForceN; Vec3 ShearForceN; Vec3 MomentNm; double Utilisation; GoverningAxis Axis;
+};
+struct ElasticPassRecord { int Iteration; std::vector<JointPassRecord> Joints; };
+// StandingComponent: std::vector<ElasticPassRecord> Passes; SolveEnd End; std::vector<InterfaceId> Blocking (RestoreFailedClosed only)
+// ComponentReport:   SolveEnd End; std::vector<ElasticPassRecord> Passes (carried from the elastic component)
+struct CascadePassRecord { uint32_t Pass; std::vector<ComponentReport> Components; std::vector<InterfaceReading> Readings;
+                           std::vector<ReleasedCluster> Clusters; std::vector<FailedInterface> Failures; };
+// CascadeVerdict:    std::vector<CascadePassRecord> PassRecords;   // `Passes` stays the counted-pass integer
+```
+
+- `SolveEnd` is `None` for one Undecided: the force scale overflowed inside `UpdateActiveSet` (no value yet, owner call).
+- Viewer JSON: `after.pass_records` is written when any verdict has records and omitted otherwise; `after.passes` stays
+  the integer count. Each record is `{pass, components: [{bodies, verdict, end, iterations, inner: [{iteration, joints:
+  [{interface, corners: ["closed"|"open"|"slipping" x4], flipped: [bool x4], corner_n: [x4], corner_shear: [[x,y,z] x4],
+  n, shear, moment, utilisation, axis}]}]}], readings: [joint-shaped, one per live interface], clusters: [as after.clusters],
+  failures: [as after.failures]}`; `iterations` is `inner.size()`. Interface ids are the viewer's existing numbers.
+- The E2E harness (`OptionsFor`) and the scenario-file harness record whenever `LOADPATH_VISUALS` is set and never
+  otherwise; `RunScenario` follows `Settings.Debug.bRecordPasses`; the CLI honours `debug.record_passes` and
+  `--record-passes` sets it true.

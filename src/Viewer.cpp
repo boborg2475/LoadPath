@@ -97,6 +97,27 @@ public:
 		Number(Value);
 	}
 
+	void ItemString(std::string_view Text)
+	{
+		Separate();
+		String(Text);
+	}
+
+	void ItemBool(bool bValue)
+	{
+		Separate();
+		Out += bValue ? "true" : "false";
+	}
+
+	void ItemVec(const Vec3& V)
+	{
+		Open('[');
+		Item(V.X);
+		Item(V.Y);
+		Item(V.Z);
+		Close(']');
+	}
+
 	void FieldNumber(std::string_view Name, double Value)
 	{
 		Key(Name);
@@ -286,6 +307,151 @@ void WriteCluster(JsonWriter& W, const ViewerScene& Scene, const ReleasedCluster
 	W.Close('}');
 }
 
+void WriteFailure(JsonWriter& W, const FailedInterface& F)
+{
+	W.Open('{');
+	W.FieldInteger("interface", F.Id.Index);
+	W.FieldInteger("pass", F.Pass);
+	W.FieldString("axis", detail::AxisText(F.Axis));
+	W.FieldNumber("ratio", F.Ratio);
+	W.FieldBool("severed", F.bSevered);
+	W.Close('}');
+}
+
+JointPassRecord RecordOf(const InterfaceReading& Reading)
+{
+	JointPassRecord Record;
+	Record.Id = Reading.Id;
+	for (std::size_t C = 0; C < Record.Corners.size(); ++C)
+	{
+		const CornerReading& Corner = Reading.Corners[C];
+		Record.Corners[C] = Corner.bOpen ? CornerState::Open : Corner.bSlipping ? CornerState::Slipping : CornerState::Closed;
+		Record.CornerNormalN[C] = Corner.NormalForceN;
+		Record.CornerShearN[C] = Corner.ShearForceN;
+	}
+	Record.NormalForceN = Reading.NormalForceN;
+	Record.ShearForceN = Reading.ShearForceN;
+	Record.MomentNm = Reading.MomentNm;
+	Record.Utilisation = Reading.Utilisation;
+	Record.Axis = Reading.Axis;
+	return Record;
+}
+
+void WriteJoint(JsonWriter& W, const JointPassRecord& J)
+{
+	W.Open('{');
+	W.FieldInteger("interface", J.Id.Index);
+	W.Key("corners");
+	W.Open('[');
+	for (const CornerState State : J.Corners)
+	{
+		W.ItemString(detail::CornerStateText(State));
+	}
+	W.Close(']');
+	W.Key("flipped");
+	W.Open('[');
+	for (const bool bFlipped : J.bFlipped)
+	{
+		W.ItemBool(bFlipped);
+	}
+	W.Close(']');
+	W.Key("corner_n");
+	W.Open('[');
+	for (const double N : J.CornerNormalN)
+	{
+		W.Item(N);
+	}
+	W.Close(']');
+	W.Key("corner_shear");
+	W.Open('[');
+	for (const Vec3& Shear : J.CornerShearN)
+	{
+		W.ItemVec(Shear);
+	}
+	W.Close(']');
+	W.FieldNumber("n", J.NormalForceN);
+	W.FieldVec("shear", J.ShearForceN);
+	W.FieldVec("moment", J.MomentNm);
+	W.FieldNumber("utilisation", J.Utilisation);
+	W.FieldString("axis", detail::AxisText(J.Axis));
+	W.Close('}');
+}
+
+void WritePassComponent(JsonWriter& W, const ComponentReport& Component)
+{
+	W.Open('{');
+	W.FieldIds("bodies", Component.Bodies);
+	W.FieldString("verdict", detail::VerdictText(Component.Verdict));
+	W.FieldString("end", detail::EndText(Component.End));
+	W.FieldInteger("iterations", Component.Passes.size());
+	W.Key("inner");
+	W.Open('[');
+	for (const ElasticPassRecord& Pass : Component.Passes)
+	{
+		W.Open('{');
+		W.FieldInteger("iteration", static_cast<std::uint64_t>(Pass.Iteration));
+		W.Key("joints");
+		W.Open('[');
+		for (const JointPassRecord& Joint : Pass.Joints)
+		{
+			WriteJoint(W, Joint);
+		}
+		W.Close(']');
+		W.Close('}');
+	}
+	W.Close(']');
+	W.Close('}');
+}
+
+bool HasPassRecords(const ViewerScene& Scene)
+{
+	return std::any_of(Scene.After.begin(), Scene.After.end(), [](const CascadeVerdict& Verdict) { return !Verdict.PassRecords.empty(); });
+}
+
+void WritePassRecords(JsonWriter& W, const ViewerScene& Scene)
+{
+	W.Key("pass_records");
+	W.Open('[');
+	for (const CascadeVerdict& Verdict : Scene.After)
+	{
+		for (const CascadePassRecord& Record : Verdict.PassRecords)
+		{
+			W.Open('{');
+			W.FieldInteger("pass", Record.Pass);
+			W.Key("components");
+			W.Open('[');
+			for (const ComponentReport& Component : Record.Components)
+			{
+				WritePassComponent(W, Component);
+			}
+			W.Close(']');
+			W.Key("readings");
+			W.Open('[');
+			for (const InterfaceReading& Reading : Record.Readings)
+			{
+				WriteJoint(W, RecordOf(Reading));
+			}
+			W.Close(']');
+			W.Key("clusters");
+			W.Open('[');
+			for (const ReleasedCluster& Cluster : Record.Clusters)
+			{
+				WriteCluster(W, Scene, Cluster);
+			}
+			W.Close(']');
+			W.Key("failures");
+			W.Open('[');
+			for (const FailedInterface& F : Record.Failures)
+			{
+				WriteFailure(W, F);
+			}
+			W.Close(']');
+			W.Close('}');
+		}
+	}
+	W.Close(']');
+}
+
 void WriteAfter(JsonWriter& W, const ViewerScene& Scene)
 {
 	W.Key("after");
@@ -322,17 +488,15 @@ void WriteAfter(JsonWriter& W, const ViewerScene& Scene)
 	{
 		for (const FailedInterface& F : Verdict.Failures)
 		{
-			W.Open('{');
-			W.FieldInteger("interface", F.Id.Index);
-			W.FieldInteger("pass", F.Pass);
-			W.FieldString("axis", detail::AxisText(F.Axis));
-			W.FieldNumber("ratio", F.Ratio);
-			W.FieldBool("severed", F.bSevered);
-			W.Close('}');
+			WriteFailure(W, F);
 		}
 	}
 	W.Close(']');
 	W.FieldIds("removed", Released);
+	if (HasPassRecords(Scene))
+	{
+		WritePassRecords(W, Scene);
+	}
 	if (Scene.ElapsedMs)
 	{
 		W.FieldNumber("elapsed_ms", *Scene.ElapsedMs);

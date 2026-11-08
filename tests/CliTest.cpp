@@ -1,5 +1,7 @@
+#include "JsonReader.h"
 #include "ScenarioTestSupport.h"
 #include "StructureFileTestSupport.h"
+#include "SlowInDebug.h"
 #include "VisualSupport.h"
 
 #include "loadpath/Cli.h"
@@ -9,7 +11,9 @@
 #include "doctest.h"
 
 #include <algorithm>
+#include <fstream>
 #include <optional>
+#include <sstream>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -301,4 +305,135 @@ TEST_CASE("Cli.Scenario.ACatalogueThatDoesNotLoadReturns2WithItsPath")
 	CHECK(R.Code == 2);
 	CHECK(R.Err.starts_with("cat.json:"));
 	CHECK(R.Out.empty());
+}
+
+namespace
+{
+const std::string BondedWallPath = "data/scenarios/bonded-wall-lateral-step.json";
+const std::string SettingsPath = "data/settings.json";
+const std::string OverridesPath = "data/settings.local.json";
+
+std::string ReadDataFile(const std::string& Relative)
+{
+	std::ifstream File(std::string(LOADPATH_DATA_PATH) + "/" + Relative, std::ios::binary);
+	std::ostringstream Text;
+	Text << File.rdbuf();
+	return Text.str();
+}
+
+MemoryFiles BondedWallFiles()
+{
+	MemoryFiles Files = ScenarioFiles(BondedWallPath, ReadDataFile("scenarios/bonded-wall-lateral-step.json"));
+	Files.Files[SettingsPath] = ReadDataFile("settings.json");
+	return Files;
+}
+
+bool WasRead(const MemoryFiles& Files, const std::string& Path) { return std::find(Files.ReadPaths.begin(), Files.ReadPaths.end(), Path) != Files.ReadPaths.end(); }
+}
+
+TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Cli.ScenarioReadsSettingsAndOverrides")
+{
+	{
+		MemoryFiles Files = BondedWallFiles();
+		const CliRun R = RunWith({"scenario", BondedWallPath}, Files);
+		INFO("Out:\n" << R.Out << "Err:\n" << R.Err);
+		CHECK(R.Code == 0);
+		CHECK(Contains(R.Out, "step 2 cascade: Stands, 2 passes"));
+		CHECK(WasRead(Files, SettingsPath));
+		CHECK(WasRead(Files, OverridesPath));
+	}
+	{
+		MemoryFiles Files = BondedWallFiles();
+		Files.Files[OverridesPath] = "{ \"cascade\": { \"max_passes\": 1 } }";
+		const CliRun R = RunWith({"scenario", BondedWallPath}, Files);
+		INFO("Out:\n" << R.Out << "Err:\n" << R.Err);
+		CHECK(R.Code == 1);
+		CHECK(Contains(R.Out, "step 2 cascade: PassCapReached, 1 pass"));
+		CHECK(R.Err.empty());
+	}
+	{
+		MemoryFiles Files = BondedWallFiles();
+		Files.Files["elsewhere/local.json"] = "{ \"cascade\": { \"max_passes\": 1 } }";
+		Files.Files["elsewhere/defaults.json"] = ReadDataFile("settings.json");
+		Files.Files.erase(SettingsPath);
+		const CliRun R = RunWith({"scenario", BondedWallPath, "--settings", "elsewhere/defaults.json", "--overrides", "elsewhere/local.json"}, Files);
+		INFO("Out:\n" << R.Out << "Err:\n" << R.Err);
+		CHECK(R.Code == 1);
+		CHECK(Contains(R.Out, "step 2 cascade: PassCapReached, 1 pass"));
+		CHECK(WasRead(Files, "elsewhere/defaults.json"));
+		CHECK(WasRead(Files, "elsewhere/local.json"));
+		CHECK_FALSE(WasRead(Files, SettingsPath));
+		CHECK_FALSE(WasRead(Files, OverridesPath));
+	}
+	{
+		MemoryFiles Files = BondedWallFiles();
+		Files.Files[OverridesPath] = "{\n  \"cascade\": { \"max_pases\": 1 }\n}\n";
+		const CliRun R = RunWith({"scenario", BondedWallPath}, Files);
+		INFO("Out:\n" << R.Out << "Err:\n" << R.Err);
+		CHECK(R.Code == 2);
+		CHECK(R.Err.starts_with(OverridesPath + ":2: "));
+		CHECK(Contains(R.Err, "cascade.max_pases"));
+		CHECK(R.Out.empty());
+	}
+	{
+		MemoryFiles Files = BondedWallFiles();
+		Files.Files["bad.json"] = "{\n  \"solver\": {},\n  \"cascade\": { \"crack_band_fraction\": 0.5, \"max_passes\": 32 },\n  \"debug\": { \"record_passes\": false }\n}\n";
+		const CliRun R = RunWith({"scenario", BondedWallPath, "--settings", "bad.json"}, Files);
+		INFO("Out:\n" << R.Out << "Err:\n" << R.Err);
+		CHECK(R.Code == 2);
+		CHECK(R.Err.starts_with("bad.json:2: "));
+		CHECK(Contains(R.Err, "solver.max_active_set_iterations"));
+		const CliRun Missing = RunWith({"scenario", BondedWallPath, "--settings", "absent.json"}, Files);
+		CHECK(Missing.Code == 2);
+		CHECK(Missing.Err == "cannot read absent.json\n");
+	}
+}
+
+namespace
+{
+bool VizHasPassRecords(const MemoryFiles& Files, const std::string& Path)
+{
+	const auto Found = Files.Files.find(Path);
+	REQUIRE(Found != Files.Files.end());
+	if (Found == Files.Files.end())
+	{
+		return false;
+	}
+	detail::JsonParser Parser(Found->second);
+	detail::JsonValue Root;
+	REQUIRE(Parser.ParseDocument(Root));
+	const detail::JsonValue* After = detail::Find(Root, "after");
+	REQUIRE(After != nullptr);
+	if (After == nullptr)
+	{
+		return false;
+	}
+	return detail::Find(*After, "pass_records") != nullptr;
+}
+}
+
+TEST_CASE("Cli.RecordPassesWritesPassesIntoTheVizFile")
+{
+	{
+		MemoryFiles Files = ScenarioFiles(ScenarioPath, ColonnadeJson);
+		const CliRun R = RunWith({"scenario", ScenarioPath, "--viz", "out.json"}, Files);
+		INFO("Out:\n" << R.Out << "Err:\n" << R.Err);
+		CHECK(R.Code == 0);
+		CHECK_FALSE(VizHasPassRecords(Files, "out.json"));
+	}
+	{
+		MemoryFiles Files = ScenarioFiles(ScenarioPath, ColonnadeJson);
+		const CliRun R = RunWith({"scenario", ScenarioPath, "--viz", "out.json", "--record-passes"}, Files);
+		INFO("Out:\n" << R.Out << "Err:\n" << R.Err);
+		CHECK(R.Code == 0);
+		CHECK(VizHasPassRecords(Files, "out.json"));
+	}
+	{
+		MemoryFiles Files = ScenarioFiles(ScenarioPath, ColonnadeJson);
+		Files.Files["data/settings.local.json"] = "{ \"debug\": { \"record_passes\": true } }";
+		const CliRun R = RunWith({"scenario", ScenarioPath, "--viz", "out.json"}, Files);
+		INFO("Out:\n" << R.Out << "Err:\n" << R.Err);
+		CHECK(R.Code == 0);
+		CHECK(VizHasPassRecords(Files, "out.json"));
+	}
 }

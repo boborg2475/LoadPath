@@ -2,6 +2,7 @@
 
 #include "loadpath/Catalogue.h"
 #include "loadpath/Scenario.h"
+#include "loadpath/Settings.h"
 #include "loadpath/StructureFile.h"
 
 #include <algorithm>
@@ -12,7 +13,10 @@ namespace loadpath
 namespace
 {
 constexpr std::string_view Usage = "usage: loadpath_cli <structure.json>\n"
-								   "       loadpath_cli scenario <scenario.json> [--viz <out.json>] [--catalogue <catalogue.json>]\n";
+								   "       loadpath_cli scenario <scenario.json> [--viz <out.json>] [--catalogue <catalogue.json>]\n"
+								   "                            [--settings <settings.json>] [--overrides <settings.local.json>] [--record-passes]\n";
+constexpr std::string_view DefaultSettingsPath = "data/settings.json";
+constexpr std::string_view DefaultOverridesPath = "data/settings.local.json";
 
 std::string DefaultCataloguePath(std::string_view ScenarioPath)
 {
@@ -73,9 +77,32 @@ std::string StepText(const ScenarioStepRecord& Step)
 
 struct ScenarioArgs
 {
-	std::string File, Viz, Catalogue;
+	std::string File, Viz, Catalogue, Settings, Overrides;
+	bool bExplicitSettings = false;
+	bool bRecordPasses = false;
 	bool bOk = false;
 };
+
+std::string* OptionTarget(ScenarioArgs& Parsed, std::string_view Flag)
+{
+	if (Flag == "--viz")
+	{
+		return &Parsed.Viz;
+	}
+	if (Flag == "--catalogue")
+	{
+		return &Parsed.Catalogue;
+	}
+	if (Flag == "--settings")
+	{
+		return &Parsed.Settings;
+	}
+	if (Flag == "--overrides")
+	{
+		return &Parsed.Overrides;
+	}
+	return nullptr;
+}
 
 ScenarioArgs ParseScenarioArgs(std::span<const std::string_view> Args)
 {
@@ -85,17 +112,34 @@ ScenarioArgs ParseScenarioArgs(std::span<const std::string_view> Args)
 		return Parsed;
 	}
 	Parsed.File = std::string(Args[1]);
-	for (std::size_t I = 2; I < Args.size(); I += 2)
+	for (std::size_t I = 2; I < Args.size();)
 	{
-		if (I + 1 >= Args.size() || (Args[I] != "--viz" && Args[I] != "--catalogue"))
+		if (Args[I] == "--record-passes")
+		{
+			Parsed.bRecordPasses = true;
+			++I;
+			continue;
+		}
+		std::string* Target = I + 1 < Args.size() ? OptionTarget(Parsed, Args[I]) : nullptr;
+		if (Target == nullptr)
 		{
 			return Parsed;
 		}
-		(Args[I] == "--viz" ? Parsed.Viz : Parsed.Catalogue) = std::string(Args[I + 1]);
+		*Target = std::string(Args[I + 1]);
+		I += 2;
 	}
 	if (Parsed.Catalogue.empty())
 	{
 		Parsed.Catalogue = DefaultCataloguePath(Parsed.File);
+	}
+	Parsed.bExplicitSettings = !Parsed.Settings.empty();
+	if (Parsed.Settings.empty())
+	{
+		Parsed.Settings = std::string(DefaultSettingsPath);
+	}
+	if (Parsed.Overrides.empty())
+	{
+		Parsed.Overrides = std::string(DefaultOverridesPath);
 	}
 	Parsed.bOk = true;
 	return Parsed;
@@ -104,6 +148,39 @@ ScenarioArgs ParseScenarioArgs(std::span<const std::string_view> Args)
 std::string Located(const std::string& Path, const FileError& Error)
 {
 	return Path + (Error.Line > 0 ? ":" + std::to_string(Error.Line) : std::string()) + ": " + Error.Message + "\n";
+}
+
+bool ResolveSettings(const ScenarioArgs& Parsed, IFileStore& Files, Settings& Out, std::string& Err)
+{
+	const std::optional<std::string> DefaultsText = Files.Read(Parsed.Settings);
+	if (!DefaultsText && Parsed.bExplicitSettings)
+	{
+		Err += "cannot read " + Parsed.Settings + "\n";
+		return false;
+	}
+	if (DefaultsText)
+	{
+		const SettingsResult Defaults = LoadSettings(*DefaultsText);
+		if (!Defaults.Ok())
+		{
+			Err += Located(Parsed.Settings, Defaults.Error);
+			return false;
+		}
+		Out = Defaults.Value;
+	}
+	const std::optional<std::string> OverridesText = Files.Read(Parsed.Overrides);
+	if (!OverridesText)
+	{
+		return true;
+	}
+	const SettingsResult Overridden = ApplyOverrides(Out, *OverridesText);
+	if (!Overridden.Ok())
+	{
+		Err += Located(Parsed.Overrides, Overridden.Error);
+		return false;
+	}
+	Out = Overridden.Value;
+	return true;
 }
 
 int RunScenarioCommand(std::span<const std::string_view> Args, IFileStore& Files, std::string& Out, std::string& Err)
@@ -138,12 +215,21 @@ int RunScenarioCommand(std::span<const std::string_view> Args, IFileStore& Files
 		Err += Located(Parsed.File, Loaded.Error);
 		return 2;
 	}
+	Settings Tunables;
+	if (!ResolveSettings(Parsed, Files, Tunables, Err))
+	{
+		return 2;
+	}
+	if (Parsed.bRecordPasses)
+	{
+		Tunables.Debug.bRecordPasses = true;
+	}
 	Scenario& Value = Loaded.Value;
 	const auto Grounded = std::count(Value.BodyGrounded.begin(), Value.BodyGrounded.end(), true);
 	Out += Value.Title + "\n";
 	Out += "built " + std::to_string(Value.BodyNames.size()) + " bodies (" + std::to_string(Grounded) + " grounded), " +
 		std::to_string(Value.Model.LiveInterfaceCount()) + " joints\n";
-	const ScenarioOutcome Outcome = RunScenario(Value);
+	const ScenarioOutcome Outcome = RunScenario(Value, Tunables);
 	for (std::size_t I = 0; I < Outcome.Steps.size(); ++I)
 	{
 		Out += "step " + std::to_string(I + 1) + " " + Outcome.Steps[I].Kind + ": " + StepText(Outcome.Steps[I]) + "\n";

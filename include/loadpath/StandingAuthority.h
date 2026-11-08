@@ -16,6 +16,8 @@
 
 namespace loadpath
 {
+struct DebugSettings;
+
 // A point force; its moment about the body's centroid is (PointM - CentroidM) x ForceN.
 struct BodyLoad
 {
@@ -33,6 +35,20 @@ struct StandingOptions
 	double PivotToleranceRelative = 1e-10;
 	// A component with more DoF than this is factorised sparse, falling back to the dense blocked factor on any sign of rank deficiency.
 	int DenseDofLimit = 600;
+	// A slipping corner re-sticks when its shear falls below capacity times (1 - this).
+	double StickMarginRelative = 1e-9;
+	// A slipping corner's held force has settled when it moves less than this times the component's force scale.
+	double HeldForceToleranceRelative = 1e-12;
+	// A dry corner inside plus or minus this times the force scale is open; a tensionless corner opens below minus it.
+	double DryNoiseFloorRelative = 1e-12;
+	// A rank-deficient component is a mechanism only when the load's null-space projection exceeds this times the load.
+	double NeutralLoadToleranceRelative = 1e-12;
+	// A corner closes or slides against friction in a null motion when it moves more than this times the motion's scale.
+	double AdmissibilityToleranceRelative = 1e-9;
+	// A body is unconstrained when its share of the unit null vector exceeds this.
+	double UnconstrainedComponent = 1e-6;
+	// The host's debug hook; null means no debug work.
+	const DebugSettings* Debug = nullptr;
 };
 
 enum class StandingState : std::uint8_t
@@ -85,6 +101,48 @@ struct MechanismMotion
 	Vec3 RotationRad;
 };
 
+enum class CornerState : std::uint8_t
+{
+	Closed,
+	Open,
+	Slipping
+};
+
+// Why a component's solve stopped; None only when no solve ran.
+enum class SolveEnd : std::uint8_t
+{
+	None,
+	Converged,
+	Mechanism,
+	RestoreFailedClosed,
+	PowerCheckFailed,
+	IterationCap,
+	InvalidInput
+};
+
+// One joint after one active-set iteration: states after the update, forces from that iteration's solution.
+struct JointPassRecord
+{
+	InterfaceId Id;
+	std::array<CornerState, 4> Corners{};
+	// A corner whose state differs from the previous iteration's; all false on iteration 1.
+	std::array<bool, 4> bFlipped{};
+	// Compression positive.
+	std::array<double, 4> CornerNormalN{};
+	std::array<Vec3, 4> CornerShearN{};
+	double NormalForceN = 0;
+	Vec3 ShearForceN;
+	Vec3 MomentNm;
+	double Utilisation = 0;
+	GoverningAxis Axis = GoverningAxis::None;
+};
+
+struct ElasticPassRecord
+{
+	int Iteration = 0;
+	std::vector<JointPassRecord> Joints;
+};
+
 struct StandingComponent
 {
 	// Ascending slot order, as ComponentPartition::FreeBodies lists them.
@@ -94,6 +152,11 @@ struct StandingComponent
 	// Indices into StandingResult::Readings of this component's interfaces.
 	std::vector<std::size_t> ReadingSlots;
 	PhaseTimings Timings;
+	// Empty unless Options.Debug->bRecordPasses; recording changes no answer.
+	std::vector<ElasticPassRecord> Passes;
+	SolveEnd End = SolveEnd::None;
+	// RestoreFailedClosed only: the interfaces whose corners blocked the restore.
+	std::vector<InterfaceId> Blocking;
 };
 
 struct StandingResult
