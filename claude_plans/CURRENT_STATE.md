@@ -371,6 +371,8 @@ solves", amended after review). Still to do, in order:
 
 ## Elastic-only: cases the solver alone gets wrong (2026-11-08)
 
+**Rule decisions the owner owes before any of these expectations change: [decisions/2026-11-08-elastic-only-rules.md](decisions/2026-11-08-elastic-only-rules.md)** (D1 crushing, D2 cluster split, D3 Mechanism as release, D4 3.13 wording). The Undecided group needs no ruling and is the work queue.
+
 Release default run after the removal (2026-11-08): 439 run, 411 pass, 28 red. Every red is a
 case the certificate used to referee; the assertions are as written. Elastic state in brackets.
 
