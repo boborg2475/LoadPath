@@ -2,7 +2,6 @@
 
 #include "EigenInclude.h"
 
-#include "loadpath/CollapseCertificate.h"
 #include "loadpath/Handles.h"
 #include "loadpath/Interface.h"
 #include "loadpath/StandingAuthority.h"
@@ -63,9 +62,7 @@ std::vector<BodyLoad> WithoutStaleLoads(const Structure& Model, std::span<const 
 // -1 when both bodies are grounded.
 int ComponentOf(const ComponentPartition& Partition, const InterfaceRecord& Record);
 
-// Shared so the combined authority rejects exactly what the certificate rejects.
-bool AreCertificateOptionsValid(const CertificateOptions& Options);
-// Shared so the combined authority rejects exactly what the standing authority rejects.
+// Shared so the elastic authority rejects exactly what the standing authority rejects.
 bool AreStandingOptionsValid(const StandingOptions& Options);
 
 // Row-major 3x6: the velocity of a point at ArmM from its body's (translation, rotation).

@@ -1,5 +1,4 @@
 #include "AnchorFixtures.h"
-#include "CertificateTestSupport.h"
 #include "StaticsTestSupport.h"
 
 #include "loadpath/StructuralAuthority.h"
@@ -38,13 +37,12 @@ AuthorityOptions Lateral(double Lambda)
 {
 	AuthorityOptions Options;
 	Options.Standing = LateralLoad(Lambda);
-	Options.Certificate = CertificateLateral(Lambda);
 	return Options;
 }
 
 AuthorityResult JudgeWith(const Structure& Model, const AuthorityOptions& Options, std::span<const BodyLoad> Loads = {})
 {
-	return MakeCombinedAuthority(MakeRbsmStandingAuthority(), MakeLimitAnalysisCertificate())->Judge(Model, Loads, Options, nullptr);
+	return MakeElasticAuthority(MakeRbsmStandingAuthority())->Judge(Model, Loads, Options, nullptr);
 }
 
 struct BothReadings
@@ -120,7 +118,7 @@ void CheckSlidesPastFrictionOnBoth(const Structure& Model, BodyId Body, double F
 	CheckSlidesAlongX(InsideBand.Elastic, Body);
 	INFO("combined inside the polygon band " << doctest::String(VerdictName(InsideBand.Combined.Worst)));
 	CHECK(InsideBand.Combined.Worst == ComponentVerdict::Undecided);
-	const BothReadings PastBand = ReadBoth(Model, Lateral(Friction * CircumscribedOverInscribed(CertificateOptions{}.ConeGenerators) * (1.0 + OnePercent)));
+	const BothReadings PastBand = ReadBoth(Model, Lateral(Friction / std::cos(Pi / 16.0) * (1.0 + OnePercent)));
 	CheckFailsOnBoth(PastBand);
 	CheckSlidesAlongX(PastBand.Elastic, Body);
 	CHECK(CombinedRelease(PastBand.Combined).size() == 1u);

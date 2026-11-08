@@ -1,6 +1,5 @@
 #pragma once
 
-#include "loadpath/CollapseCertificate.h"
 #include "loadpath/Handles.h"
 #include "loadpath/PhaseTimings.h"
 #include "loadpath/StandingAuthority.h"
@@ -29,18 +28,9 @@ struct ComponentReport
 	std::vector<BodyId> Bodies;
 	ComponentVerdict Verdict = ComponentVerdict::Undecided;
 	StandingState Elastic = StandingState::Undecided;
-	// Undecided when the certificate was not consulted.
-	CertificateState Kinematic = CertificateState::Undecided;
-	bool bConsultedCertificate = false;
-	// Elastic Mechanism against a certificate Stands; the component then reads Undecided, not Stands.
-	bool bDisagreed = false;
-	// From the certificate when consulted, else NaN.
-	double LoadFactorLower = 0.0;
-	double LoadFactorUpper = 0.0;
 	std::vector<MechanismMotion> Mechanism;
-	// The certificate's UnconstrainedBodies on Collapses, else empty; the elastic lists are never released.
+	// On Collapses the elastic UnconstrainedBodies of this component and Mechanism its motions; else both empty.
 	std::vector<BodyId> Release;
-	std::vector<InterfaceId> Hinging;
 	// Copied from the previous verdict rather than solved.
 	bool bReused = false;
 	// The loads on this component's bodies as judged, in the order given; a change to them dirties the component.
@@ -50,8 +40,6 @@ struct ComponentReport
 struct AuthorityOptions
 {
 	StandingOptions Standing;
-	// Gravity must equal Standing.Gravity or the call is InvalidInput.
-	CertificateOptions Certificate;
 };
 
 struct AuthorityResult
@@ -62,7 +50,6 @@ struct AuthorityResult
 	std::vector<InterfaceReading> Readings;
 	// Ascending by lowest body slot.
 	std::vector<ComponentReport> Components;
-	int Disagreements = 0;
 	InterfaceId InvalidInterface{};
 	// The structure's Revision() when judged.
 	std::uint64_t Revision = 0;
@@ -75,9 +62,7 @@ struct AuthorityResult
 	// The components solved in this call; a reused component adds nothing.
 	// An abandoned reuse attempt (merging readings failed and the judge re-solved) counts its solve too, since that time was spent in this call.
 	PhaseTimings ElasticTimings;
-	// Time inside certificate consults; 0.0 when none ran.
-	double CertificateSeconds = 0.0;
-	// The whole call, so at least ElasticTimings.TotalSeconds + CertificateSeconds when profiled.
+	// The whole call, so at least ElasticTimings.TotalSeconds when profiled.
 	double JudgeSeconds = 0.0;
 };
 
@@ -90,5 +75,6 @@ public:
 	virtual AuthorityResult Judge(const Structure& Model, std::span<const BodyLoad> Loads, const AuthorityOptions& Options, const AuthorityResult* Previous) const = 0;
 };
 
-std::unique_ptr<IStructuralAuthority> MakeCombinedAuthority(std::unique_ptr<IStandingAuthority> Standing, std::unique_ptr<ICollapseCertificate> Certificate);
+// Elastic-only: Mechanism reads Collapses and releases the elastic UnconstrainedBodies; Undecided releases nothing.
+std::unique_ptr<IStructuralAuthority> MakeElasticAuthority(std::unique_ptr<IStandingAuthority> Standing);
 }

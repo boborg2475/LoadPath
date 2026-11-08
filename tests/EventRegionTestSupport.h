@@ -6,7 +6,6 @@
 #include "StaticsTestSupport.h"
 
 #include "loadpath/Catalogue.h"
-#include "loadpath/CollapseCertificate.h"
 #include "loadpath/StandingAuthority.h"
 #include "loadpath/StructuralAuthority.h"
 #include "loadpath/Structure.h"
@@ -33,12 +32,6 @@ struct SolveCall
 	std::vector<BodyId> Only;
 };
 
-struct DecideCall
-{
-	std::size_t LiveBodies = 0;
-	std::vector<BodyId> Only;
-};
-
 class CountingStanding final : public IStandingAuthority
 {
 public:
@@ -59,40 +52,10 @@ private:
 	std::unique_ptr<IStandingAuthority> Inner;
 };
 
-class CountingCertificate final : public ICollapseCertificate
-{
-public:
-	explicit CountingCertificate(std::vector<DecideCall>& InCalls)
-		: Calls(InCalls)
-		, Inner(MakeLimitAnalysisCertificate())
-	{
-	}
-
-	CertificateResult Decide(const Structure& Model, std::span<const BodyLoad> Loads, const CertificateOptions& Options, std::span<const BodyId> Only) const override
-	{
-		Calls.push_back(DecideCall{Model.LiveBodyCount(), std::vector<BodyId>(Only.begin(), Only.end())});
-		return Inner->Decide(Model, Loads, Options, Only);
-	}
-
-private:
-	std::vector<DecideCall>& Calls;
-	std::unique_ptr<ICollapseCertificate> Inner;
-};
-
 inline std::string DescribeSolves(const std::vector<SolveCall>& Calls)
 {
 	std::ostringstream Out;
 	for (const SolveCall& Call : Calls)
-	{
-		Out << " {live " << Call.LiveBodies << ", only " << Describe(Call.Only) << "}";
-	}
-	return Out.str();
-}
-
-inline std::string DescribeDecides(const std::vector<DecideCall>& Calls)
-{
-	std::ostringstream Out;
-	for (const DecideCall& Call : Calls)
 	{
 		Out << " {live " << Call.LiveBodies << ", only " << Describe(Call.Only) << "}";
 	}

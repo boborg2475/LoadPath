@@ -1,8 +1,7 @@
 #include "AnchorFixtures.h"
 #include "ArchFixtures.h"
-#include "CertificateTestSupport.h"
-#include "SlowInDebug.h"
 #include "StaticsTestSupport.h"
+#include "SlowInDebug.h"
 
 #include "loadpath/StructuralAuthority.h"
 
@@ -163,26 +162,17 @@ TEST_CASE("Statics.Anchor.FrictionlessFiveDiamondFallsAndFourDiamondStands")
 	INFO("4-diamond " << FourResult.State << " in " << FourResult.ActiveSetIterations << "; 5-diamond " << FiveResult.State << " in " << FiveResult.ActiveSetIterations);
 	CHECK(FourResult.State == StandingState::Stands);
 	CHECK(FiveResult.State == StandingState::Mechanism);
-	CHECK(DecideWith(Four.Model, CertificateOptions{}).State == CertificateState::Stands);
-	CHECK(DecideWith(Five.Model, CertificateOptions{}).State == CertificateState::Collapses);
 }
 
 TEST_CASE("Statics.Anchor.FiveDiamondStandsWithFrictionAboveTheCriticalValue")
 {
-	const CertificateResult Below = DecideWith(DiamondOnTable(5, 0.41).Model, CertificateOptions{});
-	const CertificateResult Above = DecideWith(DiamondOnTable(5, 0.43).Model, CertificateOptions{});
-	INFO("certificate at 0.41 " << Below.State << ", at 0.43 " << Above.State);
-	CHECK(Below.State == CertificateState::Collapses);
-	CHECK(Above.State == CertificateState::Stands);
 	const Stack Five = DiamondOnTable(5, 0.5);
-	const AuthorityResult Combined = MakeCombinedAuthority(MakeRbsmStandingAuthority(), MakeLimitAnalysisCertificate())->Judge(Five.Model, {}, AuthorityOptions{}, nullptr);
+	const AuthorityResult Combined = MakeElasticAuthority(MakeRbsmStandingAuthority())->Judge(Five.Model, {}, AuthorityOptions{}, nullptr);
 	CHECK(Combined.Worst == ComponentVerdict::Stands);
-	CHECK(Combined.Disagreements == 0);
 	CHECK(Combined.Components.size() == 1u);
 	for (const ComponentReport& Report : Combined.Components)
 	{
 		CHECK(Report.Elastic == StandingState::Undecided);
-		CHECK(Report.Kinematic == CertificateState::Stands);
 		CHECK(Report.Release.empty());
 	}
 }

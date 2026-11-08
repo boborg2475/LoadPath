@@ -1,6 +1,5 @@
 #pragma once
 
-#include "loadpath/CollapseCertificate.h"
 #include "loadpath/Handles.h"
 #include "loadpath/StandingAuthority.h"
 #include "loadpath/StructuralAuthority.h"
@@ -27,7 +26,7 @@ struct FailedInterface
 {
 	InterfaceId Id;
 	std::uint32_t Pass = 0;
-	// The crack: the larger of tension and shear. The sever: Tension if the mechanism opens it beyond friction dilatancy, else Shear if it slides, else the reading's axis (None when unread).
+	// The crack: the larger of tension and shear. The sever: Tension if the elastic mechanism motion opens it beyond friction dilatancy, else Shear if it slides, else the reading's axis (None when unread).
 	GoverningAxis Axis = GoverningAxis::None;
 	// The crack ratio, or the elastic reading's utilisation at release.
 	double Ratio = 0.0;
@@ -40,12 +39,10 @@ struct ReleasedCluster
 	std::uint32_t Pass = 0;
 	// Ascending slot order; released as one rigid body by the host.
 	std::vector<BodyId> Bodies;
-	// The certificate's motion of the lowest-slot body; the others share it.
+	// The elastic MechanismMotion of the lowest-slot body; the others share it.
 	MechanismMotion Motion;
 	// Every live interface that crossed the cluster boundary, now Severed.
 	std::vector<InterfaceId> Severed;
-	// The certificate's bracket for the component.
-	double LoadFactorLower = 0.0, LoadFactorUpper = 0.0;
 };
 
 struct CascadeOptions

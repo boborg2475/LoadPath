@@ -1,7 +1,6 @@
 #pragma once
 
 #include "BrickFixtures.h"
-#include "CertificateTestSupport.h"
 #include "StaticsTestSupport.h"
 
 #include "loadpath/Cascade.h"
@@ -48,7 +47,7 @@ inline const char* CascadeStateName(CascadeState State)
 
 inline std::unique_ptr<IStructuralAuthority> MakeAuthority()
 {
-	return MakeCombinedAuthority(MakeRbsmStandingAuthority(), MakeLimitAnalysisCertificate());
+	return MakeElasticAuthority(MakeRbsmStandingAuthority());
 }
 
 inline AuthorityResult Judge(const Structure& Model, const AuthorityOptions& Options, std::span<const BodyLoad> Loads = {})
@@ -60,7 +59,6 @@ inline AuthorityOptions AuthorityUnderGravity(const Vec3& GravityMPerS2Vector)
 {
 	AuthorityOptions Options;
 	Options.Standing.Gravity = GravityMPerS2Vector;
-	Options.Certificate.Gravity = GravityMPerS2Vector;
 	return Options;
 }
 
@@ -112,7 +110,7 @@ inline std::string DescribeAuthority(const AuthorityResult& Result)
 	Out << "worst " << VerdictName(Result.Worst);
 	for (const ComponentReport& Report : Result.Components)
 	{
-		Out << "; [bodies " << Describe(Report.Bodies) << ", verdict " << VerdictName(Report.Verdict) << ", elastic " << StandingStateName(Report.Elastic) << ", kinematic " << CertificateStateName(Report.Kinematic) << ", release " << Describe(Report.Release) << ", hinging " << Describe(Report.Hinging) << ", t [" << Report.LoadFactorLower << ", " << Report.LoadFactorUpper << "]]";
+		Out << "; [bodies " << Describe(Report.Bodies) << ", verdict " << VerdictName(Report.Verdict) << ", elastic " << StandingStateName(Report.Elastic) << ", release " << Describe(Report.Release) << "]";
 	}
 	return Out.str();
 }
@@ -128,7 +126,7 @@ inline std::string DescribeVerdict(const CascadeVerdict& V)
 	Out << " ], clusters [";
 	for (const ReleasedCluster& C : V.Clusters)
 	{
-		Out << " {pass " << C.Pass << " bodies " << Describe(C.Bodies) << " severed " << Describe(C.Severed) << " t [" << C.LoadFactorLower << ", " << C.LoadFactorUpper << "]}";
+		Out << " {pass " << C.Pass << " bodies " << Describe(C.Bodies) << " severed " << Describe(C.Severed) << "}";
 	}
 	Out << " ], readings " << V.Readings.size() << ", components " << V.Components.size();
 	return Out.str();
@@ -215,8 +213,6 @@ inline AuthorityResult CollapsesScript(const Structure& Model, const std::vector
 	Result.Worst = ComponentVerdict::Collapses;
 	Result.Components[0].Verdict = ComponentVerdict::Collapses;
 	Result.Components[0].Elastic = StandingState::Mechanism;
-	Result.Components[0].Kinematic = CertificateState::Collapses;
-	Result.Components[0].bConsultedCertificate = true;
 	Result.Components[0].Release = Release;
 	for (const InterfaceId Id : Model.LiveInterfaces())
 	{

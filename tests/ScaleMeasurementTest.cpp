@@ -1,8 +1,7 @@
 #include "CascadeTestSupport.h"
 #include "CatalogueTestSupport.h"
-#include "CertificateTestSupport.h"
-#include "ScaleTestSupport.h"
 #include "StaticsTestSupport.h"
+#include "ScaleTestSupport.h"
 #include "WarehouseTestSupport.h"
 
 #include "loadpath/Cascade.h"
@@ -69,16 +68,13 @@ void Measure(const ScaleSubject& S)
 	const StandingResult Elastic = SolveWith(S.Model, StandingOptions{});
 	const double ElasticMs = MsSince(Start);
 	Start = Clock::now();
-	const CertificateResult Certificate = DecideWith(S.Model, CertificateOptions{});
-	const double CertificateMs = MsSince(Start);
-	Start = Clock::now();
 	const AuthorityResult First = Judge(S.Model, AuthorityOptions{});
 	const double JudgeMs = MsSince(Start);
 	const AuthorityResult Second = Judge(S.Model, AuthorityOptions{});
 	const CascadeTiming Post = TimeCascade(S.Model, S.Posts.size() > 1 ? std::vector<BodyId>{S.Posts[1]} : std::vector<BodyId>{});
 	const CascadeTiming Course = TimeCascade(S.Model, S.BaseCourse);
-	MESSAGE(S.Name << ": pieces " << S.Model.LiveBodyCount() << ", joints " << S.Model.LiveInterfaceCount() << ", components " << First.Components.size() << ", elastic " << ElasticMs << " ms (" << Elastic.State << "), certificate "
-		<< CertificateMs << " ms (" << Certificate.State << "), judge " << JudgeMs << " ms (" << std::string(VerdictName(First.Worst)) << "), cascade(post) " << Post.Ms << " ms + " << Post.Passes << " passes + " << Post.State << ", cascade(course) "
+	MESSAGE(S.Name << ": pieces " << S.Model.LiveBodyCount() << ", joints " << S.Model.LiveInterfaceCount() << ", components " << First.Components.size() << ", elastic " << ElasticMs << " ms (" << Elastic.State << "), judge "
+		<< JudgeMs << " ms (" << std::string(VerdictName(First.Worst)) << "), cascade(post) " << Post.Ms << " ms + " << Post.Passes << " passes + " << Post.State << ", cascade(course) "
 		<< Course.Ms << " ms + " << Course.Passes << " passes + " << Course.State);
 	if (S.bMustStand)
 	{

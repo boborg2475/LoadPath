@@ -6,7 +6,6 @@
 #include "StaticsTestSupport.h"
 
 #include "loadpath/Cascade.h"
-#include "loadpath/CollapseCertificate.h"
 #include "loadpath/StandingAuthority.h"
 #include "loadpath/StructuralAuthority.h"
 #include "loadpath/Structure.h"
@@ -31,14 +30,13 @@ namespace
 struct Counted
 {
 	std::vector<SolveCall> Solves;
-	std::vector<DecideCall> Decides;
 	std::unique_ptr<IStructuralAuthority> Authority;
 };
 
 std::unique_ptr<Counted> MakeCounted()
 {
 	auto C = std::make_unique<Counted>();
-	C->Authority = MakeCombinedAuthority(std::make_unique<CountingStanding>(C->Solves), std::make_unique<CountingCertificate>(C->Decides));
+	C->Authority = MakeElasticAuthority(std::make_unique<CountingStanding>(C->Solves));
 	return C;
 }
 
@@ -83,18 +81,12 @@ const ComponentReport* ComponentOf(const AuthorityResult& Result, const std::vec
 
 void CheckSameReport(const ComponentReport& Got, const ComponentReport& Want, double Rel)
 {
-	INFO("got bodies " << Describe(Got.Bodies) << " " << std::string(VerdictName(Got.Verdict)) << " elastic " << std::string(StandingStateName(Got.Elastic)) << " kinematic " << std::string(CertificateStateName(Got.Kinematic)) << " t [" << Got.LoadFactorLower << ", " << Got.LoadFactorUpper << "]");
-	INFO("want bodies " << Describe(Want.Bodies) << " " << std::string(VerdictName(Want.Verdict)) << " elastic " << std::string(StandingStateName(Want.Elastic)) << " kinematic " << std::string(CertificateStateName(Want.Kinematic)) << " t [" << Want.LoadFactorLower << ", " << Want.LoadFactorUpper << "]");
+	INFO("got bodies " << Describe(Got.Bodies) << " " << std::string(VerdictName(Got.Verdict)) << " elastic " << std::string(StandingStateName(Got.Elastic)));
+	INFO("want bodies " << Describe(Want.Bodies) << " " << std::string(VerdictName(Want.Verdict)) << " elastic " << std::string(StandingStateName(Want.Elastic)));
 	CHECK(SameIdList(Got.Bodies, Want.Bodies));
 	CHECK(Got.Verdict == Want.Verdict);
 	CHECK(Got.Elastic == Want.Elastic);
-	CHECK(Got.Kinematic == Want.Kinematic);
-	CHECK(Got.bConsultedCertificate == Want.bConsultedCertificate);
-	CHECK(Got.bDisagreed == Want.bDisagreed);
-	CHECK(Near(Got.LoadFactorLower, Want.LoadFactorLower, Rel));
-	CHECK(Near(Got.LoadFactorUpper, Want.LoadFactorUpper, Rel));
 	CHECK(SameIdList(Got.Release, Want.Release));
-	CHECK(SameIdList(Got.Hinging, Want.Hinging));
 	CHECK(Got.Mechanism.size() == Want.Mechanism.size());
 	for (std::size_t M = 0; M < Got.Mechanism.size() && M < Want.Mechanism.size(); ++M)
 	{
@@ -129,7 +121,6 @@ void CheckSameReadings(const std::vector<InterfaceReading>& Got, const std::vect
 void CheckSameVerdict(const AuthorityResult& Got, const AuthorityResult& Want, const Structure& Model, double Rel, double AbsN)
 {
 	CHECK(Got.Worst == Want.Worst);
-	CHECK(Got.Disagreements == Want.Disagreements);
 	CHECK(Got.Components.size() == Want.Components.size());
 	if (Got.Components.size() != Want.Components.size())
 	{
@@ -479,26 +470,12 @@ TEST_CASE("Authority.Judge.InvalidOptionsAreInvalidWhateverIsClean")
 		Edit(Options.Standing);
 		Variants.emplace_back(Name, Options);
 	};
-	const auto AddCertificate = [&](const char* Name, auto Edit)
-	{
-		AuthorityOptions Options;
-		Edit(Options.Certificate);
-		Variants.emplace_back(Name, Options);
-	};
 	Add("Standing.PivotToleranceRelative 0", [](StandingOptions& S) { S.PivotToleranceRelative = 0.0; });
 	Add("Standing.PivotToleranceRelative -1e-10", [](StandingOptions& S) { S.PivotToleranceRelative = -1.0e-10; });
 	Add("Standing.PivotToleranceRelative 1", [](StandingOptions& S) { S.PivotToleranceRelative = 1.0; });
 	Add("Standing.PivotToleranceRelative NaN", [](StandingOptions& S) { S.PivotToleranceRelative = NaN; });
 	Add("Standing.MaxActiveSetIterations 0", [](StandingOptions& S) { S.MaxActiveSetIterations = 0; });
 	Add("Standing.MaxActiveSetIterations -1", [](StandingOptions& S) { S.MaxActiveSetIterations = -1; });
-	AddCertificate("Certificate.ConeGenerators 3", [](CertificateOptions& O) { O.ConeGenerators = 3; });
-	AddCertificate("Certificate.ConeGenerators 5", [](CertificateOptions& O) { O.ConeGenerators = 5; });
-	AddCertificate("Certificate.LoadFactorCap 0", [](CertificateOptions& O) { O.LoadFactorCap = 0.0; });
-	AddCertificate("Certificate.LoadFactorCap 0.5", [](CertificateOptions& O) { O.LoadFactorCap = 0.5; });
-	AddCertificate("Certificate.LoadFactorCap +inf", [](CertificateOptions& O) { O.LoadFactorCap = std::numeric_limits<double>::infinity(); });
-	AddCertificate("Certificate.FeasibilityTolerance 0", [](CertificateOptions& O) { O.FeasibilityTolerance = 0.0; });
-	AddCertificate("Certificate.MaxIterations 0", [](CertificateOptions& O) { O.MaxIterations = 0; });
-	AddCertificate("Certificate.Gravity differs from Standing.Gravity", [](CertificateOptions& O) { O.Gravity = Vec3{0.0, 0.0, -9.0}; });
 	for (const auto& [Name, Options] : Variants)
 	{
 		INFO("options: " << std::string(Name));
@@ -567,16 +544,9 @@ TEST_CASE("Authority.Judge.ReusesCleanComponentsFromThePreviousVerdict")
 	const InterfaceId Bed = InterfaceBetween(F.Model, F.Ground, F.Parts[0][0]);
 	CHECK(F.Model.Sever(Bed, 1));
 	C->Solves.clear();
-	C->Decides.clear();
 	const AuthorityResult Second = C->Authority->Judge(F.Model, F.Loads, AuthorityOptions{}, &First);
 	INFO("second: " << DescribeAuthority(Second));
 	CheckSolvedOnly(C->Solves, F.Parts[0]);
-	INFO("Decide calls:" << DescribeDecides(C->Decides));
-	CHECK(C->Decides.size() == 1u);
-	if (C->Decides.size() == 1u)
-	{
-		CHECK(SameIdList(C->Decides[0].Only, F.Parts[0]));
-	}
 	CHECK(Second.Components.size() == 3u);
 	CheckFresh(Second, F.Parts[0]);
 	const ComponentReport* Mutated = ComponentOf(Second, F.Parts[0]);
@@ -599,13 +569,10 @@ TEST_CASE("Authority.Judge.ALoadChangeDirtiesOnlyItsComponent")
 	const BodyId Top = F.Parts[2][1];
 	Pushed.push_back(BodyLoad{Top, Vec3{0.1 * BrickMassKg * GravityMPerS2, 0.0, 0.0}, F.Model.Body(Top).CentroidM});
 	C->Solves.clear();
-	C->Decides.clear();
 	const AuthorityResult Second = C->Authority->Judge(F.Model, Pushed, AuthorityOptions{}, &First);
 	INFO("first: " << DescribeAuthority(First));
 	INFO("second: " << DescribeAuthority(Second));
 	CheckSolvedOnly(C->Solves, F.Parts[2]);
-	INFO("Decide calls:" << DescribeDecides(C->Decides));
-	CHECK(C->Decides.empty());
 	CheckFresh(Second, F.Parts[2]);
 	const InterfaceId Joint = InterfaceBetween(F.Model, F.Parts[2][0], F.Parts[2][1]);
 	const InterfaceReading* Before = FindReading(First.Readings, Joint);
@@ -736,11 +703,9 @@ TEST_CASE("Authority.Judge.NothingDirtyMakesNoSolveCall")
 	const auto C = MakeCounted();
 	const AuthorityResult First = C->Authority->Judge(F.Model, F.Loads, AuthorityOptions{}, nullptr);
 	C->Solves.clear();
-	C->Decides.clear();
 	const AuthorityResult Second = C->Authority->Judge(F.Model, F.Loads, AuthorityOptions{}, &First);
-	INFO("Solve calls:" << DescribeSolves(C->Solves) << "; Decide calls:" << DescribeDecides(C->Decides));
+	INFO("Solve calls:" << DescribeSolves(C->Solves));
 	CHECK(C->Solves.empty());
-	CHECK(C->Decides.empty());
 	CHECK(Second.Components.size() == 3u);
 	for (const std::vector<BodyId>& Part : F.Parts)
 	{
@@ -1033,12 +998,6 @@ TEST_CASE("Authority.Judge.DifferentOptionsReuseNothing")
 	AuthorityOptions Dof = Base;
 	Dof.Standing.DenseDofLimit = 6;
 	Variants.emplace_back("Standing.DenseDofLimit 6", Dof);
-	AuthorityOptions Cone = Base;
-	Cone.Certificate.ConeGenerators = 8;
-	Variants.emplace_back("Certificate.ConeGenerators 8", Cone);
-	AuthorityOptions Cap = Base;
-	Cap.Certificate.LoadFactorCap = 100.0;
-	Variants.emplace_back("Certificate.LoadFactorCap 100", Cap);
 	const auto Add = [&](const char* Name, auto Edit)
 	{
 		AuthorityOptions Options = Base;
@@ -1046,18 +1005,11 @@ TEST_CASE("Authority.Judge.DifferentOptionsReuseNothing")
 		Variants.emplace_back(Name, Options);
 	};
 	Add("Standing.MaxActiveSetIterations 49", [](AuthorityOptions& O) { O.Standing.MaxActiveSetIterations = 49; });
-	Add("Certificate.FeasibilityTolerance 1e-8", [](AuthorityOptions& O) { O.Certificate.FeasibilityTolerance = 1.0e-8; });
-	Add("Certificate.MaxIterations 199", [](AuthorityOptions& O) { O.Certificate.MaxIterations = 199; });
-	Add("Certificate.DenseRowLimit 6", [](AuthorityOptions& O) { O.Certificate.DenseRowLimit = 6; });
-	Add("Certificate.StallWindow 11", [](AuthorityOptions& O) { O.Certificate.StallWindow = 11; });
-	Add("Certificate.StallImprovement 0.4", [](AuthorityOptions& O) { O.Certificate.StallImprovement = 0.4; });
-	Add("Certificate.bStallRecovery false", [](AuthorityOptions& O) { O.Certificate.bStallRecovery = false; });
 	for (const auto& [Name, Options] : Variants)
 	{
 		INFO("options differing in " << std::string(Name));
 		const AuthorityResult Fresh = MakeAuthority()->Judge(F.Model, F.Loads, Options, nullptr);
 		C->Solves.clear();
-		C->Decides.clear();
 		const AuthorityResult Got = C->Authority->Judge(F.Model, F.Loads, Options, &First);
 		INFO("got: " << DescribeAuthority(Got));
 		CheckSolvedOnly(C->Solves, {});

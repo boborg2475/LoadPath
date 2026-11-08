@@ -39,15 +39,15 @@
     },
     "Deferred.Slice6.DryWallLosingItsLintelKeepsTheBricksOverThePiers": {
       "basis": "Lower-bound statics: a block resting wholly on standing blocks, under gravity alone with dry joints, cannot be pulled down by blocks falling beside it, so every pier brick and the bricks sitting wholly on them stay. The unsupported bricks must fall: the courses above the opening cannot arch across 1.075 m, because the thrust (about 380 N) exceeds the friction the light abutments can supply (about 120 N). So exactly the 10-brick triangle over the opening falls.",
-      "deferred": "The engine over-releases. With the lintel removed it drops 34 bricks in 26 clusters on pass 1, including four bricks sitting on the piers (c6x0.50, c6x7.50, c7x0.25, c7x7.75). It does release all ten bricks that must fall; the extra ones are the problem. The collapse certificate, not the elastic solver, picks the falling bricks: the cascade releases every body in the certificate's mechanism. The certificate's friction is associative, so a sliding joint must open by μ times its slip. Under that rule the triangle cannot drop straight down past its side joints. Its neighbours must spread apart and ride up their beds, so the chosen mechanism moves all 34 bricks above the opening.",
-      "green_when": "The certificate picks the falling set under non-associative friction (sliding without opening), or a selection that avoids dilatant motion; the owed least-joint-movement selection alone is not enough, because under the associative rule the 10-brick fall is not an admissible motion at all. The test then moves to E2E.Wall.*."
+      "deferred": "Elastic-only since 2026-11-08 (the certificate, which over-released 34 bricks under associative friction, is removed). The 2026-10-25 instrumented reading predicts the elastic solver under-releases: it reads Mechanism holding only two triangle bricks, then Undecided, leaving the rest hanging.",
+      "green_when": "The elastic solver releases the whole unsupported triangle and no pier brick (its restore rule stops failing closed on the loose end bats). The test then moves to E2E.Wall.*."
     },
     "E2E.Wall.BondedWallStandsOverItsOpeningWithoutTheLintel": {
       "basis": "Engineering judgement with a check: the four mortared courses above the opening act as a bonded deep beam, M = wL²/8 ≈ 75 N·m against about 115 N·m of capacity from the mortar's 0.033 MPa tension, so it stands even with the lintel gone. Builders fit a lintel anyway (owner answer 8: include it)."
     },
     "Deferred.Wall.DryWallWithAGapInItsBaseReleasesNothing": {
       "basis": "Engineering judgement: the bricks over the gap corbel or wedge between their neighbours, so nothing should fall and the wall should read Stands. Owner answer 2: require Stands, not just nothing released.",
-      "deferred": "Nothing falls and no joint fails, but the engine's state is Undecided, not Stands. The elastic solve reads a mechanism while the certificate finds a standing field; when the two disagree the engine reports Undecided rather than trusting either.",
+      "deferred": "Nothing falls and no joint fails, but the engine's state is Undecided, not Stands. The elastic solve reads a mechanism; since 2026-11-08 there is no certificate to referee it.",
       "green_when": "The parked \"trust the elastic answer\" work lands (IMMEDIATE_UPDATES §4), so the elastic solve no longer reads a false mechanism here. The test then moves to E2E.Wall.* (slow in Debug)."
     },
     "E2E.Property.BuildOrderChangesNoOutcome": {

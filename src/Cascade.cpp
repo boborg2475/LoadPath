@@ -105,7 +105,7 @@ void ClearPositions(std::vector<std::size_t>& Table, const std::vector<IdType>& 
 	}
 }
 
-std::vector<PendingCluster> ClustersOf(const Structure& Model, const ComponentReport& Component, const std::vector<std::size_t>& PositionOf, const std::vector<std::size_t>& HingingAt)
+std::vector<PendingCluster> ClustersOf(const Structure& Model, const ComponentReport& Component, const std::vector<std::size_t>& PositionOf)
 {
 	const std::vector<BodyId>& Released = Component.Release;
 	std::vector<std::size_t> Parent(Released.size());
@@ -123,10 +123,6 @@ std::vector<PendingCluster> ClustersOf(const Structure& Model, const ComponentRe
 	{
 		for (const InterfaceId Id : Model.InterfacesOf(Body))
 		{
-			if (Lookup(HingingAt, Id) != NoSlot)
-			{
-				continue;
-			}
 			const InterfaceRecord& Record = Model.Interface(Id);
 			const std::size_t A = Lookup(PositionOf, Record.BodyA);
 			const std::size_t B = Lookup(PositionOf, Record.BodyB);
@@ -244,7 +240,6 @@ struct CrackCandidate
 bool Release(Structure& Model, const AuthorityResult& Judged, std::uint32_t Pass, CascadeVerdict& Verdict, std::vector<BodyId>& ReleasedThisRun)
 {
 	std::vector<std::size_t> PositionOf;
-	std::vector<std::size_t> HingingAt;
 	std::vector<PendingCluster> Pending;
 	for (const ComponentReport& Component : Judged.Components)
 	{
@@ -253,13 +248,11 @@ bool Release(Structure& Model, const AuthorityResult& Judged, std::uint32_t Pass
 			continue;
 		}
 		MarkPositions(PositionOf, Component.Release);
-		MarkPositions(HingingAt, Component.Hinging);
-		for (PendingCluster& Cluster : ClustersOf(Model, Component, PositionOf, HingingAt))
+		for (PendingCluster& Cluster : ClustersOf(Model, Component, PositionOf))
 		{
 			Pending.push_back(std::move(Cluster));
 		}
 		ClearPositions(PositionOf, Component.Release);
-		ClearPositions(HingingAt, Component.Hinging);
 	}
 	std::stable_sort(Pending.begin(), Pending.end(),
 		[](const PendingCluster& A, const PendingCluster& B) { return A.Bodies.front().Index < B.Bodies.front().Index; });
@@ -303,8 +296,6 @@ bool Release(Structure& Model, const AuthorityResult& Judged, std::uint32_t Pass
 		Released.Pass = Pass;
 		Released.Bodies = Cluster.Bodies;
 		Released.Motion = MotionOf(*Cluster.Component, Cluster.Bodies.front());
-		Released.LoadFactorLower = Cluster.Component->LoadFactorLower;
-		Released.LoadFactorUpper = Cluster.Component->LoadFactorUpper;
 		for (const InterfaceId Id : Crossing[C])
 		{
 			if (!Model.Sever(Id, Pass))

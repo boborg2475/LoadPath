@@ -250,7 +250,7 @@ TEST_CASE("Cascade.DryBrickPastFrictionReleasesTheBrickWithTheBedSevered")
 TEST_CASE("Cascade.StackSlidingAtTheGroundIsReleasedAsOneCluster")
 {
 	DryStack S = MakeDryStackSlidingAtTheGround();
-	CHECK(PastFrictionLateral > PastFriction * CircumscribedOverInscribed(16));
+	CHECK(PastFrictionLateral > PastFriction / std::cos(Pi / 16.0));
 	CHECK(PastFrictionLateral < 0.9);
 	const CascadeVerdict V = RunCascade(S.Model, Lateral(PastFrictionLateral));
 	INFO(DescribeVerdict(V));
@@ -274,47 +274,6 @@ TEST_CASE("Cascade.StackSlidingAtTheGroundIsReleasedAsOneCluster")
 	CheckStamps(S.Model, S.Joint, InterfaceState::Removed, 0, 0);
 	CHECK_FALSE(S.Model.IsLive(S.Lower));
 	CHECK_FALSE(S.Model.IsLive(S.Upper));
-}
-
-TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Cascade.AFailedInnerSolveNeverReleasesTheBrickUnderACappedSlide")
-{
-	StrengthProfile Capped = DryJoint(5.0);
-	Capped.MaxShearStrengthPa = 0.3 * WeightN() / (BrickLengthM * BrickWidthM);
-	int Runs = 0;
-	int Bad = 0;
-	for (int Step = 1; Step <= 40; ++Step)
-	{
-		const double Lambda = 0.025 * Step;
-		for (int Cap = 1; Cap <= 30; ++Cap)
-		{
-			Structure Model;
-			const ProfileId BedProfile = AddProfileOk(Model, DryJoint(5.0));
-			const ProfileId JointProfile = AddProfileOk(Model, Capped);
-			const BodyId Ground = AddGroundPlane(Model);
-			const BodyId Lower = AddBox(Model, BrickShape(0.0, 0));
-			const BodyId Upper = AddBox(Model, BrickShape(0.0, 1));
-			const InterfaceId Bed = AddInterfaceOk(Model, OnGroundPlane(Ground, Lower, BrickShape(0.0, 0), BedProfile));
-			AddInterfaceOk(Model, *StackedFaces(Lower, BrickShape(0.0, 0), Upper, BrickShape(0.0, 1), JointProfile));
-			CascadeOptions Options = Lateral(Lambda);
-			Options.Authority.Certificate.MaxIterations = Cap;
-			const CascadeVerdict V = RunCascade(Model, Options);
-			bool bOk = Model.IsLive(Lower) && Model.IsLive(Bed);
-			for (const FailedInterface& F : V.Failures)
-			{
-				bOk = bOk && !SameHandle(F.Id, Bed);
-			}
-			for (const ReleasedCluster& C : V.Clusters)
-			{
-				bOk = bOk && SameIdList(C.Bodies, {Upper});
-			}
-			INFO("lateral " << Lambda << ", MaxIterations " << Cap << ": " << DescribeVerdict(V));
-			CHECK(bOk);
-			Bad += bOk ? 0 : 1;
-			++Runs;
-		}
-	}
-	MESSAGE(Runs << " runs, " << Bad << " release the lower brick or the bed");
-	CHECK(Runs == 1200);
 }
 
 TEST_CASE("Cascade.StackWithOnlyTheTopPastItsEdgeReleasesTheTopAlone")
@@ -472,10 +431,9 @@ TEST_CASE("Cascade.UndecidedComponentChangesNothing")
 {
 	const double Lambda = 0.7;
 	CHECK(Lambda > PastFriction);
-	CHECK(Lambda < PastFriction * CircumscribedOverInscribed(4));
 	BrickOnGround F = MakeBrickOnGround(DryJoint(PastFriction));
 	CascadeOptions Options = Lateral(Lambda);
-	Options.Authority.Certificate.ConeGenerators = 4;
+	Options.Authority.Standing.MaxActiveSetIterations = 1;
 	{
 		const AuthorityResult Judged = Judge(F.Model, Options.Authority);
 		INFO("judge: " << DescribeAuthority(Judged));
@@ -707,8 +665,6 @@ TEST_CASE("Cascade.SameInputGivesIdenticalVerdicts")
 		CHECK(SameHandle(CA.Motion.Body, CB.Motion.Body));
 		CheckIdenticalVec3(CA.Motion.TranslationM, CB.Motion.TranslationM);
 		CheckIdenticalVec3(CA.Motion.RotationRad, CB.Motion.RotationRad);
-		CHECK(((CA.LoadFactorLower == CB.LoadFactorLower) || (std::isnan(CA.LoadFactorLower) && std::isnan(CB.LoadFactorLower))));
-		CHECK(((CA.LoadFactorUpper == CB.LoadFactorUpper) || (std::isnan(CA.LoadFactorUpper) && std::isnan(CB.LoadFactorUpper))));
 	}
 }
 
@@ -1003,7 +959,7 @@ TEST_CASE("Cascade.AnOverturnedBrickSeversItsBedInTension")
 	constexpr double HighFriction = 5.0;
 	constexpr double LambdaY = 2.0;
 	CHECK(LambdaY > BrickWidthM / BrickHeightM);
-	CHECK(LambdaY < HighFriction / CircumscribedOverInscribed(16));
+	CHECK(LambdaY < HighFriction * std::cos(Pi / 16.0));
 	BrickOnGround F = MakeBrickOnGround(DryJoint(HighFriction));
 	CascadeOptions Options;
 	Options.Authority = AuthorityUnderGravity(Vec3{0.0, LambdaY * GravityMPerS2, -GravityMPerS2});
@@ -1021,7 +977,7 @@ TEST_CASE("Cascade.AnOverturnedBrickSeversItsBedInTension")
 
 TEST_CASE("Cascade.ASlidingBrickSeversItsBedInShear")
 {
-	CHECK(PastFrictionLateral > PastFriction * CircumscribedOverInscribed(16));
+	CHECK(PastFrictionLateral > PastFriction / std::cos(Pi / 16.0));
 	CHECK(PastFrictionLateral < BrickLengthM / BrickHeightM);
 	BrickOnGround F = MakeBrickOnGround(DryJoint(PastFriction));
 	const CascadeVerdict V = RunCascade(F.Model, Lateral(PastFrictionLateral));

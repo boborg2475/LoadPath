@@ -1,8 +1,7 @@
 #include "CascadeTestSupport.h"
 #include "CatalogueTestSupport.h"
-#include "CertificateTestSupport.h"
-#include "SlowInDebug.h"
 #include "StaticsTestSupport.h"
+#include "SlowInDebug.h"
 
 #include "loadpath/Catalogue.h"
 #include "loadpath/StructuralAuthority.h"
@@ -58,7 +57,6 @@ BuiltWall BuildBondedWall(int Courses = 10, int BricksPerCourse = 8)
 	return BuildWall(JointOrFail(Loaded.Value, "clay_gp_mortar_bed_ec6").Profile, JointOrFail(Loaded.Value, "clay_gp_mortar_perpend_ec6").Profile, Courses, BricksPerCourse);
 }
 
-constexpr double SmallBondedWallCollapseLambda = 8.5;
 
 double MonolithLambda(const BuiltWall& W) { return W.Spec.BrickM.Y / (W.Spec.Courses * W.Spec.BrickM.Z); }
 
@@ -107,29 +105,6 @@ TEST_CASE("Slow.Geometry.Anchor.DryRunningBondWallStandsUnderGravity")
 	CHECK(Combined.Worst == ComponentVerdict::Stands);
 }
 
-TEST_CASE("Slow.Geometry.Anchor.DryRunningBondWallOverturnsAcrossItsThicknessAtTOverH")
-{
-	const BuiltWall W = BuildDryWall();
-	if (!RequireBuilt(W))
-	{
-		return;
-	}
-	const double TOverH = MonolithLambda(W);
-	CHECK(TOverH == doctest::Approx(0.1025 / 0.65).epsilon(1e-12));
-	const auto Stands = [&](double Lambda) { return CertificateStands(W.Model, CertificateLateral(0.0, Lambda)); };
-	CHECK(DecideWith(W.Model, CertificateLateral(0.0, 0.99 * TOverH)).State == CertificateState::Stands);
-	CHECK(DecideWith(W.Model, CertificateLateral(0.0, 1.01 * TOverH)).State == CertificateState::Collapses);
-	const ThresholdBracket Bracket = Threshold(Stands, 0.0, 2.0 * TOverH, 1e-4 * TOverH);
-	MESSAGE("lateral switch along y: [" << Bracket.LastStanding << ", " << Bracket.FirstFailing << "], t/H " << TOverH);
-	REQUIRE(Bracket.bBracketed);
-	if (!Bracket.bBracketed)
-	{
-		return;
-	}
-	CHECK(Bracket.LastStanding >= 0.99 * TOverH);
-	CHECK(Bracket.FirstFailing <= 1.01 * TOverH);
-}
-
 TEST_CASE("Slow.Geometry.Anchor.BondedRunningBondWallStandsPastTOverHAndCollapsesAboveIt")
 {
 	const BuiltWall W = BuildBondedWall();
@@ -144,11 +119,6 @@ TEST_CASE("Slow.Geometry.Anchor.BondedRunningBondWallStandsPastTOverHAndCollapse
 	const AuthorityResult Past = Judge(W.Model, AuthorityUnderGravity(GravityAcrossThickness(1.1 * TOverH)));
 	INFO("at 1.1 t/H " << std::string(VerdictName(Past.Worst)));
 	CHECK((Past.Worst == ComponentVerdict::Stands || Past.Worst == ComponentVerdict::Overstressed));
-	const CertificateResult Past1 = DecideWith(W.Model, CertificateLateral(0.0, 1.1 * TOverH));
-	const CertificateResult Far = DecideWith(W.Model, CertificateLateral(0.0, 1.5));
-	MESSAGE("bonded wall certificate: at 1.1 t/H " << Past1.State << " [" << Past1.LoadFactorLower << ", " << Past1.LoadFactorUpper << "], at lambda 1.5 " << Far.State << " [" << Far.LoadFactorLower << ", " << Far.LoadFactorUpper << "] (t/H " << TOverH << ")");
-	CHECK(Past1.State == CertificateState::Stands);
-	CHECK(Far.State == CertificateState::Collapses);
 }
 
 TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Geometry.Anchor.RemovingABaseBrickArchesTheLoadOntoItsNeighbours")
@@ -183,28 +153,6 @@ TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Geometry.Anchor.SmallDryWallStandsUnderGravity
 	CHECK(Combined.Worst == ComponentVerdict::Stands);
 }
 
-TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Geometry.Anchor.SmallDryWallOverturnsAtThicknessOverHeight")
-{
-	const BuiltWall W = BuildDryWall(4, 5);
-	if (!RequireBuilt(W, 22u))
-	{
-		return;
-	}
-	const double TOverH = MonolithLambda(W);
-	CHECK(TOverH == doctest::Approx(0.1025 / 0.26).epsilon(1e-12));
-	CHECK(0.7 > TOverH);
-	const auto Stands = [&](double Lambda) { return CertificateStands(W.Model, CertificateLateral(0.0, Lambda)); };
-	const ThresholdBracket Bracket = Threshold(Stands, 0.0, 2.0 * TOverH, 1e-4 * TOverH);
-	MESSAGE("4 x 5 dry wall lateral switch along y: [" << Bracket.LastStanding << ", " << Bracket.FirstFailing << "], t/H " << TOverH);
-	REQUIRE(Bracket.bBracketed);
-	if (!Bracket.bBracketed)
-	{
-		return;
-	}
-	CHECK(Bracket.LastStanding >= 0.99 * TOverH);
-	CHECK(Bracket.FirstFailing <= 1.01 * TOverH);
-}
-
 TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Geometry.Anchor.SmallBondedWallStandsPastThicknessOverHeight")
 {
 	const BuiltWall W = BuildBondedWall(4, 5);
@@ -216,9 +164,6 @@ TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Geometry.Anchor.SmallBondedWallStandsPastThick
 	const AuthorityResult Past = Judge(W.Model, AuthorityUnderGravity(GravityAcrossThickness(1.1 * TOverH)));
 	INFO("combined at 1.1 t/H: " << DescribeAuthority(Past));
 	CHECK(Past.Worst == ComponentVerdict::Stands);
-	const CertificateResult Far = DecideWith(W.Model, CertificateLateral(0.0, SmallBondedWallCollapseLambda));
-	MESSAGE("4 x 5 bonded wall certificate at lambda " << SmallBondedWallCollapseLambda << " " << Far.State << " [" << Far.LoadFactorLower << ", " << Far.LoadFactorUpper << "] (t/H " << TOverH << ")");
-	CHECK(Far.State == CertificateState::Collapses);
 }
 
 TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Geometry.Anchor.SmallBondedWallOverturnsAtTheBondedMonolithFactor")
@@ -242,13 +187,9 @@ TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Geometry.Anchor.SmallBondedWallOverturnsAtTheB
 	const double WeightN = MassKg * GravityMPerS2;
 	const double BaseBedAreaM2 = W.Spec.BricksPerCourse * W.Spec.BrickM.X * W.Spec.BrickM.Y;
 	const double LambdaC = MonolithLambda(W) * (1.0 + TensileStrengthPa * BaseBedAreaM2 / WeightN);
-	const CertificateResult Below = DecideWith(W.Model, CertificateLateral(0.0, 0.99 * LambdaC));
-	const CertificateResult Above = DecideWith(W.Model, CertificateLateral(0.0, 1.01 * LambdaC));
 	const AuthorityResult CombinedBelow = Judge(W.Model, AuthorityUnderGravity(GravityAcrossThickness(0.99 * LambdaC)));
 	const AuthorityResult CombinedAbove = Judge(W.Model, AuthorityUnderGravity(GravityAcrossThickness(1.01 * LambdaC)));
-	MESSAGE("4 x 5 bonded wall: ft " << TensileStrengthPa << " Pa, base bed " << BaseBedAreaM2 << " m2, W " << WeightN << " N, lambda_c " << LambdaC << "; certificate at 0.99 " << Below.State << " [" << Below.LoadFactorLower << ", " << Below.LoadFactorUpper << "], at 1.01 " << Above.State << " [" << Above.LoadFactorLower << ", " << Above.LoadFactorUpper << "]; combined at 0.99 " << std::string(VerdictName(CombinedBelow.Worst)) << ", at 1.01 " << std::string(VerdictName(CombinedAbove.Worst)));
-	CHECK(Below.State == CertificateState::Stands);
-	CHECK(Above.State == CertificateState::Collapses);
+	MESSAGE("4 x 5 bonded wall: ft " << TensileStrengthPa << " Pa, base bed " << BaseBedAreaM2 << " m2, W " << WeightN << " N, lambda_c " << LambdaC << "; authority at 0.99 " << std::string(VerdictName(CombinedBelow.Worst)) << ", at 1.01 " << std::string(VerdictName(CombinedAbove.Worst)));
 	CHECK(CombinedBelow.Worst == ComponentVerdict::Stands);
 	CHECK(CombinedAbove.Worst == ComponentVerdict::Overstressed);
 }

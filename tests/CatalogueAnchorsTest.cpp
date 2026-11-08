@@ -1,6 +1,5 @@
 #include "CascadeTestSupport.h"
 #include "CatalogueTestSupport.h"
-#include "CertificateTestSupport.h"
 #include "StaticsTestSupport.h"
 
 #include "loadpath/Catalogue.h"
@@ -56,11 +55,6 @@ BlockOnGround MakeBrickOnBed(const StrengthProfile& Profile)
 	return MakeBlockOnGround(Profile, 0.215, 0.1025, 0.065);
 }
 
-CertificateOptions WeightlessCertificate()
-{
-	return CertificateUnderGravity(Vec3{0.0, 0.0, 0.0});
-}
-
 double RelativeGap(double Actual, double Expected)
 {
 	return std::abs(Actual - Expected) / std::abs(Expected);
@@ -77,18 +71,14 @@ TEST_CASE("Catalogue.Anchor.BondedBrickLiftsOffItsBedAtTensileStrengthTimesArea"
 	struct Case
 	{
 		double BondFraction;
-		CertificateState Certificate;
 		ComponentVerdict Authority;
 	};
-	const Case Cases[] = {{0.99, CertificateState::Stands, ComponentVerdict::Stands}, {1.01, CertificateState::Collapses, ComponentVerdict::Overstressed}};
+	const Case Cases[] = {{0.99, ComponentVerdict::Stands}, {1.01, ComponentVerdict::Overstressed}};
 	for (const Case& Each : Cases)
 	{
 		const std::vector<BodyLoad> Loads = {BodyLoad{F.Block, Vec3{0.0, 0.0, F.WeightN + Each.BondFraction * BondN}, F.Shape.CentreM}};
-		const CertificateResult Certificate = DecideWith(F.Model, CertificateOptions{}, Loads);
 		const AuthorityResult Authority = Judge(F.Model, AuthorityUnderGravity(Vec3{0.0, 0.0, -GravityMPerS2}), Loads);
-		INFO("uplift W + " << Each.BondFraction << " ft A, ft A = " << BondN << " N, W = " << F.WeightN << " N: certificate " << Certificate.State << " ["
-			<< Certificate.LoadFactorLower << ", " << Certificate.LoadFactorUpper << "]; authority " << DescribeAuthority(Authority));
-		CHECK(Certificate.State == Each.Certificate);
+		INFO("uplift W + " << Each.BondFraction << " ft A, ft A = " << BondN << " N, W = " << F.WeightN << " N: authority " << DescribeAuthority(Authority));
 		CHECK(Authority.Worst == Each.Authority);
 	}
 }
@@ -121,52 +111,6 @@ TEST_CASE("Catalogue.Anchor.MeasuredBondIsSixTimesTheCodeTensionAndTwiceItsCohes
 	CHECK(RelativeGap(CohesionRatio, 2.0) <= RatioRelative);
 }
 
-TEST_CASE("Catalogue.Anchor.TwoScrewsSlipAtTwiceTheirShearCapacityWhateverTheArea")
-{
-	const Catalogue Value = LoadRepositoryCatalogue();
-	const FastenerRow& Screw = FastenerOrFail(Value, "ec5_screw_8x60_steel_to_glulam");
-	const int Count = 2;
-	const double CapacityN = Count * Screw.ShearPerPlaneN;
-	REQUIRE(CapacityN > 0.0);
-	CHECK(0.97 < 1.0 / CircumscribedOverInscribed(16));
-	const double Footprints[][2] = {{0.215, 0.1025}, {0.1, 0.1}};
-	for (const auto& Footprint : Footprints)
-	{
-		const double AreaM2 = Footprint[0] * Footprint[1];
-		const BlockOnGround F = MakeBlockOnGround(FastenerProfile(Screw, Count, AreaM2), Footprint[0], Footprint[1], 0.065);
-		const Vec3 BedCentreM{0.0, 0.0, 0.0};
-		for (const auto& [Fraction, Expected] : {std::pair{0.97, CertificateState::Stands}, std::pair{1.01, CertificateState::Collapses}})
-		{
-			const std::vector<BodyLoad> Loads = {BodyLoad{F.Block, Vec3{Fraction * CapacityN, 0.0, 0.0}, BedCentreM}};
-			const CertificateResult Result = DecideWith(F.Model, WeightlessCertificate(), Loads);
-			INFO("area " << AreaM2 << " m2, shear " << Fraction << " x " << CapacityN << " N: " << Result.State << " [" << Result.LoadFactorLower << ", " << Result.LoadFactorUpper << "]");
-			CHECK(Result.State == Expected);
-		}
-	}
-}
-
-TEST_CASE("Catalogue.Anchor.TwoScrewsPullOutAtTwiceTheirWithdrawalCapacityWhateverTheArea")
-{
-	const Catalogue Value = LoadRepositoryCatalogue();
-	const FastenerRow& Screw = FastenerOrFail(Value, "ec5_screw_8x60_steel_to_glulam");
-	const int Count = 2;
-	const double CapacityN = Count * Screw.WithdrawalN;
-	REQUIRE(CapacityN > 0.0);
-	const double Footprints[][2] = {{0.215, 0.1025}, {0.1, 0.1}};
-	for (const auto& Footprint : Footprints)
-	{
-		const double AreaM2 = Footprint[0] * Footprint[1];
-		const BlockOnGround F = MakeBlockOnGround(FastenerProfile(Screw, Count, AreaM2), Footprint[0], Footprint[1], 0.065);
-		for (const auto& [Fraction, Expected] : {std::pair{0.99, CertificateState::Stands}, std::pair{1.01, CertificateState::Collapses}})
-		{
-			const std::vector<BodyLoad> Loads = {BodyLoad{F.Block, Vec3{0.0, 0.0, Fraction * CapacityN}, F.Shape.CentreM}};
-			const CertificateResult Result = DecideWith(F.Model, WeightlessCertificate(), Loads);
-			INFO("area " << AreaM2 << " m2, pull " << Fraction << " x " << CapacityN << " N: " << Result.State << " [" << Result.LoadFactorLower << ", " << Result.LoadFactorUpper << "]");
-			CHECK(Result.State == Expected);
-		}
-	}
-}
-
 TEST_CASE("Catalogue.Anchor.BoltRowIsTwelvePointNineKilonewtonsPerShearPlane")
 {
 	const Catalogue Value = LoadRepositoryCatalogue();
@@ -174,16 +118,6 @@ TEST_CASE("Catalogue.Anchor.BoltRowIsTwelvePointNineKilonewtonsPerShearPlane")
 	INFO("bolt " << Bolt.ShearPerPlaneN << " N per plane");
 	CHECK(Bolt.Basis == StrengthBasis::Characteristic);
 	CHECK(RelativeGap(Bolt.ShearPerPlaneN, 12.9e3) <= RatioRelative);
-	const double LengthM = 0.1;
-	const double WidthM = 0.1;
-	const BlockOnGround F = MakeBlockOnGround(FastenerProfile(Bolt, 1, LengthM * WidthM), LengthM, WidthM, 0.065);
-	for (const auto& [Fraction, Expected] : {std::pair{0.97, CertificateState::Stands}, std::pair{1.01, CertificateState::Collapses}})
-	{
-		const std::vector<BodyLoad> Loads = {BodyLoad{F.Block, Vec3{Fraction * 12.9e3, 0.0, 0.0}, Vec3{0.0, 0.0, 0.0}}};
-		const CertificateResult Result = DecideWith(F.Model, WeightlessCertificate(), Loads);
-		INFO("shear " << Fraction << " x 12.9 kN: " << Result.State << " [" << Result.LoadFactorLower << ", " << Result.LoadFactorUpper << "]");
-		CHECK(Result.State == Expected);
-	}
 }
 
 TEST_CASE("Catalogue.Anchor.LimeMortarFrictionIsTheTangentOfItsMeasuredAngle")

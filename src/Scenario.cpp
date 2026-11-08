@@ -1414,7 +1414,6 @@ bool RunStep(Scenario& Value, const ScenarioStep& Step, int Number, const ICasca
 	ScenarioStepRecord Record;
 	AuthorityOptions Options;
 	Options.Standing.Gravity = Outcome.Gravity;
-	Options.Certificate.Gravity = Outcome.Gravity;
 	switch (Step.Kind)
 	{
 	case ScenarioStepKind::Cascade:
@@ -1524,7 +1523,6 @@ ScenarioOutcome RunScenario(Scenario& Value, const ICascade& Cascade, const IStr
 		}
 		AuthorityOptions Options;
 		Options.Standing.Gravity = Scratch.Gravity;
-		Options.Certificate.Gravity = Scratch.Gravity;
 		Outcome.Before = Authority.Judge(Drawn.Model, Scratch.Loads, Options, nullptr).Worst;
 	}
 	const auto Start = std::chrono::steady_clock::now();
@@ -1541,8 +1539,8 @@ ScenarioOutcome RunScenario(Scenario& Value, const ICascade& Cascade, const IStr
 
 ScenarioOutcome RunScenario(Scenario& Value)
 {
-	const std::unique_ptr<IStructuralAuthority> Authority = MakeCombinedAuthority(MakeRbsmStandingAuthority(), MakeLimitAnalysisCertificate());
-	const std::unique_ptr<ICascade> Cascade = MakeCascade(MakeCombinedAuthority(MakeRbsmStandingAuthority(), MakeLimitAnalysisCertificate()));
+	const std::unique_ptr<IStructuralAuthority> Authority = MakeElasticAuthority(MakeRbsmStandingAuthority());
+	const std::unique_ptr<ICascade> Cascade = MakeCascade(MakeElasticAuthority(MakeRbsmStandingAuthority()));
 	return RunScenario(Value, *Cascade, *Authority);
 }
 

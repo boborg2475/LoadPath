@@ -198,18 +198,15 @@ WallAndPushedBrick MakeWallAndPushedBrick(bool bWithBrick)
 void CheckJudgeZero(const AuthorityResult& R, const std::string& What)
 {
 	CheckAllZero(R.ElasticTimings, What + " ElasticTimings");
-	INFO(What << ": CertificateSeconds " << R.CertificateSeconds << ", JudgeSeconds " << R.JudgeSeconds);
-	CHECK(R.CertificateSeconds == 0.0);
+	INFO(What << ": JudgeSeconds " << R.JudgeSeconds);
 	CHECK(R.JudgeSeconds == 0.0);
 }
 
 void CheckJudgeCovers(const AuthorityResult& R, const std::string& What)
 {
-	INFO(What << ": " << Describe(R.ElasticTimings) << ", CertificateSeconds " << R.CertificateSeconds << ", JudgeSeconds " << R.JudgeSeconds);
-	CHECK(std::isfinite(R.CertificateSeconds));
-	CHECK(R.CertificateSeconds >= 0.0);
+	INFO(What << ": " << Describe(R.ElasticTimings) << ", JudgeSeconds " << R.JudgeSeconds);
 	CHECK(std::isfinite(R.JudgeSeconds));
-	CHECK(R.JudgeSeconds >= R.ElasticTimings.TotalSeconds + R.CertificateSeconds);
+	CHECK(R.JudgeSeconds >= R.ElasticTimings.TotalSeconds);
 }
 
 class Fnv1a
@@ -256,7 +253,6 @@ std::uint64_t ReadingsDigest(const AuthorityResult& R)
 {
 	Fnv1a H;
 	H.Word(static_cast<std::uint64_t>(R.Worst));
-	H.Word(static_cast<std::uint64_t>(R.Disagreements));
 	H.Id(R.InvalidInterface);
 	H.Word(R.Readings.size());
 	for (const InterfaceReading& Reading : R.Readings)
@@ -285,11 +281,6 @@ std::uint64_t ReadingsDigest(const AuthorityResult& R)
 		H.Ids(C.Bodies);
 		H.Word(static_cast<std::uint64_t>(C.Verdict));
 		H.Word(static_cast<std::uint64_t>(C.Elastic));
-		H.Word(static_cast<std::uint64_t>(C.Kinematic));
-		H.Word(C.bConsultedCertificate ? 1u : 0u);
-		H.Word(C.bDisagreed ? 1u : 0u);
-		H.Real(C.LoadFactorLower);
-		H.Real(C.LoadFactorUpper);
 		H.Word(C.Mechanism.size());
 		for (const MechanismMotion& M : C.Mechanism)
 		{
@@ -298,7 +289,6 @@ std::uint64_t ReadingsDigest(const AuthorityResult& R)
 			H.Point(M.RotationRad);
 		}
 		H.Ids(C.Release);
-		H.Ids(C.Hinging);
 		H.Word(C.bReused ? 1u : 0u);
 		H.Word(C.Loads.size());
 		for (const BodyLoad& L : C.Loads)
@@ -370,7 +360,7 @@ TEST_CASE("Profile.Timings.ElasticFillsThePhasesItRunsAndSumsItsComponents")
 	CheckElasticTimings(F, &Pool, "4-worker pool");
 }
 
-TEST_CASE("Profile.Timings.JudgeSplitsElasticAndCertificateTimeAndReuseCostsNothing")
+TEST_CASE("Profile.Timings.JudgeCoversItsElasticTimeAndReuseCostsNothing")
 {
 	const std::unique_ptr<IStructuralAuthority> Authority = MakeAuthority();
 	const WallAndPushedBrick Both = MakeWallAndPushedBrick(true);
@@ -381,15 +371,12 @@ TEST_CASE("Profile.Timings.JudgeSplitsElasticAndCertificateTimeAndReuseCostsNoth
 	const ComponentReport& Pushed = First.Components[1];
 	CHECK(SameIdList(Pushed.Bodies, std::vector<BodyId>{Both.Brick}));
 	CHECK(Wall.Verdict == ComponentVerdict::Stands);
-	CHECK_FALSE(Wall.bConsultedCertificate);
-	CHECK(Pushed.bConsultedCertificate);
 	CHECK(Pushed.Verdict == ComponentVerdict::Collapses);
 
 	const WallAndPushedBrick Alone = MakeWallAndPushedBrick(false);
 	const AuthorityResult WallOnly = Authority->Judge(Alone.Model, {}, AuthorityOptions{}, nullptr);
 	INFO("wall alone: " << DescribeAuthority(WallOnly));
 	REQUIRE(WallOnly.Components.size() == 1u);
-	CHECK_FALSE(WallOnly.Components[0].bConsultedCertificate);
 
 	const AuthorityResult Again = Authority->Judge(Both.Model, Both.Loads, AuthorityOptions{}, &First);
 	INFO("judged again: " << DescribeAuthority(Again));
@@ -401,13 +388,10 @@ TEST_CASE("Profile.Timings.JudgeSplitsElasticAndCertificateTimeAndReuseCostsNoth
 	{
 		CheckFilled(First.ElasticTimings, SolvePath::Dense, "wall and pushed brick ElasticTimings");
 		CheckJudgeCovers(First, "wall and pushed brick");
-		CHECK(First.CertificateSeconds > 0.0);
 		CheckFilled(WallOnly.ElasticTimings, SolvePath::Dense, "wall alone ElasticTimings");
 		CheckJudgeCovers(WallOnly, "wall alone");
-		CHECK(WallOnly.CertificateSeconds == 0.0);
 		CheckAllZero(Again.ElasticTimings, "judged again ElasticTimings");
 		CheckJudgeCovers(Again, "judged again");
-		CHECK(Again.CertificateSeconds == 0.0);
 	}
 	else
 	{
@@ -436,7 +420,6 @@ TEST_CASE("Measure.Profile.ReadingsDigest")
 	const AuthorityResult R = Judge(Pushed.Model, AuthorityOptions{}, Pushed.Loads);
 	INFO("wall and pushed brick: " << DescribeAuthority(R));
 	REQUIRE(R.Components.size() == 2u);
-	CHECK(R.Components[1].bConsultedCertificate);
 	CHECK(R.Components[1].Verdict == ComponentVerdict::Collapses);
 	CHECK_FALSE(R.Components[1].Mechanism.empty());
 	Report("wall and pushed brick", R);

@@ -2200,3 +2200,20 @@ Slices 1 to 3 are the engine; 4 onward is the engine being right at scale.
   Overstressed before the cascade (its joints are past capacity; it becomes a mechanism only once
   the cascade cracks the base). The same day the owner confirmed LoadPath has no collision
   detection: pieces passing through others in the page's animation are expected.
+
+### The certificate is removed; the runtime is elastic-only (owner, 2026-11-08)
+
+The limit-analysis certificate is deleted from the library: `ICollapseCertificate`,
+`MakeLimitAnalysisCertificate`, the cap-site factor, `MakeCombinedAuthority` and every
+certificate field on the authority and cascade results. Its code is preserved on branch
+`certificate_checkpoint`. The structural authority is `MakeElasticAuthority`: per component,
+elastic Stands reads Stands, Overstressed reads Overstressed (no only-crushed consult), Mechanism
+reads Collapses and releases the elastic `UnconstrainedBodies` with the elastic `MechanismMotion`,
+and Undecided reads Undecided, releases nothing and is reported to the host. The cascade releases
+each collapsing component's bodies as clusters joined by live interfaces (the certificate's
+hinging split is gone) and drives the sever axis from the elastic motion. Reasons: the
+certificate's associative flow over-releases (3.13, the lintel wall: 34 bricks where 10 must
+fall, because a sliding joint must open by μ times its slip), and its cost dominates every scale
+row (SCALE.md: the shed's certificate seconds against the elastic solve's fraction of a second,
+the half warehouse's tens of seconds). Tests whose expected outcome depended on the certificate
+refereeing are left red as written and listed in CURRENT_STATE as the owner's work queue.

@@ -602,13 +602,12 @@ inline AuthorityOptions OptionsFor(const Scene& S)
 {
 	AuthorityOptions Options;
 	Options.Standing.Gravity = S.Gravity;
-	Options.Certificate.Gravity = S.Gravity;
 	return Options;
 }
 
-inline std::unique_ptr<IStructuralAuthority> CombinedAuthority()
+inline std::unique_ptr<IStructuralAuthority> ElasticAuthority()
 {
-	return MakeCombinedAuthority(MakeRbsmStandingAuthority(), MakeLimitAnalysisCertificate());
+	return MakeElasticAuthority(MakeRbsmStandingAuthority());
 }
 
 inline CaseRun Run(Scene& S, std::string_view Slug)
@@ -625,12 +624,12 @@ inline CaseRun Run(Scene& S, std::string_view Slug)
 	CascadeOptions Options;
 	Options.Authority = OptionsFor(S);
 	const auto Start = std::chrono::steady_clock::now();
-	R.Verdict = MakeCascade(CombinedAuthority())->Run(S.Model, S.Loads, Options, nullptr);
+	R.Verdict = MakeCascade(ElasticAuthority())->Run(S.Model, S.Loads, Options, nullptr);
 	R.ElapsedMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - Start).count();
 	return R;
 }
 
-inline ComponentVerdict JudgeRemainder(const Scene& S) { return CombinedAuthority()->Judge(S.Model, S.Loads, OptionsFor(S), nullptr).Worst; }
+inline ComponentVerdict JudgeRemainder(const Scene& S) { return ElasticAuthority()->Judge(S.Model, S.Loads, OptionsFor(S), nullptr).Worst; }
 
 inline NameSet Sorted(NameSet Names)
 {

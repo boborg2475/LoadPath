@@ -31,20 +31,14 @@ TEST_CASE("Statics.Cracked.BondedBrickUnderUpliftCollapsesOnceCracked")
 	const std::vector<BodyLoad> Loads = UpwardAtCentroid(F.Brick);
 	{
 		const StandingResult Elastic = MakeRbsmStandingAuthority()->Solve(F.Model, Loads, StandingOptions{}, {});
-		const CertificateResult Kinematic = MakeLimitAnalysisCertificate()->Decide(F.Model, Loads, CertificateOptions{}, {});
-		INFO("bonded: elastic " << doctest::String(StandingStateName(Elastic.State)) << ", certificate " << doctest::String(CertificateStateName(Kinematic.State)));
+		INFO("bonded: elastic " << doctest::String(StandingStateName(Elastic.State)));
 		CHECK(Elastic.State == StandingState::Stands);
-		CHECK(Kinematic.State == CertificateState::Stands);
 	}
 	CHECK(F.Model.Crack(F.Bed, 1));
 	const StandingResult Elastic = MakeRbsmStandingAuthority()->Solve(F.Model, Loads, StandingOptions{}, {});
-	const CertificateResult Kinematic = MakeLimitAnalysisCertificate()->Decide(F.Model, Loads, CertificateOptions{}, {});
 	const AuthorityResult Combined = Judge(F.Model, AuthorityOptions{}, Loads);
-	INFO("cracked: elastic " << doctest::String(StandingStateName(Elastic.State)) << ", certificate " << doctest::String(CertificateStateName(Kinematic.State)) << " t [" << Kinematic.LoadFactorLower << ", " << Kinematic.LoadFactorUpper << "], unconstrained " << Describe(Kinematic.UnconstrainedBodies) << "; combined " << DescribeAuthority(Combined));
+	INFO("cracked: elastic " << doctest::String(StandingStateName(Elastic.State)) << ", unconstrained " << Describe(Elastic.UnconstrainedBodies) << "; combined " << DescribeAuthority(Combined));
 	CHECK((Elastic.State == StandingState::Mechanism || Elastic.State == StandingState::Undecided));
-	CHECK(Kinematic.State == CertificateState::Collapses);
-	CHECK(std::abs(Kinematic.LoadFactorLower) <= 1.0e-6);
-	CHECK(SameIdList(Kinematic.UnconstrainedBodies, {F.Brick}));
 	CHECK(Combined.Worst == ComponentVerdict::Collapses);
 	CHECK(Combined.Components.size() == 1u);
 	if (!(Combined.Components.size() == 1u))
@@ -63,11 +57,9 @@ TEST_CASE("Statics.Cracked.CrackedBedKeepsFrictionOnATwentyDegreeTilt")
 	CHECK(F.Model.Interface(F.Bed).State == InterfaceState::Cracked);
 	const AuthorityOptions Options = AuthorityTilted(TiltRad);
 	const StandingResult Elastic = MakeRbsmStandingAuthority()->Solve(F.Model, {}, Options.Standing, {});
-	const CertificateResult Kinematic = MakeLimitAnalysisCertificate()->Decide(F.Model, {}, Options.Certificate, {});
 	const AuthorityResult Combined = Judge(F.Model, Options);
-	INFO("elastic " << doctest::String(StandingStateName(Elastic.State)) << ", certificate " << doctest::String(CertificateStateName(Kinematic.State)) << "; combined " << DescribeAuthority(Combined));
+	INFO("elastic " << doctest::String(StandingStateName(Elastic.State)) << "; combined " << DescribeAuthority(Combined));
 	CHECK(Elastic.State == StandingState::Stands);
-	CHECK(Kinematic.State == CertificateState::Stands);
 	CHECK(Combined.Worst == ComponentVerdict::Stands);
 }
 
@@ -77,9 +69,8 @@ TEST_CASE("Statics.Cracked.CrackedBedKeepsTheCrushingBound")
 	CHECK(F.Model.Crack(F.Bed, 1));
 	CHECK(F.Model.Interface(F.Bed).State == InterfaceState::Cracked);
 	const StandingResult Elastic = MakeRbsmStandingAuthority()->Solve(F.Model, {}, StandingOptions{}, {});
-	const CertificateResult Kinematic = MakeLimitAnalysisCertificate()->Decide(F.Model, {}, CertificateOptions{}, {});
 	const AuthorityResult Combined = Judge(F.Model, AuthorityOptions{});
-	INFO("elastic " << doctest::String(StandingStateName(Elastic.State)) << ", certificate " << doctest::String(CertificateStateName(Kinematic.State)) << "; combined " << DescribeAuthority(Combined));
+	INFO("elastic " << doctest::String(StandingStateName(Elastic.State)) << "; combined " << DescribeAuthority(Combined));
 	CHECK(Elastic.State == StandingState::Overstressed);
 	CHECK(Elastic.Readings.size() == 1u);
 	if (!(Elastic.Readings.size() == 1u))
@@ -87,13 +78,11 @@ TEST_CASE("Statics.Cracked.CrackedBedKeepsTheCrushingBound")
 		return;
 	}
 	CHECK(Elastic.Readings.front().Axis == GoverningAxis::Compression);
-	CHECK(Kinematic.State == CertificateState::Collapses);
 	CHECK(Combined.Worst == ComponentVerdict::Collapses);
 	CHECK(Combined.Components.size() == 1u);
 	if (!(Combined.Components.size() == 1u))
 	{
 		return;
 	}
-	CHECK(Combined.Components.front().bConsultedCertificate);
 	CHECK(SameIdList(Combined.Components.front().Release, {F.Brick}));
 }

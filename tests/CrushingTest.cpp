@@ -21,7 +21,6 @@ constexpr double PierDensityKgPerM3 = 1800.0;
 constexpr int PierBlockCount = 3;
 constexpr double PaviaBaseStressPa = 1.85e6;
 constexpr double PierFriction = 0.6;
-constexpr double LoadFactorRelative = 1.0e-6;
 
 double PierAreaM2()
 {
@@ -83,14 +82,6 @@ CascadeVerdict RunCascadeOn(Structure& Model, const CascadeOptions& Options, std
 {
 	return MakeCascade(MakeAuthority())->Run(Model, Loads, Options, nullptr);
 }
-
-void CheckBracketAround(const ComponentReport& Report, double Want)
-{
-	INFO("bracket [" << Report.LoadFactorLower << ", " << Report.LoadFactorUpper << "], want " << Want);
-	CHECK(Report.LoadFactorLower <= Report.LoadFactorUpper);
-	CHECK(std::abs(Report.LoadFactorLower - Want) <= LoadFactorRelative * Want);
-	CHECK(std::abs(Report.LoadFactorUpper - Want) <= LoadFactorRelative * Want);
-}
 }
 
 TEST_CASE("Statics.Anchor.APierAboveItsCrushingStrengthCollapsesAndBelowItStands")
@@ -127,13 +118,8 @@ TEST_CASE("Statics.Anchor.APierAboveItsCrushingStrengthCollapsesAndBelowItStands
 		}
 		const ComponentReport& Only = Judged.Components.front();
 		CHECK(Only.Elastic == StandingState::Overstressed);
-		CHECK(Only.bConsultedCertificate);
-		CHECK(Only.Kinematic == CertificateState::Collapses);
 		CHECK(Only.Verdict == ComponentVerdict::Collapses);
-		CHECK_FALSE(Only.bDisagreed);
-		CheckBracketAround(Only, FcPa / PaviaBaseStressPa);
 		CHECK(SameIdList(Only.Release, P.BlocksBottomUp));
-		CHECK(SameIdList(Only.Hinging, {P.JointsBottomUp[0]}));
 
 		const CascadeVerdict V = RunCascadeOn(P.Model, CascadeOptions{}, P.Loads);
 		INFO(DescribeVerdict(V));
@@ -170,7 +156,6 @@ TEST_CASE("Statics.Anchor.APierAboveItsCrushingStrengthCollapsesAndBelowItStands
 			return;
 		}
 		CHECK(Judged.Components.front().Elastic == StandingState::Stands);
-		CHECK_FALSE(Judged.Components.front().bConsultedCertificate);
 		const CascadeVerdict V = RunCascadeOn(P.Model, CascadeOptions{}, P.Loads);
 		INFO(DescribeVerdict(V));
 		CHECK(V.State == CascadeState::Stands);
@@ -216,14 +201,8 @@ TEST_CASE("Statics.Combined.ACornerCrushedOnlyElasticallyIsConsultedAndStaysOver
 	}
 	const ComponentReport& Only = Judged.Components.front();
 	CHECK(Only.Elastic == StandingState::Overstressed);
-	CHECK(Only.bConsultedCertificate);
-	CHECK(Only.Kinematic == CertificateState::Stands);
 	CHECK(Only.Verdict == ComponentVerdict::Overstressed);
-	CHECK_FALSE(Only.bDisagreed);
-	CHECK(Judged.Disagreements == 0);
-	CheckBracketAround(Only, PlasticLoadFactor);
 	CHECK(Only.Release.empty());
-	CHECK(Only.Hinging.empty());
 	const CascadeVerdict V = RunCascadeOn(F.Model, CascadeOptions{}, Loads);
 	INFO(DescribeVerdict(V));
 	CHECK(V.State == CascadeState::Overstressed);
@@ -277,7 +256,6 @@ TEST_CASE("Statics.Combined.ACrushedJointBesideAShearedBondIsNotConsulted")
 	}
 	const ComponentReport& Only = Judged.Components.front();
 	CHECK(Only.Elastic == StandingState::Overstressed);
-	CHECK_FALSE(Only.bConsultedCertificate);
 	CHECK(Only.Verdict == ComponentVerdict::Overstressed);
 	CHECK(Only.Release.empty());
 	CascadeOptions Options;
@@ -296,49 +274,6 @@ TEST_CASE("Statics.Combined.ACrushedJointBesideAShearedBondIsNotConsulted")
 	CHECK(V.Failures.size() == 1u);
 	CHECK(V.Clusters.empty());
 	CheckStamps(Model, Bed, InterfaceState::Intact, 0, 0);
-}
-
-TEST_CASE("Statics.Combined.ACrushedComponentWhoseCertificateIsUndecidedStaysOverstressed")
-{
-	BrickOnGround F = MakeBrickOnGround(CrushedByOwnWeight());
-	AuthorityOptions Options;
-	Options.Certificate.MaxIterations = 1;
-	Options.Certificate.bStallRecovery = false;
-	const AuthorityResult Judged = Judge(F.Model, Options);
-	INFO(DescribeAuthority(Judged) << "; readings" << DescribeReadings(Judged.Readings));
-	const InterfaceReading* Bed = ReadingOf(Judged.Readings, F.Bed);
-	CHECK(Bed != nullptr);
-	if (!(Bed != nullptr))
-	{
-		return;
-	}
-	CHECK(Bed->Axis == GoverningAxis::Compression);
-	CHECK(Bed->CompressionUtilisation > 1.0);
-	CHECK(Judged.Components.size() == 1u);
-	if (!(Judged.Components.size() == 1u))
-	{
-		return;
-	}
-	const ComponentReport& Only = Judged.Components.front();
-	CHECK(Only.Elastic == StandingState::Overstressed);
-	CHECK(Only.bConsultedCertificate);
-	CHECK(Only.Kinematic == CertificateState::Undecided);
-	CHECK(Only.Verdict == ComponentVerdict::Overstressed);
-	CHECK_FALSE(Only.bDisagreed);
-	CHECK(Judged.Disagreements == 0);
-	CHECK(Judged.Worst == ComponentVerdict::Overstressed);
-	CHECK(Only.Release.empty());
-	CHECK(Only.Mechanism.empty());
-	CHECK(Only.Hinging.empty());
-	CascadeOptions Cascade;
-	Cascade.Authority = Options;
-	const CascadeVerdict V = RunCascadeOn(F.Model, Cascade, {});
-	INFO(DescribeVerdict(V));
-	CHECK(V.State == CascadeState::Overstressed);
-	CHECK(V.Failures.empty());
-	CHECK(V.Clusters.empty());
-	CHECK(F.Model.IsLive(F.Brick));
-	CheckStamps(F.Model, F.Bed, InterfaceState::Intact, 0, 0);
 }
 
 TEST_CASE("Statics.Combined.AZeroCrushingStrengthIsNotConsulted")
@@ -363,11 +298,9 @@ TEST_CASE("Statics.Combined.AZeroCrushingStrengthIsNotConsulted")
 	}
 	const ComponentReport& Only = Judged.Components.front();
 	CHECK(Only.Elastic == StandingState::Overstressed);
-	CHECK_FALSE(Only.bConsultedCertificate);
 	CHECK(Only.Verdict == ComponentVerdict::Overstressed);
 	CHECK(Only.Release.empty());
 	CHECK(Only.Mechanism.empty());
-	CHECK(Only.Hinging.empty());
 	const CascadeVerdict V = RunCascadeOn(F.Model, CascadeOptions{}, {});
 	INFO(DescribeVerdict(V));
 	CHECK(V.Clusters.empty());

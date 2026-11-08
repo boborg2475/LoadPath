@@ -8,7 +8,6 @@
 #include "StaticsTestSupport.h"
 #include "WarehouseTestSupport.h"
 
-#include "loadpath/CollapseCertificate.h"
 #include "loadpath/ParallelFor.h"
 #include "loadpath/StandingAuthority.h"
 #include "loadpath/StructuralAuthority.h"
@@ -249,9 +248,9 @@ void CheckEveryPoolSize(const Fixture& F)
 	}
 }
 
-bool AnyConsulted(const AuthorityResult& R)
+bool AnyCollapses(const AuthorityResult& R)
 {
-	return std::any_of(R.Components.begin(), R.Components.end(), [](const ComponentReport& C) { return C.bConsultedCertificate; });
+	return std::any_of(R.Components.begin(), R.Components.end(), [](const ComponentReport& C) { return C.Verdict == ComponentVerdict::Collapses; });
 }
 
 bool AnyReused(const AuthorityResult& R)
@@ -261,12 +260,12 @@ bool AnyReused(const AuthorityResult& R)
 
 std::unique_ptr<IStructuralAuthority> SerialAuthority()
 {
-	return MakeCombinedAuthority(MakeRbsmStandingAuthority(), MakeLimitAnalysisCertificate());
+	return MakeElasticAuthority(MakeRbsmStandingAuthority());
 }
 
 std::unique_ptr<IStructuralAuthority> ParallelAuthority(const IParallelFor& Workers)
 {
-	return MakeCombinedAuthority(MakeRbsmStandingAuthority(&Workers), MakeLimitAnalysisCertificate());
+	return MakeElasticAuthority(MakeRbsmStandingAuthority(&Workers));
 }
 
 StrengthProfile StiffJoint(double StiffnessPaPerM)
@@ -333,7 +332,7 @@ std::string DescribeAuthorityDifference(const AuthorityResult& Got, const Author
 {
 	std::ostringstream Out;
 	Out << "worst " << VerdictName(Got.Worst) << " (serial " << VerdictName(Want.Worst) << "), components " << Got.Components.size() << " (serial " << Want.Components.size() << "), readings same " << bitwise::Same(Got.Readings, Want.Readings)
-		<< ", components same " << bitwise::Same(Got.Components, Want.Components) << ", disagreements " << Got.Disagreements << " (serial " << Want.Disagreements << "), invalid " << Got.InvalidInterface << " (serial " << Want.InvalidInterface
+		<< ", components same " << bitwise::Same(Got.Components, Want.Components) << ", invalid " << Got.InvalidInterface << " (serial " << Want.InvalidInterface
 		<< "), stale same " << bitwise::Same(Got.StaleLoads, Want.StaleLoads);
 	return Out.str();
 }
@@ -453,7 +452,7 @@ TEST_CASE("Statics.Parallel.TheCombinedAuthorityWithAParallelElasticAuthorityJud
 	}
 	INFO("serial cold: " << DescribeAuthority(Cold[0]));
 	INFO("serial warm: " << DescribeAuthority(Warm[0]));
-	REQUIRE(AnyConsulted(Cold[0]));
+	REQUIRE(AnyCollapses(Cold[0]));
 	REQUIRE(Cold[0].StaleLoads.size() == 1u);
 	REQUIRE(AnyReused(Warm[0]));
 	for (std::size_t K = 1; K < Cold.size(); ++K)
@@ -464,8 +463,8 @@ TEST_CASE("Statics.Parallel.TheCombinedAuthorityWithAParallelElasticAuthorityJud
 		CHECK(SameParallel(Warm[K], Warm[0]));
 	}
 	INFO("pool indices run " << Pool.Ran.load() << ", reverse indices run " << Reverse.Ran);
-	CHECK_MESSAGE(Pool.Ran.load() > 0u, "the combined authority's elastic solves went through the pool");
-	CHECK_MESSAGE(Reverse.Ran > 0u, "the combined authority's elastic solves went through the reverse hook");
+	CHECK_MESSAGE(Pool.Ran.load() > 0u, "the elastic authority's solves went through the pool");
+	CHECK_MESSAGE(Reverse.Ran > 0u, "the elastic authority's solves went through the reverse hook");
 }
 
 TEST_CASE("Statics.Parallel.InvalidInputIsUnchanged")

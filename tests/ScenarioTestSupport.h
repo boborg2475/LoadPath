@@ -121,6 +121,6 @@ inline bool SameProfile(const StrengthProfile& A, const StrengthProfile& B)
 
 inline std::unique_ptr<IStructuralAuthority> StandardAuthority()
 {
-	return MakeCombinedAuthority(MakeRbsmStandingAuthority(), MakeLimitAnalysisCertificate());
+	return MakeElasticAuthority(MakeRbsmStandingAuthority());
 }
 }

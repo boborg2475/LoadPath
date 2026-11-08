@@ -211,8 +211,7 @@ bool SameFailure(const FailedInterface& A, const FailedInterface& B)
 bool SameCluster(const ReleasedCluster& A, const ReleasedCluster& B)
 {
 	return A.Pass == B.Pass && SameIdList(A.Bodies, B.Bodies) && SameIdList(A.Severed, B.Severed) && SameHandle(A.Motion.Body, B.Motion.Body) &&
-		SameVec(A.Motion.TranslationM, B.Motion.TranslationM) && SameVec(A.Motion.RotationRad, B.Motion.RotationRad) &&
-		SameDouble(A.LoadFactorLower, B.LoadFactorLower) && SameDouble(A.LoadFactorUpper, B.LoadFactorUpper);
+		SameVec(A.Motion.TranslationM, B.Motion.TranslationM) && SameVec(A.Motion.RotationRad, B.Motion.RotationRad);
 }
 
 const ComponentReport* ComponentHolding(const AuthorityResult& Result, BodyId Body)
@@ -268,7 +267,7 @@ void CheckNoCohesiveCornerSlips(const Structure& Model, const std::vector<Interf
 	}
 }
 
-void CheckReleasesCertified(const Structure& Before, const FuzzDraw& D, const CascadeVerdict& V)
+void CheckReleasesJudged(const Structure& Before, const FuzzDraw& D, const CascadeVerdict& V)
 {
 	if (V.Clusters.empty())
 	{
@@ -287,31 +286,6 @@ void CheckReleasesCertified(const Structure& Before, const FuzzDraw& D, const Ca
 		{
 			INFO("body " << Body.Index);
 			CHECK(HasBody(Component->Release, Body));
-		}
-	}
-	const auto ClusterOf = [&V](BodyId Body)
-	{
-		for (std::size_t C = 0; C < V.Clusters.size(); ++C)
-		{
-			if (HasBody(V.Clusters[C].Bodies, Body))
-			{
-				return static_cast<int>(C);
-			}
-		}
-		return -1;
-	};
-	for (const ComponentReport& Component : Judged.Components)
-	{
-		for (const InterfaceId Hinge : Component.Hinging)
-		{
-			const InterfaceRecord& R = Before.Interface(Hinge);
-			const int A = ClusterOf(R.BodyA);
-			const int B = ClusterOf(R.BodyB);
-			INFO("hinging interface " << Hinge.Index << " between clusters " << A << " and " << B);
-			if (A >= 0 && B >= 0)
-			{
-				CHECK(A != B);
-			}
 		}
 	}
 }
@@ -490,7 +464,7 @@ void RunDraw(std::uint64_t Seed, FuzzFamily Family, Coverage& Seen)
 		const Structure Before = D.Model;
 		Last = Cascade->Run(D.Model, D.Loads, FuzzOptions(D, 1), nullptr);
 		INFO("pass run from " << Before.HighestPass() << ": " << DescribeVerdict(Last));
-		CheckReleasesCertified(Before, D, Last);
+		CheckReleasesJudged(Before, D, Last);
 		CheckNoCohesiveCornerSlips(D.Model, Last.Readings, "pass verdict");
 		CheckStampsMatchRecords(Before, D.Model, D, Last);
 		Failures.insert(Failures.end(), Last.Failures.begin(), Last.Failures.end());

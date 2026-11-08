@@ -35,13 +35,11 @@ endif()
 
 # The engine.
 add_library(loadpath STATIC
-	src/CapSiteFactor.cpp
 	src/Cascade.cpp
 	src/Catalogue.cpp
 	src/Cli.cpp
-	src/CombinedAuthority.cpp
+	src/ElasticAuthority.cpp
 	src/Handles.cpp
-	src/LimitAnalysisCertificate.cpp
 	src/RbsmStandingAuthority.cpp
 	src/Scenario.cpp
 	src/StaticsCommon.cpp

@@ -267,11 +267,6 @@ void WriteCluster(JsonWriter& W, const ViewerScene& Scene, const ReleasedCluster
 	W.FieldInteger("pass", Cluster.Pass);
 	W.FieldIds("bodies", Cluster.Bodies);
 	W.FieldIds("severed", Cluster.Severed);
-	W.Key("lambda");
-	W.Open('[');
-	W.Item(Cluster.LoadFactorLower);
-	W.Item(Cluster.LoadFactorUpper);
-	W.Close(']');
 	W.FieldInteger("motion_body", Cluster.Motion.Body.Index);
 	W.Key("motion");
 	W.Open('{');

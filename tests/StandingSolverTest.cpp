@@ -1,7 +1,6 @@
 #include "BrickFixtures.h"
 #include "StaticsTestSupport.h"
 
-#include "loadpath/CollapseCertificate.h"
 #include "loadpath/StructuralAuthority.h"
 #include "loadpath/geometry/RunningBondWall.h"
 
@@ -508,11 +507,9 @@ TEST_CASE("Statics.Solver.TwoBrickStackOverturnedByABiaxialLoadCollapses")
 	CHECK(Result.State == StandingState::Undecided);
 	AuthorityOptions Options;
 	Options.Standing = BiaxialLateralLoad(LambdaX, LambdaY);
-	Options.Certificate.Gravity = Options.Standing.Gravity;
-	const AuthorityResult Combined = MakeCombinedAuthority(MakeRbsmStandingAuthority(), MakeLimitAnalysisCertificate())->Judge(S.Model, {}, Options, nullptr);
-	INFO("combined worst " << static_cast<int>(Combined.Worst) << ", disagreements " << Combined.Disagreements);
+	const AuthorityResult Combined = MakeElasticAuthority(MakeRbsmStandingAuthority())->Judge(S.Model, {}, Options, nullptr);
+	INFO("combined worst " << static_cast<int>(Combined.Worst));
 	CHECK(Combined.Worst == ComponentVerdict::Collapses);
-	CHECK(Combined.Disagreements == 0);
 }
 
 TEST_CASE("Statics.Solver.ALightlyCohesiveTwoBrickStackOverturnedByABiaxialLoadIsAMechanism")
@@ -538,10 +535,8 @@ TEST_CASE("Statics.Solver.ACappedCohesiveJointChargesItsShearCapNotItsCohesionFo
 	CHECK(Result.ActiveSetIterations == 3);
 	AuthorityOptions Options;
 	Options.Standing = BiaxialLateralLoad(1.5, 0.875);
-	Options.Certificate.Gravity = Options.Standing.Gravity;
-	const AuthorityResult Combined = MakeCombinedAuthority(MakeRbsmStandingAuthority(), MakeLimitAnalysisCertificate())->Judge(S.Model, {}, Options, nullptr);
-	INFO("combined worst " << static_cast<int>(Combined.Worst) << ", disagreements " << Combined.Disagreements);
-	CHECK(Combined.Disagreements == 0);
+	const AuthorityResult Combined = MakeElasticAuthority(MakeRbsmStandingAuthority())->Judge(S.Model, {}, Options, nullptr);
+	INFO("combined worst " << static_cast<int>(Combined.Worst));
 }
 
 TEST_CASE("Statics.Solver.ACrackedCohesiveStackOverturnsLikeADryOne")
@@ -558,11 +553,9 @@ TEST_CASE("Statics.Solver.ACrackedCohesiveStackOverturnsLikeADryOne")
 	CHECK(Result.ActiveSetIterations == DryResult.ActiveSetIterations);
 	AuthorityOptions Options;
 	Options.Standing = BiaxialLateralLoad(1.5, 0.875);
-	Options.Certificate.Gravity = Options.Standing.Gravity;
-	const AuthorityResult Combined = MakeCombinedAuthority(MakeRbsmStandingAuthority(), MakeLimitAnalysisCertificate())->Judge(S.Model, {}, Options, nullptr);
-	INFO("combined worst " << static_cast<int>(Combined.Worst) << ", disagreements " << Combined.Disagreements);
+	const AuthorityResult Combined = MakeElasticAuthority(MakeRbsmStandingAuthority())->Judge(S.Model, {}, Options, nullptr);
+	INFO("combined worst " << static_cast<int>(Combined.Worst));
 	CHECK(Combined.Worst == ComponentVerdict::Collapses);
-	CHECK(Combined.Disagreements == 0);
 }
 
 TEST_CASE("Statics.Solver.LoadsThatOverflowReadInfiniteUtilisationAndNeverStand")

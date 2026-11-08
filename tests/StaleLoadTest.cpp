@@ -1,11 +1,9 @@
 #include "BitwiseTestSupport.h"
 #include "BrickFixtures.h"
 #include "CascadeTestSupport.h"
-#include "CertificateTestSupport.h"
 #include "StaticsTestSupport.h"
 
 #include "loadpath/Cascade.h"
-#include "loadpath/CollapseCertificate.h"
 #include "loadpath/StandingAuthority.h"
 #include "loadpath/StructuralAuthority.h"
 
@@ -81,23 +79,7 @@ TEST_CASE("Loads.Stale.TheElasticAuthoritySkipsALoadOnARemovedBodyAndReportsIt")
 	CHECK(bitwise::Same(Got, Want));
 }
 
-TEST_CASE("Loads.Stale.TheCertificateSkipsALoadOnARemovedBodyAndReportsIt")
-{
-	const StackWithRemovedBrick F = MakeStackWithRemovedBrick();
-	const std::vector<BodyLoad> Loads = WithStaleMiddle(F);
-	const std::vector<BodyLoad> Live = WithoutStale(Loads);
-	const std::unique_ptr<ICollapseCertificate> Certificate = MakeLimitAnalysisCertificate();
-	const CertificateResult Got = Certificate->Decide(F.Model, Loads, CertificateOptions{}, {});
-	const CertificateResult Want = Certificate->Decide(F.Model, Live, CertificateOptions{}, {});
-	INFO("got " << std::string(CertificateStateName(Got.State)) << " t [" << Got.LoadFactorLower << ", " << Got.LoadFactorUpper << "], want " << std::string(CertificateStateName(Want.State)) << " t [" << Want.LoadFactorLower << ", " << Want.LoadFactorUpper << "]");
-	REQUIRE(Want.State != CertificateState::InvalidInput);
-	CHECK(Got.State != CertificateState::InvalidInput);
-	CHECK(bitwise::Same(Got.StaleLoads, StaleIsTheMiddle));
-	CHECK(Want.StaleLoads.empty());
-	CHECK(bitwise::Same(Got, Want));
-}
-
-TEST_CASE("Loads.Stale.TheCombinedAuthoritySkipsALoadOnARemovedBodyAndReportsIt")
+TEST_CASE("Loads.Stale.TheStructuralAuthoritySkipsALoadOnARemovedBodyAndReportsIt")
 {
 	const StackWithRemovedBrick F = MakeStackWithRemovedBrick();
 	const std::vector<BodyLoad> Loads = WithStaleMiddle(F);
@@ -154,7 +136,6 @@ struct EntryPoint
 
 const EntryPoint EntryPoints[] = {
 	{"Solve", [](Structure& Model, std::span<const BodyLoad> Loads) { return MakeRbsmStandingAuthority()->Solve(Model, Loads, StandingOptions{}, {}).State == StandingState::InvalidInput; }},
-	{"Decide", [](Structure& Model, std::span<const BodyLoad> Loads) { return MakeLimitAnalysisCertificate()->Decide(Model, Loads, CertificateOptions{}, {}).State == CertificateState::InvalidInput; }},
 	{"Judge", [](Structure& Model, std::span<const BodyLoad> Loads) { return MakeAuthority()->Judge(Model, Loads, AuthorityOptions{}, nullptr).Worst == ComponentVerdict::InvalidInput; }},
 	{"Run", [](Structure& Model, std::span<const BodyLoad> Loads) { return MakeCascade(MakeAuthority())->Run(Model, Loads, CascadeOptions{}, nullptr).State == CascadeState::InvalidInput; }},
 };

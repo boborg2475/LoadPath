@@ -986,7 +986,6 @@ TEST_CASE("Scenario.Steps.LoadAndLateralStepsReachTheCascadeExactlyAsTheApiWould
 		DirectWall D = BuildDirectWall(5, 4);
 		CascadeOptions Options;
 		Options.Authority.Standing.Gravity = Gravity;
-		Options.Authority.Certificate.Gravity = Gravity;
 		const CascadeVerdict Want = MakeCascade(StandardAuthority())->Run(D.Model, {}, Options, nullptr);
 		REQUIRE(O.Verdicts.size() == 1);
 		CheckSameVerdict(S.Model, O.Verdicts.back(), D.Model, Want);

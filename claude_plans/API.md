@@ -535,358 +535,48 @@ Couplet–Heyman semicircular arch with radial joints stands at `t/r = 0.1075` a
 within a half-voussoir of 54.5°); the friction switch on that arch (stands at φ = 22°, slides at
 21°). Bracket: the Orduña hollow pile's non-associative load factor inside [0.427, 0.553].
 
-## Slice 4: the collapse certificate (limit analysis, pulled forward 2026-10-11)
+## The structural authority: elastic-only (`StructuralAuthority.h`, 2026-11-08)
 
-The kinematic authority. Where the elastic standing authority fails closed (Undecided) or
-reports a Mechanism it cannot certify, this answers from the static theorem of limit analysis
-over the same rigid blocks and interfaces (Livesley 1978; Gilbert & Melbourne 1994; Orduña &
-Lourenço 2005; the formulation BENCHMARKS groups 4 and 5 were computed with). It is a second
-implementation behind its own interface, swappable like the first (DESIGN §7). This section
-is the contract as built and reviewed twice (2026-10-11); the dated rulings it absorbed are in
-DESIGN §10.
-
-### The interface (`CollapseCertificate.h`)
-
-```cpp
-enum class CertificateState : uint8_t { Stands, Collapses, Undecided, InvalidInput };
-
-struct CertificateOptions {
-	Vec3   Gravity = {0.0, 0.0, -GravityMPerS2};
-	int    ConeGenerators = 16;            // even, >= 4; the friction circle is approximated by this polygon
-	double LoadFactorCap = 1.0e3;          // the LP's upper bound on t, at least 1; reaching it means "stands with margin >= cap"
-	double FeasibilityTolerance = 1.0e-9;  // relative, on the equilibrium residual, dual residual and gap
-	int    MaxIterations = 200;            // interior-point iterations per solve before it is declared failed
-	bool   bStallRecovery = true;          // on a stalled or failed cone solve, bound t by the rigorous dual bound and re-solve under it; a failed inscribed solve counts as t_in = 0
-};
-
-struct CertificateResult {
-	CertificateState State = CertificateState::Undecided;
-	double LoadFactorLower = 0.0;          // t_in: a statically admissible field exists up to here
-	double LoadFactorUpper = 0.0;          // t_out: no statically admissible field exists beyond here
-	std::vector<MechanismMotion> Mechanism;        // the selected mechanism of every Collapses component, whatever State
-	std::vector<BodyId> UnconstrainedBodies;
-	std::vector<InterfaceId> HingingInterfaces;    // interfaces the selected mechanism moves (kinematic)
-	int Iterations = 0;                            // maximum over components
-	InterfaceId InvalidInterface{};
-	std::vector<CertificateComponent> Components;  // one per decided component in partition order, its Bodies as the partition lists them; empty on InvalidInput (carried from 6b, item 2 amendment)
-	std::vector<std::size_t> StaleLoads;            // indices into the input loads whose body this structure issued but has removed: skipped, never InvalidInput (2026-10-15)
-};
-
-struct CertificateComponent {                  // one decided component's verdict: the fields mean what CertificateResult's aggregate fields mean, restricted to its bodies; bounds capped at LoadFactorCap
-	std::vector<BodyId> Bodies;
-	CertificateState State;
-	double LoadFactorLower, LoadFactorUpper;
-	int Iterations;
-	std::vector<MechanismMotion> Mechanism;
-	std::vector<BodyId> UnconstrainedBodies;
-	std::vector<InterfaceId> HingingInterfaces;
-};
-
-class ICollapseCertificate {
-public:
-	virtual ~ICollapseCertificate() = default;
-	// Only: empty decides every component; otherwise the components containing a listed body, loads outside them without effect; an entry that is not a live free body is InvalidInput (stage 1b-ii).
-	virtual CertificateResult Decide(const Structure&, std::span<const BodyLoad>, const CertificateOptions&, std::span<const BodyId> Only) const = 0;
-};
-
-std::unique_ptr<ICollapseCertificate> MakeLimitAnalysisCertificate();
-```
-
-### The problem it solves
-
-**Loading is proportional.** `A α = t · b` with `b` the whole wrench, gravity and `BodyLoad`
-together (a point force acts at its point, so it carries a moment about the centroid exactly as
-in slice 2); the dead-plus-live form is not offered. `t = 0, α = 0` is always feasible, so there
-is no infeasibility detection. Objective: maximise `t` subject to `t ≤ LoadFactorCap`.
-
-**Unknowns.** For every corner of every live interface (slice 2's four corners), one
-non-negative coefficient `α_j` per friction generator `g_j = n + r (cos θ_j u + sin θ_j v)`,
-`θ_j = 2πj/G`, and, when the joint has cohesion, one `κ_j ≥ 0` per cohesion generator
-`ρ (cos θ_j u + sin θ_j v)`. The corner force on B is `−T n + Σ α_j g_j + Σ κ_j c_j`: the tension
-offset `T` is a fixed force on the right-hand side (not scaled by `t`), friction acts on the
-compressive remainder, cohesion is a separate bounded polygon. Per-corner bounds:
-`Σ α_j ≤ fc A/4 + T` (crushing: `N ≤ fc A/4`) and `Σ κ_j ≤ C`; a bound that is not `> 0` drops
-its group (`!(x > 0)`), so dry joints carry no cohesion columns.
-
-**Two regions, two solves.** The inscribed solve uses the **inner region**: `r = μ`, `ρ = 1`,
-`T = min(ft, c/μ) · A/4` (`ft · A/4` when `μ = 0`), `C = (c − μ · min(ft, c/μ)) · A/4`. That is
-`|S| ≤ c + μ N` for `N ≥ −T`: inside DESIGN's "only compression buys friction" envelope
-everywhere, exact in compression, conservative in tension, and the largest valid region of this
-family. The circumscribed solve uses the **hull**: `r = μ / cos(π/G)`, `ρ = 1 / cos(π/G)`,
-`T = ft · A/4`, `C = c · A/4`, which contains every admissible field. Consequences: a joint with
-`ft > 0`, `c = 0`, `μ > 0` gets `T = 0` on the inscribed side (a tension-only connection reads
-Undecided at best; slice 4b decides whether such profiles need a cohesion floor); on bonded
-joints the band is wider than the friction polygon alone. `MaxShearStrengthPa` is **not in the
-LP** (a finite cap is ignored, which over-reads capacity and is fail-open for Stands; slice 4b
-adds facet rows on the corner shear before a host trusts a Stands on a capped joint).
-
-**Rows.** Six equilibrium rows per free body (force, and moment about the centroid), a corner
-force acting on B and its negative on A; grounded bodies contribute nothing. Per component
-(union-find over free-free interfaces, as slice 2; shared code in `src/StaticsCommon.*`) the
-forces are divided by the component's total load magnitude and the arms by its characteristic
-length, so verdicts are local and scale-invariant (pinned at s = 1/16 … 16).
-
-**Solver.** The homogeneous self-dual embedding with Mehrotra predictor-corrector on the normal
-equations, `6 × free bodies` square after Schur-eliminating the diagonal bound rows and the
-rank-one cap row (the plain infeasible-start method stalls when `t* = 0`, where the feasible set
-has no interior); Eigen LLT; on a failed pivot the diagonal is shifted by `1e-16`, then `1e-14`, then `1e-12 ×`
-the largest diagonal (coupling term included, dense and bordered alike) until the pivots are
-positive, a failure at `1e-12` reading Undecided; one iterative-refinement pass on the corrector,
-or 20 on both the predictor and the corrector in an iteration whose factor was shifted (DESIGN
-§10, the interior-optimum defect); step 0.995 to the boundary; a feasible deterministic start (`α = min(1, bound/2G)`, lowered to the body's own load where a group touches a body whose largest normalised `|Demand|` is under 1e-6,
-`t = min(1, cap/2)`, complementarity products 1, duals 0, `τ = κ = 1`); termination when the
-primal residual (per block, term-size scaled), the dual residual (relative to
-`1 + max(1, |s|, |Aᵀy|)`) and the gap `xᵀs/τ²` are all under `FeasibilityTolerance`. Any
-non-finite value or the iteration cap marks that solve failed. Every cone solve, converged or not, also returns a **rigorous dual bound** on its optimum: with `ŷ = y/τ` and `r = Aᵀŷ + e_t`, `U = −bᵀŷ + Σᵢ ubᵢ max(0, rᵢ + γₖ (|A|ᵀ|ŷ| + |c|)ᵢ)` over the box every variable has (a group's forces and slack by its bound, `t` and the cap slack by the cap, a cap site's facet slack `K` by its bound plus `Σ_G B_G max_J |f_K · d_J|` over the site's groups, which holds for any `μ`), weak duality for a box-bounded LP valid for any `ŷ` (Neumaier & Shcherbina 2004); a non-finite term (an overflowed `ŷ`) makes `U` unbounded rather than dropping the column; the bound returned is the lesser of `U` at `ŷ` and `U` at a polished `ŷ` (each cap site's facet duals from a small LP over them, then each group row's dual `−max(0, max_J a_J)` and the cap row's `−max(0, 1 − D·ŷ)`, with `a_J` the column's reduced cost without its group dual), the allowance recomputed at the polished duals; any `ŷ` is valid, so the polish affects only tightness (DESIGN §10 2026-10-14); `γₖ = k u / (1 − k u)` with `u` the unit roundoff and `k` the column length (`6 × free bodies + 2` for `t`, `14 + facets` for the rest), plus `γ` over the bound's own sum. **Stall recovery** (`bStallRecovery`, DESIGN §10): an inscribed solve that stalls or fails with `0 < U < cap` is re-solved with the cap at `U (1 − 1e-5)`, then `U (1 − 1e-3)`; the first that converges gives `t_in` (its duals give the mechanism unless it reached that cap, when the stalled solve's last duals do), and if neither converges the component reads Undecided; a circumscribed solve that does not converge gives `t_out = min(cap, U)`. Each re-solve is its own solve for `Iterations`. Deterministic: ordered assembly,
-no threads, Eigen storage and factorisation only. The circumscribed solve is skipped when the
-inscribed one reaches the cap; `t_out` is clamped to at least `t_in` (exact, every inscribed
-set sits inside its circumscribed one). `t_out` is the converged primal value, but a Collapses
-needs the circumscribed solve's rigorous dual bound below 1 as well: a converged `t_out < 1 ≤ U_out`
-reads Undecided with `LoadFactorUpper = min(cap, U_out)` (DESIGN §10 2026-10-14; with a loose
-`FeasibilityTolerance` the primal can sit below 1 while the optimum sits above it). Only that
-verdict is backed: elsewhere the reported `LoadFactorUpper` is the primal and can sit below
-`t*_out` by the termination gap (1.3e-9 below `U_out` on the 46-block wall at default options;
-5.8e-5 below the optimum on a cohesive block at tolerance 1e-2), which is the unsafe side of an
-upper bound; reporting `min(cap, U_out)` instead is open (CURRENT_STATE).
-
-**State.** `Stands` when `t_in ≥ 1` (whatever the circumscribed solve did: if it failed,
-`LoadFactorUpper = min(LoadFactorCap, U)`, or the cap with recovery off); `Collapses` when `t_out < 1` and, on a converged circumscribed solve, its dual bound `U_out < 1`; with recovery on, a failed inscribed solve counts as `t_in = 0` (the load factor scales every load, so zero load with zero joint forces is admissible), so a rigorous `U_out < 1` still reads Collapses, its mechanism from the selection when that mechanism does positive work (a motion of L1 size at least ½ whose net work is above 1e-6 of the sum of its per-row magnitudes, so independent of mass; zero-dissipation mechanisms with positive work prove `t*_in = 0` in exact arithmetic, and the Collapses itself rests on `U_out < 1`), else Undecided; `Undecided` when
-`t_in < 1 ≤ t_out` (including a converged `t_out < 1 ≤ U_out`, bounds `[t_in, min(cap, U_out)]`; the polygon band, narrowed by raising `ConeGenerators`; on a cone-vertex
-direction a slide flips Stands → Undecided at `μ` and Undecided → Collapses at `μ / cos(π/G)`,
-on a mid-edge direction at `μ cos(π/G)` and `μ`), when the inscribed solve failed (its recovery re-solves included) and, with recovery on, the circumscribed solve gives no rigorous `U_out < 1` (bounds `[0, t_out or U_out]`, or `[0, cap]` with recovery off), when
-`t_in < 1` and the circumscribed solve failed with recovery off or with `U_out ≥ cap` (bounds
-`[0, cap]`), or when the mechanism selection below failed; `InvalidInput` on the slice-2 rules (a load on a never-issued handle,
-non-finite load or gravity; a load on a removed body is skipped and listed in `StaleLoads`) plus `ConeGenerators` odd or under 4, a `LoadFactorCap` below 1, and non-finite or non-positive
-options, with `InvalidInterface` left default. On dry joints the cones are homogeneous, so `t`
-is exactly 0 or the cap; finite load factors come only from bonded, cohesive or crushing bounds
-(`ft A L / (W (λh − L))` for tension tipping, `c A / (W (sin θ − μ cos θ))` for cohesive sliding,
-`fc A / W` for crushing). Load factors compare at 1e-7 relative plus 1e-6 absolute. A massless
-free body with no load is Stands; a free body with no interface is Collapses at `t = 0` and is
-listed, and so is an ungrounded component carrying no `BodyLoad` (the rigid fall, slice 6a). Across components the state is the worst in the order InvalidInput > Undecided >
-Collapses > Stands, load factors are the minimum, the lists collect **every Collapses
-component whatever the overall state**, and `Iterations` is the maximum. A single state hides
-which component collapsed; the combined authority (slice 4b) reports per component.
-
-**Mechanism.** The mechanism names the bodies to release and the direction they move; it comes
-from the inscribed program and is not itself a proof of collapse (a sliding mechanism dilates at
-`atan μ`, short of the circumscribed cone; the verdict's proof is the circumscribed dual bound,
-DESIGN §10 2026-10-14). Where `t*` is finite and the dual unique, the equilibrium-row duals at the
-inscribed optimum are the body velocities (sign `−y`, rotations unscaled by the characteristic
-length, normalised per component so the largest physical component is 1). At `t* = 0` the dual
-optimal set is a cone and the interior point returns its analytic centre, which names every
-body that can move; so on a Collapses with `t_in` under the selection gate (`FeasibilityTolerance`, 1e-9; the largest dry `t_in` seen is 5.5e-10 and `t_in` scales with the tolerance, so the margin is thin but real)
-a **selection LP** runs per component: over body
-velocities `y` and bounding variables `u`, with `±y ≤ u`, the kinematic admissibility rows
-`gᵀ (v_B − v_A) ≤ 0` for every inscribed friction and cohesion generator, the opening row
-`−Tᵀ y ≤ tol` where the inner tension offset is non-zero, and a motion normalisation, choose the
-mechanism with the greatest external work per unit of L1 motion (maximise `bᵀ y` subject to
-`Σ u = 1`; the earlier unit-work form `bᵀ y = 1, min Σ u` is the same mechanism up to scale
-but fails 1e-6 past a threshold, where unit work needs velocities near 1e6 and `τ → 0`). The
-bound-group dual variables are omitted: per corner the minimum dissipation is the support
-function of a strength region containing the origin, hence non-negative, and zero exactly for
-dilatant opening on a dry corner or zero relative motion where `T > 0`, which the rows above
-express. The selected mechanism is reported; `UnconstrainedBodies` and `HingingInterfaces`
-follow the listing threshold below. The selection factor's retry escalates like the cone solves' (`1e-16`, `1e-14`, `1e-12` of the largest diagonal, coupling and opening terms included), and 3 iterative-refinement passes on the selection corrector (DESIGN §10, the modified Cholesky reverted). "Minimal" means highest work per unit
-motion, not fewest bodies: a cap on an exactly critical end brick is reported with that brick
-(TRAPS: a cluster released as one body must be a certified mechanism; two bricks whose joint
-centroid is past a pillar's edge are named together with one rigid rotation). **If the selection
-LP does not converge the component reads Undecided with empty lists**: the analytic centre is
-never handed to a host as a release set. On `Stands` every list is empty. The selection has a
-**resolution limit**: a harmonic stack with every offset scaled by `1 + ε` has every level past
-its threshold and the optimum scales with ε, so once it falls under the solver's absolute
-termination gap (ε about 1e-7 for n ≥ 5, 1e-8 for n ≥ 3) the solve returns near the centre of
-the near-optimal set and names every level, or reads Undecided; every body it names there is
-past its own threshold, so this is not host-unsafe, and slice 4b's referee records it:
-the tests pin only that the top block is named. The cone solves have a **threshold resolution
-limit** too: within about 1e-6 relative of a load factor where the admissible set empties, the
-inscribed solve can stall with its primal residual near 1e-4 and the component reads Undecided
-(the Ferris & Tin-Loi wall at G = 64, λ 9/14 + 1e-6, while G = 16 stands: [0, cap] with recovery
-off, [0, t_out] with it, about [0, 999.9999999996]); fail closed.
-Near an interior optimum (`t*` strictly inside `(0, cap)`) a solve can stall with only its primal residual floored; stall recovery decides it (DESIGN §10).
-**Listing
-threshold (ruled 2026-10-11 after the third review):** a body is unconstrained when the largest
-of its six scaled components exceeds 1e-3 of the component's largest, and an interface hinges
-when a corner's relative speed exceeds 1e-3 of the fastest corner and one of its bodies is
-listed; the earlier 1e-6 admitted interior-point residue (tied levels at about 1e-5, a stable
-bystander lifting at 1.6e-6, a weakly bonded bystander's joint read hinging) and let the two
-lists disagree. An Undecided after a failed selection still carries `LoadFactorUpper < 1`.
-
-### The theorem ruling (settles the question slice 2 left open)
-
-The certificate implements **associative** limit analysis: the inscribed solution is a genuine
-statically admissible field, so `Stands` certifies that equilibrium within every strength bound
-is possible; the circumscribed solution bounds every admissible field, so `Collapses` certifies
-that none exists for the associative problem, and since the non-associative collapse load never
-exceeds the associative one, `Collapses` holds for the physical joint too. The gap is the other
-direction: under non-associative friction a structure with an admissible field can still fail
-along a sliding path (Ferris & Tin-Loi; Orduña's pile reads [0.427, 0.553] for exactly this
-reason). **Ruling:** static admissibility is the standing criterion for the host where the elastic
-authority found no mechanism. **Amended 2026-10-13** (DESIGN §10, the 5-diamond with friction and
-the false-Stands class): where slice 2 reports Mechanism and the certificate says `Stands`, the
-combined authority reports `Undecided`, releases nothing, and counts the disagreement. A probe
-DEM showed that case can fall under Coulomb friction (the three-brick bridge at μ 5 and λ (2.5,
-0.875) in every variant, and 3 of 5 such random dry walls robustly): the certificate's field can
-rest on associative dilatancy that a sliding joint does not supply. Undecided is a ceiling, not a
-collapse claim: some of these cases stand or fall on damping, and 71 of the 80 such verdicts in
-the random families are on cohesive structures that the probe DEM cannot model. A red on the oracle property's never-Mechanism direction is therefore not
-automatically a slice-2 defect. Where the elastic authority reads Undecided and the certificate
-Stands, the combined answer stays Stands; that residual is a known unsafe gap (about a fifth of
-such dry random walls fall in the probe DEM), logged in CURRENT_STATE.
-The pile's non-associative factor is pinned as a bracket on `[t_in, t_out]` containing the
-associative value, not as the certificate's answer.
-
-### Anchors slice 4 must pin
-
-Pinned in 4a: the single-brick closed forms and the polygon band, bonded tension, cohesion and
-crushing load factors, point-load tipping and eccentric crushing, the slice-2 anchors through
-the certificate, the deferred stack and bridge rows, the inner-region cap at `c/μ`, mechanism
-selection on a sliding cap, an overhanging cap, a two-brick cluster, a bonded pier and a
-running-bond wall with an end brick removed, and agreement with the test-tier NNLS oracle (0
-disagreements on 300 seeded draws). Still to pin (4b): the three `Deferred.Slice4.*` cases move
-back under `Statics.*` through the combined authority; the Couplet–Heyman semicircular arch
-(B-ARC-01, radial joints, stands at `t/r = 0.1075` and collapses below, hinge positions within a
-half-voussoir of 54.5°, voussoir count from the report's discretisation guidance); its friction
-switch (B-ARC-06, stands at φ = 22°, slides at 21°); the 3DEC wedge (B-WDG-01, physical φ_crit 33.36°, the associative certificate 31.07°
-within 0.05°); the Orduña pile bracket (B-ORD-01); the shear cap.
-
-## Slice 4b: the combined authority, the shear cap, and the kinematic anchors
-
-### The combined authority (`StructuralAuthority.h`)
-
-One call a host makes per structure and load. It owns nothing: it is handed the two
-implementations and composes their answers under the theorem ruling above.
+The limit-analysis certificate was removed on 2026-11-08 (DESIGN §10, that date). Its code and
+its former contract are on branch `certificate_checkpoint`. The structural authority now wraps
+the elastic standing authority alone.
 
 ```cpp
 enum class ComponentVerdict : uint8_t { Stands, Overstressed, Collapses, Undecided, InvalidInput };
 
 struct ComponentReport {
-	std::vector<BodyId> Bodies;                   // the free bodies of this connected component, ascending slot order
+	std::vector<BodyId> Bodies;                   // the free bodies of this component, ascending slot order
 	ComponentVerdict Verdict = ComponentVerdict::Undecided;
-	StandingState Elastic = StandingState::Undecided;        // what the elastic authority said for these bodies
-	CertificateState Kinematic = CertificateState::Undecided; // what the certificate said, or Undecided if it was not consulted
-	bool bConsultedCertificate = false;
-	bool bDisagreed = false;                      // elastic Mechanism against certificate Stands
-	double LoadFactorLower = 0.0;                 // from the certificate when consulted, else NaN
-	double LoadFactorUpper = 0.0;
-	std::vector<MechanismMotion> Mechanism;       // the certificate's selected mechanism on Collapses
-	std::vector<BodyId> Release;                  // bodies the host releases: the certificate's UnconstrainedBodies on Collapses, else empty
-	std::vector<InterfaceId> Hinging;             // the certificate's HingingInterfaces on Collapses, else empty
-	std::vector<BodyLoad> Loads;                  // the loads on these bodies, as given; compared exactly for reuse (stage 2)
-	bool bReused = false;                         // copied from the previous verdict rather than solved (stage 2)
+	StandingState Elastic = StandingState::Undecided;
+	std::vector<MechanismMotion> Mechanism;       // on Collapses: the elastic MechanismMotion of this component's bodies
+	std::vector<BodyId> Release;                  // on Collapses: the elastic UnconstrainedBodies of this component; else empty
+	bool bReused = false;                         // copied from the previous verdict rather than solved
+	std::vector<BodyLoad> Loads;                  // the loads on these bodies as judged; a change dirties the component
 };
 
-struct AuthorityOptions {
-	StandingOptions Standing;
-	CertificateOptions Certificate;               // Gravity must equal Standing.Gravity or the call is InvalidInput
-};
+struct AuthorityOptions { StandingOptions Standing; };
 
 struct AuthorityResult {
-	ComponentVerdict Worst = ComponentVerdict::Undecided;  // InvalidInput > Undecided > Collapses > Overstressed > Stands
-	std::vector<InterfaceReading> Readings;      // the elastic authority's readings, every live interface, ascending slot order
-	std::vector<ComponentReport> Components;     // ascending by lowest body slot
-	int Disagreements = 0;                       // components where the elastic said Mechanism and the certificate Stands (reported Undecided)
-	std::uint64_t Revision = 0;                  // Structure::Revision() when judged (stage 2)
-	std::uint64_t Lineage = 0;                   // Structure::Lineage() of the judged structure; a Previous from another lineage is unmatched (stage 2 fix)
-	AuthorityOptions Options;                    // the options judged under; a Previous under other options is unmatched (stage 2)
+	ComponentVerdict Worst;                       // InvalidInput > Undecided > Collapses > Overstressed > Stands
+	std::vector<InterfaceReading> Readings;       // every live interface, ascending slot order
+	std::vector<ComponentReport> Components;      // ascending by lowest body slot
 	InterfaceId InvalidInterface{};
-	std::vector<std::size_t> StaleLoads;            // indices into the input loads whose body this structure issued but has removed: skipped, never InvalidInput (2026-10-15)
-	PhaseTimings ElasticTimings;                  // the components solved in this call, a reused one adding nothing; an abandoned reuse attempt (merging readings failed, the judge re-solved) counts its solve too
-	double CertificateSeconds = 0.0;             // time inside certificate consults; 0.0 when none ran
-	double JudgeSeconds = 0.0;                   // the whole call, so at least ElasticTimings.TotalSeconds + CertificateSeconds when profiled
+	std::uint64_t Revision, Lineage;
+	AuthorityOptions Options;
+	std::vector<std::size_t> StaleLoads;
+	PhaseTimings ElasticTimings;
+	double JudgeSeconds;                          // at least ElasticTimings.TotalSeconds when profiled
 };
 
-class IStructuralAuthority {
-public:
-	virtual ~IStructuralAuthority() = default;
-	// Previous: an earlier verdict on this structure's lineage, or nullptr; clean components (same bodies, no body touched since Previous->Revision, same loads, same options) are copied with bReused set, the rest solved through one filtered Solve (stage 2).
-	virtual AuthorityResult Judge(const Structure&, std::span<const BodyLoad>, const AuthorityOptions&, const AuthorityResult* Previous) const = 0;
-};
-
-std::unique_ptr<IStructuralAuthority> MakeCombinedAuthority(std::unique_ptr<IStandingAuthority>, std::unique_ptr<ICollapseCertificate>);
+std::unique_ptr<IStructuralAuthority> MakeElasticAuthority(std::unique_ptr<IStandingAuthority> Standing);
 ```
 
-**Rules.** Options are validated first: `Certificate.Gravity` must equal `Standing.Gravity`
-and the certificate options must pass the slice-4 checks (`ConeGenerators` even and at least
-4, finite positive cap, tolerance and iterations), or the result is `InvalidInput` with no
-readings and no components. The elastic authority then runs once over the whole structure for
-the result's readings, and once more per connected component on that component's
-sub-structure (its free bodies, every grounded body, the loads on those bodies): **the
-sub-solve's `State` is the component's elastic verdict, never inferred from the whole-structure
-state.** One global state cannot say which component is Overstressed, and an elastic Undecided
-coexists with listed bodies; the first version inferred it and relabelled an Overstressed brick
-Undecided beside an unrelated pass-capped one, and read NaN readings as Stands. Locality
-(slice 2) makes the sub-solve's readings equal the whole-structure ones, so the cost is a second
-solve, logged for slice 6. Per component (the same partition both implementations use, the
-shared partition code, so the mapping of bodies to components is one definition):
-- elastic `Stands` → `Stands`;
-- elastic `Overstressed` that is only crushed (every reading in the component finite, none torn
-  (`ft > 0` and tension ratio above 1), none sheared (`c > 0` and shear ratio above 1), and some
-  compression ratio above 1; a bed with `fc = 0` reads +inf and is never consulted) → the certificate is consulted on that component alone, as below:
-  `Collapses` → `Collapses` with its lists; `Stands` or `Undecided` → `Overstressed`, nothing
-  released and no disagreement counted; `InvalidInput` → `InvalidInput` (2026-10-15, DESIGN §10
-  "crushing, first step"); any other elastic `Overstressed` → `Overstressed`, not consulted (slice
-  3's crack band acts on it);
-- elastic `Mechanism` or `Undecided` → the certificate is consulted on that component alone (a
-  structure holding only that component's bodies, grounded bodies kept, loads filtered):
-  `Stands` → `Stands` when the elastic said Undecided, and `Undecided` with `bDisagreed` and
-  `Disagreements + 1` when the elastic said Mechanism (nothing released; the certificate's
-  `Stands` stays in `Kinematic`);
-  `Collapses` → `Collapses` with the certificate's lists as `Release`, `Mechanism` and `Hinging`;
-  `Undecided` → `Undecided`, nothing released;
-- elastic `InvalidInput` → the whole result is `InvalidInput` with the elastic's interface.
-The release set is always the certificate's (listing threshold 1e-3, rotations scaled by the
-component's characteristic length); the elastic authority's own `Mechanism` lists stay
-informational and are never released, which is the shared listing definition slice 4a asked for
-(the elastic lists at 1e-6 from a direct null space and need not change). Deterministic; no
-state between calls. The three `Deferred.Slice4.*` cases assert through this authority and move
-back under `Statics.*`.
-
-### The shear cap in the LP
-
-`MaxShearStrengthPa · A/4` bounds the corner shear with facet rows: for each of the `G` facet
-directions `d_j = cos θ_j u + sin θ_j v` the shear component along `d_j` of the corner force is
-at most `cap · A/4 · cos(π/G)` on the inscribed solve and `cap · A/4` on the circumscribed one (a facet row bounds the apothem, so the plain cap is already the circumscribed polygon and the inscribed one is its cos(π/G) scaling)
-(the same polygon pair as the friction cone, a bound on the force not on `Σ α`, which would turn
-a shear cap into a compression cap). A dry brick with `μ` large and a small cap Collapses past lateral factor `λ = cap · A / W`
-(every corner at its cap) and Stands below `cos(π/G)` of it, Undecided between; at tilt the
-switch is `θ = asin(cap · A / W)`, which slice 2 already pins for the elastic authority. The
-cap bounds shear only: a brick at rest under a cap far below its weight Stands. **A cap of 0 is
-a real cap** (the joint carries no shear; `+inf` is the only "no cap"), so a cap-0 brick under
-any lateral load Collapses at `t = 0`; in the mechanism selection a cap-0 corner contributes
-only its normal row (tangential slip dissipates nothing there), and a finite positive cap adds
-no selection rows (its prism contains the origin, so the zero-dissipation set is the friction
-cone's).
-
-### Anchors slice 4b must pin
-
-- B-WDG-01, the 3DEC wedge, through the certificate with `ConeGenerators` high enough that the
-  polygon band is under the 0.05° tolerance (`1/cos(π/G) − 1` times μ: G = 64 gives 0.12 % of
-  μ, about 0.04° at 33°); the skipped elastic test stays skipped and says so.
-- B-ARC-01 and B-ARC-02, the Couplet–Heyman semicircle: radial joints, centreline radius `r`,
-  unit depth, density any, `μ ≥ 0.5` (use 0.7). Stands at `t/r = 0.1075 + 0.002`, Collapses at
-  `0.1075 − 0.001`; the haunch hinge within one joint of 54.48° from the crown (joints every 5°
-  plus a joint at ±54.484°, or voussoirs of 2°; B-ARC-09's "discretisation only raises the least
-  thickness" is a DDA observation and is **false for exact sector voussoirs**: the joints are
-  a subset of the continuous sections, so the discrete least thickness is at or below the
-  continuous one (0.1074601 at 3° joints by a thrust-line oracle); with joints at ±54.484° it
-  is exactly 0.107478, which is the pin). On Collapses the
-  hinging set is the crown, the two haunches and the two springings (symmetric mechanism; the
-  selection may return one side's four hinges, so assert the haunch and crown hinges and that
-  every hinge is one of the seven joints 0°, ±54°, ±54.484°, ±90°, the haunch hinge accepted within
-  one joint (±51°, ±57°) as B-ARC-02 allows; the 0.484° sliver between
-  54° and 54.484° lists both of its joints, the selection mixing two admissible mechanisms
-  below least thickness, not a physical event).
-- B-ARC-06, the friction switch on that arch at least thickness: Collapses (sliding) at φ = 21°
-  (μ 0.384) and Stands at 22° (μ 0.404) with `G = 32` so the band (0.5 % of μ) clears the 0.3 %
-  gap between tan 22° and tan 21.57°.
-- B-ORD-01, the Orduña & Lourenço hollow pile, if the block layout can be taken from the cited
-  paper or the research notes: `[t_in, t_out]` must contain a value in [0.427, 0.553] and the
-  elastic authority's verdict at λ = 0.4 must not be Mechanism; otherwise a `Deferred.Slice4b`
-  case with the reason.
-- The combined authority: the three deferred cases; a structure with one Overstressed and one
-  Collapses component reports both per component with `Worst = Collapses`; the disagreement
-  count on the dry bridge at μ 5, λ (2.5, 0.875) is 1 (elastic Mechanism, certificate Stands)
-  and the release set is empty; a pure elastic Stands never consults the certificate.
+Per component: elastic Stands reads Stands, Overstressed reads Overstressed, Mechanism reads
+Collapses and releases the elastic list, Undecided reads Undecided and releases nothing. Invalid
+standing options read InvalidInput. Previous-verdict reuse, reading merge and stale-load
+handling are unchanged. The cascade releases each Collapses component's Release list; bodies of
+it joined by any live interface fall as one cluster (the certificate's hinging split is gone),
+and a cluster's Motion is the elastic motion of its lowest-slot body.
 
 ## Slice 3: the cascade (crack, sever, release)
 
@@ -1463,53 +1153,6 @@ panel. Not contracted here.
 of the Release exe, so the repo's exe stays free) and appended to SCALE.md with the HEAD, and
 with the default suites green in both configurations; a stage that changes any anchor reading
 is a stage that is wrong.
-
-### 6b, stage 3: the certificate at scale (written against the profile in SCALE.md)
-
-**3a, the structured cap-site factor (done 2026-10-12, merged at 2623138; reviewed, fix round merged at 0214d3e).**
-The structured block is the only cap-site factor since the 6b close (until then
-`CertificateOptions::CapSiteKind { Dense, Structured }`, default Structured, Dense the referee).
-Per cap site
-the Schur block `Mww` is factored by eliminating its diagonal group rows and factoring the
-facet block `diag(D_facet) + Facets K′ Facetsᵀ` with a 3 × 3 core formed as a sum of PSD terms
-(DESIGN §10); `Mww⁻¹Fᵀ` is cached per site; the constant geometry is cached per component and
-the normal-equation buffers are reused across interior-point iterations. Every certificate
-answer is unchanged: `Certificate.CapSite.TheCertificateReadsTheSameEverywhere` pins twelve
-fixtures' iteration counts and 17-digit load factors (worst movement 3e-13 relative);
-`StructuredSolveMatchesTheDenseSchurBlock` (200 seeded blocks, backward error 1.5e-16 at κ
-up to 4e12) and `FailureIsReportedWhereTheDenseFactorFailed` (the same positivity verdict,
-NaN failing closed; 160 cases in eight kinds after the review, one per guard) pin the
-factor itself, with `StructuredSolveMatchesOnTheCapSiteShape` building the site the way
-`BuildProgram` does; the Slow ratio test decides the shed D, S, S, D in one process and has
-the structured minimum at most 0.85 of the dense minimum (measured 0.67–0.84). Measured: shed 6.65 s to 4.4 s; the
-32 × 40 wall 106.8 s to 92.4 s.
-
-**3b, the stall rule (done 2026-10-12, the default window 20 after its review; the
-complementarity restart 2026-10-13; DESIGN §10).** `CertificateOptions::StallWindow` (20; 0
-disables) and `StallImprovement` (0.5): a cone solve tracks its best largest relative
-residual and stops when a window of iterations has not brought it below `StallImprovement`
-times the best at the window's start, the window also restarting whenever the complementarity
-`(xᵀs + τκ)/(n + 1)` falls below half its value at the window's start (DESIGN §10, the stall
-defect), returning the iteration cap's outcome (no iterate is
-kept: one within tolerance would already have ended the solve, DESIGN §10). The complementarity
-restart resets the window's best residual to the current one, which raises iterations on stuck
-solves (45 to 96 on the Ferris & Tin-Loi G = 64 near-threshold case, none at the cap). The selection
-solve is untouched. Pinned by `Certificate.Stall.*`.
-
-**3c, the coupling out of the factor (done 2026-10-12, 425506a, in review).**
-The bordered system is the only coupling since the 6b close (until then
-`CertificateOptions::CouplingKind { InFactor, Bordered }`, default Bordered, InFactor the
-referee). Above `DenseRowLimit` the normal system
-`M = M_sites + c·d dᵀ` is no longer assembled with its dense coupling block: the sparse path
-factors the bordered symmetric indefinite system `[M_sites + ρI, d; dᵀ, −1/c]` with
-`SimplicialLDLT` under an ordering that runs AMD on the site block and eliminates the border
-last, accepts positive site pivots and a negative border pivot, retries with the same ρ as
-before, and solves `[r; 0]` taking the site part. Answers unchanged: iteration counts equal and
-bounds identical on the 66 agreement cases and the 12 pinned fixtures (`Certificate.Coupling.*`).
-Measured: the 40 × 32 wall's certificate 118 s to 34 s, the half warehouse's 89 s to 59 s.
-
-**3d, a verdict-only option.** As ruled in DESIGN §10 "stage 3 opening", last and only if the
-warm-cascade target still needs it after 3a–3c (measurement in SCALE.md).
 
 ## Profiling timers (`PhaseTimings.h`, 2026-10-15, DESIGN §10 "profiling timers")
 

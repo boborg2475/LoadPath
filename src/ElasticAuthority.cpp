@@ -4,12 +4,10 @@
 #include "StaticsCommon.h"
 
 #include <algorithm>
-#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <vector>
-#include <limits>
 #include <utility>
 
 namespace loadpath
@@ -41,18 +39,11 @@ bool SameStanding(const StandingOptions& A, const StandingOptions& B)
 	return SameVector(AGravity, BGravity) && AIterations == BIterations && APivot == BPivot && ADense == BDense;
 }
 
-bool SameCertificate(const CertificateOptions& A, const CertificateOptions& B)
-{
-	const auto& [AGravity, AGenerators, ACap, ATolerance, AIterations, AStallWindow, AStallImprovement, ARows, AStallRecovery] = A;
-	const auto& [BGravity, BGenerators, BCap, BTolerance, BIterations, BStallWindow, BStallImprovement, BRows, BStallRecovery] = B;
-	return SameVector(AGravity, BGravity) && AGenerators == BGenerators && ACap == BCap && ATolerance == BTolerance && AIterations == BIterations && AStallWindow == BStallWindow && AStallImprovement == BStallImprovement && ARows == BRows && AStallRecovery == BStallRecovery;
-}
-
 bool SameOptions(const AuthorityOptions& A, const AuthorityOptions& B)
 {
-	const auto& [AStanding, ACertificate] = A;
-	const auto& [BStanding, BCertificate] = B;
-	return SameStanding(AStanding, BStanding) && SameCertificate(ACertificate, BCertificate);
+	const auto& [AStanding] = A;
+	const auto& [BStanding] = B;
+	return SameStanding(AStanding, BStanding);
 }
 
 AuthorityResult Invalid(InterfaceId Interface)
@@ -160,37 +151,34 @@ bool MergeReadings(const Structure& Model, const std::vector<InterfaceReading>& 
 	return true;
 }
 
-class CombinedAuthority final : public IStructuralAuthority
+class ElasticAuthority final : public IStructuralAuthority
 {
 public:
-	CombinedAuthority(std::unique_ptr<IStandingAuthority> InStanding, std::unique_ptr<ICollapseCertificate> InCertificate)
+	explicit ElasticAuthority(std::unique_ptr<IStandingAuthority> InStanding)
 		: Standing(std::move(InStanding))
-		, Certificate(std::move(InCertificate))
 	{
 	}
 
 	AuthorityResult Judge(const Structure& Model, std::span<const BodyLoad> Loads, const AuthorityOptions& Options, const AuthorityResult* Previous) const override
 	{
 		PhaseTimings Elastic;
-		double CertificateSeconds = 0.0;
 		double JudgeSeconds = 0.0;
 		AuthorityResult Result = profile::Timed(JudgeSeconds, [&] {
 			std::vector<std::size_t> Stale;
 			const std::vector<BodyLoad> Live = statics::WithoutStaleLoads(Model, Loads, Stale);
-			AuthorityResult Judged = JudgeLive(Model, Live, Options, Previous, Elastic, CertificateSeconds);
+			AuthorityResult Judged = JudgeLive(Model, Live, Options, Previous, Elastic);
 			Judged.StaleLoads = std::move(Stale);
 			return Judged;
 		});
 		Result.ElasticTimings = Elastic;
-		Result.CertificateSeconds = CertificateSeconds;
 		Result.JudgeSeconds = JudgeSeconds;
 		return Result;
 	}
 
 private:
-	AuthorityResult JudgeLive(const Structure& Model, std::span<const BodyLoad> Loads, const AuthorityOptions& Options, const AuthorityResult* Previous, PhaseTimings& Elastic, double& CertificateSeconds) const
+	AuthorityResult JudgeLive(const Structure& Model, std::span<const BodyLoad> Loads, const AuthorityOptions& Options, const AuthorityResult* Previous, PhaseTimings& Elastic) const
 	{
-		if (!SameVector(Options.Standing.Gravity, Options.Certificate.Gravity) || !statics::AreCertificateOptionsValid(Options.Certificate) || !statics::AreStandingOptionsValid(Options.Standing))
+		if (!statics::AreStandingOptionsValid(Options.Standing))
 		{
 			AuthorityResult Result = Invalid(InterfaceId{});
 			Result.Options = Options;
@@ -200,7 +188,7 @@ private:
 		const bool bMatchable = Previous != nullptr && SameOptions(Previous->Options, Options) && Previous->Lineage == Model.Lineage() && Previous->Revision <= Model.Revision() && AreLoadsAttributable(Model, Loads);
 		if (bMatchable)
 		{
-			std::optional<AuthorityResult> Reused = JudgeAgainst(Model, Loads, Options, Previous, Elastic, CertificateSeconds);
+			std::optional<AuthorityResult> Reused = JudgeAgainst(Model, Loads, Options, Previous, Elastic);
 			if (Reused)
 			{
 				Reused->Options = Options;
@@ -208,13 +196,13 @@ private:
 				return std::move(*Reused);
 			}
 		}
-		AuthorityResult Result = std::move(*JudgeAgainst(Model, Loads, Options, nullptr, Elastic, CertificateSeconds));
+		AuthorityResult Result = std::move(*JudgeAgainst(Model, Loads, Options, nullptr, Elastic));
 		Result.Options = Options;
 		Result.Lineage = Model.Lineage();
 		return Result;
 	}
 
-	std::optional<AuthorityResult> JudgeAgainst(const Structure& Model, std::span<const BodyLoad> Loads, const AuthorityOptions& Options, const AuthorityResult* Previous, PhaseTimings& Elastic, double& CertificateSeconds) const
+	std::optional<AuthorityResult> JudgeAgainst(const Structure& Model, std::span<const BodyLoad> Loads, const AuthorityOptions& Options, const AuthorityResult* Previous, PhaseTimings& Elastic) const
 	{
 		const ComponentPartition& Partition = Model.Components();
 		const std::size_t Count = Partition.FreeBodies.size();
@@ -272,10 +260,20 @@ private:
 		{
 			return std::nullopt;
 		}
+		std::vector<std::size_t> SolvedOfSlot;
+		for (std::size_t Solved = 0; Solved < Whole.Components.size(); ++Solved)
+		{
+			for (const BodyId Body : Whole.Components[Solved].Bodies)
+			{
+				if (Body.Index >= SolvedOfSlot.size())
+				{
+					SolvedOfSlot.resize(static_cast<std::size_t>(Body.Index) + 1, Whole.Components.size());
+				}
+				SolvedOfSlot[Body.Index] = Solved;
+			}
+		}
 		std::size_t NextSolved = 0;
 		std::vector<ComponentReport> Reports(Count);
-		std::vector<std::size_t> Pending;
-		std::vector<BodyId> Ask;
 		for (std::size_t K = 0; K < Count; ++K)
 		{
 			if (CleanFrom[K] != nullptr)
@@ -284,45 +282,32 @@ private:
 				Reports[K].bReused = true;
 				continue;
 			}
-			Reports[K] = ReportOf(Model, Whole.Readings, Whole.Components[NextSolved++]);
+			const std::size_t Solved = NextSolved++;
+			Reports[K] = ReportOf(Whole.Components[Solved]);
 			Reports[K].Loads = std::move(LoadsOf[K]);
-			if (!Reports[K].bConsultedCertificate)
+			if (Reports[K].Verdict != ComponentVerdict::Collapses)
 			{
 				continue;
 			}
-			Pending.push_back(K);
-			Ask.insert(Ask.end(), Reports[K].Bodies.begin(), Reports[K].Bodies.end());
-		}
-		if (!Pending.empty())
-		{
-			std::sort(Ask.begin(), Ask.end(), [](BodyId A, BodyId B) { return A.Index < B.Index; });
-			CertificateResult Kinematic = profile::Timed(CertificateSeconds, [&] { return Certificate->Decide(Model, Loads, Options.Certificate, Ask); });
-			std::size_t Next = 0;
-			for (const std::size_t K : Pending)
+			const auto IsHere = [&](BodyId Body) { return Body.Index < SolvedOfSlot.size() && SolvedOfSlot[Body.Index] == Solved; };
+			for (const BodyId Body : Whole.UnconstrainedBodies)
 			{
-				while (Next < Kinematic.Components.size() && Kinematic.Components[Next].Bodies != Reports[K].Bodies)
+				if (IsHere(Body))
 				{
-					++Next;
+					Reports[K].Release.push_back(Body);
 				}
-				if (Next < Kinematic.Components.size())
+			}
+			for (const MechanismMotion& Motion : Whole.Mechanism)
+			{
+				if (IsHere(Motion.Body))
 				{
-					Consult(std::move(Kinematic.Components[Next++]), Reports[K]);
-				}
-				else
-				{
-					CertificateComponent Missing;
-					Missing.State = CertificateState::InvalidInput;
-					Consult(std::move(Missing), Reports[K]);
+					Reports[K].Mechanism.push_back(Motion);
 				}
 			}
 		}
 		Result.Worst = ComponentVerdict::Stands;
 		for (ComponentReport& Report : Reports)
 		{
-			if (Report.bDisagreed)
-			{
-				++Result.Disagreements;
-			}
 			if (Severity(Report.Verdict) > Severity(Result.Worst))
 			{
 				Result.Worst = Report.Verdict;
@@ -332,89 +317,28 @@ private:
 		return Result;
 	}
 
-	static bool IsOnlyCrushed(const Structure& Model, const std::vector<InterfaceReading>& Readings, const StandingComponent& Part)
-	{
-		bool bCrushed = false;
-		for (const std::size_t Slot : Part.ReadingSlots)
-		{
-			const InterfaceReading& Reading = Readings[Slot];
-			if (!std::isfinite(Reading.CompressionUtilisation) || !std::isfinite(Reading.TensionUtilisation) || !std::isfinite(Reading.ShearUtilisation))
-			{
-				return false;
-			}
-			const StrengthProfile Profile = Model.EffectiveProfile(Reading.Id);
-			const bool bTorn = Profile.TensileStrengthPa > 0.0 && Reading.TensionUtilisation > 1.0;
-			const bool bSheared = Profile.ShearCohesionPa > 0.0 && Reading.ShearUtilisation > 1.0;
-			if (bTorn || bSheared)
-			{
-				return false;
-			}
-			bCrushed = bCrushed || Reading.CompressionUtilisation > 1.0;
-		}
-		return bCrushed;
-	}
-
-	static ComponentReport ReportOf(const Structure& Model, const std::vector<InterfaceReading>& Readings, StandingComponent& Part)
+	static ComponentReport ReportOf(StandingComponent& Part)
 	{
 		ComponentReport Report;
 		Report.Bodies = std::move(Part.Bodies);
 		Report.Elastic = Part.State;
-		Report.LoadFactorLower = std::numeric_limits<double>::quiet_NaN();
-		Report.LoadFactorUpper = std::numeric_limits<double>::quiet_NaN();
-		if (Report.Elastic == StandingState::Stands)
+		switch (Part.State)
 		{
-			Report.Verdict = ComponentVerdict::Stands;
-		}
-		else if (Report.Elastic == StandingState::Overstressed)
-		{
-			Report.Verdict = ComponentVerdict::Overstressed;
-			Report.bConsultedCertificate = IsOnlyCrushed(Model, Readings, Part);
-		}
-		else
-		{
-			Report.bConsultedCertificate = true;
+		case StandingState::Stands: Report.Verdict = ComponentVerdict::Stands; break;
+		case StandingState::Overstressed: Report.Verdict = ComponentVerdict::Overstressed; break;
+		case StandingState::Mechanism: Report.Verdict = ComponentVerdict::Collapses; break;
+		case StandingState::Undecided: Report.Verdict = ComponentVerdict::Undecided; break;
+		case StandingState::InvalidInput: Report.Verdict = ComponentVerdict::InvalidInput; break;
 		}
 		return Report;
 	}
 
-	static void Consult(CertificateComponent Kinematic, ComponentReport& Report)
-	{
-		Report.Kinematic = Kinematic.State;
-		Report.LoadFactorLower = Kinematic.LoadFactorLower;
-		Report.LoadFactorUpper = Kinematic.LoadFactorUpper;
-		switch (Kinematic.State)
-		{
-		case CertificateState::Stands:
-			if (Report.Elastic == StandingState::Overstressed)
-			{
-				Report.Verdict = ComponentVerdict::Overstressed;
-				break;
-			}
-			Report.bDisagreed = Report.Elastic == StandingState::Mechanism;
-			Report.Verdict = Report.bDisagreed ? ComponentVerdict::Undecided : ComponentVerdict::Stands;
-			break;
-		case CertificateState::Collapses:
-			Report.Verdict = ComponentVerdict::Collapses;
-			Report.Release = std::move(Kinematic.UnconstrainedBodies);
-			Report.Mechanism = std::move(Kinematic.Mechanism);
-			Report.Hinging = std::move(Kinematic.HingingInterfaces);
-			break;
-		case CertificateState::Undecided:
-			Report.Verdict = Report.Elastic == StandingState::Overstressed ? ComponentVerdict::Overstressed : ComponentVerdict::Undecided;
-			break;
-		case CertificateState::InvalidInput:
-			Report.Verdict = ComponentVerdict::InvalidInput;
-			break;
-		}
-	}
-
 	std::unique_ptr<IStandingAuthority> Standing;
-	std::unique_ptr<ICollapseCertificate> Certificate;
 };
 }
 
-std::unique_ptr<IStructuralAuthority> MakeCombinedAuthority(std::unique_ptr<IStandingAuthority> Standing, std::unique_ptr<ICollapseCertificate> Certificate)
+std::unique_ptr<IStructuralAuthority> MakeElasticAuthority(std::unique_ptr<IStandingAuthority> Standing)
 {
-	return std::make_unique<CombinedAuthority>(std::move(Standing), std::move(Certificate));
+	return std::make_unique<ElasticAuthority>(std::move(Standing));
 }
 }

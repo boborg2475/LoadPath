@@ -3,7 +3,6 @@
 #include "ParallelTestSupport.h"
 #include "SlowInDebug.h"
 
-#include "loadpath/CollapseCertificate.h"
 #include "loadpath/ParallelFor.h"
 #include "loadpath/StandingAuthority.h"
 #include "loadpath/StructuralAuthority.h"
@@ -51,24 +50,24 @@ struct ReaderOutcome
 	AuthorityResult Pooled;
 };
 
-bool ConsultedCertificate(const AuthorityResult& Verdict)
+bool AnyCollapses(const AuthorityResult& Verdict)
 {
-	return std::any_of(Verdict.Components.begin(), Verdict.Components.end(), [](const ComponentReport& C) { return C.bConsultedCertificate; });
+	return std::any_of(Verdict.Components.begin(), Verdict.Components.end(), [](const ComponentReport& C) { return C.Verdict == ComponentVerdict::Collapses; });
 }
 
-void CheckReadersAgreeWithSerial(const StrengthProfile& Joint, const AuthorityOptions& Options, int RepeatCount, bool bExpectCertificate)
+void CheckReadersAgreeWithSerial(const StrengthProfile& Joint, const AuthorityOptions& Options, int RepeatCount, bool bExpectCollapse)
 {
 	const Structure Template = MakeWall(Joint);
 	const std::unique_ptr<IStructuralAuthority> Authority = MakeAuthority();
 	const ThreadPoolFor Pool(SharedPoolWorkers);
-	const std::unique_ptr<IStructuralAuthority> PooledAuthority = MakeCombinedAuthority(MakeRbsmStandingAuthority(&Pool), MakeLimitAnalysisCertificate());
+	const std::unique_ptr<IStructuralAuthority> PooledAuthority = MakeElasticAuthority(MakeRbsmStandingAuthority(&Pool));
 
 	Structure SerialModel = Template;
 	const ComponentPartition SerialPartition = SerialModel.Components();
 	const AuthorityResult SerialVerdict = Authority->Judge(SerialModel, {}, Options, nullptr);
 	INFO("serial: " << DescribeAuthority(SerialVerdict));
 	REQUIRE(SerialVerdict.Worst != ComponentVerdict::InvalidInput);
-	REQUIRE(ConsultedCertificate(SerialVerdict) == bExpectCertificate);
+	REQUIRE(AnyCollapses(SerialVerdict) == bExpectCollapse);
 
 	int PartitionMismatches = 0;
 	int VerdictMismatches = 0;
@@ -115,7 +114,7 @@ TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Concurrency.ConcurrentReadersOfOneStructureAgr
 	CheckReadersAgreeWithSerial(BondedJoint(2.0e5, 3.0e5, 0.7), AuthorityOptions{}, Repeats, false);
 }
 
-TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Concurrency.ConcurrentReadersThatConsultTheCertificateAgreeWithASerialRun")
+TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Concurrency.ConcurrentReadersOfAMechanismAgreeWithASerialRun")
 {
 	CheckReadersAgreeWithSerial(DryJoint(0.7), AuthorityUnderGravity(Vec3{0.0, LateralLambda * GravityMPerS2, -GravityMPerS2}), LateralRepeats, true);
 }

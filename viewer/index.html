@@ -111,7 +111,7 @@ body.capture .why { display: none; }
   <header class="top">
     <div class="eyebrow">LoadPath · rigid-block statics · end-to-end tests</div>
     <h1>LoadPath E2E tests</h1>
-    <p class="lede">Every entry is recorded by a test while it runs, so this page always shows the suite as it is. Each shows the structure before the run and the engine's state after the cascade; when the test expects something else, a button switches the after view to the expected outcome. The mark on each entry says whether its test passed, failed or is deferred to later work. Each entry reads verdict → bodies that fall → state: the verdict is the engine's judgement of the structure as the before view shows it, just before the cascade; the state is what is left standing once the cascade has released what falls. Released bodies move along the collapse mechanism the certificate computed, coloured one colour per falling piece; removed bodies are dashed ghosts; severed joints are red.</p>
+    <p class="lede">Every entry is recorded by a test while it runs, so this page always shows the suite as it is. Each shows the structure before the run and the engine's state after the cascade; when the test expects something else, a button switches the after view to the expected outcome. The mark on each entry says whether its test passed, failed or is deferred to later work. Each entry reads verdict → bodies that fall → state: the verdict is the engine's judgement of the structure as the before view shows it, just before the cascade; the state is what is left standing once the cascade has released what falls. Released bodies move along the mechanism motion the elastic solver computed, coloured one colour per falling piece; removed bodies are dashed ghosts; severed joints are red.</p>
     <p class="generated" id="generated"></p>
   </header>
 
@@ -149,7 +149,6 @@ body.capture .why { display: none; }
       <dl class="readout" id="readout"></dl>
       <div class="failures" id="failures"></div>
       <p class="note" id="note"></p>
-      <p class="note">The load factor is the certificate's multiplier on every applied load at once, gravity included: at or above 1 the structure stands, below 1 it collapses. On dry joints it reads either about 0 or the cap of 1000, since friction alone has no strength scale.</p>
     </main>
   </div>
 </div>
@@ -423,7 +422,6 @@ function readout(sc) {
     ["Bodies", sc.bodies.filter(x => !x.grounded).length],
     ["Verdict before the cascade", `<span class="pill ${stateClass(b.verdict)}">${b.verdict ?? "n/a"}</span>`],
     ["What is left, after the cascade", `<span class="pill ${stateClass(a.state)}">${a.state ?? "n/a"}</span>`],
-    ["Load factor", b.lambda ? `[${fmt(b.lambda[0])}, ${fmt(b.lambda[1])}]` : "n/a"],
     ["Passes", a.passes ?? "n/a"],
     ["Bodies released", judgeOnly ? "none (verdict only)" : releasedCount],
     [judgeOnly ? "Hinging joints" : "Severed joints", judgeOnly ? (a.clusters || []).reduce((n, c) => n + (c.severed || []).length, 0) : (a.failures || []).filter(f => f.severed !== false).length],

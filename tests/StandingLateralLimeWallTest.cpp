@@ -6,7 +6,6 @@
 #include "StaticsTestSupport.h"
 
 #include "loadpath/Catalogue.h"
-#include "loadpath/CollapseCertificate.h"
 #include "loadpath/StructuralAuthority.h"
 #include "loadpath/geometry/RunningBondWall.h"
 
@@ -419,12 +418,10 @@ TEST_CASE("Statics.Lime.AWedgeThatMustBreakCohesionToMoveIsUndecided")
 		const StandingResult Result = SolveWith(W.Model, Options);
 		AuthorityOptions Judged;
 		Judged.Standing = Options;
-		Judged.Certificate.Gravity = Options.Gravity;
-		const AuthorityResult Combined = MakeCombinedAuthority(MakeRbsmStandingAuthority(), MakeLimitAnalysisCertificate())->Judge(W.Model, {}, Judged, nullptr);
-		INFO("5 x 5 lime wall, c " << C.CohesionPa << " Pa, at (" << LambdaX << ", 0): elastic " << Result.State << " after " << Result.ActiveSetIterations << ", combined worst " << static_cast<int>(Combined.Worst) << ", disagreements " << Combined.Disagreements);
+		const AuthorityResult Combined = MakeElasticAuthority(MakeRbsmStandingAuthority())->Judge(W.Model, {}, Judged, nullptr);
+		INFO("5 x 5 lime wall, c " << C.CohesionPa << " Pa, at (" << LambdaX << ", 0): elastic " << Result.State << " after " << Result.ActiveSetIterations << ", combined worst " << static_cast<int>(Combined.Worst));
 		CHECK(Result.State == C.Elastic);
 		CHECK(Combined.Worst == C.Combined);
-		CHECK(Combined.Disagreements == 0);
 	}
 }
 
@@ -454,11 +451,9 @@ TEST_CASE("Statics.Lime.HeldFrictionOnACrackedJointCountsAgainstTheLoadPower")
 	const StandingResult Result = SolveWith(W.Model, Options);
 	AuthorityOptions Judge;
 	Judge.Standing = Options;
-	Judge.Certificate.Gravity = Options.Gravity;
-	const AuthorityResult Combined = MakeCombinedAuthority(MakeRbsmStandingAuthority(), MakeLimitAnalysisCertificate())->Judge(W.Model, {}, Judge, nullptr);
-	INFO("1 x 3 lime wall, three joints cracked: elastic " << Result.State << " after " << Result.ActiveSetIterations << ", combined worst " << static_cast<int>(Combined.Worst) << ", disagreements " << Combined.Disagreements);
+	const AuthorityResult Combined = MakeElasticAuthority(MakeRbsmStandingAuthority())->Judge(W.Model, {}, Judge, nullptr);
+	INFO("1 x 3 lime wall, three joints cracked: elastic " << Result.State << " after " << Result.ActiveSetIterations << ", combined worst " << static_cast<int>(Combined.Worst));
 	CHECK(Result.State == StandingState::Undecided);
 	CHECK(Result.ActiveSetIterations == 3);
 	CHECK(Combined.Worst == ComponentVerdict::Stands);
-	CHECK(Combined.Disagreements == 0);
 }

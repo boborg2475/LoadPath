@@ -37,10 +37,8 @@ void ReportLayers(const Structure& Model)
 {
 	const StandingResult Elastic = SolveWith(Model, StandingOptions{});
 	MESSAGE("elastic: " << doctest::String(StandingStateName(Elastic.State)) << ", unconstrained " << Describe(Elastic.UnconstrainedBodies) << ", mechanism bodies " << Elastic.Mechanism.size());
-	const CertificateResult Cert = DecideWith(Model, CertificateOptions{});
-	MESSAGE("certificate: " << doctest::String(CertificateStateName(Cert.State)) << ", t [" << Cert.LoadFactorLower << ", " << Cert.LoadFactorUpper << "], unconstrained " << Describe(Cert.UnconstrainedBodies) << ", hinging " << Describe(Cert.HingingInterfaces) << ", mechanism bodies " << Cert.Mechanism.size());
 	const AuthorityResult Combined = Judge(Model, AuthorityOptions{});
-	MESSAGE("combined: " << DescribeAuthority(Combined) << ", disagreements " << Combined.Disagreements);
+	MESSAGE("authority: " << DescribeAuthority(Combined));
 }
 
 void CheckReleasedAsOneCluster(Structure& Model, const std::vector<BodyId>& Floating, std::span<const BodyLoad> Loads = {})
@@ -203,10 +201,6 @@ void CheckUpperBrickLeavesAlone(const Vec3& ForceN)
 {
 	FloatingPair P = MakeFloatingPair();
 	const BodyLoad Loads[] = {BodyLoad{P.Upper, ForceN, P.UpperShape.CentreM}};
-	const CertificateResult Cert = DecideWith(P.Model, CertificateOptions{}, Loads);
-	INFO("certificate: " << doctest::String(CertificateStateName(Cert.State)) << ", t [" << Cert.LoadFactorLower << ", " << Cert.LoadFactorUpper << "], unconstrained " << Describe(Cert.UnconstrainedBodies) << ", hinging " << Describe(Cert.HingingInterfaces));
-	CHECK(Cert.State == CertificateState::Collapses);
-	CHECK(std::any_of(Cert.HingingInterfaces.begin(), Cert.HingingInterfaces.end(), [&P](const InterfaceId& Id) { return SameHandle(Id, P.Joint); }));
 	const CascadeVerdict V = MakeCascade(MakeAuthority())->Run(P.Model, Loads, CascadeOptions{}, nullptr);
 	INFO(DescribeVerdict(V));
 	CHECK_FALSE(OneClusterHoldsBoth(V, P.Lower, P.Upper));
@@ -224,50 +218,9 @@ TEST_CASE("Cascade.FloatingWall.ALateralPushSlidesTheUpperBrickOffItsFallingDryP
 	CheckUpperBrickLeavesAlone(Vec3{30.0, 0.0, 0.0});
 }
 
-TEST_CASE("Certificate.Floating.AWeightlessPairSqueezedByLoadsWithARoundingResidueStands")
-{
-	CertificateOptions Weightless;
-	Weightless.Gravity = Vec3{0.0, 0.0, 0.0};
-	SUBCASE("an exact split")
-	{
-		FloatingPair P = MakeFloatingPair();
-		const BodyLoad Loads[] = {BodyLoad{P.Lower, Vec3{0.0, 0.0, 0.3}, P.LowerShape.CentreM}, BodyLoad{P.Upper, Vec3{0.0, 0.0, -0.3}, P.UpperShape.CentreM}};
-		const CertificateResult Cert = DecideWith(P.Model, Weightless, Loads);
-		INFO("state " << Cert.State << ", t [" << Cert.LoadFactorLower << ", " << Cert.LoadFactorUpper << "]");
-		CHECK(Cert.State == CertificateState::Stands);
-	}
-	SUBCASE("0.1 + 0.2 against 0.3")
-	{
-		CHECK(0.1 + 0.2 != 0.3);
-		FloatingPair P = MakeFloatingPair();
-		const BodyLoad Loads[] = {BodyLoad{P.Lower, Vec3{0.0, 0.0, 0.1}, P.LowerShape.CentreM}, BodyLoad{P.Lower, Vec3{0.0, 0.0, 0.2}, P.LowerShape.CentreM}, BodyLoad{P.Upper, Vec3{0.0, 0.0, -0.3}, P.UpperShape.CentreM}};
-		const CertificateResult Cert = DecideWith(P.Model, Weightless, Loads);
-		INFO("state " << Cert.State << ", t [" << Cert.LoadFactorLower << ", " << Cert.LoadFactorUpper << "]");
-		CHECK(Cert.State == CertificateState::Stands);
-	}
-}
-
-TEST_CASE("Certificate.Floating.AFloatingPairUnderGravityFallsStraightDownWithUnitSpeed")
+TEST_CASE("Cascade.FloatingWall.AFloatingPairUnderGravityFallsStraightDownWithUnitSpeed")
 {
 	FloatingPair P = MakeFloatingPair();
-	const CertificateResult Cert = DecideWith(P.Model, CertificateOptions{});
-	INFO("state " << Cert.State << ", mechanism bodies " << Cert.Mechanism.size());
-	REQUIRE(Cert.State == CertificateState::Collapses);
-	REQUIRE(Cert.Mechanism.size() == 2u);
-	if (Cert.State != CertificateState::Collapses || Cert.Mechanism.size() != 2u)
-	{
-		return;
-	}
-	for (const MechanismMotion& M : Cert.Mechanism)
-	{
-		INFO("body " << M.Body.Index << ": translation (" << M.TranslationM.X << ", " << M.TranslationM.Y << ", " << M.TranslationM.Z << "), rotation (" << M.RotationRad.X << ", " << M.RotationRad.Y << ", " << M.RotationRad.Z << ")");
-		CHECK(M.TranslationM.X == 0.0);
-		CHECK(M.TranslationM.Y == 0.0);
-		CHECK(M.TranslationM.Z == -1.0);
-		CHECK(M.RotationRad.X == 0.0);
-		CHECK(M.RotationRad.Y == 0.0);
-		CHECK(M.RotationRad.Z == 0.0);
-	}
 	const CascadeVerdict V = MakeCascade(MakeAuthority())->Run(P.Model, {}, CascadeOptions{}, nullptr);
 	INFO(DescribeVerdict(V));
 	REQUIRE(V.Clusters.size() == 1u);
@@ -311,9 +264,6 @@ TEST_CASE("Deferred.Slice6.BondedWallHangingFromADryCeilingContactReleasesAsOneC
 		const Box Shape{R.CentroidM, Vec3{0.5 * Spec.BrickM.X * R.MassKg / FullKg, 0.5 * Spec.BrickM.Y, 0.5 * Spec.BrickM.Z}, R.MassKg};
 		AddInterfaceOk(W.Model, *StackedFaces(Id, Shape, Ceiling, CeilingShape, Dry));
 	}
-	const CertificateResult Cert = DecideWith(W.Model, CertificateOptions{});
-	INFO("certificate: " << doctest::String(CertificateStateName(Cert.State)) << ", t [" << Cert.LoadFactorLower << ", " << Cert.LoadFactorUpper << "]");
-	CHECK(Cert.State == CertificateState::Collapses);
 	CheckReleasedAsOneCluster(W.Model, LiveFreeBodies(W.Model, W.Value.Courses));
 }
 

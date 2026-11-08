@@ -20,12 +20,8 @@ add_executable(loadpath_tests
 	StandingLocalityTest.cpp
 	StandingUngroundedTest.cpp
 	StaticsOracleTest.cpp
-	CollapseCertificateTest.cpp
-	CertificateAnchorsTest.cpp
-	CertificateShearCapTest.cpp
-	CertificateDualBoundTest.cpp
-	CertificateCollapseGateTest.cpp
 	StructuralAuthorityTest.cpp
+	ElasticAuthorityTest.cpp
 	ArchAnchorsTest.cpp
 	InterfaceStateTest.cpp
 	CrackedJointTest.cpp
@@ -47,12 +43,7 @@ add_executable(loadpath_tests
 	FactorTest.cpp
 	SparseTest.cpp
 	ComponentResultsTest.cpp
-	CertificateSparseTest.cpp
-	CertificateStallTest.cpp
 	EventRegionTest.cpp
-	CertificateIterationsTest.cpp
-	CapSiteFactorTest.cpp
-	CertificateCouplingTest.cpp
 	CascadeScanTest.cpp
 	FactorPanelBoundaryTest.cpp
 	Slice2bAnchorsTest.cpp
