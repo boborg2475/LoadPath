@@ -6,7 +6,7 @@ answers alone: Stands and Overstressed pass through, a Mechanism component is Co
 releases the elastic solver's own `UnconstrainedBodies`, an Undecided component releases
 nothing. Four rules the certificate used to supply no longer have an owner. Each section below
 states the question, what the code does today, the evidence, the options and a
-recommendation. **Status is OPEN until the owner rules**; record the ruling in DESIGN §10 and
+recommendation. **Superseded in part on 2026-11-08 by [2026-11-08-forced-collapse-and-core-suite.md](2026-11-08-forced-collapse-and-core-suite.md), the rulings in force; each status line below says which.** **Status is OPEN until the owner rules**; record the ruling in DESIGN §10 and
 change the status line here. An agent working the red list in CURRENT_STATE ("Elastic-only:
 cases the solver alone gets wrong") must not change a test's expectation under an open
 decision; it works the Undecided cases (decision-free) first.
@@ -15,7 +15,7 @@ decision; it works the Undecided cases (decision-free) first.
 
 ## D1. What happens after a joint crushes?
 
-**Status: OPEN.**
+**Status: DECIDED 2026-11-08, differently from the options below: crushing is its own outcome. The crushed body is handed to the host as rubble and LoadPath re-judges after it settles; several crush in one pass only inside the cascade top band, shared with cracking. See [2026-11-08-forced-collapse-and-core-suite.md](2026-11-08-forced-collapse-and-core-suite.md) §2.**
 
 **Question.** A component whose only failure is compression over `fc · A/4` at some corner
 reads elastic `Overstressed`. The crack step does nothing for compression (a crack removes
@@ -59,7 +59,7 @@ Undecided queue.
 
 ## D2. Does a released set split into clusters along the motion?
 
-**Status: OPEN.**
+**Status: OPEN, discussed 2026-11-08, not scheduled** (forced-collapse doc §7). Tests under it stay as written.
 
 **Question.** The cascade groups a component's released bodies into clusters over live
 interfaces (`ClustersOf`, Cascade.cpp). The certificate also returned a *hinging* list (joints
@@ -100,7 +100,7 @@ six red tests already pin it.
 
 ## D3. Is an elastic Mechanism always a release?
 
-**Status: OPEN.**
+**Status: DECIDED 2026-11-08 by the forced-collapse rule: every Mechanism releases (`Forced` false) and every Undecided releases its whole component (`Forced` true). The four tests here stay red as written until the owner re-expects them (forced-collapse doc §1).**
 
 **Question.** The elastic solver's Mechanism was ruled "a verdict, not a certificate" on
 2026-10-11 because it once read Mechanism where a standing field existed (a dry three-brick
@@ -137,7 +137,7 @@ in the census. The two cone-band tests should be re-expected under this ruling, 
 
 ## D4. 3.13: does "exactly the 10-brick triangle" stand as the expectation?
 
-**Status: OPEN** (owed since 2026-10-25; unchanged by the removal).
+**Status: OPEN; the lintel wall stays deferred and is core case 8** (owed since 2026-10-25; unchanged by the removal).
 
 **Question.** `Deferred.Slice6.DryWallLosingItsLintelKeepsTheBricksOverThePiers` asserts
 that the 10 bricks over the opening fall and the 4 bricks wholly on the piers stay; the

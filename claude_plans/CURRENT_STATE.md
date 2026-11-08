@@ -47,6 +47,14 @@ the non-associative answer) and the two hanging-component cases (slice 6), red b
 
 ## Next
 
+**Build order in force (owner, 2026-11-08, [decisions/2026-11-08-forced-collapse-and-core-suite.md](decisions/2026-11-08-forced-collapse-and-core-suite.md)), one item at a time, owner review between items:**
+
+1. **Settings file and pass recorder** (in progress): JSON defaults file committed read-only plus an overrides file; `CrackBandFraction`, pass caps and the solver constants read from it; debug options in the same file, the first being the pass recorder, reached through one debug-settings hook the host, tests and CLI share; the recorder writes every cascade pass and every inner elastic iteration (corner states, N/shear/moment, utilisation, flipped corners) through the viewer JSON and `RecordVisual`; the viewer gains an outer and inner scrubber.
+2. **Re-measure speed** against the 200 ms target with the certificate gone.
+3. Then as the owner orders: forced collapse for Undecided (`Forced`, `ForcedReason`, `PassCount`, `UnsettledJoints`, whole-component release, tally by reason), crushing as rubble handed to the host (shared band with cracking; today the band is 0.5 and must narrow), the core suite A to H, the fast-vs-slow load research, hinge splitting.
+
+The older order below stands behind it.
+
 **The near-term order is in [IMMEDIATE_UPDATES.md](IMMEDIATE_UPDATES.md)** (owner, 2026-10-15: workflow, then the approved elastic items, then test control; the elastic-trust work is parked). This list stays the full record.
 
 **Parallel component solves, the rest (deferred 2026-10-15, IMMEDIATE_UPDATES §2 item 1).** The
@@ -371,7 +379,7 @@ solves", amended after review). Still to do, in order:
 
 ## Elastic-only: cases the solver alone gets wrong (2026-11-08)
 
-**Rule decisions the owner owes before any of these expectations change: [decisions/2026-11-08-elastic-only-rules.md](decisions/2026-11-08-elastic-only-rules.md)** (D1 crushing, D2 cluster split, D3 Mechanism as release, D4 3.13 wording). The Undecided group needs no ruling and is the work queue.
+**Rulings in force: [decisions/2026-11-08-forced-collapse-and-core-suite.md](decisions/2026-11-08-forced-collapse-and-core-suite.md)** (D1 crushing and D3 Mechanism decided there; D2 hinge split and D4 3.13 still open in [decisions/2026-11-08-elastic-only-rules.md](decisions/2026-11-08-elastic-only-rules.md)). No expectation below changes until the owner re-expects it; the Undecided group becomes forced collapses under build-order item 3 and stays the solver work queue.
 
 Release default run after the removal (2026-11-08): 439 run, 411 pass, 28 red. Every red is a
 case the certificate used to referee; the assertions are as written. Elastic state in brackets.

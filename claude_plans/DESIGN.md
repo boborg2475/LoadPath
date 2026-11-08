@@ -2217,3 +2217,20 @@ fall, because a sliding joint must open by μ times its slip), and its cost domi
 row (SCALE.md: the shed's certificate seconds against the elastic solve's fraction of a second,
 the half warehouse's tens of seconds). Tests whose expected outcome depended on the certificate
 refereeing are left red as written and listed in CURRENT_STATE as the owner's work queue.
+
+### Elastic-only, the rules in force for the moment (owner, 2026-11-08)
+
+Recorded in full in `claude_plans/decisions/2026-11-08-forced-collapse-and-core-suite.md`
+(mirror of the owner's doc). The headlines: an elastic Undecided component resolves to Collapses
+and releases its whole component, marked `Forced` with a `ForcedReason`, `PassCount` and
+`UnsettledJoints`, so the host never sees a structure hang; a Mechanism releases unmarked.
+Crushing is its own outcome: the crushed body is handed to the host as rubble, the host settles
+it and hands the structure back to be judged again; several crush in one pass only inside the
+cascade's top band, one setting shared with cracking. Every tunable constant moves into a JSON
+settings file of committed real-life defaults plus a user overrides file, debug options included;
+the first debug option is a pass recorder (every cascade pass and every inner elastic iteration,
+off by default, switched on by tests, the CLI and the host through one debug-settings hook)
+feeding a pass-by-pass scrubber in the viewer. Day-to-day testing shrinks to a core suite of
+cases with known answers (lettered A to H in the doc), the rest parked. Hinge splitting is
+discussed but not decided. Build order: settings file and recorder, then re-measure speed, then
+the rest as the owner orders at each review; each item is reviewed before the next starts.
