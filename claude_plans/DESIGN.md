@@ -2244,3 +2244,20 @@ components by reason. The resolution lives in the cascade, not the authority, so
 existing red tests that pin the authority are unchanged. Accepted for now: under `collapse` the warehouse frame after a
 post removal (`IterationCap`, joint 10638 chattering) and the shed's 15-body component (`RestoreFailedClosed`) become
 forced releases; `stands` is the owner's switch for that.
+
+### 2026-11-08 crushing as rubble (owner ruling, build-order item 3b)
+
+Built per `claude_plans/decisions/2026-11-08-forced-collapse-and-core-suite.md` §2. A joint whose
+compression utilisation is over one inside the cascade's top band crushes a body: never a grounded
+one; else the one of lower known material compressive strength (`BodyDesc::CompressiveStrengthPa`,
+from the catalogue material's `compressive_strength_mpa`; C24 at f_c,90,k 2.5 MPa, clay brick at a
+declared 20 MPa); else the lower along gravity; else the lower slot. The cascade removes it, reports
+it in `CascadeVerdict::CrushedBodies` and as a `FailedInterface` of kind `Crushed`, and the next
+judge decides what it carried; the host turns it to rubble. Cracking and crushing share one band
+(`CrackBandFraction`, R_max over both), so a pass crushes and cracks together only when both are
+near the worst. Orchestrator calls made here: a crush needs a finite compression ratio above 1 + 1e-9, so ulp-level overloads and an fc = 0 bed (ratio +inf) stay Overstressed as before (the 2026-10-15 pins `APierCrushedOnlyByRoundingIsNeverReleased` and `AZeroCrushingStrengthIsNotConsulted` hold); the band is per component, as cracking's is; a body
+named by several joints is crushed once, by the worst; the crushed body's loads are dropped like a
+released body's; with body strengths unknown (every fixture built without materials) the lower body
+crushes, so a pier over its prism strength in every joint loses each joint's lower block in one pass
+and the top block falls next pass. Not done: `ComponentReport` carries no crushed flag (the band,
+not the judge, picks the crushes), and the structure file does not save body strengths.

@@ -109,14 +109,16 @@
     {
       "name": "clay_brick",
       "density_kg_per_m3": 2000,
+      "compressive_strength_mpa": 20,
       "source": "EN 1991-1-1 Annex A, Table A.1 (masonry units) ; the brick fixtures of ANCHORS.md (B-CAT-01, 10 x 8 dry wall)",
-      "note": "Solid fired-clay brick at 2000 kg/m3, the density every brick fixture in this repository uses (B-CAT-01: a 0.215 x 0.1025 x 0.065 m brick of 2.8648 kg). A perforated unit is lighter and needs its own row."
+      "note": "Solid fired-clay brick at 2000 kg/m3, the density every brick fixture in this repository uses (B-CAT-01: a 0.215 x 0.1025 x 0.065 m brick of 2.8648 kg). A perforated unit is lighter and needs its own row. Compressive strength 20 MPa is a typical declared normalised unit strength f_b (EN 771-1, tested to EN 772-1), not a measured value; it only ranks which body of a crushing joint crushes."
     },
     {
       "name": "c24",
       "density_kg_per_m3": 420,
+      "compressive_strength_mpa": 2.5,
       "source": "https://blueprints.readthedocs.io/en/stable/API%20reference/codes/eurocode/en_338_2016/chapter_5_classification_of_structural_timber/table_1/ (EN 338:2016 Table 1)",
-      "note": "C24 softwood mean density rho_mean = 420 kg/m3 (characteristic rho_k = 350). Mass is a mean quantity, so the mean is used."
+      "note": "C24 softwood mean density rho_mean = 420 kg/m3 (characteristic rho_k = 350). Mass is a mean quantity, so the mean is used. Compressive strength 2.5 MPa is f_c,90,k (EN 338:2016 Table 1), the across-grain value timber bears at in these structures; it only ranks which body of a crushing joint crushes."
     }
   ]
 }

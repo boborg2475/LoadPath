@@ -91,6 +91,13 @@ inline const Catalogue& Rows()
 
 inline StrengthProfile JointProfile(std::string_view Name) { return JointOrFail(Rows(), Name).Profile; }
 
+inline double MaterialStrengthPa(std::string_view Name)
+{
+	const MaterialRow* Row = Rows().FindMaterial(Name);
+	CHECK(Row != nullptr);
+	return Row != nullptr ? Row->CompressiveStrengthPa : 0.0;
+}
+
 inline StrengthProfile Bearing() { return JointProfile("c24_bearing_perp_to_grain"); }
 
 inline StrengthProfile Ec6Bed() { return JointProfile("clay_gp_mortar_bed_ec6"); }
@@ -165,6 +172,7 @@ struct BoxSpec
 	Vec3 LoM, HiM;
 	double DensityKgPerM3 = 0.0;
 	bool bGrounded = false;
+	double CompressiveStrengthPa = 0.0;
 };
 
 using ProfilePicker = std::function<std::size_t(const std::string& LowerKind, const std::string& UpperKind, bool bBed)>;
@@ -208,7 +216,7 @@ public:
 			const geometry::Box Shape{Vec3{0.5 * (Spec.LoM.X + Spec.HiM.X), 0.5 * (Spec.LoM.Y + Spec.HiM.Y), 0.5 * (Spec.LoM.Z + Spec.HiM.Z)},
 				Vec3{0.5 * (Spec.HiM.X - Spec.LoM.X), 0.5 * (Spec.HiM.Y - Spec.LoM.Y), 0.5 * (Spec.HiM.Z - Spec.LoM.Z)}};
 			const double VolumeM3 = 8.0 * Shape.HalfExtentsM.X * Shape.HalfExtentsM.Y * Shape.HalfExtentsM.Z;
-			const Result<BodyId> Added = S.Model.AddBody(BodyDesc{Spec.bGrounded ? 0.0 : Spec.DensityKgPerM3 * VolumeM3, Shape.CentreM, Spec.bGrounded});
+			const Result<BodyId> Added = S.Model.AddBody(BodyDesc{Spec.bGrounded ? 0.0 : Spec.DensityKgPerM3 * VolumeM3, Shape.CentreM, Spec.bGrounded, Spec.CompressiveStrengthPa});
 			INFO("body " << Spec.Name);
 			CHECK(Added.Ok());
 			Ids[I] = Added.Value;
@@ -279,11 +287,11 @@ inline Scene BuildTimberOnPiers(double Factor, unsigned Seed = 0)
 	{
 		for (int C = 0; C < 5; ++C)
 		{
-			B.Add(BoxSpec{"pier" + std::to_string(P) + "_c" + std::to_string(C), "brick", "clay brick, EC6", Vec3{P * 1.0, -BrickYM / 2, C * BrickZM}, Vec3{P * 1.0 + BrickXM, BrickYM / 2, (C + 1) * BrickZM}, BrickDensity});
+			B.Add(BoxSpec{"pier" + std::to_string(P) + "_c" + std::to_string(C), "brick", "clay brick, EC6", Vec3{P * 1.0, -BrickYM / 2, C * BrickZM}, Vec3{P * 1.0 + BrickXM, BrickYM / 2, (C + 1) * BrickZM}, BrickDensity, false, MaterialStrengthPa("clay_brick")});
 		}
 	}
 	const double TopM = 5 * BrickZM + PierBeamDepthM;
-	B.Add(BoxSpec{"beam", "beam", "C24 timber beam", Vec3{0.0, -BrickYM / 2, 5 * BrickZM}, Vec3{1.0 + BrickXM, BrickYM / 2, TopM}, TimberDensity});
+	B.Add(BoxSpec{"beam", "beam", "C24 timber beam", Vec3{0.0, -BrickYM / 2, 5 * BrickZM}, Vec3{1.0 + BrickXM, BrickYM / 2, TopM}, TimberDensity, false, MaterialStrengthPa("c24")});
 	const std::size_t Bed = B.Profile(Ec6Bed());
 	const std::size_t Bear = B.Profile(Bearing());
 	Scene S = B.Build([=](const std::string&, const std::string& Upper, bool) { return Upper == "beam" ? Bear : Bed; }, Seed);
@@ -758,6 +766,7 @@ struct ExpectedOutcome
 	CascadeState State = CascadeState::Stands;
 	bool bNoFailures = false;
 	NameSet Either;
+	NameSet Crushed;
 };
 
 // Clusters by name, survivors (every free body neither removed nor released is live), the final state, and a Stands state re-judging Stands.
@@ -768,6 +777,13 @@ inline void CheckOutcome(const Scene& S, const CaseRun& R, const ExpectedOutcome
 	const std::vector<NameSet> GotClusters = ClusterNames(S, R.Verdict);
 	INFO("clusters got " << Names(GotClusters) << "want " << Names(WantClusters));
 	CHECK(GotClusters == WantClusters);
+	NameSet GotCrushed;
+	for (const CrushedBody& C : R.Verdict.CrushedBodies)
+	{
+		GotCrushed.push_back(NameIn(S, C.Body));
+	}
+	INFO("crushed got " << Names(Sorted(GotCrushed)) << "want " << Names(Sorted(Want.Crushed)));
+	CHECK(Sorted(GotCrushed) == Sorted(Want.Crushed));
 	if (Want.ClusterPass)
 	{
 		for (const ReleasedCluster& C : R.Verdict.Clusters)
@@ -793,7 +809,8 @@ inline void CheckOutcome(const Scene& S, const CaseRun& R, const ExpectedOutcome
 	{
 		const bool bRemoved = std::find(R.RemovedBeforeRun.begin(), R.RemovedBeforeRun.end(), B.Name) != R.RemovedBeforeRun.end();
 		const bool bReleased = std::find(Released.begin(), Released.end(), B.Name) != Released.end();
-		if (!B.bGrounded && !bRemoved && !bReleased)
+		const bool bCrushed = std::find(Want.Crushed.begin(), Want.Crushed.end(), B.Name) != Want.Crushed.end();
+		if (!B.bGrounded && !bRemoved && !bReleased && !bCrushed)
 		{
 			WantLive.push_back(B.Name);
 		}
@@ -833,7 +850,7 @@ inline VisualCaption CaptionFor(std::string_view Slug)
 		{"dry-wall-push-0-98", {"3.7 Dry wall pushed at 0.98 t/H", "A 5 x 4 dry wall under a lateral push just below t/H: nothing falls."}},
 		{"dry-wall-push-1-05", {"3.7 Dry wall pushed at 1.05 t/H", "Past t/H every brick falls; the cluster partition is not asserted."}},
 		{"timber-bearing-load-0-8", {"3.8 Timber beam on brick piers, bearing at 0.8", "A midspan load puts each timber bearing at 0.8 of f_c,90 A: nothing falls."}},
-		{"timber-bearing-load-1-2", {"3.8 Timber beam on brick piers, bearing at 1.2", "At 1.2 of f_c,90 A the timber bearings crush: the beam falls and all ten pier bricks stand."}},
+		{"timber-bearing-load-1-2", {"3.8 Timber beam on brick piers, bearing at 1.2", "At 1.2 of f_c,90 A the timber crushes at its bearings: the beam turns to rubble and all ten pier bricks stand."}},
 		{"shed-minus-side-posts", {"3.9 Shed, every post along one side removed", "Each bay's beams and screwed planks tip off the far posts as one cluster per bay; walls and far posts stand."}},
 		{"shed-minus-middle-post", {"3.10 Shed, one middle post removed", "The screwed planks carry the beam ends that lost their post: nothing falls."}},
 		{"shed-minus-corner-post", {"3.10 Shed, one corner post removed", "The screwed planks carry the beam ends that lost their post: nothing falls."}},
@@ -906,6 +923,10 @@ inline void RecordVisual(const Scene& S, const CaseRun& R, const std::optional<E
 		for (const std::string& Name : Expected->Either)
 		{
 			E.Either.push_back(SceneBody(S, Name));
+		}
+		for (const std::string& Name : Expected->Crushed)
+		{
+			E.Crushed.push_back(SceneBody(S, Name));
 		}
 		V.Expected = std::move(E);
 	}

@@ -19,6 +19,7 @@ namespace
 constexpr double NaN = std::numeric_limits<double>::quiet_NaN();
 constexpr double Infinity = std::numeric_limits<double>::infinity();
 constexpr double CrackBandRelativeEdge = 1.0e-9;
+constexpr double CrushRelativeEdge = 1.0e-9;
 
 bool AreOptionsValid(const CascadeOptions& Options)
 {
@@ -364,6 +365,7 @@ bool Release(Structure& Model, const AuthorityResult& Judged, std::uint32_t Pass
 			Failure.Axis = MechanismAxis(Model, *Cluster.Component, Id, Reading != nullptr ? Reading->Axis : GoverningAxis::None);
 			Failure.Ratio = Reading != nullptr ? Reading->Utilisation : NaN;
 			Failure.bSevered = true;
+			Failure.Kind = FailureKind::Severed;
 			Verdict.Failures.push_back(Failure);
 			Released.Severed.push_back(Id);
 		}
@@ -377,7 +379,50 @@ bool Release(Structure& Model, const AuthorityResult& Judged, std::uint32_t Pass
 	return !Pending.empty();
 }
 
-bool CrackBand(Structure& Model, const AuthorityResult& Judged, std::uint32_t Pass, double BandFraction, CascadeVerdict& Verdict)
+struct CrushCandidate
+{
+	InterfaceId Id;
+	BodyId Body;
+	double Ratio = 0.0;
+};
+
+double HeightOf(const BodyDesc& Body, const Vec3& Gravity)
+{
+	return -Dot(Body.CentroidM, Gravity);
+}
+
+bool IsKnownStrength(double StrengthPa)
+{
+	return IsFinite(StrengthPa) && StrengthPa > 0.0;
+}
+
+BodyId CrushingBody(const Structure& Model, const InterfaceRecord& Record, const Vec3& Gravity)
+{
+	const BodyDesc& A = Model.Body(Record.BodyA);
+	const BodyDesc& B = Model.Body(Record.BodyB);
+	if (A.bGrounded || B.bGrounded)
+	{
+		return A.bGrounded ? Record.BodyB : Record.BodyA;
+	}
+	if (IsKnownStrength(A.CompressiveStrengthPa) && IsKnownStrength(B.CompressiveStrengthPa) && A.CompressiveStrengthPa != B.CompressiveStrengthPa)
+	{
+		return A.CompressiveStrengthPa < B.CompressiveStrengthPa ? Record.BodyA : Record.BodyB;
+	}
+	const double HeightA = HeightOf(A, Gravity);
+	const double HeightB = HeightOf(B, Gravity);
+	if (HeightA != HeightB)
+	{
+		return HeightA < HeightB ? Record.BodyA : Record.BodyB;
+	}
+	return IsLowerSlot(Record.BodyA, Record.BodyB) ? Record.BodyA : Record.BodyB;
+}
+
+bool IsWorseCrush(const CrushCandidate& A, const CrushCandidate& B)
+{
+	return A.Ratio != B.Ratio ? A.Ratio > B.Ratio : A.Id.Index < B.Id.Index;
+}
+
+bool FailBand(Structure& Model, const AuthorityResult& Judged, std::uint32_t Pass, const CascadeOptions& Options, CascadeVerdict& Verdict, std::vector<BodyId>& ReleasedThisRun)
 {
 	std::vector<std::size_t> ComponentOf;
 	for (std::size_t C = 0; C < Judged.Components.size(); ++C)
@@ -412,15 +457,21 @@ bool CrackBand(Structure& Model, const AuthorityResult& Judged, std::uint32_t Pa
 			Bucket[C].push_back(R);
 		}
 	}
-	bool bCracked = false;
+	bool bChanged = false;
 	for (std::size_t C = 0; C < Judged.Components.size(); ++C)
 	{
 		std::vector<CrackCandidate> Eligible;
 		double RMax = -Infinity;
+		std::vector<CrushCandidate> Crushing;
 		for (const std::size_t R : Bucket[C])
 		{
 			const InterfaceReading& Reading = Judged.Readings[R];
 			const InterfaceRecord& Record = Model.Interface(Reading.Id);
+			if (Model.IsLive(Reading.Id) && IsFinite(Reading.CompressionUtilisation) && Reading.CompressionUtilisation > 1.0 + CrushRelativeEdge)
+			{
+				Crushing.push_back(CrushCandidate{Reading.Id, CrushingBody(Model, Record, Options.Authority.Standing.Gravity), Reading.CompressionUtilisation});
+				RMax = std::max(RMax, Reading.CompressionUtilisation);
+			}
 			if (!Model.IsLive(Reading.Id) || Record.State != InterfaceState::Intact)
 			{
 				continue;
@@ -443,7 +494,19 @@ bool CrackBand(Structure& Model, const AuthorityResult& Judged, std::uint32_t Pa
 				RMax = std::max(RMax, Ratio);
 			}
 		}
-		const double Threshold = RMax * (1.0 - BandFraction) * (1.0 - CrackBandRelativeEdge);
+		const double Threshold = RMax * (1.0 - Options.CrackBandFraction) * (1.0 - CrackBandRelativeEdge);
+		std::sort(Crushing.begin(), Crushing.end(), IsWorseCrush);
+		for (const CrushCandidate& Each : Crushing)
+		{
+			if (Each.Ratio < Threshold || !Model.RemoveBody(Each.Body))
+			{
+				continue;
+			}
+			ReleasedThisRun.push_back(Each.Body);
+			Verdict.CrushedBodies.push_back(CrushedBody{Pass, Each.Body, Each.Id, Each.Ratio});
+			Verdict.Failures.push_back(FailedInterface{Each.Id, Pass, GoverningAxis::Compression, Each.Ratio, false, FailureKind::Crushed});
+			bChanged = true;
+		}
 		for (const CrackCandidate& Each : Eligible)
 		{
 			const bool bInBand = !IsFinite(Each.Ratio) || Each.Ratio >= Threshold;
@@ -452,10 +515,10 @@ bool CrackBand(Structure& Model, const AuthorityResult& Judged, std::uint32_t Pa
 				continue;
 			}
 			Verdict.Failures.push_back(FailedInterface{Each.Id, Pass, Each.Axis, Each.Ratio, false});
-			bCracked = true;
+			bChanged = true;
 		}
 	}
-	return bCracked;
+	return bChanged;
 }
 
 class BrittleCascade final : public ICascade
@@ -515,21 +578,25 @@ private:
 			const std::size_t FailuresBefore = Verdict.Failures.size();
 			const std::size_t ClustersBefore = Verdict.Clusters.size();
 			const bool bReleased = Release(Model, Judged, Pass, Verdict, ReleasedThisRun);
-			const bool bCracked = CrackBand(Model, Judged, Pass, Options.CrackBandFraction, Verdict);
+			const std::size_t CrushedBefore = Verdict.CrushedBodies.size();
+			const bool bFailed = FailBand(Model, Judged, Pass, Options, Verdict, ReleasedThisRun);
 			std::stable_sort(Verdict.Failures.begin() + static_cast<std::ptrdiff_t>(FailuresBefore), Verdict.Failures.end(),
 				[](const FailedInterface& A, const FailedInterface& B) { return A.Id.Index < B.Id.Index; });
+			std::sort(Verdict.CrushedBodies.begin() + static_cast<std::ptrdiff_t>(CrushedBefore), Verdict.CrushedBodies.end(),
+				[](const CrushedBody& A, const CrushedBody& B) { return A.Body.Index < B.Body.Index; });
 			if (bRecord)
 			{
 				Verdict.PassRecords.push_back(CascadePassRecord{Pass, Judged.Components, Judged.Readings,
 					{Verdict.Clusters.begin() + static_cast<std::ptrdiff_t>(ClustersBefore), Verdict.Clusters.end()},
-					{Verdict.Failures.begin() + static_cast<std::ptrdiff_t>(FailuresBefore), Verdict.Failures.end()}});
+					{Verdict.Failures.begin() + static_cast<std::ptrdiff_t>(FailuresBefore), Verdict.Failures.end()},
+					{Verdict.CrushedBodies.begin() + static_cast<std::ptrdiff_t>(CrushedBefore), Verdict.CrushedBodies.end()}});
 			}
 			const ComponentVerdict Worst = Judged.Worst;
 			Last = std::move(Judged);
 			Before = &Last;
 			Verdict.Readings = Last.Readings;
 			Verdict.Components = Last.Components;
-			if (!bReleased && !bCracked)
+			if (!bReleased && !bFailed)
 			{
 				Verdict.State = FinalState(Worst);
 				return Verdict;
@@ -551,7 +618,7 @@ private:
 				AuthorityResult Rejudged = Authority->Judge(Model, CapLoads, Options.Authority, &Last);
 				if (bRecord)
 				{
-					Verdict.PassRecords.push_back(CascadePassRecord{Pass + 1, Rejudged.Components, Rejudged.Readings, {}, {}});
+					Verdict.PassRecords.push_back(CascadePassRecord{Pass + 1, Rejudged.Components, Rejudged.Readings, {}, {}, {}});
 				}
 				Verdict.Readings = std::move(Rejudged.Readings);
 				Verdict.Components = std::move(Rejudged.Components);

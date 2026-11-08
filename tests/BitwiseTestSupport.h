@@ -27,6 +27,7 @@ inline bool Same(const BodyLoad& A, const BodyLoad& B);
 inline bool Same(const ComponentReport& A, const ComponentReport& B);
 inline bool Same(const FailedInterface& A, const FailedInterface& B);
 inline bool Same(const ReleasedCluster& A, const ReleasedCluster& B);
+inline bool Same(const CrushedBody& A, const CrushedBody& B);
 
 template <class T>
 bool Same(const std::vector<T>& A, const std::vector<T>& B)
@@ -86,7 +87,9 @@ inline bool Same(const AuthorityResult& A, const AuthorityResult& B)
 	return A.Worst == B.Worst && Same(A.Readings, B.Readings) && Same(A.Components, B.Components) && Same(A.InvalidInterface, B.InvalidInterface) && A.Revision == B.Revision;
 }
 
-inline bool Same(const FailedInterface& A, const FailedInterface& B) { return Same(A.Id, B.Id) && A.Pass == B.Pass && A.Axis == B.Axis && Same(A.Ratio, B.Ratio) && A.bSevered == B.bSevered; }
+inline bool Same(const FailedInterface& A, const FailedInterface& B) { return Same(A.Id, B.Id) && A.Pass == B.Pass && A.Axis == B.Axis && Same(A.Ratio, B.Ratio) && A.bSevered == B.bSevered && A.Kind == B.Kind; }
+
+inline bool Same(const CrushedBody& A, const CrushedBody& B) { return A.Pass == B.Pass && Same(A.Body, B.Body) && Same(A.Interface, B.Interface) && Same(A.Ratio, B.Ratio); }
 
 inline bool Same(const ReleasedCluster& A, const ReleasedCluster& B)
 {
@@ -95,7 +98,7 @@ inline bool Same(const ReleasedCluster& A, const ReleasedCluster& B)
 
 inline bool Same(const CascadeVerdict& A, const CascadeVerdict& B)
 {
-	return A.State == B.State && A.FirstPass == B.FirstPass && A.LastPass == B.LastPass && A.Passes == B.Passes && Same(A.Failures, B.Failures) && Same(A.Clusters, B.Clusters) && Same(A.Readings, B.Readings) && Same(A.Components, B.Components) && Same(A.InvalidInterface, B.InvalidInterface) && A.ForcedByReason == B.ForcedByReason;
+	return A.State == B.State && A.FirstPass == B.FirstPass && A.LastPass == B.LastPass && A.Passes == B.Passes && Same(A.Failures, B.Failures) && Same(A.Clusters, B.Clusters) && Same(A.CrushedBodies, B.CrushedBodies) && Same(A.Readings, B.Readings) && Same(A.Components, B.Components) && Same(A.InvalidInterface, B.InvalidInterface) && A.ForcedByReason == B.ForcedByReason;
 }
 
 inline bool Same(const ComponentPartition& A, const ComponentPartition& B) { return Same(A.ComponentOfSlot, B.ComponentOfSlot) && Same(A.OffsetOfSlot, B.OffsetOfSlot) && Same(A.FreeBodies, B.FreeBodies); }

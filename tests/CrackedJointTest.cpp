@@ -78,11 +78,15 @@ TEST_CASE("Statics.Cracked.CrackedBedKeepsTheCrushingBound")
 		return;
 	}
 	CHECK(Elastic.Readings.front().Axis == GoverningAxis::Compression);
-	CHECK(Combined.Worst == ComponentVerdict::Collapses);
-	CHECK(Combined.Components.size() == 1u);
-	if (!(Combined.Components.size() == 1u))
+	CHECK(Combined.Worst == ComponentVerdict::Overstressed);
+	const CascadeVerdict V = MakeCascade(MakeAuthority())->Run(F.Model, {}, CascadeOptions{}, nullptr);
+	INFO(DescribeVerdict(V));
+	CHECK(V.CrushedBodies.size() == 1u);
+	if (!(V.CrushedBodies.size() == 1u))
 	{
 		return;
 	}
-	CHECK(SameIdList(Combined.Components.front().Release, {F.Brick}));
+	CHECK(SameHandle(V.CrushedBodies[0].Body, F.Brick));
+	CHECK(SameHandle(V.CrushedBodies[0].Interface, F.Bed));
+	CHECK_FALSE(F.Model.IsLive(F.Brick));
 }

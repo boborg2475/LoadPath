@@ -473,7 +473,9 @@ TEST_CASE("E2E.Bearing.AnOverloadedTimberBearingDropsTheBeamAndSparesThePiers")
 	{
 		Scene S = BuildTimberOnPiers(1.2);
 		const CaseRun R = Run(S, TimberBearingLoad12);
-		const ExpectedOutcome Want{{{"beam"}}, 1u};
+		ExpectedOutcome Want;
+		Want.Crushed = {"beam"};
+		Want.Passes = 1;
 		RecordVisual(S, R, Want);
 		CheckOutcome(S, R, Want);
 	}

@@ -31,6 +31,13 @@ enum class CascadeState : std::uint8_t
 	PassCapReached
 };
 
+enum class FailureKind : std::uint8_t
+{
+	Cracked,
+	Severed,
+	Crushed
+};
+
 struct FailedInterface
 {
 	InterfaceId Id;
@@ -39,8 +46,10 @@ struct FailedInterface
 	GoverningAxis Axis = GoverningAxis::None;
 	// The crack ratio, or the elastic reading's utilisation at release.
 	double Ratio = 0.0;
-	// False: cracked (bond lost, friction kept); true: severed with its cluster.
+	// False: cracked (bond lost, friction kept) or crushed; true: severed with its cluster.
 	bool bSevered = false;
+	// Severed exactly when bSevered; Crushed names the joint whose crush removed a body (CascadeVerdict::CrushedBodies).
+	FailureKind Kind = FailureKind::Cracked;
 };
 
 struct ReleasedCluster
@@ -54,6 +63,16 @@ struct ReleasedCluster
 	std::vector<InterfaceId> Severed;
 	// Released by resolving an Undecided component; its Motion is zero.
 	bool bForced = false;
+};
+
+// A body whose material crushed at Interface: removed from the structure for the host to turn to rubble.
+struct CrushedBody
+{
+	std::uint32_t Pass = 0;
+	BodyId Body;
+	InterfaceId Interface;
+	// The joint's compression utilisation.
+	double Ratio = 0.0;
 };
 
 struct CascadeOptions
@@ -75,6 +94,7 @@ struct CascadePassRecord
 	std::vector<InterfaceReading> Readings;
 	std::vector<ReleasedCluster> Clusters;
 	std::vector<FailedInterface> Failures;
+	std::vector<CrushedBody> Crushed;
 };
 
 struct CascadeVerdict
@@ -88,6 +108,8 @@ struct CascadeVerdict
 	std::vector<FailedInterface> Failures;
 	// Ascending (pass, lowest body slot).
 	std::vector<ReleasedCluster> Clusters;
+	// Ascending (pass, body slot); separate from Clusters.
+	std::vector<CrushedBody> CrushedBodies;
 	// The final judge's readings, every live interface.
 	std::vector<InterfaceReading> Readings;
 	// The final judge's components.

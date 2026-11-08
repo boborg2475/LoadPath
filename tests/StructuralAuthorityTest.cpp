@@ -3,6 +3,7 @@
 #include "StaticsTestSupport.h"
 #include "WedgeFixture.h"
 
+#include "loadpath/Cascade.h"
 #include "loadpath/Catalogue.h"
 #include "loadpath/StructuralAuthority.h"
 #include "loadpath/geometry/RunningBondWall.h"
@@ -456,7 +457,7 @@ TEST_CASE("Statics.Combined.ACrushedComponentIsConsultedAndCollapses")
 	const double StrengthOverWeight = Profile.CompressiveStrengthPa * BrickLengthM * BrickWidthM / (BrickMassKg * GravityMPerS2);
 	const double CrushingLoadFactor = StrengthOverWeight / (std::cos(TiltRad) + BrickHeightM / BrickLengthM * std::sin(TiltRad));
 	CHECK(CrushingLoadFactor < 1.0);
-	const BrickOnGround F = MakeBrickOnGround(Profile);
+	BrickOnGround F = MakeBrickOnGround(Profile);
 	const AuthorityResult Result = JudgeWith(F.Model, Tilted(TiltRad));
 	INFO(DescribeResult(Result));
 	for (const InterfaceReading& Reading : Result.Readings)
@@ -465,7 +466,7 @@ TEST_CASE("Statics.Combined.ACrushedComponentIsConsultedAndCollapses")
 		CHECK(Reading.TensionUtilisation <= 1.0);
 		CHECK(Reading.ShearUtilisation <= 1.0);
 	}
-	CHECK(Result.Worst == ComponentVerdict::Collapses);
+	CHECK(Result.Worst == ComponentVerdict::Overstressed);
 	CHECK(Result.Components.size() == 1u);
 	if (Result.Components.size() != 1u)
 	{
@@ -473,8 +474,20 @@ TEST_CASE("Statics.Combined.ACrushedComponentIsConsultedAndCollapses")
 	}
 	const ComponentReport& Only = Result.Components.front();
 	CHECK(Only.Elastic == StandingState::Overstressed);
-	CHECK(Only.Verdict == ComponentVerdict::Collapses);
-	CHECK(SameIds(Only.Release, {F.Brick}));
+	CHECK(Only.Verdict == ComponentVerdict::Overstressed);
+	CHECK(Only.Release.empty());
+	CascadeOptions Options;
+	Options.Authority = Tilted(TiltRad);
+	const CascadeVerdict V = MakeCascade(MakeElasticAuthority(MakeRbsmStandingAuthority()))->Run(F.Model, {}, Options, nullptr);
+	CHECK(V.CrushedBodies.size() == 1u);
+	if (V.CrushedBodies.size() != 1u)
+	{
+		return;
+	}
+	CHECK(SameHandle(V.CrushedBodies[0].Body, F.Brick));
+	CHECK(SameHandle(V.CrushedBodies[0].Interface, F.Bed));
+	CHECK(V.Clusters.empty());
+	CHECK_FALSE(F.Model.IsLive(F.Brick));
 }
 
 TEST_CASE("Statics.Combined.NonFiniteReadingsNeverStand")

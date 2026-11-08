@@ -347,3 +347,25 @@ TEST_CASE("Catalogue.Materials.RowsCarryTheirDensityAndRefuseBadOnes")
 		CHECK_MESSAGE(Contains(Result.Error.Message, Bad.MustName), "the message must name " << Bad.MustName);
 	}
 }
+
+TEST_CASE("Catalogue.Materials.CompressiveStrengthIsOptionalAndInMegapascals")
+{
+	const CatalogueResult Repository = LoadRepositoryCatalogue();
+	const MaterialRow* Brick = Repository.Value.FindMaterial("clay_brick");
+	const MaterialRow* Timber = Repository.Value.FindMaterial("c24");
+	REQUIRE(Brick != nullptr);
+	REQUIRE(Timber != nullptr);
+	CHECK(Timber->CompressiveStrengthPa == 2.5e6);
+	CHECK(Brick->CompressiveStrengthPa > Timber->CompressiveStrengthPa);
+
+	const std::string Head = "{\n\"version\": 1,\n\"joints\": [],\n\"fasteners\": [],\n\"materials\": [\n";
+	const std::string Tail = "\n]\n}";
+	const CatalogueResult Without = LoadCatalogue(Head + "{ \"name\": \"a\", \"density_kg_per_m3\": 420, \"source\": \"s\", \"note\": \"n\" }" + Tail);
+	REQUIRE(Without.Ok());
+	CHECK(Without.Value.Materials[0].CompressiveStrengthPa == 0.0);
+	const CatalogueResult With = LoadCatalogue(Head + "{ \"name\": \"a\", \"density_kg_per_m3\": 420, \"compressive_strength_mpa\": 2.5, \"source\": \"s\", \"note\": \"n\" }" + Tail);
+	INFO("line " << With.Error.Line << ": " << With.Error.Message);
+	REQUIRE(With.Ok());
+	CHECK(With.Value.Materials[0].CompressiveStrengthPa == 2.5e6);
+	CHECK_FALSE(LoadCatalogue(Head + "{ \"name\": \"a\", \"density_kg_per_m3\": 420, \"compressive_strength_mpa\": -1, \"source\": \"s\", \"note\": \"n\" }" + Tail).Ok());
+}

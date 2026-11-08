@@ -164,8 +164,8 @@ bool ReadMaterial(const JsonValue& Value, std::size_t Index, std::unordered_set<
 		return false;
 	}
 	RowReader Reader(Value, "material", Index, Error);
-	return Reader.Name(Row.Name, Seen) && Reader.OnlyKeys({"name", "density_kg_per_m3", "source", "note"}) &&
-		Reader.Positive("density_kg_per_m3", 1.0, Row.DensityKgPerM3) && Reader.Fields.String("source", Row.Source) &&
+	return Reader.Name(Row.Name, Seen) && Reader.OnlyKeys({"name", "density_kg_per_m3", "compressive_strength_mpa", "source", "note"}) &&
+		Reader.Positive("density_kg_per_m3", 1.0, Row.DensityKgPerM3) && Reader.Scaled("compressive_strength_mpa", PaPerMPa, Row.CompressiveStrengthPa, false) && Reader.Fields.String("source", Row.Source) &&
 		Reader.Fields.String("note", Row.Note);
 }
 

@@ -319,7 +319,24 @@ void WriteFailure(JsonWriter& W, const FailedInterface& F)
 	W.FieldString("axis", detail::AxisText(F.Axis));
 	W.FieldNumber("ratio", F.Ratio);
 	W.FieldBool("severed", F.bSevered);
+	W.FieldString("kind", F.Kind == FailureKind::Crushed ? "crushed" : F.Kind == FailureKind::Severed ? "severed" : "cracked");
 	W.Close('}');
+}
+
+void WriteCrushed(JsonWriter& W, const std::vector<CrushedBody>& Crushed)
+{
+	W.Key("crushed");
+	W.Open('[');
+	for (const CrushedBody& C : Crushed)
+	{
+		W.Open('{');
+		W.FieldInteger("body", C.Body.Index);
+		W.FieldInteger("pass", C.Pass);
+		W.FieldInteger("interface", C.Interface.Index);
+		W.FieldNumber("ratio", C.Ratio);
+		W.Close('}');
+	}
+	W.Close(']');
 }
 
 JointPassRecord RecordOf(const InterfaceReading& Reading)
@@ -473,6 +490,7 @@ void WritePassRecords(JsonWriter& W, const ViewerScene& Scene)
 				WriteFailure(W, F);
 			}
 			W.Close(']');
+			WriteCrushed(W, Record.Crushed);
 			W.Close('}');
 		}
 	}
@@ -519,6 +537,16 @@ void WriteAfter(JsonWriter& W, const ViewerScene& Scene)
 		}
 	}
 	W.Close(']');
+	std::vector<CrushedBody> Crushed;
+	for (const CascadeVerdict& Verdict : Scene.After)
+	{
+		Crushed.insert(Crushed.end(), Verdict.CrushedBodies.begin(), Verdict.CrushedBodies.end());
+	}
+	WriteCrushed(W, Crushed);
+	for (const CrushedBody& C : Crushed)
+	{
+		Released.push_back(C.Body);
+	}
 	W.FieldIds("removed", Released);
 	W.Key("components");
 	W.Open('[');
@@ -556,6 +584,7 @@ void WriteExpected(JsonWriter& W, const ViewerExpected& Expected)
 	}
 	W.Close(']');
 	W.FieldIds("either", Expected.Either);
+	W.FieldIds("crushed", Expected.Crushed);
 	W.Close('}');
 }
 }

@@ -14,6 +14,7 @@
   --stage: #e3e7ea;
   --accent: #d9601c;       /* released bodies: safety orange */
   --sever: #b3262d;        /* severed joints */
+  --rubble: #7a5c43;       /* crushed bodies, turned to rubble */
   --stand: #2f7d5b;        /* stands */
   --undecided: #8a6d12;    /* undecided */
   --body: #a9b3bb;         /* resting block */
@@ -26,7 +27,7 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --bg: #14181c; --panel: #1b2025; --ink: #e4e8eb; --muted: #95a1ab; --line: #2c343b; --stage: #101418;
-    --accent: #f0782f; --sever: #e2545a; --stand: #4fb386; --undecided: #d1aa3c; --body: #6d7881; --ground: #3d464e; --flip: #4cc8f0;
+    --accent: #f0782f; --sever: #e2545a; --stand: #4fb386; --undecided: #d1aa3c; --body: #6d7881; --ground: #3d464e; --flip: #4cc8f0; --rubble: #b08a68;
     color-scheme: dark;
   }
 }
@@ -168,6 +169,7 @@ body.capture .why { display: none; }
           <span><i class="sw" style="background:var(--undecided)"></i>forced release (the solver could not decide; not a proven mechanism)</span>
           <span><i class="sw" style="background:var(--sever)"></i><span id="legend-sever">severed joint</span></span>
           <span><i class="sw" style="background:var(--ground)"></i>ground</span>
+          <span id="legend-crushed"><i class="sw" style="background:repeating-linear-gradient(45deg,var(--rubble) 0 3px,transparent 3px 6px);border:1px solid var(--rubble)"></i>crushed: turned to rubble</span>
           <span id="legend-removed"><i class="sw" style="border:1px dashed var(--muted)"></i>removed before the cascade</span>
           <span id="legend-unasserted"><i class="sw" style="border:2px solid var(--undecided)"></i>not asserted by the test</span>
           <span id="legend-load"><i class="sw" style="background:var(--ink);height:3px"></i>applied load / sideways acceleration</span>
@@ -309,8 +311,9 @@ function build(sc, opts = {}) {
   const after = sc.after || {};
   const released = new Map();
   for (const cl of after.clusters || []) for (const id of cl.bodies || []) released.set(id, (cl.motion || {})[id] || null);
+  const crushed = crushedOf(after);
   const removedAfter = new Set(after.removed || []);
-  for (const id of removedAfter) if (!released.has(id)) released.set(id, null);
+  for (const id of removedAfter) if (!released.has(id) && !crushed.has(id)) released.set(id, null);
 
   const grounded = sc.bodies.filter(b => b.grounded && b.h);
   const live = sc.bodies.filter(b => !b.grounded && !removedBefore.has(b.id));
@@ -333,7 +336,9 @@ function build(sc, opts = {}) {
   const ghosts = [...removedBefore].map(id => byId.get(id)).filter(Boolean);
   if (ghosts.length) { sceneBefore.add(buildGroup(ghosts, colorOf("--muted"), { edges: true, dashed: true })); sceneAfter.add(buildGroup(ghosts, colorOf("--muted"), { edges: true, dashed: true })); }
 
-  const standing = live.filter(b => !released.has(b.id));
+  const rubble = live.filter(b => crushed.has(b.id));
+  if (rubble.length) sceneAfter.add(buildGroup(rubble, colorOf("--rubble"), { edges: true, dashed: true }));
+  const standing = live.filter(b => !released.has(b.id) && !crushed.has(b.id));
   const standingGroup = buildGroup(standing, colorOf("--body"), { edges });
   sceneAfter.add(standingGroup);
 
@@ -472,13 +477,18 @@ function loop(t) {
   requestAnimationFrame(loop);
 }
 
+const crushedOf = a => new Set((a?.crushed || []).map(c => c.body));
+const failureKind = f => f.kind || (f.severed === false ? "cracked" : "severed");
+
 function readout(sc) {
   const a = sc.after || {}, b = sc.before || {};
   const judgeOnly = a.released_by_engine === false;
   const expected = String(a.source || "").startsWith("expected") || a.expected_only === true;
   $("tag-after").textContent = judgeOnly ? "After · mechanism, nothing released" : expected ? "After · expected by the test" : "After · engine";
   $("legend-sever").textContent = judgeOnly ? "hinging joint" : "severed joint";
-  const releasedCount = new Set([...(a.clusters || []).flatMap(c => c.bodies || []), ...(a.removed || [])]).size;
+  const crushedIds = crushedOf(a);
+  const releasedCount = [...new Set([...(a.clusters || []).flatMap(c => c.bodies || []), ...(a.removed || [])])].filter(id => !crushedIds.has(id)).length;
+  const crushedNames = [...crushedIds].map(id => escHtml((sc.bodies.find(x => x.id === id) || {}).name || `body ${id}`));
   const rows = [
     ["Test", sc.status ? `<span class="pill ${sc.status}">${sc.status}</span>` : "n/a"],
     ["After shows", expected ? "the test's expected outcome (drawn)" : "the engine's cascade"],
@@ -487,15 +497,17 @@ function readout(sc) {
     ["What is left, after the cascade", `<span class="pill ${stateClass(a.state)}">${a.state ?? "n/a"}</span>`],
     ["Passes", a.passes ?? "n/a"],
     ["Bodies released", judgeOnly ? "none (verdict only)" : releasedCount],
+    ["Bodies crushed (rubble)", crushedNames.length ? `${crushedNames.length}: ${crushedNames.slice(0, 6).join(", ")}${crushedNames.length > 6 ? ", …" : ""}` : 0],
     [judgeOnly ? "Hinging joints" : "Severed joints", judgeOnly ? (a.clusters || []).reduce((n, c) => n + (c.severed || []).length, 0) : (a.failures || []).filter(f => f.severed !== false).length],
     ["Engine time", a.elapsed_ms != null ? `${fmt(a.elapsed_ms, 3)} ms` : "n/a"],
   ];
   if (sc.lateral) rows.splice(3, 0, ["Lateral λ", `(${sc.lateral.map(v => fmt(v)).join(", ")})`]);
   $("readout").innerHTML = rows.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join("");
   const fl = a.failures || [];
-  $("failures").innerHTML = fl.length ? `<table><thead><tr><th>Joint</th><th>Pass</th><th>Axis</th><th>Ratio</th><th>Severed</th></tr></thead><tbody>${fl.slice(0, 40).map(f => `<tr><td>${f.interface}</td><td>${f.pass ?? ""}</td><td>${f.axis ?? ""}</td><td>${f.ratio == null ? "n/a" : fmt(f.ratio)}</td><td>${f.severed === false ? "no" : "yes"}</td></tr>`).join("")}</tbody></table>${fl.length > 40 ? `<p class="note">${fl.length - 40} more not shown.</p>` : ""}` : "";
+  $("failures").innerHTML = fl.length ? `<table><thead><tr><th>Joint</th><th>Pass</th><th>Axis</th><th>Ratio</th><th>Kind</th></tr></thead><tbody>${fl.slice(0, 40).map(f => `<tr><td>${f.interface}</td><td>${f.pass ?? ""}</td><td>${f.axis ?? ""}</td><td>${f.ratio == null ? "n/a" : fmt(f.ratio)}</td><td>${escHtml(failureKind(f))}</td></tr>`).join("")}</tbody></table>${fl.length > 40 ? `<p class="note">${fl.length - 40} more not shown.</p>` : ""}` : "";
   $("note").textContent = sc.note || "";
   $("legend-removed").hidden = !(sc.removed_before_run || []).length;
+  $("legend-crushed").hidden = !crushedIds.size;
   $("legend-unasserted").hidden = !((a.unasserted || []).length);
   $("legend-load").hidden = !((sc.loads || []).length || (sc.lateral && (sc.lateral[0] || sc.lateral[1])));
 }
@@ -523,22 +535,24 @@ function sceneAtPass(sc, P, k) {
   if (k >= P.length - 1) return sc;
   const colour = new Map();
   (sc.after.clusters || []).forEach((cl, i) => (cl.bodies || []).forEach(id => colour.set(id, i)));
-  const clusters = [], failures = [];
+  const clusters = [], failures = [], crushed = [];
   for (let j = 0; j <= k; j++) {
+    for (const c of P[j].crushed || []) crushed.push(c);
     for (const cl of P[j].clusters || []) clusters.push({ pass: P[j].pass, ...cl, colour: colour.get((cl.bodies || [])[0]) ?? clusters.length });
     for (const f of P[j].failures || []) failures.push({ pass: P[j].pass, ...f });
   }
-  return { ...sc, after: { ...sc.after, clusters, failures, removed: [...new Set(clusters.flatMap(c => c.bodies || []))] } };
+  return { ...sc, after: { ...sc.after, clusters, failures, crushed, removed: [...new Set([...clusters.flatMap(c => c.bodies || []), ...crushed.map(c => c.body)])] } };
 }
 
 // The entry that first released each body, and every entry that cracked or severed each joint.
 function causesOf(P) {
-  const released = new Map(), failed = new Map();
+  const released = new Map(), failed = new Map(), crushed = new Map();
   P.forEach((p, j) => {
+    for (const c of p.crushed || []) if (!crushed.has(c.body)) crushed.set(c.body, { j, c });
     for (const cl of p.clusters || []) for (const id of cl.bodies || []) if (!released.has(id)) released.set(id, j);
     for (const f of p.failures || []) { if (!failed.has(f.interface)) failed.set(f.interface, []); failed.get(f.interface).push({ j, f }); }
   });
-  return { released, failed };
+  return { released, failed, crushed };
 }
 
 // The joint's own frame; v completes (u, v, n) as right-handed, as the library builds it.
@@ -566,7 +580,7 @@ function replayOverlay(P, k, eff) {
     const severed = new Set();
     for (const f of a.failures || []) if (f.severed !== false) severed.add(f.interface);
     for (const cl of a.clusters || []) for (const id of cl.severed || []) severed.add(id);
-    const cracked = new Set((a.failures || []).filter(f => f.severed === false && !severed.has(f.interface)).map(f => f.interface));
+    const cracked = new Set((a.failures || []).filter(f => failureKind(f) === "cracked" && !severed.has(f.interface)).map(f => f.interface));
     const pickMat = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
     const addPicker = (it, info) => {
       const f = jointFrame(it);
@@ -620,10 +634,11 @@ function replayPanel(P) {
   $("rp-pass").max = P.length - 1; $("rp-pass").value = k;
   $("rp-prev").disabled = k <= 0; $("rp-next").disabled = k >= P.length - 1;
   const fl = p.failures || [], cl = p.clusters || [];
-  const quiet = !fl.length && !cl.length;
+  const quiet = !fl.length && !cl.length && !(p.crushed || []).length;
   $("rp-label").textContent = `${passName(P, k)} · ${k + 1} of ${P.length}${quiet && k === P.length - 1 ? " · the final judge, nothing more falls" : ""}`;
   const fell = cl.reduce((n, c) => n + (c.bodies || []).length, 0), sev = fl.filter(f => f.severed !== false).length;
-  $("rp-summary").textContent = `This pass released ${fell} ${fell === 1 ? "body" : "bodies"} in ${cl.length} ${cl.length === 1 ? "piece" : "pieces"}, cracked ${fl.length - sev} ${fl.length - sev === 1 ? "joint" : "joints"} and severed ${sev}. The after view shows the structure once this pass has run.`;
+  const cru = (p.crushed || []).length, crk = fl.filter(f => failureKind(f) === "cracked").length;
+  $("rp-summary").textContent = `This pass released ${fell} ${fell === 1 ? "body" : "bodies"} in ${cl.length} ${cl.length === 1 ? "piece" : "pieces"}, crushed ${cru} ${cru === 1 ? "body" : "bodies"} to rubble, cracked ${crk} ${crk === 1 ? "joint" : "joints"} and severed ${sev}. The after view shows the structure once this pass has run.`;
   const anyForced = comps.some(c => c.forced);
   const forcedText = c => c.forced ? `${escHtml(c.forced_reason ?? "None")} after ${c.pass_count ?? "?"} passes${(c.unsettled_joints || []).length ? `, unsettled joints ${escHtml(c.unsettled_joints.join(", "))}` : ""}` : "no";
   const names = c => { const ids = c.bodies || []; return `${ids.length}: ${escHtml(ids.slice(0, 4).map(id => name.get(id)).join(", "))}${ids.length > 4 ? ", …" : ""}`; };
@@ -648,16 +663,17 @@ function renderInspect(hover) {
 }
 
 function failureText(P, j, f) {
-  return `${f.severed === false ? "cracked" : "severed"} in ${passName(P, j)}${f.axis ? `, ${escHtml(f.axis)}` : ""}${f.ratio != null ? `, ratio ${fmt(f.ratio)}` : ""}`;
+  return `${failureKind(f)} in ${passName(P, j)}${f.axis ? `, ${escHtml(f.axis)}` : ""}${f.ratio != null ? `, ratio ${fmt(f.ratio)}` : ""}`;
 }
 
 function bodyInspect(P, id) {
-  const { released, failed } = causesOf(P);
+  const { released, failed, crushed } = causesOf(P);
   const name = new Map(current.bodies.map(b => [b.id, b.name || `body ${b.id}`]));
   const b = current.bodies.find(x => x.id === id) || {};
   const j = released.get(id);
   const fromCluster = (current.after.clusters || []).find(c => (c.bodies || []).includes(id));
-  const status = j != null ? `released in ${passName(P, j)}${j > replay.k ? " (still in place at the pass shown)" : ""}`
+  const cr = crushed.get(id);
+  const status = cr ? `crushed to rubble in ${passName(P, cr.j)} at joint ${cr.c.interface}, ratio ${fmt(cr.c.ratio)}${cr.j > replay.k ? " (still in place at the pass shown)" : ""}` : j != null ? `released in ${passName(P, j)}${j > replay.k ? " (still in place at the pass shown)" : ""}`
     : fromCluster ? `released in pass ${fromCluster.pass ?? "?"}` : "not released in any recorded pass";
   const joints = (current.interfaces || []).filter(it => (it.a === id || it.b === id) && failed.has(it.id));
   const list = joints.map(it => `<li>joint ${it.id} to ${escHtml(name.get(it.a === id ? it.b : it.a))}: ${failed.get(it.id).map(({ j, f }) => failureText(P, j, f)).join("; ")}</li>`).join("");
@@ -773,7 +789,7 @@ let showExpected = new URLSearchParams(location.search).has("expected");
 
 function expectedView(sc) {
   const e = sc.expected;
-  return { ...sc, after: { source: "expected by the test", state: e.state, passes: null, clusters: (e.clusters || []).map(c => ({ bodies: c.bodies || [] })), failures: [], removed: [], unasserted: e.either || [], elapsed_ms: null } };
+  return { ...sc, after: { source: "expected by the test", state: e.state, passes: null, clusters: (e.clusters || []).map(c => ({ bodies: c.bodies || [] })), failures: [], crushed: (e.crushed || []).map(id => ({ body: id })), removed: [...(e.crushed || [])], unasserted: e.either || [], elapsed_ms: null } };
 }
 
 function showView() {
@@ -802,12 +818,15 @@ function differences(sc) {
   const name = new Map(sc.bodies.map(b => [b.id, b.name || `body ${b.id}`]));
   const a = sc.after || {};
   const engine = new Set([...(a.clusters || []).flatMap(c => c.bodies || []), ...(a.removed || [])]);
-  const expected = new Set((e.clusters || []).flatMap(c => c.bodies || []));
+  const expected = new Set([...(e.clusters || []).flatMap(c => c.bodies || []), ...(e.crushed || [])]);
+  const engineCrushed = crushedOf(a), expectedCrushed = new Set(e.crushed || []);
   const either = new Set(e.either || []);
   const names = ids => ids.map(id => name.get(id)).sort();
   return {
     extra: names([...engine].filter(id => !expected.has(id) && !either.has(id))),
     missing: names([...expected].filter(id => !engine.has(id) && !either.has(id))),
+    crushedExtra: names([...engineCrushed].filter(id => !expectedCrushed.has(id))),
+    crushedMissing: names([...expectedCrushed].filter(id => !engineCrushed.has(id))),
     state: (a.state || "") !== (e.state || "Stands") ? { engine: a.state, expected: e.state || "Stands" } : null,
     expectedCount: expected.size, engineCount: engine.size,
   };
@@ -825,10 +844,12 @@ function whyHtml(sc) {
   const d = differences(sc);
   const parts = [`<h3>${heading}</h3>`];
   if (status === "deferred" && r.deferred && d) parts.push(`<p>${escHtml(r.deferred)}</p>`);
-  if (d && (d.extra.length || d.missing.length || d.state)) {
+  if (d && (d.extra.length || d.missing.length || d.crushedExtra.length || d.crushedMissing.length || d.state)) {
     const rows = [];
     if (d.extra.length) rows.push(`<li>Released by the engine, expected to stand (${d.extra.length}): ${nameList(d.extra)}</li>`);
     if (d.missing.length) rows.push(`<li>Expected to fall, still standing (${d.missing.length}): ${nameList(d.missing)}</li>`);
+    if (d.crushedExtra.length) rows.push(`<li>Crushed by the engine, not expected to crush (${d.crushedExtra.length}): ${nameList(d.crushedExtra)}</li>`);
+    if (d.crushedMissing.length) rows.push(`<li>Expected to crush, not crushed (${d.crushedMissing.length}): ${nameList(d.crushedMissing)}</li>`);
     if (d.state) rows.push(`<li>Final state: the engine says ${escHtml(d.state.engine)}, the test expects ${escHtml(d.state.expected)}</li>`);
     parts.push(`<h4>Where this entry differs from the test</h4><ul>${rows.join("")}</ul>`);
     parts.push(`<p>Use “Show the expected outcome” to see what the test expects.</p>`);
@@ -847,7 +868,7 @@ function whyHtml(sc) {
   return `<section class="why ${escHtml(status)}" id="why" aria-label="Why this result">${parts.join("")}</section>`;
 }
 
-const releasedOf = r => new Set([...(r.after?.clusters || []).flatMap(c => c.bodies || []), ...(r.after?.removed || [])]).size;
+const releasedOf = r => { const c = crushedOf(r.after); return [...new Set([...(r.after?.clusters || []).flatMap(cl => cl.bodies || []), ...(r.after?.removed || [])])].filter(id => !c.has(id)).length; };
 
 async function main() {
   let runs = [];

@@ -45,6 +45,8 @@ struct MaterialRow
 {
 	std::string Name, Source, Note;
 	double DensityKgPerM3 = 0;
+	// Optional key compressive_strength_mpa; 0 when absent.
+	double CompressiveStrengthPa = 0;
 };
 
 struct Catalogue

@@ -11,6 +11,7 @@
 
 #include "doctest.h"
 
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <cstddef>
@@ -309,6 +310,13 @@ void CheckStampsMatchRecords(const Structure& Before, const Structure& After, co
 		INFO("failure " << F.Id.Index << " pass " << F.Pass << (F.bSevered ? " severed" : " cracked") << "; record " << doctest::String(InterfaceStateName(R.State)) << " crack " << R.CrackPass << " sever " << R.SeverPass);
 		CHECK(F.Pass >= V.FirstPass);
 		CHECK(F.Pass <= V.LastPass);
+		if (F.Kind == FailureKind::Crushed)
+		{
+			CHECK(R.State == InterfaceState::Removed);
+			CHECK(std::any_of(V.CrushedBodies.begin(), V.CrushedBodies.end(), [&](const CrushedBody& C) { return SameHandle(C.Interface, F.Id) && C.Pass == F.Pass && !After.IsLive(C.Body); }));
+			continue;
+		}
+		CHECK(F.Kind == (F.bSevered ? FailureKind::Severed : FailureKind::Cracked));
 		CHECK(R.State == (F.bSevered ? InterfaceState::Severed : InterfaceState::Cracked));
 		CHECK((F.bSevered ? R.SeverPass : R.CrackPass) == F.Pass);
 	}

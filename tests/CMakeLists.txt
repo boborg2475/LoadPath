@@ -58,7 +58,8 @@ add_executable(loadpath_tests
 	ScenarioFilesTest.cpp
 	VisualSupportTest.cpp
 	SettingsTest.cpp
-	PassRecorderTest.cpp)
+	PassRecorderTest.cpp
+	CrushingRubbleTest.cpp)
 target_link_libraries(loadpath_tests PRIVATE loadpath doctest)
 target_include_directories(loadpath_tests PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_include_directories(loadpath_tests SYSTEM PRIVATE ${CMAKE_SOURCE_DIR}/third_party/eigen)
