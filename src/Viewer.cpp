@@ -288,6 +288,10 @@ void WriteCluster(JsonWriter& W, const ViewerScene& Scene, const ReleasedCluster
 	W.FieldInteger("pass", Cluster.Pass);
 	W.FieldIds("bodies", Cluster.Bodies);
 	W.FieldIds("severed", Cluster.Severed);
+	if (Cluster.bForced)
+	{
+		W.FieldBool("forced", true);
+	}
 	W.FieldInteger("motion_body", Cluster.Motion.Body.Index);
 	W.Key("motion");
 	W.Open('{');
@@ -377,12 +381,35 @@ void WriteJoint(JsonWriter& W, const JointPassRecord& J)
 	W.Close('}');
 }
 
+void WriteForced(JsonWriter& W, const ComponentReport& Component)
+{
+	if (!Component.Forced)
+	{
+		return;
+	}
+	W.FieldBool("forced", true);
+	W.FieldString("forced_reason", detail::EndText(Component.ForcedReason));
+	W.FieldInteger("pass_count", static_cast<std::uint64_t>(Component.PassCount));
+	W.FieldIds("unsettled_joints", Component.UnsettledJoints);
+}
+
+void WriteComponentSummary(JsonWriter& W, const ComponentReport& Component)
+{
+	W.Open('{');
+	W.FieldIds("bodies", Component.Bodies);
+	W.FieldString("verdict", detail::VerdictText(Component.Verdict));
+	W.FieldString("end", detail::EndText(Component.End));
+	WriteForced(W, Component);
+	W.Close('}');
+}
+
 void WritePassComponent(JsonWriter& W, const ComponentReport& Component)
 {
 	W.Open('{');
 	W.FieldIds("bodies", Component.Bodies);
 	W.FieldString("verdict", detail::VerdictText(Component.Verdict));
 	W.FieldString("end", detail::EndText(Component.End));
+	WriteForced(W, Component);
 	W.FieldInteger("iterations", Component.Passes.size());
 	W.Key("inner");
 	W.Open('[');
@@ -493,6 +520,16 @@ void WriteAfter(JsonWriter& W, const ViewerScene& Scene)
 	}
 	W.Close(']');
 	W.FieldIds("removed", Released);
+	W.Key("components");
+	W.Open('[');
+	if (!Scene.After.empty())
+	{
+		for (const ComponentReport& Component : Scene.After.back().Components)
+		{
+			WriteComponentSummary(W, Component);
+		}
+	}
+	W.Close(']');
 	if (HasPassRecords(Scene))
 	{
 		WritePassRecords(W, Scene);

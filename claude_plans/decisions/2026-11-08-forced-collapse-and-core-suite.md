@@ -28,6 +28,8 @@ before the next starts.
   Add a tally of forced collapses by reason across the fuzz and scale runs.
 - Context: 619 of 3,000 realistic random stacks and bridges read Undecided where collapse is
   provable.
+- **Built 2026-11-08** (build-order item 3a) as the setting `cascade.undecided_resolution`
+  (`collapse` default, `stands`); API.md "Forced collapse".
 
 ## 2. Crushing: the crushed material turns to rubble (decides D1)
 

@@ -2234,3 +2234,13 @@ feeding a pass-by-pass scrubber in the viewer. Day-to-day testing shrinks to a c
 cases with known answers (lettered A to H in the doc), the rest parked. Hinge splitting is
 discussed but not decided. Build order: settings file and recorder, then re-measure speed, then
 the rest as the owner orders at each review; each item is reviewed before the next starts.
+
+### 2026-11-08 forced collapse as a setting
+
+The §1 ruling (Undecided resolves to forced `Collapses`, the whole component released) is built behind
+`cascade.undecided_resolution`, default `collapse`; `stands` treats the component as standing. Either way the report says
+`Forced`, the elastic end that caused it, the pass count and the unsettled joints, and the verdict tallies forced
+components by reason. The resolution lives in the cascade, not the authority, so `Judge` still reports Undecided and the
+existing red tests that pin the authority are unchanged. Accepted for now: under `collapse` the warehouse frame after a
+post removal (`IterationCap`, joint 10638 chattering) and the shed's 15-body component (`RestoreFailedClosed`) become
+forced releases; `stands` is the owner's switch for that.

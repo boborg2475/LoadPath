@@ -121,6 +121,30 @@ private:
 		return true;
 	}
 
+	bool Resolution(const JsonValue* Object, std::string_view Path, std::string_view Key, UndecidedResolution& Out)
+	{
+		const JsonValue* Value = nullptr;
+		if (Object == nullptr || !Get(*Object, Path, Key, JsonType::String, Value))
+		{
+			return Object == nullptr;
+		}
+		if (Value == nullptr)
+		{
+			return true;
+		}
+		if (Value->Text == "collapse")
+		{
+			Out = UndecidedResolution::Collapse;
+			return true;
+		}
+		if (Value->Text == "stands")
+		{
+			Out = UndecidedResolution::Stands;
+			return true;
+		}
+		return Fail(Value->Line, Qualified(Path, Key) + " must be \"collapse\" or \"stands\"");
+	}
+
 	bool ReadSolver(const JsonValue* Object, SolverSettings& Out)
 	{
 		const std::string_view Path = "solver";
@@ -138,7 +162,8 @@ private:
 	bool ReadCascade(const JsonValue* Object, CascadeSettings& Out)
 	{
 		const std::string_view Path = "cascade";
-		return (Object == nullptr || OnlyKeys(*Object, Path, {"crack_band_fraction", "max_passes"})) && Double(Object, Path, "crack_band_fraction", Out.CrackBandFraction) &&
+		return (Object == nullptr || OnlyKeys(*Object, Path, {"undecided_resolution", "crack_band_fraction", "max_passes"})) &&
+			Resolution(Object, Path, "undecided_resolution", Out.OnUndecided) && Double(Object, Path, "crack_band_fraction", Out.CrackBandFraction) &&
 			Int(Object, Path, "max_passes", Out.MaxPasses);
 	}
 
@@ -199,6 +224,7 @@ CascadeOptions ToCascadeOptions(const Settings& Value, Vec3 Gravity)
 	Options.Authority.Standing = ToStandingOptions(Value, Gravity);
 	Options.CrackBandFraction = Value.Cascade.CrackBandFraction;
 	Options.MaxPasses = Value.Cascade.MaxPasses;
+	Options.OnUndecided = Value.Cascade.OnUndecided;
 	return Options;
 }
 }

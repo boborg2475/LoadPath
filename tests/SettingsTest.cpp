@@ -55,7 +55,7 @@ bool SameSettings(const Settings& A, const Settings& B)
 		A.Solver.HeldForceToleranceRelative == B.Solver.HeldForceToleranceRelative && A.Solver.DryNoiseFloorRelative == B.Solver.DryNoiseFloorRelative &&
 		A.Solver.NeutralLoadToleranceRelative == B.Solver.NeutralLoadToleranceRelative &&
 		A.Solver.AdmissibilityToleranceRelative == B.Solver.AdmissibilityToleranceRelative && A.Solver.UnconstrainedComponent == B.Solver.UnconstrainedComponent &&
-		A.Cascade.CrackBandFraction == B.Cascade.CrackBandFraction && A.Cascade.MaxPasses == B.Cascade.MaxPasses && A.Debug.bRecordPasses == B.Debug.bRecordPasses;
+		A.Cascade.CrackBandFraction == B.Cascade.CrackBandFraction && A.Cascade.MaxPasses == B.Cascade.MaxPasses && A.Cascade.OnUndecided == B.Cascade.OnUndecided && A.Debug.bRecordPasses == B.Debug.bRecordPasses;
 }
 
 Settings LoadOk(const std::string& Json)
@@ -143,7 +143,31 @@ TEST_CASE("Settings.DefaultsFileLoadsAndMatchesTheCompiledDefaults")
 	CHECK(Loaded.Solver.UnconstrainedComponent == 1e-6);
 	CHECK(Loaded.Cascade.CrackBandFraction == 0.5);
 	CHECK(Loaded.Cascade.MaxPasses == 32);
+	CHECK(Loaded.Cascade.OnUndecided == UndecidedResolution::Collapse);
 	CHECK(Loaded.Debug.bRecordPasses == false);
+}
+
+TEST_CASE("Settings.UndecidedResolutionReadsItsTwoNamesAndRejectsAnyOther")
+{
+	const std::string Json = ReadSettingsFile();
+	{
+		const std::string Stands = Replace(Json, "\"undecided_resolution\": \"collapse\"", "\"undecided_resolution\": \"stands\"");
+		CHECK(LoadOk(Stands).Cascade.OnUndecided == UndecidedResolution::Stands);
+	}
+	{
+		const std::string Bad = Replace(Json, "\"undecided_resolution\": \"collapse\"", "\"undecided_resolution\": \"maybe\"");
+		CheckNames(LoadSettings(Bad), "cascade.undecided_resolution", LineOf(Bad, "\"maybe\""));
+	}
+	{
+		const std::string Wrong = Replace(Json, "\"undecided_resolution\": \"collapse\"", "\"undecided_resolution\": 1");
+		CheckNames(LoadSettings(Wrong), "cascade.undecided_resolution", LineOf(Wrong, "\"undecided_resolution\""));
+	}
+	{
+		const SettingsResult Applied = ApplyOverrides(Settings{}, "{\n  \"cascade\": {\n    \"undecided_resolution\": \"stands\"\n  }\n}\n");
+		REQUIRE(Applied.Ok());
+		CHECK(Applied.Value.Cascade.OnUndecided == UndecidedResolution::Stands);
+		CheckNames(ApplyOverrides(Settings{}, "{\n  \"cascade\": {\n    \"undecided_resolution\": \"Collapse\"\n  }\n}\n"), "cascade.undecided_resolution", 3);
+	}
 }
 
 TEST_CASE("Settings.AMissingKeyIsAnErrorNamingIt")

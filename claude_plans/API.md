@@ -1269,7 +1269,7 @@ only the keys a user changed; reset discards the overrides ([decisions/2026-11-0
 struct SolverSettings  { int MaxActiveSetIterations = 50; double PivotToleranceRelative = 1e-10; int DenseDofLimit = 600;
                          double StickMarginRelative = 1e-9, HeldForceToleranceRelative = 1e-12, DryNoiseFloorRelative = 1e-12,
                          NeutralLoadToleranceRelative = 1e-12, AdmissibilityToleranceRelative = 1e-9, UnconstrainedComponent = 1e-6; };
-struct CascadeSettings { double CrackBandFraction = 0.5; int MaxPasses = 32; };
+struct CascadeSettings { double CrackBandFraction = 0.5; int MaxPasses = 32; UndecidedResolution OnUndecided = UndecidedResolution::Collapse; };
 struct DebugSettings   { bool bRecordPasses = false; };
 struct Settings        { SolverSettings Solver; CascadeSettings Cascade; DebugSettings Debug; };
 struct SettingsResult  { Settings Value; FileError Error; bool Ok() const; };
@@ -1325,3 +1325,31 @@ struct CascadePassRecord { uint32_t Pass; std::vector<ComponentReport> Component
 - The E2E harness (`OptionsFor`) and the scenario-file harness record whenever `LOADPATH_VISUALS` is set and never
   otherwise; `RunScenario` follows `Settings.Debug.bRecordPasses`; the CLI honours `debug.record_passes` and
   `--record-passes` sets it true.
+
+## Forced collapse (`Cascade.h`, `StructuralAuthority.h`, 2026-11-08, build-order item 3a)
+
+The owner's §1 ruling ([decisions/2026-11-08-forced-collapse-and-core-suite.md](decisions/2026-11-08-forced-collapse-and-core-suite.md)),
+built as a setting: `cascade.undecided_resolution` in `data/settings.json`, `"collapse"` (default) or `"stands"`; any other
+value is an error naming `cascade.undecided_resolution` and its line.
+
+```cpp
+enum class UndecidedResolution : uint8_t { Collapse, Stands };
+// CascadeOptions / CascadeSettings: UndecidedResolution OnUndecided = UndecidedResolution::Collapse;
+// ComponentReport: int PassCount;                         // the elastic ActiveSetIterations
+//                  bool Forced; SolveEnd ForcedReason;    // IterationCap, RestoreFailedClosed, PowerCheckFailed, or None (non-finite force scale)
+//                  std::vector<InterfaceId> UnsettledJoints;
+// ReleasedCluster: bool bForced;                          // a forced release; Motion is zero
+// CascadeVerdict:  std::array<uint32_t, SolveEndCount> ForcedByReason;  // forced components solved this run, by SolveEnd
+```
+
+- The cascade's judge step resolves every component the elastic authority reads Undecided. Under `Collapse` it reads
+  `Collapses` and its whole `Bodies` list is released (not the elastic `UnconstrainedBodies`); under `Stands` it reads
+  `Stands` and the cascade carries on, readings as read. Both set `Forced` and `ForcedReason`; a Mechanism component reads
+  `Collapses` with `Forced` false. The authority alone (`IStructuralAuthority::Judge`) still reports Undecided.
+- `UnsettledJoints` (filled by the authority on any Undecided component): the `Blocking` list at `RestoreFailedClosed`;
+  at `IterationCap` with the pass recorder on, the joints with a corner flipped in the last iteration; otherwise empty.
+- A reused component is not counted twice in `ForcedByReason`. The re-judge after `PassCapReached` is not resolved.
+- Viewer JSON: `after.components` (the last verdict's components: `bodies`, `verdict`, `end`) and every
+  `pass_records[].components[]` carry `forced`, `forced_reason`, `pass_count`, `unsettled_joints` when `Forced` is true;
+  a forced cluster carries `forced: true`. The page tints forced releases with the undecided colour and the components
+  table gains a Forced column; absent fields change nothing.

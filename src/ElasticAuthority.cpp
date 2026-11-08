@@ -318,12 +318,38 @@ private:
 		return Result;
 	}
 
+	static std::vector<InterfaceId> UnsettledOf(const StandingComponent& Part)
+	{
+		if (Part.End == SolveEnd::RestoreFailedClosed)
+		{
+			return Part.Blocking;
+		}
+		std::vector<InterfaceId> Out;
+		if (Part.End != SolveEnd::IterationCap || Part.Passes.empty())
+		{
+			return Out;
+		}
+		for (const JointPassRecord& Joint : Part.Passes.back().Joints)
+		{
+			if (std::find(Joint.bFlipped.begin(), Joint.bFlipped.end(), true) != Joint.bFlipped.end())
+			{
+				Out.push_back(Joint.Id);
+			}
+		}
+		return Out;
+	}
+
 	static ComponentReport ReportOf(StandingComponent& Part)
 	{
 		ComponentReport Report;
 		Report.Bodies = std::move(Part.Bodies);
 		Report.Elastic = Part.State;
 		Report.End = Part.End;
+		Report.PassCount = Part.ActiveSetIterations;
+		if (Part.State == StandingState::Undecided)
+		{
+			Report.UnsettledJoints = UnsettledOf(Part);
+		}
 		Report.Passes = std::move(Part.Passes);
 		switch (Part.State)
 		{

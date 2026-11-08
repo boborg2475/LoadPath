@@ -11,6 +11,7 @@
     "unconstrained_component": 1e-6
   },
   "cascade": {
+    "undecided_resolution": "collapse",
     "crack_band_fraction": 0.5,
     "max_passes": 32
   },

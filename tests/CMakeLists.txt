@@ -27,6 +27,7 @@ add_executable(loadpath_tests
 	CrackedJointTest.cpp
 	CrushingTest.cpp
 	CascadeTest.cpp
+	ForcedCollapseTest.cpp
 	CatalogueTest.cpp
 	CatalogueAnchorsTest.cpp
 	GeometryContactTest.cpp

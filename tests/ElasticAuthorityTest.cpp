@@ -206,9 +206,12 @@ TEST_CASE("Statics.Elastic.AnUndecidedElasticSolveReleasesNothing")
 	CHECK(Only.Release.empty());
 	CHECK(Only.Mechanism.empty());
 
-	const CascadeVerdict V = RunElastic(F.Model, Options);
+	CascadeOptions Kept;
+	Kept.Authority = Options;
+	Kept.OnUndecided = UndecidedResolution::Stands;
+	const CascadeVerdict V = MakeCascade(MakeElasticAuthority(MakeRbsmStandingAuthority()))->Run(F.Model, {}, Kept, nullptr);
 	INFO(DescribeVerdict(V));
-	CHECK(V.State == CascadeState::Undecided);
+	CHECK(V.State == CascadeState::Stands);
 	CHECK(V.Clusters.empty());
 	CHECK(F.Model.IsLive(F.Brick));
 }

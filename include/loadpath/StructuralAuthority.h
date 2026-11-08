@@ -38,6 +38,13 @@ struct ComponentReport
 	// Carried from the elastic component; Passes is empty unless recording.
 	SolveEnd End = SolveEnd::None;
 	std::vector<ElasticPassRecord> Passes;
+	int PassCount = 0;
+	// Set by the cascade: the verdict came from resolving an elastic Undecided, not from a proven mechanism.
+	bool Forced = false;
+	// The elastic end behind a forced verdict; None when the solve stopped on a non-finite force scale or nothing was forced.
+	SolveEnd ForcedReason = SolveEnd::None;
+	// RestoreFailedClosed: the blocking joints; IterationCap with recording on: the joints with a corner flipped in the last iteration.
+	std::vector<InterfaceId> UnsettledJoints;
 };
 
 struct AuthorityOptions
