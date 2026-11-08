@@ -89,6 +89,8 @@ justify.
    certificate then takes 96 to 111 ms to say Stands: warm re-judge about 150 ms, about 40 ms
    without it. Find why that corner cycles (its force against its capacity and against
    `StickMarginRelative`) before choosing a fix.
+   2026-11-08, certificate gone: the warm cascade is 40 to 50 ms and reads Undecided; the recorder
+   shows joint 10638 still flipping at the 50-iteration cap, utilisation 1.017 (SCALE.md, item 2).
 2. **Fallback census.** Count every certificate consult by cause (Mechanism; Undecided by trigger;
    only-crushed Overstressed) with what the certificate answered, plus the flipping corners' force
    sizes relative to the force scale and to their own capacity. Over the seeded families, the 3,000

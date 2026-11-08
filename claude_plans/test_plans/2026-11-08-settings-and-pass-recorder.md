@@ -1,4 +1,4 @@
-Status: proposed 2026-11-08; built at the owner's direction to work item 1 and review it on completion. Owner review of the plan and the item is pending.
+Status: built and accepted by the owner 2026-11-08 (`bb7b083`); the review findings carried are listed under item 1 in CURRENT_STATE.md.
 
 # Build-order item 1: settings file and pass recorder
 

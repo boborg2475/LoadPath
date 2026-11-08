@@ -4,8 +4,12 @@
 #include "ScaleTestSupport.h"
 #include "WarehouseTestSupport.h"
 
+#include "StateNames.h"
+
 #include "loadpath/Cascade.h"
 #include "loadpath/Catalogue.h"
+#include "loadpath/Settings.h"
+#include "loadpath/StandingAuthority.h"
 #include "loadpath/StructuralAuthority.h"
 #include "loadpath/geometry/RunningBondWall.h"
 #include "loadpath/geometry/Warehouse.h"
@@ -14,6 +18,7 @@
 
 #include <chrono>
 #include <cstddef>
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <vector>
@@ -91,6 +96,41 @@ void Measure(const ScaleSubject& S)
 	MESSAGE(S.Name << ": total " << MsSince(CaseStart) << " ms");
 }
 
+void DescribeUnsettled(const std::string& Name, const Structure& Model, const AuthorityResult& Previous)
+{
+	static const DebugSettings Recording{true};
+	CascadeOptions Options;
+	Options.Authority.Standing.Debug = &Recording;
+	Structure Copy = Model;
+	const CascadeVerdict V = MakeCascade(MakeAuthority())->Run(Copy, {}, Options, &Previous);
+	for (const ComponentReport& C : V.Components)
+	{
+		if (C.Verdict == ComponentVerdict::Stands)
+		{
+			continue;
+		}
+		std::size_t Flipping = 0;
+		std::string Joints;
+		if (!C.Passes.empty())
+		{
+			for (const JointPassRecord& J : C.Passes.back().Joints)
+			{
+				bool bAny = false;
+				for (const bool bFlipped : J.bFlipped)
+				{
+					bAny = bAny || bFlipped;
+				}
+				if (bAny)
+				{
+					++Flipping;
+					Joints += (Joints.empty() ? "" : ", ") + std::to_string(static_cast<std::uint32_t>(J.Id.Index)) + " util " + std::to_string(J.Utilisation);
+				}
+			}
+		}
+		MESSAGE(Name << " unsettled component: " << C.Bodies.size() << " bodies, " << std::string(detail::VerdictText(C.Verdict)) << ", end " << std::string(detail::EndText(C.End)) << ", iterations " << C.Passes.size() << ", joints flipping in the last iteration " << Flipping << (Joints.empty() ? "" : " (" + Joints + ")"));
+	}
+}
+
 void MeasureWarmPostRemoval(const ScaleSubject& S)
 {
 	INFO(S.Name << ": live bodies " << S.Model.LiveBodyCount() << ", closed form " << S.ExpectedBodies);
@@ -112,6 +152,7 @@ void MeasureWarmPostRemoval(const ScaleSubject& S)
 		Reused += C.bReused ? 1u : 0u;
 	}
 	MESSAGE(S.Name << " warm: pieces " << S.Model.LiveBodyCount() << ", components " << V.Components.size() << " (first judge " << First.Components.size() << "), reused " << Reused << ", first judge " << JudgeMs << " ms (" << std::string(VerdictName(First.Worst)) << "), warm cascade(post) " << CascadeMs << " ms + " << V.Passes << " passes + " << std::string(CascadeStateName(V.State)));
+	DescribeUnsettled(S.Name, Copy, First);
 	CHECK(V.State == CascadeState::Stands);
 }
 }

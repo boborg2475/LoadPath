@@ -365,3 +365,32 @@ The warm re-judge after the post removal is about 150 ms, and most of it is one 
 198-DoF frame flips one corner Stuck ↔ Slipping to the 50-pass cap (36 to 46 ms), reads
 Undecided, and the certificate takes 96 to 111 ms to stand it. The candidate speed-ups and this
 chatter are listed, parked, in IMMEDIATE_UPDATES.md section 4.
+
+## Rows with the certificate gone (2026-11-08, HEAD bb7b083, Release, copied exe, one row per process; build-order item 2)
+
+| Structure | Pieces | Joints | Components | Elastic | Judge | Cascade: base course | Cascade: post removed (cold) | Warm post cascade (4 of 5 reused) |
+|---|---|---|---|---|---|---|---|---|
+| Wall 10 × 8 | 86 | 227 | 1 | 9.8 ms | 10 ms | 0.8 ms, 1 pass, Stands | | |
+| Shed | 420 | 1,090 | 5 | 36 ms | 38 ms | 33 ms, 1 pass, Stands | 39 ms, 0 passes, **Undecided** | 3.1 to 3.9 ms, **Undecided** |
+| Wall 40 × 32 | 1,297 | 3,784 | 1 | 172 ms | 156 ms | 19 ms, 1 pass, Stands | | |
+| Half warehouse | 1,822 | 5,138 | 5 | 164 ms | 167 ms | 136 ms, 1 pass, Stands | 196 ms, 0 passes, **Undecided** | |
+| Warehouse | 3,695 | 10,678 | 5 | 452 ms | 484 ms | 312 ms, 1 pass, Stands | 580 ms, 0 passes, **Undecided** | **40 to 50 ms**, **Undecided** |
+
+Three runs of each warm row; the spread is the range shown. The 200 ms warm target is met with
+150 ms to spare, but only because the answer is no longer computed: the certificate used to turn
+the frame's Undecided into Stands in 96 to 111 ms, and nothing does now. What the warm cascade's
+unsettled component reads, from the pass recorder (`Measure.Scale.*PostRemovedWarm` now prints
+it): the warehouse's 33-body frame stops at `IterationCap` (50 iterations) with one joint, 10638,
+still flipping in the last iteration at utilisation 1.017 (the IMMEDIATE_UPDATES §4 chatter, one
+corner Stuck ↔ Slipping at its friction limit); the shed's 15-body component stops at
+`RestoreFailedClosed` after 18 iterations with nothing flipping. Both are `Measure.*` rows whose
+`CHECK(Stands)` fails, and they stay failing on purpose: they are the speed target's real state.
+
+The cold rows are unchanged within noise from 2026-10-15 (elastic 452 vs 419 ms on the warehouse,
+judge 484 vs 549 ms; the judge is now the elastic solve alone). The elastic solve is the whole
+cost, and its profile (factorization 40%, assembly 40%) is the one recorded on 2026-10-15.
+
+Consequence for build-order item 3: under the forced-collapse rule as written, the warehouse
+frame reading Undecided after one post is removed would be released whole with `Forced` true.
+The chatter (and the shed's restore failure) must be settled, or the forced rule must exclude
+these ends, before that rule is switched on for the scale cases.
