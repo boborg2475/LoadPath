@@ -10,5 +10,7 @@ struct BodyDesc
 	double MassKg = 0;
 	Vec3 CentroidM;
 	bool bGrounded = false;
+	// The material's, used only to pick which body of a crushing joint crushes; 0 is unknown.
+	double CompressiveStrengthPa = 0;
 };
 }

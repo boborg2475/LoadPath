@@ -415,16 +415,20 @@ TEST_CASE("Cascade.CrushingOverloadCracksNothingAndReleasesTheBrick")
 	}
 	CHECK(SameHandle(V.Failures[0].Id, F.Bed));
 	CHECK(V.Failures[0].Pass == 1u);
-	CHECK(V.Failures[0].bSevered);
+	CHECK_FALSE(V.Failures[0].bSevered);
+	CHECK(V.Failures[0].Kind == FailureKind::Crushed);
 	CHECK(V.Failures[0].Axis == GoverningAxis::Compression);
-	CHECK(V.Clusters.size() == 1u);
-	if (!(V.Clusters.size() == 1u))
+	CHECK(V.Clusters.empty());
+	CHECK(V.CrushedBodies.size() == 1u);
+	if (!(V.CrushedBodies.size() == 1u))
 	{
 		return;
 	}
-	CHECK(SameIdList(V.Clusters[0].Bodies, {F.Brick}));
-	CHECK(SameIdList(V.Clusters[0].Severed, {F.Bed}));
-	CheckStamps(F.Model, F.Bed, InterfaceState::Severed, 0, 1);
+	CHECK(SameHandle(V.CrushedBodies[0].Body, F.Brick));
+	CHECK(SameHandle(V.CrushedBodies[0].Interface, F.Bed));
+	CHECK(V.CrushedBodies[0].Pass == 1u);
+	CHECK_FALSE(F.Model.IsLive(F.Brick));
+	CheckStamps(F.Model, F.Bed, InterfaceState::Removed, 0, 0);
 }
 
 TEST_CASE("Cascade.UndecidedComponentChangesNothing")

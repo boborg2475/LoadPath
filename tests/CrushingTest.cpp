@@ -90,7 +90,7 @@ TEST_CASE("Statics.Anchor.APierAboveItsCrushingStrengthCollapsesAndBelowItStands
 	CHECK(std::abs(TotalAboveBaseN / PierAreaM2() - PaviaBaseStressPa) <= 1.0e-9 * PaviaBaseStressPa);
 	CHECK(BelfryN() > 0.0);
 
-	SUBCASE("prism strength 1.5 MPa: the base crushes and the whole pier is released")
+	SUBCASE("prism strength 1.5 MPa: every joint is in the band: the blocks under them crush and the top block falls")
 	{
 		const double FcPa = 1.5e6;
 		Pier P = MakePier(FcPa);
@@ -118,30 +118,39 @@ TEST_CASE("Statics.Anchor.APierAboveItsCrushingStrengthCollapsesAndBelowItStands
 		}
 		const ComponentReport& Only = Judged.Components.front();
 		CHECK(Only.Elastic == StandingState::Overstressed);
-		CHECK(Only.Verdict == ComponentVerdict::Collapses);
-		CHECK(SameIdList(Only.Release, P.BlocksBottomUp));
+		CHECK(Only.Verdict == ComponentVerdict::Overstressed);
+		CHECK(Only.Release.empty());
 
 		const CascadeVerdict V = RunCascadeOn(P.Model, CascadeOptions{}, P.Loads);
 		INFO(DescribeVerdict(V));
 		CHECK(V.State == CascadeState::Stands);
-		CHECK(V.Passes == 1);
-		CHECK(V.Failures.size() == 1u);
-		if (!(V.Failures.size() == 1u))
+		CHECK(V.Passes == 2);
+		CHECK(V.CrushedBodies.size() == 2u);
+		if (!(V.CrushedBodies.size() == 2u))
 		{
 			return;
 		}
-		CHECK(SameHandle(V.Failures[0].Id, P.JointsBottomUp[0]));
-		CHECK(V.Failures[0].Pass == 1u);
-		CHECK(V.Failures[0].bSevered);
-		CHECK(V.Failures[0].Axis == GoverningAxis::Compression);
+		CHECK(SameHandle(V.CrushedBodies[0].Body, P.BlocksBottomUp[0]));
+		CHECK(SameHandle(V.CrushedBodies[0].Interface, P.JointsBottomUp[0]));
+		CHECK(SameHandle(V.CrushedBodies[1].Body, P.BlocksBottomUp[1]));
+		CHECK(SameHandle(V.CrushedBodies[1].Interface, P.JointsBottomUp[2]));
+		for (const CrushedBody& C : V.CrushedBodies)
+		{
+			CHECK(C.Pass == 1u);
+		}
+		CHECK(V.Failures.size() == 2u);
+		for (const FailedInterface& F : V.Failures)
+		{
+			CHECK(F.Kind == FailureKind::Crushed);
+			CHECK(F.Axis == GoverningAxis::Compression);
+		}
 		CHECK(V.Clusters.size() == 1u);
 		if (!(V.Clusters.size() == 1u))
 		{
 			return;
 		}
-		CHECK(SameIdList(V.Clusters[0].Bodies, P.BlocksBottomUp));
-		CHECK(SameIdList(V.Clusters[0].Severed, {P.JointsBottomUp[0]}));
-		CheckStamps(P.Model, P.JointsBottomUp[0], InterfaceState::Severed, 0, 1);
+		CHECK(V.Clusters[0].Pass == 2u);
+		CHECK(SameIdList(V.Clusters[0].Bodies, {P.BlocksBottomUp[2]}));
 	}
 
 	SUBCASE("prism strength 3.5 MPa: no joint is overstressed and the pier stands")
@@ -164,7 +173,7 @@ TEST_CASE("Statics.Anchor.APierAboveItsCrushingStrengthCollapsesAndBelowItStands
 	}
 }
 
-TEST_CASE("Statics.Combined.ACornerCrushedOnlyElasticallyIsConsultedAndStaysOverstressed")
+TEST_CASE("Statics.Combined.ACornerCrushedOnlyElasticallyCrushesTheBrick")
 {
 	const double Eccentricity = 0.25;
 	const double CornerShare = 0.34;
@@ -205,14 +214,19 @@ TEST_CASE("Statics.Combined.ACornerCrushedOnlyElasticallyIsConsultedAndStaysOver
 	CHECK(Only.Release.empty());
 	const CascadeVerdict V = RunCascadeOn(F.Model, CascadeOptions{}, Loads);
 	INFO(DescribeVerdict(V));
-	CHECK(V.State == CascadeState::Overstressed);
-	CHECK(V.Failures.empty());
+	CHECK(V.State == CascadeState::Stands);
 	CHECK(V.Clusters.empty());
-	CHECK(F.Model.IsLive(F.Brick));
-	CheckStamps(F.Model, F.Bed, InterfaceState::Intact, 0, 0);
+	CHECK(V.CrushedBodies.size() == 1u);
+	if (!(V.CrushedBodies.size() == 1u))
+	{
+		return;
+	}
+	CHECK(SameHandle(V.CrushedBodies[0].Body, F.Brick));
+	CheckRelative(V.CrushedBodies[0].Ratio, ElasticPeakCornerN / CornerCapacityN, 1.0e-6, "crushed ratio");
+	CHECK_FALSE(F.Model.IsLive(F.Brick));
 }
 
-TEST_CASE("Statics.Combined.ACrushedJointBesideAShearedBondIsNotConsulted")
+TEST_CASE("Statics.Combined.ACrushedBedBesideAShearedBondCrushesInTheSameBand")
 {
 	const double WeightN = BrickMassKg * GravityMPerS2;
 	const double AreaM2 = BrickLengthM * BrickWidthM;
@@ -267,13 +281,20 @@ TEST_CASE("Statics.Combined.ACrushedJointBesideAShearedBondIsNotConsulted")
 	{
 		return;
 	}
-	CHECK(SameHandle(V.Failures[0].Id, Joint));
+	CHECK(JointReading->ShearUtilisation >= BedReading->CompressionUtilisation * (1.0 - CascadeOptions{}.CrackBandFraction));
+	CHECK(SameHandle(V.Failures[0].Id, Bed));
 	CHECK(V.Failures[0].Pass == 1u);
-	CHECK_FALSE(V.Failures[0].bSevered);
-	CHECK(V.Failures[0].Axis == GoverningAxis::Shear);
+	CHECK(V.Failures[0].Kind == FailureKind::Crushed);
 	CHECK(V.Failures.size() == 1u);
 	CHECK(V.Clusters.empty());
-	CheckStamps(Model, Bed, InterfaceState::Intact, 0, 0);
+	CHECK(V.CrushedBodies.size() == 1u);
+	if (!(V.CrushedBodies.size() == 1u))
+	{
+		return;
+	}
+	CHECK(SameHandle(V.CrushedBodies[0].Body, Lower));
+	CheckStamps(Model, Joint, InterfaceState::Removed, 0, 0);
+	CHECK(Model.IsLive(Upper));
 }
 
 TEST_CASE("Statics.Combined.AZeroCrushingStrengthIsNotConsulted")

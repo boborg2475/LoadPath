@@ -32,6 +32,7 @@ struct ViewerExpected
 	std::string State = "Stands";
 	std::vector<std::vector<BodyId>> Clusters;
 	std::vector<BodyId> Either;
+	std::vector<BodyId> Crushed;
 };
 
 struct ViewerScene

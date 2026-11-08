@@ -62,12 +62,15 @@ across all fields before negativity is checked on any.
 ### Bodies (`Body.h`)
 
 ```cpp
-struct BodyDesc { double MassKg = 0; Vec3 CentroidM; bool bGrounded = false; };
+struct BodyDesc { double MassKg = 0; Vec3 CentroidM; bool bGrounded = false; double CompressiveStrengthPa = 0; };
 ```
 
 `AddBody` refuses a NaN or infinite mass or centroid (`NonFiniteInput`) and a negative mass
 (`NegativeMass`). Zero mass is accepted: a massless body is meaningful (TRAPS). A grounded body
-is part of the earth: it never moves and absorbs any load.
+is part of the earth: it never moves and absorbs any load. `CompressiveStrengthPa` is the body's
+material strength, used only to pick which body of a crushing joint crushes (the cascade, step 3);
+0 is unknown. The scenario loader fills it from the catalogue material row's optional
+`compressive_strength_mpa` (2026-11-08).
 
 ### Interfaces (`Interface.h`)
 
@@ -630,7 +633,17 @@ struct FailedInterface {
 	std::uint32_t Pass;
 	GoverningAxis Axis;        // the crack: the larger of tension and shear; the sever: Tension if the mechanism opens it beyond friction dilatancy (none on a zero-cap joint), else Compression if it closes, else Shear if it slides, else the reading's axis (None when unread)
 	double Ratio;              // the crack ratio, or the elastic reading's utilisation at release
-	bool bSevered;             // false: cracked (bond lost, friction kept); true: severed with its cluster
+	bool bSevered;             // false: cracked (bond lost, friction kept) or crushed; true: severed with its cluster
+	FailureKind Kind;          // Cracked, Severed (exactly when bSevered) or Crushed (2026-11-08)
+};
+
+enum class FailureKind : uint8_t { Cracked, Severed, Crushed };
+
+struct CrushedBody {                       // 2026-11-08: the body is removed; the host turns it to rubble
+	std::uint32_t Pass;
+	BodyId Body;
+	InterfaceId Interface;                 // the joint that crushed it (the worst, when several name it)
+	double Ratio;                          // that joint's CompressionUtilisation
 };
 
 struct ReleasedCluster {
@@ -653,6 +666,7 @@ struct CascadeVerdict {
 	int Passes = 0;                              // counted passes: those that cracked or released something
 	std::vector<FailedInterface> Failures;       // ascending (pass, slot)
 	std::vector<ReleasedCluster> Clusters;       // ascending (pass, lowest body slot)
+	std::vector<CrushedBody> CrushedBodies;      // ascending (pass, body slot); separate from Clusters
 	std::vector<InterfaceReading> Readings;      // the final judge's readings, every live interface
 	std::vector<ComponentReport> Components;     // the final judge's components
 	InterfaceId InvalidInterface{};
@@ -687,17 +701,27 @@ the run is dropped from later passes and not listed. Then, with `Pass = HighestP
    as a `FailedInterface` with `bSevered`, the elastic reading's utilisation as `Ratio`, and an `Axis` from the mechanism: relative velocity B minus A at the joint's four corners, a body outside the mechanism still; `Tension` if some corner's normal opening less μ times its tangential speed exceeds 1e-3 of the fastest corner's relative speed, else `Compression` if some corner closes faster than that threshold, else `Shear` if a tangential speed exceeds it, else the reading's axis; a zero-cap joint (`MaxShearStrengthPa = 0`, NormalOnly in the certificate) subtracts no friction lift), then
    `RemoveBody` every cluster body (its internal joints go with it, `Removed`, no stamp). The
    cluster's `Motion` is the certificate's motion of its lowest-slot body.
-3. **Crack.** For every component with Verdict `Overstressed`: the eligible joints are its live
-   `Intact` interfaces whose profile is bonded (`TensileStrengthPa > 0` or
-   `ShearCohesionPa > 0`) with crack ratio `max(TensionUtilisation, ShearUtilisation)` not
-   `≤ 1` (so NaN is over). `R_max` is the largest **finite** eligible ratio; a joint cracks when
-   its ratio is NaN or `+inf` (every pass it is eligible) or `≥ R_max · (1 − δ) · (1 − 1e-9)`
-   (the relative edge keeps two identical joints that differ by rounding in the same pass).
-   Cracked joints are stamped `Pass` and recorded with the crack ratio and its axis. A joint over
-   one on compression only (crushing) stands and logs: no crack action, as in the old project; a
-   dry joint over one cannot be Overstressed on a crackable axis and is never eligible.
+3. **Crush and crack, one band** (crushing as rubble, 2026-11-08, decisions
+   2026-11-08-forced-collapse-and-core-suite.md §2). For every component with Verdict
+   `Overstressed`: the crack-eligible joints are its live `Intact` interfaces whose profile is
+   bonded (`TensileStrengthPa > 0` or `ShearCohesionPa > 0`) with crack ratio
+   `max(TensionUtilisation, ShearUtilisation)` not `≤ 1` (so NaN is over); the crush-eligible
+   joints are its live interfaces, `Intact` or `Cracked`, with `CompressionUtilisation` not `≤ 1`.
+   `R_max` is the largest **finite** ratio over both lists; a joint fails when its ratio is NaN or
+   `+inf` or `≥ R_max · (1 − δ) · (1 − 1e-9)` (the relative edge keeps two identical joints that
+   differ by rounding in the same pass). Crushes go first, worst ratio first (non-finite first,
+   then ascending slot): each names a body (not grounded; else the one of lower known
+   `CompressiveStrengthPa` when both are known and differ; else the lower along gravity; else the
+   lower slot) which is removed with `RemoveBody` (its joints go `Removed`, unstamped), listed in
+   `CrushedBodies` and as a `FailedInterface` of kind `Crushed`, axis `Compression`, ratio the
+   joint's compression utilisation; a body two joints name is crushed once, by the worse. Its loads
+   are dropped from later passes, as a released body's are. Then the in-band crack joints still
+   live are cracked: stamped `Pass` and recorded with the crack ratio and its axis. A crush is
+   not a crack and not a release: what the crushed body carried falls by the ordinary rules at
+   the next judge. A dry joint over one cannot be Overstressed on a crackable axis and is never
+   crack-eligible.
    `Undecided` and `Stands` components change nothing.
-4. A pass that released or cracked anything is **counted** and the loop repeats with
+4. A pass that released, crushed or cracked anything is **counted** and the loop repeats with
    `Pass + 1`; a pass that changed nothing ends the run and is not counted. Termination is
    structural: joints never heal, every counted pass stamps at least one, so the run ends within
    the live interface count; `MaxPasses` is a budget, and reaching it after a counted pass ends
@@ -1235,18 +1259,25 @@ int RunCli(std::span<const std::string_view> Args, IFileStore& Files, std::strin
   order on `Value.Model`; a cascade gets the accumulated loads and the current gravity (both
   `Standing` and `Certificate`) with `Previous = nullptr`, exactly as a direct `ICascade::Run` call
   would. Clusters concatenate, passes sum, the state is the last cascade's (or judge's) name;
-  `Cracked` lists `<a>/<b>` for each crack (not sever) event. A step that cannot run (removing or
+  `Cracked` lists `<a>/<b>` for each crack (not sever, not crush) event; `Crushed` names every body a
+  cascade crushed (2026-11-08). A step that cannot run (removing or
   loading a body already gone) sets `RunError` and stops the run. `ElapsedMs` times the steps.
 - **Comparing.** Lines, in this order when present: `run error: ...`, `state: expected X, engine Y`,
   `released, not expected: a, b`, `expected to fall, still standing: a, b`, the partition line
   `expected {a} {b, c}; engine {...}` (sorted, `either` bodies left out), `passes: expected N,
-  engine M`, `cracked, not expected: ...`, `expected to crack, not cracked: ...`. Met means no lines.
+  engine M`, `cracked, not expected: ...`, `expected to crack, not cracked: ...`, `crushed: expected
+  [a], engine [b]`. The expectation's `crushed` (body patterns) is compared as a set and absent means
+  nothing crushes, so a crush the file did not expect fails it. Met means no lines.
 - **Viewer export.** Keys in a fixed order: `slug`, `title`, `test` (when set), `summary`, `units`,
   `gravity`, `lateral`, `loads`, `bodies` (`id`, `name`, `c`, `h`, `q` as (w, x, y, z), `grounded`,
   `mass_kg`, `material`), `interfaces` (every interface ever added, with `state_after`),
   `removed_before_run`, `before.verdict`, `after` (`state`, `passes`, `clusters` with `motion`,
-  `failures`, `removed`, `elapsed_ms` only when timed), and `expected` only when it differs from the
-  engine's after. Numbers are shortest round-trip, so the export of a run is byte-identical run to
+  `failures` (each with `kind`: `cracked`, `severed` or `crushed`), `crushed` (`body`, `pass`,
+  `interface`, `ratio`; always written), `removed` (released and crushed bodies), `elapsed_ms` only
+  when timed), and `expected` (with `crushed` body ids) only when it differs from the engine's
+  after. The page draws a crushed body in place with a rubble tint and dashed edges and lists it in
+  the facts, the failures table and the body inspect panel; it reads a file without `crushed` as
+  crushing nothing. Numbers are shortest round-trip, so the export of a run is byte-identical run to
   run. `ViewerSceneOf` leaves `ElapsedMs` unset and sets `Expected` only when the file's expectation
   is not met.
 - **CLI.** `loadpath_cli scenario <file> [--viz <out.json>] [--catalogue <path>] [--settings <path>] [--overrides <path>]`: the catalogue
@@ -1312,7 +1343,8 @@ struct ElasticPassRecord { int Iteration; std::vector<JointPassRecord> Joints; }
 // StandingComponent: std::vector<ElasticPassRecord> Passes; SolveEnd End; std::vector<InterfaceId> Blocking (RestoreFailedClosed only)
 // ComponentReport:   SolveEnd End; std::vector<ElasticPassRecord> Passes (carried from the elastic component)
 struct CascadePassRecord { uint32_t Pass; std::vector<ComponentReport> Components; std::vector<InterfaceReading> Readings;
-                           std::vector<ReleasedCluster> Clusters; std::vector<FailedInterface> Failures; };
+                           std::vector<ReleasedCluster> Clusters; std::vector<FailedInterface> Failures;
+                           std::vector<CrushedBody> Crushed; };   // the crushes of this pass (2026-11-08)
 // CascadeVerdict:    std::vector<CascadePassRecord> PassRecords;   // `Passes` stays the counted-pass integer
 ```
 
@@ -1321,7 +1353,7 @@ struct CascadePassRecord { uint32_t Pass; std::vector<ComponentReport> Component
   the integer count. Each record is `{pass, components: [{bodies, verdict, end, iterations, inner: [{iteration, joints:
   [{interface, corners: ["closed"|"open"|"slipping" x4], flipped: [bool x4], corner_n: [x4], corner_shear: [[x,y,z] x4],
   n, shear, moment, utilisation, axis}]}]}], readings: [joint-shaped, one per live interface], clusters: [as after.clusters],
-  failures: [as after.failures]}`; `iterations` is `inner.size()`. Interface ids are the viewer's existing numbers.
+  failures: [as after.failures], crushed: [as after.crushed, this pass only]}`; `iterations` is `inner.size()`. Interface ids are the viewer's existing numbers.
 - The E2E harness (`OptionsFor`) and the scenario-file harness record whenever `LOADPATH_VISUALS` is set and never
   otherwise; `RunScenario` follows `Settings.Debug.bRecordPasses`; the CLI honours `debug.record_passes` and
   `--record-passes` sets it true.

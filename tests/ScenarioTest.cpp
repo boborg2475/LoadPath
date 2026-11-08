@@ -279,9 +279,19 @@ std::vector<std::string> FailuresBySlot(const Structure& Model, const CascadeVer
 		char Ratio[32];
 		std::snprintf(Ratio, sizeof Ratio, "%.9g", F.Ratio);
 		Out.push_back("p" + std::to_string(F.Pass) + " " + std::to_string(Lo) + "/" + std::to_string(Hi) + " axis " + std::to_string(static_cast<int>(F.Axis)) +
-			(F.bSevered ? " severed" : " cracked") + " ratio " + Ratio);
+			(F.Kind == FailureKind::Crushed ? " crushed" : F.bSevered ? " severed" : " cracked") + " ratio " + Ratio);
 	}
 	return SortedNames(std::move(Out));
+}
+
+std::vector<std::string> CrushedBySlot(const CascadeVerdict& V)
+{
+	std::vector<std::string> Out;
+	for (const CrushedBody& C : V.CrushedBodies)
+	{
+		Out.push_back("p" + std::to_string(C.Pass) + " " + std::to_string(C.Body.Index) + " at " + std::to_string(C.Interface.Index));
+	}
+	return Out;
 }
 
 void CheckSameVerdict(const Structure& GotModel, const CascadeVerdict& Got, const Structure& WantModel, const CascadeVerdict& Want)
@@ -290,6 +300,7 @@ void CheckSameVerdict(const Structure& GotModel, const CascadeVerdict& Got, cons
 	CHECK(Got.Passes == Want.Passes);
 	CHECK(FailuresBySlot(GotModel, Got) == FailuresBySlot(WantModel, Want));
 	CHECK(ClustersBySlot(Got) == ClustersBySlot(Want));
+	CHECK(CrushedBySlot(Got) == CrushedBySlot(Want));
 }
 
 struct DirectBox
@@ -307,7 +318,8 @@ Structure BuildDirectBoxes(const std::vector<DirectBox>& Boxes, const std::funct
 	{
 		const Vec3 H = B.Shape.HalfExtentsM;
 		const double MassKg = B.bGrounded ? 0.0 : B.DensityKgPerM3 * 8.0 * H.X * H.Y * H.Z;
-		const Result<BodyId> Added = Model.AddBody(BodyDesc{MassKg, B.Shape.CentreM, B.bGrounded});
+		const MaterialRow* Row = ScenarioRows().FindMaterial(B.Material);
+		const Result<BodyId> Added = Model.AddBody(BodyDesc{MassKg, B.Shape.CentreM, B.bGrounded, Row != nullptr ? Row->CompressiveStrengthPa : 0.0});
 		REQUIRE(Added.Ok());
 		Ids.push_back(Added.Value);
 	}
@@ -1073,9 +1085,9 @@ TEST_CASE("Scenario.Steps.TheBeforeVerdictJudgesTheStructureAsTheBeforeViewDraws
 	{
 		CHECK(BeforeOf(FileText("bonded-wall-lateral-step.json")) == ComponentVerdict::Overstressed);
 	}
-	SUBCASE("a load step: overloaded before the cascade releases the beam")
+	SUBCASE("a load step: overstressed before the cascade crushes the beam")
 	{
-		CHECK(BeforeOf(FileText("beam-on-piers-load-step.json")) == ComponentVerdict::Collapses);
+		CHECK(BeforeOf(FileText("beam-on-piers-load-step.json")) == ComponentVerdict::Overstressed);
 	}
 	SUBCASE("intact wall, cascade only")
 	{
@@ -1620,4 +1632,90 @@ TEST_CASE("Scenario.Viewer.PassesAreWrittenWhenRecordedAndOmittedWhenNot")
 	}
 	std::sort(RecordedClusters.begin(), RecordedClusters.end());
 	CHECK(RecordedClusters == ClusterBodies(Field(After, "clusters")));
+}
+
+namespace
+{
+std::string BeamOnPiersFile()
+{
+	std::ifstream File(std::string(LOADPATH_SCENARIO_DIR) + "/beam-on-piers-load-step.json", std::ios::binary);
+	CHECK(File.good());
+	return std::string(std::istreambuf_iterator<char>(File), std::istreambuf_iterator<char>());
+}
+}
+
+TEST_CASE("Scenario.Expect.TheCrushedBodiesMustMatchTheExpectation")
+{
+	const std::string File = BeamOnPiersFile();
+	const auto Met = [](const std::string& Json) {
+		Scenario S = LoadScenarioOk(Json);
+		const ScenarioOutcome O = RunScenario(S);
+		INFO("run error: " << O.RunError);
+		CHECK(O.RunError.empty());
+		CHECK(O.Crushed == std::vector<std::string>{"beam"});
+		CHECK(O.Clusters.empty());
+		CHECK(S.Expect.has_value());
+		return S.Expect.has_value() && CompareExpectation(*S.Expect, O).bMet;
+	};
+	CHECK(Met(File));
+	CHECK_FALSE(Met(Replaced(File, R"("expect": { "crushed": ["beam"] })", R"("expect": {})")));
+	CHECK_FALSE(Met(Replaced(File, R"("expect": { "crushed": ["beam"] })", R"("expect": { "crushed": ["pier0.1"] })")));
+	CHECK_FALSE(Met(Replaced(File, R"("expect": { "crushed": ["beam"] })", R"("expect": { "released": [["beam"]] })")));
+}
+
+TEST_CASE("Scenario.Viewer.CrushedBodiesAreWrittenUnderAfterAndEachPassRecord")
+{
+	Settings Tunables;
+	Tunables.Debug.bRecordPasses = true;
+	Scenario S = LoadScenarioOk(BeamOnPiersFile());
+	const ScenarioOutcome O = RunScenario(S, Tunables);
+	const Parsed P = Parse(WriteViewerJson(S, O, "beam-on-piers-load-step"));
+	CHECK(P.bOk);
+	if (!(P.bOk))
+	{
+		return;
+	}
+	const double Beam = static_cast<double>(S.Find("beam").Index);
+	const detail::JsonValue& After = Field(P.Root, "after");
+	CHECK(HasKey(After, "crushed"));
+	if (!(HasKey(After, "crushed")))
+	{
+		return;
+	}
+	const detail::JsonValue& Crushed = Field(After, "crushed");
+	CHECK(Crushed.Items.size() == 1u);
+	if (!(Crushed.Items.size() == 1u))
+	{
+		return;
+	}
+	CHECK(Field(Crushed.Items[0], "body").Number == Beam);
+	CHECK(Field(Crushed.Items[0], "pass").Number == 1.0);
+	CHECK(HasKey(Crushed.Items[0], "interface"));
+	CHECK(Field(Crushed.Items[0], "ratio").Number > 1.0);
+	CHECK(Numbers(Field(After, "removed")) == std::vector<double>{Beam});
+	CHECK(Field(After, "clusters").Items.empty());
+	bool bCrushFailure = false;
+	for (const detail::JsonValue& F : Field(After, "failures").Items)
+	{
+		bCrushFailure = bCrushFailure || Field(F, "kind").Text == "crushed";
+	}
+	CHECK(bCrushFailure);
+	const detail::JsonValue& Records = Field(After, "pass_records");
+	CHECK(Records.Items.size() == 2u);
+	if (!(Records.Items.size() == 2u))
+	{
+		return;
+	}
+	CHECK(HasKey(Records.Items[0], "crushed"));
+	if (!(HasKey(Records.Items[0], "crushed")))
+	{
+		return;
+	}
+	CHECK(Field(Records.Items[0], "crushed").Items.size() == 1u);
+	if (!(Field(Records.Items[0], "crushed").Items.size() == 1u))
+	{
+		return;
+	}
+	CHECK(Field(Field(Records.Items[0], "crushed").Items[0], "body").Number == Beam);
+	CHECK(Field(Records.Items[1], "crushed").Items.empty());
 }

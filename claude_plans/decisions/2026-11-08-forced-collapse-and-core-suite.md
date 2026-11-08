@@ -42,6 +42,7 @@ before the next starts.
   same pass), which is far wider than "a small margin"; case D2 is the check that the band is not
   too wide, and the value becomes a settings-file entry (§5).
 - Visualisations in a separate session confirm the rule.
+- **Built 2026-11-08** on branch item3/crushing-rubble (DESIGN §10 "2026-11-08 crushing as rubble", API.md slice 3 step 3): `CascadeVerdict::CrushedBodies`, `FailureKind::Crushed`, `CascadePassRecord::Crushed`, viewer `crushed` keys; awaits the owner's review and the visual check.
 
 ## 3. Pass-by-pass replay (owner request)
 

@@ -822,7 +822,8 @@ private:
 
 	BodyId AddBody(const std::string& Name, const std::string& Material, const geometry::Box& Shape, double MassKg, bool bGrounded, PlacedBox Placed)
 	{
-		const Result<BodyId> Added = Out.Model.AddBody(BodyDesc{MassKg, Shape.CentreM, bGrounded});
+		const MaterialRow* Row = Rows.FindMaterial(Material);
+		const Result<BodyId> Added = Out.Model.AddBody(BodyDesc{MassKg, Shape.CentreM, bGrounded, Row != nullptr ? Row->CompressiveStrengthPa : 0.0});
 		if (!Added.Ok())
 		{
 			Fail(Placed.Line, "body " + Quoted(Name) + ": " + ModelErrorText(Added.Error));
@@ -1186,7 +1187,7 @@ private:
 			return Object == nullptr && Error.Message.empty();
 		}
 		ScenarioExpect Expect;
-		if (!OnlyKeys(*Object, {"state", "released", "either", "passes", "cracked"}) || !Text(*Object, "state", false, Expect.State))
+		if (!OnlyKeys(*Object, {"state", "released", "either", "passes", "cracked", "crushed"}) || !Text(*Object, "state", false, Expect.State))
 		{
 			return false;
 		}
@@ -1199,8 +1200,9 @@ private:
 		const JsonValue* Either = nullptr;
 		const JsonValue* Passes = nullptr;
 		const JsonValue* Cracked = nullptr;
+		const JsonValue* Crushed = nullptr;
 		if (!Typed(*Object, "released", JsonType::Array, false, Released) || !Typed(*Object, "either", JsonType::Array, false, Either) ||
-			!Typed(*Object, "passes", JsonType::Number, false, Passes) || !Typed(*Object, "cracked", JsonType::Array, false, Cracked))
+			!Typed(*Object, "passes", JsonType::Number, false, Passes) || !Typed(*Object, "cracked", JsonType::Array, false, Cracked) || !Typed(*Object, "crushed", JsonType::Array, false, Crushed))
 		{
 			return false;
 		}
@@ -1249,6 +1251,16 @@ private:
 				Joints.push_back(Joint.Text);
 			}
 			Expect.Cracked = std::move(Joints);
+		}
+		if (Crushed != nullptr)
+		{
+			for (const JsonValue& Pattern : Crushed->Items)
+			{
+				if (!ExpandBodies(Pattern, Expect.Crushed))
+				{
+					return false;
+				}
+			}
 		}
 		Out.Expect = std::move(Expect);
 		return true;
@@ -1390,9 +1402,13 @@ void RecordCascade(const Scenario& Value, const CascadeVerdict& Verdict, Scenari
 		Record.Released.push_back(NamesOf(Value, Cluster.Bodies));
 		Outcome.Clusters.push_back(Record.Released.back());
 	}
+	for (const CrushedBody& Crushed : Verdict.CrushedBodies)
+	{
+		Outcome.Crushed.push_back(NamesOf(Value, {Crushed.Body})[0]);
+	}
 	for (const FailedInterface& Failure : Verdict.Failures)
 	{
-		if (Failure.bSevered)
+		if (Failure.bSevered || Failure.Kind == FailureKind::Crushed)
 		{
 			continue;
 		}
@@ -1623,6 +1639,12 @@ ExpectationReport CompareExpectation(const ScenarioExpect& Expect, const Scenari
 			Report.Lines.push_back("expected to crack, not cracked: " + Joined(Missing));
 		}
 	}
+	const std::set<std::string> WantCrushed(Expect.Crushed.begin(), Expect.Crushed.end());
+	const std::set<std::string> GotCrushed(Outcome.Crushed.begin(), Outcome.Crushed.end());
+	if (WantCrushed != GotCrushed)
+	{
+		Report.Lines.push_back("crushed: expected [" + Joined(std::vector<std::string>(WantCrushed.begin(), WantCrushed.end())) + "], engine [" + Joined(std::vector<std::string>(GotCrushed.begin(), GotCrushed.end())) + "]");
+	}
 	Report.bMet = Report.Lines.empty();
 	return Report;
 }
@@ -1686,6 +1708,7 @@ ViewerScene ViewerSceneOf(const Scenario& Value, const ScenarioOutcome& Outcome,
 			}
 		}
 		Expected.Either = IdsOf(Value, Value.Expect->Either);
+		Expected.Crushed = IdsOf(Value, Value.Expect->Crushed);
 		Scene.Expected = std::move(Expected);
 	}
 	return Scene;

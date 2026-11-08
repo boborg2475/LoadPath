@@ -121,7 +121,12 @@ inline std::string DescribeVerdict(const CascadeVerdict& V)
 	Out << "state " << CascadeStateName(V.State) << ", passes " << V.Passes << ", first " << V.FirstPass << ", last " << V.LastPass << ", failures [";
 	for (const FailedInterface& F : V.Failures)
 	{
-		Out << " {" << F.Id.Index << " pass " << F.Pass << " " << GoverningAxisName(F.Axis) << " " << F.Ratio << (F.bSevered ? " severed" : " cracked") << "}";
+		Out << " {" << F.Id.Index << " pass " << F.Pass << " " << GoverningAxisName(F.Axis) << " " << F.Ratio << (F.Kind == FailureKind::Crushed ? " crushed" : F.bSevered ? " severed" : " cracked") << "}";
+	}
+	Out << " ], crushed [";
+	for (const CrushedBody& C : V.CrushedBodies)
+	{
+		Out << " {pass " << C.Pass << " body " << C.Body.Index << " at " << C.Interface.Index << " ratio " << C.Ratio << "}";
 	}
 	Out << " ], clusters [";
 	for (const ReleasedCluster& C : V.Clusters)
@@ -156,6 +161,7 @@ struct ScriptedJoint
 	InterfaceId Id;
 	double TensionUtilisation = 0.0;
 	double ShearUtilisation = 0.0;
+	double CompressionUtilisation = 0.0;
 };
 
 // Returns Script[call] on each Judge, repeating the last entry once the script runs out.
@@ -202,6 +208,12 @@ inline AuthorityResult OverstressedScript(const Structure& Model, const std::vec
 		const bool bTension = !(Joint.TensionUtilisation < Joint.ShearUtilisation);
 		Reading.Utilisation = bTension ? Joint.TensionUtilisation : Joint.ShearUtilisation;
 		Reading.Axis = bTension ? GoverningAxis::Tension : GoverningAxis::Shear;
+		Reading.CompressionUtilisation = Joint.CompressionUtilisation;
+		if (Joint.CompressionUtilisation > Reading.Utilisation)
+		{
+			Reading.Utilisation = Joint.CompressionUtilisation;
+			Reading.Axis = GoverningAxis::Compression;
+		}
 		Result.Readings.push_back(Reading);
 	}
 	return Result;

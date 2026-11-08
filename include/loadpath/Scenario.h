@@ -34,6 +34,8 @@ struct ScenarioExpect
 	std::vector<std::string> Either;
 	std::optional<int> Passes;
 	std::optional<std::vector<std::string>> Cracked;
+	// Compared as a set; absent means nothing crushes.
+	std::vector<std::string> Crushed;
 };
 
 enum class ScenarioStepKind : std::uint8_t { Cascade, Judge, Remove, Load, Lateral };
@@ -96,6 +98,8 @@ struct ScenarioOutcome
 	int Passes = 0;
 	// "<a>/<b>" for every joint a cascade cracked.
 	std::vector<std::string> Cracked;
+	// Every body a cascade crushed, in order.
+	std::vector<std::string> Crushed;
 	std::vector<ScenarioStepRecord> Steps;
 	std::vector<CascadeVerdict> Verdicts;
 	// The judge of the structure as the before view draws it: every remove step applied, every load and lateral_g applied, no cascade run.
