@@ -27,6 +27,7 @@ struct CascadeSettings
 {
 	double CrackBandFraction = 0.5;
 	int MaxPasses = 32;
+	UndecidedResolution OnUndecided = UndecidedResolution::Collapse;
 };
 
 // Every debug option's real-life default is off.

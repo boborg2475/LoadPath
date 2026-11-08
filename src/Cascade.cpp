@@ -5,6 +5,7 @@
 #include "StaticsCommon.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstddef>
 #include <limits>
@@ -22,7 +23,8 @@ constexpr double CrackBandRelativeEdge = 1.0e-9;
 bool AreOptionsValid(const CascadeOptions& Options)
 {
 	return IsFinite(Options.CrackBandFraction) && Options.CrackBandFraction >= 0.0 && Options.CrackBandFraction <= 1.0 &&
-		Options.MaxPasses >= 1;
+		Options.MaxPasses >= 1 &&
+		(Options.OnUndecided == UndecidedResolution::Collapse || Options.OnUndecided == UndecidedResolution::Stands);
 }
 
 bool Contains(const std::vector<BodyId>& Bodies, BodyId Id)
@@ -231,6 +233,56 @@ GoverningAxis MechanismAxis(const Structure& Model, const ComponentReport& Compo
 	return Fallback;
 }
 
+int Severity(ComponentVerdict Verdict)
+{
+	switch (Verdict)
+	{
+	case ComponentVerdict::Stands: return 0;
+	case ComponentVerdict::Overstressed: return 1;
+	case ComponentVerdict::Collapses: return 2;
+	case ComponentVerdict::Undecided: return 3;
+	case ComponentVerdict::InvalidInput: return 4;
+	}
+	return 4;
+}
+
+SolveEnd ForcedReasonOf(SolveEnd End)
+{
+	return End == SolveEnd::IterationCap || End == SolveEnd::RestoreFailedClosed || End == SolveEnd::PowerCheckFailed ? End : SolveEnd::None;
+}
+
+void ResolveUndecided(AuthorityResult& Judged, UndecidedResolution Resolution, std::array<std::uint32_t, SolveEndCount>& Tally)
+{
+	Judged.Worst = ComponentVerdict::Stands;
+	for (ComponentReport& Component : Judged.Components)
+	{
+		if (Component.Verdict == ComponentVerdict::Undecided)
+		{
+			Component.Forced = true;
+			Component.ForcedReason = ForcedReasonOf(Component.End);
+			Component.Mechanism.clear();
+			Component.Release.clear();
+			if (Resolution == UndecidedResolution::Collapse)
+			{
+				Component.Verdict = ComponentVerdict::Collapses;
+				Component.Release = Component.Bodies;
+			}
+			else
+			{
+				Component.Verdict = ComponentVerdict::Stands;
+			}
+			if (!Component.bReused)
+			{
+				++Tally[static_cast<std::size_t>(Component.ForcedReason)];
+			}
+		}
+		if (Severity(Component.Verdict) > Severity(Judged.Worst))
+		{
+			Judged.Worst = Component.Verdict;
+		}
+	}
+}
+
 struct CrackCandidate
 {
 	InterfaceId Id;
@@ -296,7 +348,8 @@ bool Release(Structure& Model, const AuthorityResult& Judged, std::uint32_t Pass
 		ReleasedCluster Released;
 		Released.Pass = Pass;
 		Released.Bodies = Cluster.Bodies;
-		Released.Motion = MotionOf(*Cluster.Component, Cluster.Bodies.front());
+		Released.bForced = Cluster.Component->Forced;
+		Released.Motion = Released.bForced ? MechanismMotion{Cluster.Bodies.front(), Vec3{}, Vec3{}} : MotionOf(*Cluster.Component, Cluster.Bodies.front());
 		for (const InterfaceId Id : Crossing[C])
 		{
 			if (!Model.Sever(Id, Pass))
@@ -458,6 +511,7 @@ private:
 				Verdict.Components = std::move(Judged.Components);
 				return Verdict;
 			}
+			ResolveUndecided(Judged, Options.OnUndecided, Verdict.ForcedByReason);
 			const std::size_t FailuresBefore = Verdict.Failures.size();
 			const std::size_t ClustersBefore = Verdict.Clusters.size();
 			const bool bReleased = Release(Model, Judged, Pass, Verdict, ReleasedThisRun);

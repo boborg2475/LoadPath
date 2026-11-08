@@ -5,6 +5,7 @@
 #include "loadpath/StructuralAuthority.h"
 #include "loadpath/Structure.h"
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -13,6 +14,14 @@
 
 namespace loadpath
 {
+enum class UndecidedResolution : std::uint8_t
+{
+	Collapse,
+	Stands
+};
+
+inline constexpr std::size_t SolveEndCount = 7;
+
 enum class CascadeState : std::uint8_t
 {
 	Stands,
@@ -43,6 +52,8 @@ struct ReleasedCluster
 	MechanismMotion Motion;
 	// Every live interface that crossed the cluster boundary, now Severed.
 	std::vector<InterfaceId> Severed;
+	// Released by resolving an Undecided component; its Motion is zero.
+	bool bForced = false;
 };
 
 struct CascadeOptions
@@ -52,6 +63,8 @@ struct CascadeOptions
 	double CrackBandFraction = 0.5;
 	// Counted passes before PassCapReached.
 	int MaxPasses = 32;
+	// Collapse releases a whole Undecided component; Stands keeps it standing; either marks it Forced.
+	UndecidedResolution OnUndecided = UndecidedResolution::Collapse;
 };
 
 // One pass's judge and what it changed; the final judge that changed nothing is recorded too.
@@ -84,6 +97,8 @@ struct CascadeVerdict
 	std::vector<std::size_t> StaleLoads;
 	// Empty unless Options.Authority.Standing.Debug->bRecordPasses.
 	std::vector<CascadePassRecord> PassRecords;
+	// Forced components solved this run, indexed by their SolveEnd.
+	std::array<std::uint32_t, SolveEndCount> ForcedByReason{};
 };
 
 // Run mutates the structure it is given (stamps, removals) and lists every change in the verdict.

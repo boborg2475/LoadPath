@@ -78,7 +78,7 @@ inline bool Same(const BodyLoad& A, const BodyLoad& B) { return Same(A.Body, B.B
 
 inline bool Same(const ComponentReport& A, const ComponentReport& B)
 {
-	return Same(A.Bodies, B.Bodies) && A.Verdict == B.Verdict && A.Elastic == B.Elastic && Same(A.Mechanism, B.Mechanism) && Same(A.Release, B.Release) && A.bReused == B.bReused && Same(A.Loads, B.Loads);
+	return Same(A.Bodies, B.Bodies) && A.Verdict == B.Verdict && A.Elastic == B.Elastic && Same(A.Mechanism, B.Mechanism) && Same(A.Release, B.Release) && A.bReused == B.bReused && Same(A.Loads, B.Loads) && A.PassCount == B.PassCount && A.Forced == B.Forced && A.ForcedReason == B.ForcedReason && Same(A.UnsettledJoints, B.UnsettledJoints);
 }
 
 inline bool Same(const AuthorityResult& A, const AuthorityResult& B)
@@ -90,12 +90,12 @@ inline bool Same(const FailedInterface& A, const FailedInterface& B) { return Sa
 
 inline bool Same(const ReleasedCluster& A, const ReleasedCluster& B)
 {
-	return A.Pass == B.Pass && Same(A.Bodies, B.Bodies) && Same(A.Motion, B.Motion) && Same(A.Severed, B.Severed);
+	return A.Pass == B.Pass && Same(A.Bodies, B.Bodies) && Same(A.Motion, B.Motion) && Same(A.Severed, B.Severed) && A.bForced == B.bForced;
 }
 
 inline bool Same(const CascadeVerdict& A, const CascadeVerdict& B)
 {
-	return A.State == B.State && A.FirstPass == B.FirstPass && A.LastPass == B.LastPass && A.Passes == B.Passes && Same(A.Failures, B.Failures) && Same(A.Clusters, B.Clusters) && Same(A.Readings, B.Readings) && Same(A.Components, B.Components) && Same(A.InvalidInterface, B.InvalidInterface);
+	return A.State == B.State && A.FirstPass == B.FirstPass && A.LastPass == B.LastPass && A.Passes == B.Passes && Same(A.Failures, B.Failures) && Same(A.Clusters, B.Clusters) && Same(A.Readings, B.Readings) && Same(A.Components, B.Components) && Same(A.InvalidInterface, B.InvalidInterface) && A.ForcedByReason == B.ForcedByReason;
 }
 
 inline bool Same(const ComponentPartition& A, const ComponentPartition& B) { return Same(A.ComponentOfSlot, B.ComponentOfSlot) && Same(A.OffsetOfSlot, B.OffsetOfSlot) && Same(A.FreeBodies, B.FreeBodies); }

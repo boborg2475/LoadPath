@@ -439,13 +439,15 @@ TEST_CASE("Cascade.UndecidedComponentChangesNothing")
 		INFO("judge: " << DescribeAuthority(Judged));
 		CHECK(Judged.Worst == ComponentVerdict::Undecided);
 	}
+	Options.OnUndecided = UndecidedResolution::Stands;
 	const CascadeVerdict V = RunCascade(F.Model, Options);
 	INFO(DescribeVerdict(V));
-	CHECK(V.State == CascadeState::Undecided);
+	CHECK(V.State == CascadeState::Stands);
 	CheckNothingChanged(V);
 	CheckStamps(F.Model, F.Bed, InterfaceState::Intact, 0, 0);
 	CHECK(F.Model.IsLive(F.Brick));
 	CHECK(V.Components.size() == 1u);
+	CHECK((V.Components.size() == 1u && V.Components[0].Forced));
 }
 
 TEST_CASE("Cascade.PassCapEndsAfterTheCrackAndASecondRunContinues")
