@@ -187,7 +187,7 @@ TEST_CASE("Statics.Combined.PureElasticStandsPassesThrough")
 	CHECK(Only.Release.empty());
 }
 
-TEST_CASE("Statics.Combined.TwoBrickStackPastFrictionCollapses")
+TEST_CASE("Parked.Statics.Combined.TwoBrickStackPastFrictionCollapses")
 {
 	const double Friction = 0.6;
 	const double LambdaX = 0.625;
@@ -212,7 +212,7 @@ TEST_CASE("Statics.Combined.TwoBrickStackPastFrictionCollapses")
 	}
 }
 
-TEST_CASE("Statics.Combined.ThreeBrickBridgeStandsAtEveryProvableBiaxialPoint")
+TEST_CASE("Parked.Statics.Combined.ThreeBrickBridgeStandsAtEveryProvableBiaxialPoint")
 {
 	struct Case
 	{
@@ -234,7 +234,7 @@ TEST_CASE("Statics.Combined.ThreeBrickBridgeStandsAtEveryProvableBiaxialPoint")
 	}
 }
 
-TEST_CASE("Statics.Combined.ThreeBrickBridgeTheElasticSeesFallReadsUndecided")
+TEST_CASE("Parked.Statics.Combined.ThreeBrickBridgeTheElasticSeesFallReadsUndecided")
 {
 	struct Case
 	{
@@ -260,7 +260,7 @@ TEST_CASE("Statics.Combined.ThreeBrickBridgeTheElasticSeesFallReadsUndecided")
 	}
 }
 
-TEST_CASE("Statics.Combined.ThreeBrickBridgeStandsWhereTheElasticFindsNoMechanism")
+TEST_CASE("Parked.Statics.Combined.ThreeBrickBridgeStandsWhereTheElasticFindsNoMechanism")
 {
 	const ThreeBrickBridge B = MakeThreeBrickBridge(DryJoint(5.0));
 	const AuthorityResult Result = JudgeWith(B.Model, Biaxial(2.5, 0.75));
@@ -275,7 +275,7 @@ TEST_CASE("Statics.Combined.ThreeBrickBridgeStandsWhereTheElasticFindsNoMechanis
 	}
 }
 
-TEST_CASE("Statics.Combined.DryTwoCourseWallTheElasticSeesFallReadsUndecided")
+TEST_CASE("Parked.Statics.Combined.DryTwoCourseWallTheElasticSeesFallReadsUndecided")
 {
 	const CatalogueResult Loaded = LoadCatalogue(ReadCatalogueFile());
 	REQUIRE(Loaded.Ok());
@@ -377,7 +377,7 @@ TEST_CASE("Statics.Combined.CollapseReleaseIsTheElasticList")
 	CheckSlidesAlongWithoutClosing(*Motion, PlusX, PlusZ, ShapeTolerance);
 }
 
-TEST_CASE("Statics.Combined.UndecidedComponentIsRefereed")
+TEST_CASE("Parked.Statics.Combined.UndecidedComponentIsRefereed")
 {
 	const BrickOnGround F = MakeBrickOnGround(DryJoint(0.6));
 	const double TiltRad = 29.0 * RadPerDegree;

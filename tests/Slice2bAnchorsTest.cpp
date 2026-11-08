@@ -228,7 +228,7 @@ void CheckOnlyTheBaseOpens(const StandingResult& Result, const LibertonWall& W)
 }
 }
 
-TEST_CASE("Statics.Anchor.FreeWallWithFrictionBelowThicknessOverHeightSlidesAtFriction")
+TEST_CASE("Parked.Statics.Anchor.FreeWallWithFrictionBelowThicknessOverHeightSlidesAtFriction")
 {
 	const double ThicknessM = BrickWidthM;
 	const double HeightM = 10.0 * BrickHeightM;
@@ -275,7 +275,7 @@ TEST_CASE("Statics.Anchor.ConstantStepStackStandsUpToLengthOverCountAndItsTopBlo
 	}
 }
 
-TEST_CASE("Statics.Anchor.SeatedBeamSlidesAtTheMirandolaAccelerationOnNeopreneAndHoldsAtTheCodeFriction")
+TEST_CASE("Parked.Statics.Anchor.SeatedBeamSlidesAtTheMirandolaAccelerationOnNeopreneAndHoldsAtTheCodeFriction")
 {
 	const double MirandolaLambda = 0.264;
 	for (const double Friction : {0.13, 0.35})

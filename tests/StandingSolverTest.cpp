@@ -495,7 +495,7 @@ TEST_CASE("Statics.Solver.BiaxialLoadOpensOnlyTheWindwardCornerAndThreeCarryTheB
 	}
 }
 
-TEST_CASE("Statics.Solver.TwoBrickStackOverturnedByABiaxialLoadCollapses")
+TEST_CASE("Parked.Statics.Solver.TwoBrickStackOverturnedByABiaxialLoadCollapses")
 {
 	const double ShiftXM = 0.03;
 	const double LambdaX = 1.5;

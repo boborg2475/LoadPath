@@ -134,6 +134,18 @@ Invoke-Case "Visuals.Script.TheDataFolderIsEmptiedBeforeTheRun" {
     } finally { Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $Dir }
 }
 
+Invoke-Case "Visuals.Script.AParkedCaseIsExemptFromTheGuardAndMarkedDeferred" {
+    $C = "Visuals.Script.AParkedCaseIsExemptFromTheGuardAndMarkedDeferred"
+    $Guard = Test-PictureGuard -Cases @("E2E.A", "Parked.E2E.B") -RecordedTests @("E2E.A")
+    Assert-True $C $Guard.Passed "an unrecorded Parked.* case must not fail the guard: $($Guard.Message)"
+    $Entries = @((New-Entry "Parked.E2E.B" "b1"), (New-Entry "Parked.E2E.C" "c1"))
+    $Index = New-VisualIndex -Entries $Entries -Results @{ "Parked.E2E.B" = $false; "Parked.E2E.C" = $true }
+    $Statuses = @($Index.Entries | ForEach-Object { $_.status }) -join ","
+    Assert-True $C ($Statuses -ceq "deferred,passed") "statuses should be deferred,passed, got $Statuses"
+    $Messages = @($Index.Messages) -join "`n"
+    Assert-True $C ($Messages -notlike "*Parked.E2E.C*") "a green parked case must not be reported (some are parked green): $Messages"
+}
+
 Write-Output ("[Visuals.Tests.ps1] {0} passed, {1} failed" -f $Script:Passed, $Script:Failures.Count)
 if ($Script:Failures.Count -gt 0) { exit 1 }
 exit 0

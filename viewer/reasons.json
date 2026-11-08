@@ -1,19 +1,19 @@
 {
   "_about": "Why each E2E result is what it is, shown on the picture pages. Keyed by test name; a slug key overrides its test's entry. basis: why the expected outcome is right (from the approved plan). deferred: why the test is held red. green_when: what turns it green. Edit with the plan: claude_plans/test_plans/2026-10-15-e2e-validation.md and 2026-10-16-scenario-workbench.md.",
   "tests": {
-    "E2E.Colonnade.RemovingAPostDropsOnlyTheBeamsItCarried": {
+    "Parked.E2E.Colonnade.RemovingAPostDropsOnlyTheBeamsItCarried": {
       "basis": "Closed form. A beam left on one dry bearing has its centroid about 1.05 m beyond that bearing and no tension to hold it, so it tips; a beam on two bearings stands. Dry bearings pass no moment, so the neighbouring bays are untouched (F-RON-02, untied: collapse confined to one bay)."
     },
-    "E2E.Arch.LosingTheKeystoneLeavesOnlyTheHaunchesFrictionHolds": {
+    "Parked.E2E.Arch.LosingTheKeystoneLeavesOnlyTheHaunchesFrictionHolds": {
       "basis": "An independent oracle in the test. A half-arch with a free top is an open chain: each joint carries exactly the weight above it. The chain stands up to a joint only while every joint below has the centroid of the part above inside it and does not slide (cot φ ≤ μ). The longest such chain ends at the 54.484° joint, since one voussoir higher cot 54.484° = 0.714 exceeds μ = 0.7. So 12 voussoirs stand on each side. The engine drops the rest one voussoir per pass inside one run; the test checks only the final set and its symmetry (owner answer 5)."
     },
     "E2E.Wall.RemovingANonStructuralBrickReleasesNothing": {
       "basis": "Engineering judgement: a brick with nothing above it, or one whose neighbours bridge it by bond, carries no load another piece depends on. Nothing is released, nothing cracks, and the wall stands."
     },
-    "E2E.Colonnade.ScrewedBearingsBridgeALostPostAboveTheWithdrawalThreshold": {
+    "Parked.E2E.Colonnade.ScrewedBearingsBridgeALostPostAboveTheWithdrawalThreshold": {
       "basis": "Closed form from the catalogue's EC5 screw withdrawal. A beam left on one post overturns with moment 543.6 N × 1.0 m against n × 5240 N × 0.04975 m, so it holds when n ≥ 2.08: two screws let it fall, three hold it. F-RON-02 (tied: the loss is bridged) is the published precedent. Fastener values are characteristic, not mean (owner answer 6)."
     },
-    "E2E.Colonnade.AScrewedEndBayTipsWithItsPost": {
+    "Parked.E2E.Colonnade.AScrewedEndBayTipsWithItsPost": {
       "basis": "Closed form. Post and beam together have their centroid about 0.68 m from the post's centre line, far outside its 0.1 m half-width, and the post base carries no tension, so the screwed pair tips about the base edge facing the gap. With dry bearings the beam tips alone off a post that then stands."
     },
     "E2E.Wall.BondedWallPushedPastItsLimitFallsAsOneSlab": {
@@ -25,16 +25,16 @@
     "E2E.Bearing.AnOverloadedTimberBearingDropsTheBeamAndSparesThePiers": {
       "basis": "Closed form from the catalogue: each timber bearing carries P/2 + W_beam/2 against f_c,90 A = 3.75 MPa × 0.0220 m² = 82.6 kN (EN 1995-1-1 §6.1.5), while the brick beds sit at about half their EC6 capacity. At 0.8 of the bearing capacity nothing happens; at 1.2 the bearings crush, the beam falls and the piers stand. That crushing releases what is above it is the 2026-10-15 crushing ruling (owner answer 7)."
     },
-    "E2E.Shed.LosingOneSideOfPostsDropsTheRoofBayByBay": {
+    "Parked.E2E.Shed.LosingOneSideOfPostsDropsTheRoofBayByBay": {
       "basis": "Closed form. With the near posts gone, each bay's beams and screwed planks rest only on dry bearings atop the far posts, with their centroid well to the near side, so they tip about the far post tops, one cluster per bay. The bays share no joint and the frame does not touch the walls, so nothing else is affected."
     },
-    "E2E.Shed.LosingOnePostLeavesTheScrewedRoofStanding": {
+    "Parked.E2E.Shed.LosingOnePostLeavesTheScrewedRoofStanding": {
       "basis": "Engineering judgement with a check: the free beam end hangs from three screwed planks that cantilever from the far beams; each plank joint sees about 85 N·m against about 1,050 N·m of capacity. A real screwed frame would sag here but stand (owner answer 1: it stands)."
     },
-    "E2E.Cantilever.TheCounterweightHoldsTheBeamAndItsRemovalTipsIt": {
+    "Parked.E2E.Cantilever.TheCounterweightHoldsTheBeamAndItsRemovalTipsIt": {
       "basis": "The lever rule: the beam's centroid is 0.2 m past the post's edge, so the counterweight must be at least 5.36 kg to pull the combined centroid back over the post. 16 kg holds it (centroid at x = 0.019 m); 4 kg does not (0.239 m); removing the 16 kg block tips the beam."
     },
-    "E2E.File.ALoadedColonnadeFallsLikeTheBuiltOne": {
+    "Parked.E2E.File.ALoadedColonnadeFallsLikeTheBuiltOne": {
       "basis": "As 3.1, but the colonnade is loaded from data/structures/colonnade.json: the file must give exactly the outcome of the colonnade built in code, so buildings can arrive as data."
     },
     "Deferred.Slice6.DryWallLosingItsLintelKeepsTheBricksOverThePiers": {

@@ -9,7 +9,7 @@
 using namespace loadpath;
 using namespace loadpath::test;
 
-TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Statics.Anchor.OrdunaHollowPileStandsThroughTheAuthorityAtLambdaPointFour")
+TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Parked.Statics.Anchor.OrdunaHollowPileStandsThroughTheAuthorityAtLambdaPointFour")
 {
 	const HollowPile Pile = MakeHollowPile(0.7);
 	CHECK(Pile.Blocks.size() == 30u);

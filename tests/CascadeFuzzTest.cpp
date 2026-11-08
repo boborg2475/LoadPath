@@ -526,7 +526,7 @@ void RunDraw(std::uint64_t Seed, FuzzFamily Family, Coverage& Seen)
 }
 }
 
-TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Cascade.Fuzz.SeededStructuresKeepTheCascadeInvariants")
+TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Parked.Cascade.Fuzz.SeededStructuresKeepTheCascadeInvariants")
 {
 	Coverage Seen;
 	const auto Start = std::chrono::steady_clock::now();

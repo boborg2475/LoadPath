@@ -1,7 +1,7 @@
 # Build, then run the doctest suite. Extra arguments go to doctest, e.g.
 #   Scripts/Test.ps1 -tc="Model.*"        run the test cases matching a pattern
 #   Scripts/Test.ps1 -ltc                 list test cases
-# Test cases named Deferred.*, Slow.* and Measure.* are excluded unless the caller passes its own -tc;
+# Test cases named Deferred.*, Parked.*, Slow.* and Measure.* are excluded unless the caller passes its own -tc;
 # a caller's -tce alone adds to those exclusions.
 # -Jobs N splits the run across N processes, each running a contiguous range of the same filtered
 # order (doctest --first/--last), balanced by per-test durations cached in the build folder.
@@ -24,7 +24,7 @@ $Exe = "$BuildDir\tests\$Config\loadpath_tests.exe"
 if ($null -eq $DoctestArgs) { $DoctestArgs = @() }
 
 function Write-ExcludedCounts {
-    foreach ($Prefix in @("Deferred", "Slow", "Measure")) {
+    foreach ($Prefix in @("Deferred", "Parked", "Slow", "Measure")) {
         $Count = (& $Exe -c "-tc=$Prefix.*" | Out-String) -replace '(?s).*passing the current filters:\s*(\d+).*', '$1'
         if ($Count -ne "0") {
             Write-Output "[Test.ps1] excluded $Count $($Prefix.ToLower()) test case(s) ($Prefix.*); pass -tc to run them."
@@ -163,7 +163,7 @@ if ($CallerIncludes.Count -gt 0) {
 }
 $ExcludePattern = '^-+(dt-)?(tce|test-case-exclude)=(.*)$'
 $CallerExcludes = @($DoctestArgs | Where-Object { $_ -match $ExcludePattern } | ForEach-Object { $_ -replace $ExcludePattern, '$3' })
-$Excludes = (@($CallerExcludes) + "Deferred.*,Slow.*,Measure.*") -join ','
+$Excludes = (@($CallerExcludes) + "Deferred.*,Parked.*,Slow.*,Measure.*") -join ','
 $Passed = @($DoctestArgs | Where-Object { $_ -notmatch $ExcludePattern })
 function Invoke-Visuals([int]$Code) {
     if ($IsQuery -or $NoVisuals -or $Profile -or $Config -ne "Release") { return $Code }

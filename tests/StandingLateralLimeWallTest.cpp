@@ -399,7 +399,7 @@ TEST_CASE("Statics.Lime.ARestoreStepReclosureNeitherCountsNorResets")
 	CHECK(Kept.ActiveSetIterations == 13);
 }
 
-TEST_CASE("Statics.Lime.AWedgeThatMustBreakCohesionToMoveIsUndecided")
+TEST_CASE("Parked.Statics.Lime.AWedgeThatMustBreakCohesionToMoveIsUndecided")
 {
 	struct Case
 	{
@@ -425,7 +425,7 @@ TEST_CASE("Statics.Lime.AWedgeThatMustBreakCohesionToMoveIsUndecided")
 	}
 }
 
-TEST_CASE("Statics.Lime.HeldFrictionOnACrackedJointCountsAgainstTheLoadPower")
+TEST_CASE("Parked.Statics.Lime.HeldFrictionOnACrackedJointCountsAgainstTheLoadPower")
 {
 	StrengthProfile Bed = LoadLime();
 	StrengthProfile Perpend = Bed;

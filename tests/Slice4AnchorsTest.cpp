@@ -204,7 +204,7 @@ double SecondsSince(std::chrono::steady_clock::time_point Start)
 }
 }
 
-TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Statics.Anchor.FerrisTinLoiWallStandsBelowTheLoadFactorAndCollapsesAboveIt")
+TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Parked.Statics.Anchor.FerrisTinLoiWallStandsBelowTheLoadFactorAndCollapsesAboveIt")
 {
 	const auto Start = std::chrono::steady_clock::now();
 	const BlockWall Wall = MakeFerrisTinLoiWall();

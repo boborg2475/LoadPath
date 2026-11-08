@@ -6,7 +6,8 @@
 #   Scripts/Visuals.ps1                  build Release, run every E2E case with recording on, write both pages
 #   Scripts/Visuals.ps1 -NoScreenshots   the 3D viewer only
 #   . Scripts/Visuals.ps1 -FunctionsOnly define the functions and return (Scripts/Visuals.Tests.ps1)
-# Each entry is marked passed, failed or deferred from its case's exit code (a red Deferred.* case is deferred).
+# Each entry is marked passed, failed or deferred from its case's exit code (a red Deferred.* or Parked.* case is deferred).
+# Parked.* cases (owner, 2026-11-08) are exempt from the picture guard, and a green one is not reported (some are parked green).
 # Exit code: 1 when an executed E2E case wrote no picture (named; the page is still written), else 0.
 param([ValidateSet("Debug","Release")][string]$Config = "Release",
       [string]$Out = "",
@@ -42,7 +43,7 @@ function Test-PictureGuard([string[]]$Cases, [string[]]$RecordedTests) {
     foreach ($Name in @($RecordedTests)) { [void]$Recorded.Add($Name) }
     $Missing = @($Cases | Where-Object {
         $Name = $_
-        $Exempt = @($PictureGuardExempt | Where-Object { $Name -ceq $_ -or $Name -ceq "Slow.$_" }).Count -gt 0
+        $Exempt = $Name -clike "Parked.*" -or @($PictureGuardExempt | Where-Object { $Name -ceq $_ -or $Name -ceq "Slow.$_" }).Count -gt 0
         -not $Exempt -and -not $Recorded.Contains($Name)
     })
     if ($Missing.Count -eq 0) { return [pscustomobject]@{ Passed = $true; Missing = @(); Message = "" } }
@@ -66,9 +67,10 @@ function New-VisualIndex($Entries, [hashtable]$Results) {
     foreach ($E in $Sorted) {
         $Test = [string]$E.test
         $Passed = $Results.ContainsKey($Test) -and [bool]$Results[$Test]
-        $Deferred = $Test -like "Deferred.*"
+        $Parked = $Test -like "Parked.*"
+        $Deferred = $Test -like "Deferred.*" -or $Parked
         $Status = if ($Passed) { "passed" } elseif ($Deferred) { "deferred" } else { "failed" }
-        if ($Deferred -and $Passed -and $Reported.Add($Test)) { $Messages += "$Test passes: move it out of Deferred" }
+        if ($Deferred -and -not $Parked -and $Passed -and $Reported.Add($Test)) { $Messages += "$Test passes: move it out of Deferred" }
         $Counts[$Status]++
         $Item = [ordered]@{ test = $Test; slug = [string]$E.slug; status = $Status }
         if ($E.PSObject.Properties.Name -contains "text") { $Item.text = $E.text }

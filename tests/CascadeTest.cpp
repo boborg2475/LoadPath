@@ -745,7 +745,7 @@ TEST_CASE("Cascade.ARunThatExhaustsThePassCounterStopsAtTheCap")
 	CHECK_FALSE(V.Readings.empty());
 }
 
-TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Cascade.ArchBelowLeastThicknessReleasesVoussoirRunsBetweenHinges")
+TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Parked.Cascade.ArchBelowLeastThicknessReleasesVoussoirRunsBetweenHinges")
 {
 	SemicircularArch Arch = MakeSemicircularArch(0.1075 - 0.002, DryJoint(0.7));
 	const std::vector<double> HingeAnglesDeg = {-90.0, -ArchHaunchJointDeg, -54.0, 0.0, 54.0, ArchHaunchJointDeg, 90.0};
@@ -992,7 +992,7 @@ TEST_CASE("Cascade.ASlidingBrickSeversItsBedInShear")
 	CHECK(V.Failures[0].Axis == GoverningAxis::Shear);
 }
 
-TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Cascade.ArchBelowLeastThicknessOpensEveryHingeItSevers")
+TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Parked.Cascade.ArchBelowLeastThicknessOpensEveryHingeItSevers")
 {
 	SemicircularArch Arch = MakeSemicircularArch(0.1075 - 0.002, DryJoint(0.7));
 	const CascadeVerdict V = RunCascade(Arch.Model, CascadeOptions{});

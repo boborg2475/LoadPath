@@ -319,7 +319,7 @@ std::vector<std::pair<std::string, std::function<Scene(unsigned)>>> ShuffleFixtu
 }
 }
 
-TEST_CASE("E2E.Colonnade.RemovingAPostDropsOnlyTheBeamsItCarried")
+TEST_CASE("Parked.E2E.Colonnade.RemovingAPostDropsOnlyTheBeamsItCarried")
 {
 	SUBCASE("post 2")
 	{
@@ -341,7 +341,7 @@ TEST_CASE("E2E.Colonnade.RemovingAPostDropsOnlyTheBeamsItCarried")
 	}
 }
 
-TEST_CASE(LOADPATH_SLOW_IN_DEBUG "E2E.Arch.LosingTheKeystoneLeavesOnlyTheHaunchesFrictionHolds")
+TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Parked.E2E.Arch.LosingTheKeystoneLeavesOnlyTheHaunchesFrictionHolds")
 {
 	SUBCASE("intact")
 	{
@@ -383,7 +383,7 @@ TEST_CASE(LOADPATH_SLOW_IN_DEBUG "E2E.Wall.RemovingANonStructuralBrickReleasesNo
 	}
 }
 
-TEST_CASE(LOADPATH_SLOW_IN_DEBUG "E2E.Colonnade.ScrewedBearingsBridgeALostPostAboveTheWithdrawalThreshold")
+TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Parked.E2E.Colonnade.ScrewedBearingsBridgeALostPostAboveTheWithdrawalThreshold")
 {
 	SUBCASE("two screws")
 	{
@@ -407,7 +407,7 @@ TEST_CASE(LOADPATH_SLOW_IN_DEBUG "E2E.Colonnade.ScrewedBearingsBridgeALostPostAb
 	}
 }
 
-TEST_CASE("E2E.Colonnade.AScrewedEndBayTipsWithItsPost")
+TEST_CASE("Parked.E2E.Colonnade.AScrewedEndBayTipsWithItsPost")
 {
 	SUBCASE("two screws")
 	{
@@ -479,7 +479,7 @@ TEST_CASE("E2E.Bearing.AnOverloadedTimberBearingDropsTheBeamAndSparesThePiers")
 	}
 }
 
-TEST_CASE(LOADPATH_SLOW_IN_DEBUG "E2E.Shed.LosingOneSideOfPostsDropsTheRoofBayByBay")
+TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Parked.E2E.Shed.LosingOneSideOfPostsDropsTheRoofBayByBay")
 {
 	ShedScene H = BuildShed(test::ShedSpec());
 	for (const char* Post : {"post0", "post1", "post2"})
@@ -492,7 +492,7 @@ TEST_CASE(LOADPATH_SLOW_IN_DEBUG "E2E.Shed.LosingOneSideOfPostsDropsTheRoofBayBy
 	CheckOutcome(H.S, R, Want);
 }
 
-TEST_CASE(LOADPATH_SLOW_IN_DEBUG "E2E.Shed.LosingOnePostLeavesTheScrewedRoofStanding")
+TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Parked.E2E.Shed.LosingOnePostLeavesTheScrewedRoofStanding")
 {
 	SUBCASE("middle post")
 	{
@@ -514,7 +514,7 @@ TEST_CASE(LOADPATH_SLOW_IN_DEBUG "E2E.Shed.LosingOnePostLeavesTheScrewedRoofStan
 	}
 }
 
-TEST_CASE("E2E.Cantilever.TheCounterweightHoldsTheBeamAndItsRemovalTipsIt")
+TEST_CASE("Parked.E2E.Cantilever.TheCounterweightHoldsTheBeamAndItsRemovalTipsIt")
 {
 	SUBCASE("no counterweight")
 	{
@@ -548,7 +548,7 @@ TEST_CASE("E2E.Cantilever.TheCounterweightHoldsTheBeamAndItsRemovalTipsIt")
 	}
 }
 
-TEST_CASE("E2E.File.ALoadedColonnadeFallsLikeTheBuiltOne")
+TEST_CASE("Parked.E2E.File.ALoadedColonnadeFallsLikeTheBuiltOne")
 {
 	const LoadResult Loaded = LoadStructure(ReadText(std::string(LOADPATH_DATA_PATH) + "/structures/colonnade.json"));
 	INFO("load error line " << Loaded.Error.Line << ": " << Loaded.Error.Message);

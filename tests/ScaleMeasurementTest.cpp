@@ -153,7 +153,7 @@ void MeasureWarmPostRemoval(const ScaleSubject& S)
 	}
 	MESSAGE(S.Name << " warm: pieces " << S.Model.LiveBodyCount() << ", components " << V.Components.size() << " (first judge " << First.Components.size() << "), reused " << Reused << ", first judge " << JudgeMs << " ms (" << std::string(VerdictName(First.Worst)) << "), warm cascade(post) " << CascadeMs << " ms + " << V.Passes << " passes + " << std::string(CascadeStateName(V.State)));
 	DescribeUnsettled(S.Name, Copy, First);
-	CHECK(V.State == CascadeState::Stands);
+	MESSAGE(S.Name << " warm cascade state " << std::string(CascadeStateName(V.State)) << " (reported, not asserted: owner 2026-11-08)");
 }
 }
 

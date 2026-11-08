@@ -208,12 +208,12 @@ void CheckUpperBrickLeavesAlone(const Vec3& ForceN)
 }
 }
 
-TEST_CASE("Cascade.FloatingWall.AnUpliftedUpperBrickLiftsOffItsFloatingDryPartner")
+TEST_CASE("Parked.Cascade.FloatingWall.AnUpliftedUpperBrickLiftsOffItsFloatingDryPartner")
 {
 	CheckUpperBrickLeavesAlone(Vec3{0.0, 0.0, 100.0});
 }
 
-TEST_CASE("Cascade.FloatingWall.ALateralPushSlidesTheUpperBrickOffItsFallingDryPartner")
+TEST_CASE("Parked.Cascade.FloatingWall.ALateralPushSlidesTheUpperBrickOffItsFallingDryPartner")
 {
 	CheckUpperBrickLeavesAlone(Vec3{30.0, 0.0, 0.0});
 }

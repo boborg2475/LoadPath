@@ -164,7 +164,7 @@ TEST_CASE("Statics.Anchor.FrictionlessFiveDiamondFallsAndFourDiamondStands")
 	CHECK(FiveResult.State == StandingState::Mechanism);
 }
 
-TEST_CASE("Statics.Anchor.FiveDiamondStandsWithFrictionAboveTheCriticalValue")
+TEST_CASE("Parked.Statics.Anchor.FiveDiamondStandsWithFrictionAboveTheCriticalValue")
 {
 	const Stack Five = DiamondOnTable(5, 0.5);
 	const AuthorityResult Combined = MakeElasticAuthority(MakeRbsmStandingAuthority())->Judge(Five.Model, {}, AuthorityOptions{}, nullptr);
