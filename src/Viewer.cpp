@@ -639,6 +639,16 @@ std::string WriteViewerJson(const ViewerScene& Scene)
 	{
 		W.FieldNull("verdict");
 	}
+	if (!Scene.BeforeReadings.empty())
+	{
+		W.Key("readings");
+		W.Open('[');
+		for (const InterfaceReading& Reading : Scene.BeforeReadings)
+		{
+			WriteJoint(W, RecordOf(Reading));
+		}
+		W.Close(']');
+	}
 	W.Close('}');
 	WriteAfter(W, Scene);
 	if (Scene.Expected && !ExpectedMatchesEngine(Scene))

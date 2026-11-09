@@ -44,6 +44,8 @@ struct ViewerScene
 	Vec3 Gravity{0.0, 0.0, -GravityMPerS2};
 	std::vector<BodyLoad> Loads;
 	std::optional<ComponentVerdict> Before;
+	// Written as before.readings only when not empty.
+	std::vector<InterfaceReading> BeforeReadings;
 	// One verdict per cascade run: passes sum, clusters and failures concatenate, the state is the last one's.
 	std::vector<CascadeVerdict> After;
 	// Written only when set, so an untimed export is byte-identical run to run.

@@ -9,6 +9,7 @@
 #include <array>
 #include <chrono>
 #include <cmath>
+#include <cstdio>
 #include <cstring>
 #include <initializer_list>
 #include <map>
@@ -167,11 +168,23 @@ struct WallItem
 	int Line = 0;
 };
 
+struct ArchItem
+{
+	std::string Name, Material, Joint;
+	std::array<std::string, 2> Springings;
+	Vec3 CentreM;
+	double RadiusM = 0.0, ThicknessM = 0.0, DepthM = 0.0, DensityKgPerM3 = 0.0;
+	int Voussoirs = 0;
+	int Line = 0;
+};
+
 struct BuildItem
 {
 	bool bWall = false;
+	bool bArch = false;
 	std::vector<BoxSpec> Boxes;
 	WallItem Wall;
+	ArchItem Arch;
 };
 
 struct PlacedBox
@@ -180,7 +193,17 @@ struct PlacedBox
 	int Line = 0;
 	int Wall = -1;
 	int OnSlot = -1;
+	bool bArch = false;
 };
+
+struct PlacedWall
+{
+	double TopM = 0.0;
+	std::vector<int> TopSlots;
+};
+
+constexpr std::array<double, 4> Identity{1.0, 0.0, 0.0, 0.0};
+constexpr double Pi = 3.14159265358979323846;
 
 enum class RowKind : std::uint8_t { Joint, Fastener };
 
@@ -497,7 +520,8 @@ private:
 			}
 			BuildItem Built;
 			Built.bWall = Get(Item, "wall") != nullptr;
-			if (!(Built.bWall ? ReadWall(Item, Built.Wall) : ReadBox(Item, Built.Boxes)))
+			Built.bArch = !Built.bWall && Get(Item, "arch") != nullptr;
+			if (!(Built.bWall ? ReadWall(Item, Built.Wall) : Built.bArch ? ReadArch(Item, Built.Arch) : ReadBox(Item, Built.Boxes)))
 			{
 				return false;
 			}
@@ -625,6 +649,67 @@ private:
 		return true;
 	}
 
+	bool PositiveNumber(const JsonValue& Object, std::string_view Key, double& Into)
+	{
+		const JsonValue* Value = nullptr;
+		if (!Typed(Object, Key, JsonType::Number, true, Value))
+		{
+			return false;
+		}
+		if (!(Value->Number > 0.0) || !std::isfinite(Value->Number))
+		{
+			return Fail(Value->Line, std::string(Key) + " must be finite and positive");
+		}
+		Into = Value->Number;
+		return true;
+	}
+
+	bool ReadArch(const JsonValue& Item, ArchItem& Arch)
+	{
+		Arch.Line = Item.Line;
+		if (!OnlyKeys(Item, {"arch", "material", "centre", "radius", "thickness", "depth", "voussoirs", "springings", "joint"}) ||
+			!Text(Item, "arch", true, Arch.Name) || !ValidName(Arch.Name, Item.Line) || !Text(Item, "material", true, Arch.Material) ||
+			!Density(Arch.Material, false, Item.Line, Arch.DensityKgPerM3) || !Vector(Item, "centre", true, Arch.CentreM) ||
+			!PositiveNumber(Item, "radius", Arch.RadiusM) || !PositiveNumber(Item, "depth", Arch.DepthM))
+		{
+			return false;
+		}
+		const JsonValue* Thickness = nullptr;
+		if (!Typed(Item, "thickness", JsonType::Number, true, Thickness))
+		{
+			return false;
+		}
+		Arch.ThicknessM = Thickness->Number;
+		if (!(Arch.ThicknessM > 0.0) || !(Arch.ThicknessM < 2.0 * Arch.RadiusM))
+		{
+			return Fail(Thickness->Line, "thickness must be positive and less than twice the radius");
+		}
+		const JsonValue* Count = Get(Item, "voussoirs");
+		if (Count == nullptr)
+		{
+			return Fail(Item.Line, "missing 'voussoirs'");
+		}
+		if (!WholeNumber(*Count, "voussoirs", 1.0, Arch.Voussoirs))
+		{
+			return false;
+		}
+		const JsonValue* Springings = nullptr;
+		if (!Typed(Item, "springings", JsonType::Array, true, Springings))
+		{
+			return false;
+		}
+		if (Springings->Items.size() != 2 || Springings->Items[0].Type != JsonType::String || Springings->Items[1].Type != JsonType::String)
+		{
+			return Fail(Springings->Line, "'springings' must hold 2 wall names");
+		}
+		Arch.Springings = {Springings->Items[0].Text, Springings->Items[1].Text};
+		if (!Text(Item, "joint", true, Arch.Joint))
+		{
+			return false;
+		}
+		return IsJointRow(Arch.Joint) || Fail(Item.Line, "unknown row " + Quoted(Arch.Joint) + " for an arch joint");
+	}
+
 	bool ReadRules(const JsonValue& Root, std::vector<Rule>& Rules)
 	{
 		const JsonValue* Array = nullptr;
@@ -716,6 +801,21 @@ private:
 				}
 				continue;
 			}
+			if (Item.bArch)
+			{
+				if (!Seen.insert(Item.Arch.Name).second)
+				{
+					return Fail(Item.Arch.Line, "duplicate name " + Quoted(Item.Arch.Name));
+				}
+				for (int K = 0; K < Item.Arch.Voussoirs; ++K)
+				{
+					if (!Seen.insert(VoussoirName(Item.Arch, K)).second)
+					{
+						return Fail(Item.Arch.Line, "duplicate name " + Quoted(VoussoirName(Item.Arch, K)));
+					}
+				}
+				continue;
+			}
 			for (const BoxSpec& Box : Item.Boxes)
 			{
 				if (!Seen.insert(Box.Name).second)
@@ -774,8 +874,24 @@ private:
 				}
 			}
 		}
+		for (const BuildItem& Item : Items)
+		{
+			if (!Item.bArch)
+			{
+				continue;
+			}
+			for (const std::string& Name : Item.Arch.Springings)
+			{
+				if (std::none_of(Items.begin(), Items.end(), [&](const BuildItem& Other) { return Other.bWall && Other.Wall.Name == Name; }))
+				{
+					return Fail(Item.Arch.Line, "the arch's springing names no wall: " + Quoted(Name));
+				}
+			}
+		}
 		return true;
 	}
+
+	static std::string VoussoirName(const ArchItem& Arch, int K) { return Arch.Name + "." + std::to_string(K); }
 
 	static int BricksInCourse(const WallItem& Wall, int Course) { return Course % 2 == 1 ? Wall.Bricks + 1 : Wall.Bricks; }
 
@@ -820,7 +936,8 @@ private:
 		return SharedProfile(Row, Row, Local != LocalProfiles.end() ? Local->second : Rows.FindJoint(Row)->Profile);
 	}
 
-	BodyId AddBody(const std::string& Name, const std::string& Material, const geometry::Box& Shape, double MassKg, bool bGrounded, PlacedBox Placed)
+	BodyId AddBody(const std::string& Name, const std::string& Material, const geometry::Box& Shape, double MassKg, bool bGrounded, PlacedBox Placed,
+		const std::array<double, 4>& Rotation = Identity)
 	{
 		const MaterialRow* Row = Rows.FindMaterial(Material);
 		const Result<BodyId> Added = Out.Model.AddBody(BodyDesc{MassKg, Shape.CentreM, bGrounded, Row != nullptr ? Row->CompressiveStrengthPa : 0.0});
@@ -833,6 +950,7 @@ private:
 		Out.BodyNames.push_back(Name);
 		Out.BodyMaterials.push_back(Material);
 		Out.BodyBoxes.push_back(Shape);
+		Out.BodyRotations.push_back(Rotation);
 		Out.BodyMassesKg.push_back(MassKg);
 		Out.BodyGrounded.push_back(bGrounded);
 		Placed.Shape = Shape;
@@ -846,6 +964,14 @@ private:
 		int WallIndex = 0;
 		for (const BuildItem& Item : Items)
 		{
+			if (Item.bArch)
+			{
+				if (!PlaceArch(Item.Arch, WallIndex++))
+				{
+					return false;
+				}
+				continue;
+			}
 			if (!Item.bWall)
 			{
 				for (const BoxSpec& Box : Item.Boxes)
@@ -925,6 +1051,10 @@ private:
 					return false;
 				}
 				Map[ScratchId.Index] = Id;
+				if (C == Wall.Courses - 1)
+				{
+					Walls[Wall.Name].TopSlots.push_back(static_cast<int>(Out.BodyNames.size()) - 1);
+				}
 			}
 		}
 		const ProfileId Bed = JointProfile(Wall.Bed);
@@ -945,6 +1075,94 @@ private:
 				return Fail(Wall.Line, "the wall " + Quoted(Wall.Name) + ": " + ModelErrorText(Added.Error));
 			}
 		}
+		Walls[Wall.Name].TopM = Wall.OriginM.Z + Wall.Courses * Wall.BrickM.Z;
+		return true;
+	}
+
+	bool AddJoint(const InterfaceDesc& Desc, int Line, const std::string& What)
+	{
+		const Result<InterfaceId> Added = Out.Model.AddInterface(Desc);
+		return Added.Ok() || Fail(Line, What + ": " + ModelErrorText(Added.Error));
+	}
+
+	bool PlaceArch(const ArchItem& Arch, int Group)
+	{
+		const double HalfAngleRad = 0.5 * Pi / Arch.Voussoirs;
+		const double InnerM = Arch.RadiusM - 0.5 * Arch.ThicknessM;
+		const double OuterM = Arch.RadiusM + 0.5 * Arch.ThicknessM;
+		const double CentroidRadiusM = (2.0 / 3.0) * (std::sin(HalfAngleRad) / HalfAngleRad) * (OuterM * OuterM * OuterM - InnerM * InnerM * InnerM) / (OuterM * OuterM - InnerM * InnerM);
+		const double MassKg = Arch.DensityKgPerM3 * Arch.DepthM * HalfAngleRad * (OuterM * OuterM - InnerM * InnerM);
+		const double RadialHalfM = std::min(CentroidRadiusM - InnerM, OuterM * std::cos(HalfAngleRad) - CentroidRadiusM);
+		const Vec3 Half{(CentroidRadiusM - RadialHalfM) * std::tan(HalfAngleRad), 0.5 * Arch.DepthM, RadialHalfM};
+		const Vec3 C = Arch.CentreM;
+		std::vector<BodyId> Ids;
+		for (int K = 0; K < Arch.Voussoirs; ++K)
+		{
+			const double BisectorRad = -0.5 * Pi + (2 * K + 1) * HalfAngleRad;
+			const Vec3 Centroid{C.X + CentroidRadiusM * std::sin(BisectorRad), C.Y, C.Z + CentroidRadiusM * std::cos(BisectorRad)};
+			PlacedBox Placed;
+			Placed.Line = Arch.Line;
+			Placed.Wall = Group;
+			Placed.bArch = true;
+			const BodyId Id = AddBody(VoussoirName(Arch, K), Arch.Material, geometry::Box{Centroid, Half}, MassKg, false, Placed,
+				{std::cos(0.5 * BisectorRad), 0.0, std::sin(0.5 * BisectorRad), 0.0});
+			if (Id == BodyId::Invalid())
+			{
+				return false;
+			}
+			Ids.push_back(Id);
+		}
+		const ProfileId Joint = JointProfile(Arch.Joint);
+		for (int K = 1; K < Arch.Voussoirs; ++K)
+		{
+			const double Phi = -0.5 * Pi + 2 * K * HalfAngleRad;
+			const InterfaceDesc Desc{Ids[static_cast<std::size_t>(K - 1)], Ids[static_cast<std::size_t>(K)], Vec3{std::cos(Phi), 0.0, -std::sin(Phi)},
+				Vec3{C.X + Arch.RadiusM * std::sin(Phi), C.Y, C.Z + Arch.RadiusM * std::cos(Phi)}, Vec3{std::sin(Phi), 0.0, std::cos(Phi)}, Vec3{0.0, -1.0, 0.0},
+				0.5 * Arch.ThicknessM, 0.5 * Arch.DepthM, Joint};
+			if (!AddJoint(Desc, Arch.Line, "the arch " + Quoted(Arch.Name)))
+			{
+				return false;
+			}
+		}
+		for (int End = 0; End < 2; ++End)
+		{
+			const std::string& WallName = Arch.Springings[static_cast<std::size_t>(End)];
+			const auto Wall = Walls.find(WallName);
+			if (Wall == Walls.end())
+			{
+				return Fail(Arch.Line, "the arch's springing wall " + Quoted(WallName) + " must come before the arch");
+			}
+			if (!(std::abs(Wall->second.TopM - C.Z) <= ToleranceM))
+			{
+				return Fail(Arch.Line, "the top of " + Quoted(WallName) + " is not at the arch's springing level");
+			}
+			const int K = End == 0 ? 0 : Arch.Voussoirs - 1;
+			const double FootX = C.X + (End == 0 ? -Arch.RadiusM : Arch.RadiusM);
+			int Contacts = 0;
+			for (const int Slot : Wall->second.TopSlots)
+			{
+				const geometry::Box& Brick = Out.BodyBoxes[static_cast<std::size_t>(Slot)];
+				const double X0 = std::max(FootX - 0.5 * Arch.ThicknessM, Brick.CentreM.X - Brick.HalfExtentsM.X);
+				const double X1 = std::min(FootX + 0.5 * Arch.ThicknessM, Brick.CentreM.X + Brick.HalfExtentsM.X);
+				const double Y0 = std::max(C.Y - 0.5 * Arch.DepthM, Brick.CentreM.Y - Brick.HalfExtentsM.Y);
+				const double Y1 = std::min(C.Y + 0.5 * Arch.DepthM, Brick.CentreM.Y + Brick.HalfExtentsM.Y);
+				if (!(X1 - X0 > ToleranceM) || !(Y1 - Y0 > ToleranceM))
+				{
+					continue;
+				}
+				const InterfaceDesc Desc{Out.BodyIds[static_cast<std::size_t>(Slot)], Ids[static_cast<std::size_t>(K)], Vec3{0.0, 0.0, 1.0},
+					Vec3{0.5 * (X0 + X1), 0.5 * (Y0 + Y1), C.Z}, Vec3{1.0, 0.0, 0.0}, Vec3{0.0, 1.0, 0.0}, 0.5 * (X1 - X0), 0.5 * (Y1 - Y0), Joint};
+				if (!AddJoint(Desc, Arch.Line, "the arch " + Quoted(Arch.Name)))
+				{
+					return false;
+				}
+				++Contacts;
+			}
+			if (Contacts == 0)
+			{
+				return Fail(Arch.Line, Quoted(VoussoirName(Arch, K)) + " rests on no brick of " + Quoted(WallName));
+			}
+		}
 		return true;
 	}
 
@@ -954,7 +1172,7 @@ private:
 		{
 			for (std::size_t I = 0; I < J; ++I)
 			{
-				if (Boxes[I].Wall >= 0 && Boxes[I].Wall == Boxes[J].Wall)
+				if ((Boxes[I].Wall >= 0 && Boxes[I].Wall == Boxes[J].Wall) || Boxes[I].bArch || Boxes[J].bArch)
 				{
 					continue;
 				}
@@ -1012,7 +1230,7 @@ private:
 			{
 				const PlacedBox& A = Boxes[I];
 				const PlacedBox& B = Boxes[J];
-				if ((A.Wall >= 0 && A.Wall == B.Wall) || (B.Wall >= 0 && B.OnSlot == static_cast<int>(I)) || (A.Wall >= 0 && A.OnSlot == static_cast<int>(J)))
+				if (A.bArch || B.bArch || (A.Wall >= 0 && A.Wall == B.Wall) || (B.Wall >= 0 && B.OnSlot == static_cast<int>(I)) || (A.Wall >= 0 && A.OnSlot == static_cast<int>(J)))
 				{
 					continue;
 				}
@@ -1187,7 +1405,7 @@ private:
 			return Object == nullptr && Error.Message.empty();
 		}
 		ScenarioExpect Expect;
-		if (!OnlyKeys(*Object, {"state", "released", "either", "passes", "cracked", "crushed"}) || !Text(*Object, "state", false, Expect.State))
+		if (!OnlyKeys(*Object, {"state", "released", "either", "passes", "cracked", "crushed", "utilisation", "forced", "stands"}) || !Text(*Object, "state", false, Expect.State))
 		{
 			return false;
 		}
@@ -1262,7 +1480,96 @@ private:
 				}
 			}
 		}
+		if (!ReadStandsForcedAndUtilisation(*Object, Expect))
+		{
+			return false;
+		}
 		Out.Expect = std::move(Expect);
+		return true;
+	}
+
+	bool ReadStandsForcedAndUtilisation(const JsonValue& Object, ScenarioExpect& Expect)
+	{
+		const JsonValue* Forced = nullptr;
+		const JsonValue* Stands = nullptr;
+		const JsonValue* Utilisation = nullptr;
+		if (!Typed(Object, "forced", JsonType::Bool, false, Forced) || !Typed(Object, "stands", JsonType::Array, false, Stands) ||
+			!Typed(Object, "utilisation", JsonType::Object, false, Utilisation))
+		{
+			return false;
+		}
+		if (Forced != nullptr)
+		{
+			Expect.Forced = Forced->Bool;
+		}
+		if (Stands != nullptr)
+		{
+			for (const JsonValue& Pattern : Stands->Items)
+			{
+				if (!ExpandBodies(Pattern, Expect.Stands))
+				{
+					return false;
+				}
+			}
+		}
+		if (Utilisation == nullptr)
+		{
+			return true;
+		}
+		if (!OnlyKeys(*Utilisation, {"before", "after"}))
+		{
+			return false;
+		}
+		const JsonValue* Before = nullptr;
+		const JsonValue* After = nullptr;
+		return Typed(*Utilisation, "before", JsonType::Object, false, Before) && Typed(*Utilisation, "after", JsonType::Object, false, After) &&
+			(Before == nullptr || ReadUtilisation(*Before, Expect.BeforeUtilisation)) && (After == nullptr || ReadUtilisation(*After, Expect.AfterUtilisation));
+	}
+
+	bool ReadUtilisation(const JsonValue& Object, std::optional<ScenarioUtilisation>& Into)
+	{
+		ScenarioUtilisation U;
+		const JsonValue* Max = nullptr;
+		const JsonValue* At = nullptr;
+		if (!OnlyKeys(Object, {"max", "at", "axis"}) || !Typed(Object, "max", JsonType::Array, true, Max) || !Typed(Object, "at", JsonType::Array, false, At))
+		{
+			return false;
+		}
+		const std::vector<JsonValue>& Band = Max->Items;
+		if (Band.size() != 2 || Band[0].Type != JsonType::Number || Band[1].Type != JsonType::Number || !std::isfinite(Band[0].Number) ||
+			!std::isfinite(Band[1].Number) || !(Band[0].Number < Band[1].Number))
+		{
+			return Fail(Max->Line, "max must hold 2 finite numbers, lo below hi");
+		}
+		U.Low = Band[0].Number;
+		U.High = Band[1].Number;
+		if (At != nullptr)
+		{
+			for (const JsonValue& Joint : At->Items)
+			{
+				if (Joint.Type != JsonType::String || std::count(Joint.Text.begin(), Joint.Text.end(), '/') != 1 || !PatternIsValid(Joint.Text))
+				{
+					return Fail(Joint.Line, "an 'at' joint is written '<a>/<b>'");
+				}
+				U.At.push_back(Joint.Text);
+			}
+		}
+		std::string Axis;
+		if (!Text(Object, "axis", false, Axis))
+		{
+			return false;
+		}
+		if (Get(Object, "axis") != nullptr)
+		{
+			static constexpr std::array<GoverningAxis, 3> Axes = {GoverningAxis::Compression, GoverningAxis::Tension, GoverningAxis::Shear};
+			const auto Found = std::find_if(Axes.begin(), Axes.end(), [&](GoverningAxis A) { return Axis == AxisText(A); });
+			if (Found == Axes.end())
+			{
+				return Fail(Object.Line, "unknown axis " + Quoted(Axis));
+			}
+			U.Axis = *Found;
+		}
+		Into = std::move(U);
 		return true;
 	}
 
@@ -1308,6 +1615,7 @@ private:
 	std::map<std::string, StrengthProfile> LocalProfiles;
 	std::map<std::string, ProfileId> SharedProfiles;
 	std::vector<PlacedBox> Boxes;
+	std::map<std::string, PlacedWall> Walls;
 	std::set<std::string> RemovedBeforeAnyCascade;
 	bool bCascadeSeen = false;
 };
@@ -1395,13 +1703,29 @@ std::vector<BodyId> IdsOf(const Scenario& Value, const std::vector<std::string>&
 	return Out;
 }
 
+std::vector<ScenarioJointReading> Named(const Scenario& Value, const std::vector<InterfaceReading>& Readings)
+{
+	std::vector<ScenarioJointReading> Out;
+	for (const InterfaceReading& Reading : Readings)
+	{
+		const InterfaceRecord& R = Value.Model.Interface(Reading.Id);
+		Out.push_back(ScenarioJointReading{NamesOf(Value, {R.BodyA})[0] + "/" + NamesOf(Value, {R.BodyB})[0], Reading});
+	}
+	return Out;
+}
+
 void RecordCascade(const Scenario& Value, const CascadeVerdict& Verdict, ScenarioStepRecord& Record, ScenarioOutcome& Outcome)
 {
 	for (const ReleasedCluster& Cluster : Verdict.Clusters)
 	{
 		Record.Released.push_back(NamesOf(Value, Cluster.Bodies));
 		Outcome.Clusters.push_back(Record.Released.back());
+		if (Cluster.bForced)
+		{
+			Outcome.ForcedClusters.push_back(Record.Released.back());
+		}
 	}
+	Outcome.AfterReadings = Named(Value, Verdict.Readings);
 	for (const CrushedBody& Crushed : Verdict.CrushedBodies)
 	{
 		Outcome.Crushed.push_back(NamesOf(Value, {Crushed.Body})[0]);
@@ -1425,6 +1749,62 @@ void RecordCascade(const Scenario& Value, const CascadeVerdict& Verdict, Scenari
 	Outcome.Passes += Verdict.Passes;
 }
 
+std::string Short(double Value)
+{
+	char Text[32];
+	std::snprintf(Text, sizeof Text, "%.6g", Value);
+	return Text;
+}
+
+void CompareUtilisation(std::string_view State, const ScenarioUtilisation& Want, const std::vector<ScenarioJointReading>& Readings, std::vector<std::string>& Lines)
+{
+	const std::string Head = "utilisation " + std::string(State) + ": ";
+	if (Readings.empty())
+	{
+		Lines.push_back(Head + "no readings");
+		return;
+	}
+	std::size_t Worst = 0;
+	for (std::size_t K = 0; K < Readings.size(); ++K)
+	{
+		const double U = Readings[K].Reading.Utilisation;
+		if (std::isnan(U))
+		{
+			Worst = K;
+			break;
+		}
+		if (U > Readings[Worst].Reading.Utilisation)
+		{
+			Worst = K;
+		}
+	}
+	const ScenarioJointReading& Top = Readings[Worst];
+	const double Max = Top.Reading.Utilisation;
+	if (!(Max >= Want.Low && Max < Want.High))
+	{
+		Lines.push_back(Head + "max " + Short(Max) + " at " + Top.Joint + " (" + AxisText(Top.Reading.Axis) + "), expected [" + Short(Want.Low) + ", " + Short(Want.High) + ")");
+		return;
+	}
+	std::vector<const ScenarioJointReading*> Attaining;
+	for (const ScenarioJointReading& R : Readings)
+	{
+		const bool bNamed = Want.At.empty() || std::any_of(Want.At.begin(), Want.At.end(), [&](const std::string& P) { return JointMatches(P, R.Joint); });
+		if (bNamed && R.Reading.Utilisation >= Max * (1.0 - 1e-9))
+		{
+			Attaining.push_back(&R);
+		}
+	}
+	if (Attaining.empty())
+	{
+		Lines.push_back(Head + "max " + Short(Max) + " at " + Top.Joint + ", not at " + Joined(Want.At));
+		return;
+	}
+	if (Want.Axis && std::none_of(Attaining.begin(), Attaining.end(), [&](const ScenarioJointReading* R) { return R->Reading.Axis == *Want.Axis; }))
+	{
+		Lines.push_back(Head + "governed by " + AxisText(Attaining[0]->Reading.Axis) + " at " + Attaining[0]->Joint + ", expected " + AxisText(*Want.Axis));
+	}
+}
+
 bool RunStep(Scenario& Value, const ScenarioStep& Step, int Number, const ICascade& Cascade, const IStructuralAuthority& Authority, const Settings& Tunables, ScenarioOutcome& Outcome)
 {
 	ScenarioStepRecord Record;
@@ -1442,7 +1822,9 @@ bool RunStep(Scenario& Value, const ScenarioStep& Step, int Number, const ICasca
 	case ScenarioStepKind::Judge:
 	{
 		Record.Kind = "judge";
-		Record.State = VerdictText(Authority.Judge(Value.Model, Outcome.Loads, Options, nullptr).Worst);
+		const AuthorityResult Judged = Authority.Judge(Value.Model, Outcome.Loads, Options, nullptr);
+		Record.State = VerdictText(Judged.Worst);
+		Outcome.AfterReadings = Named(Value, Judged.Readings);
 		Outcome.State = Record.State;
 		break;
 	}
@@ -1536,7 +1918,9 @@ ScenarioOutcome RunScenario(Scenario& Value, const ICascade& Cascade, const IStr
 			}
 		}
 		const AuthorityOptions Options{ToStandingOptions(Tunables, Scratch.Gravity)};
-		Outcome.Before = Authority.Judge(Drawn.Model, Scratch.Loads, Options, nullptr).Worst;
+		const AuthorityResult Judged = Authority.Judge(Drawn.Model, Scratch.Loads, Options, nullptr);
+		Outcome.Before = Judged.Worst;
+		Outcome.BeforeReadings = Named(Drawn, Judged.Readings);
 	}
 	const auto Start = std::chrono::steady_clock::now();
 	for (std::size_t Index = 0; Index < Value.Steps.size(); ++Index)
@@ -1645,6 +2029,35 @@ ExpectationReport CompareExpectation(const ScenarioExpect& Expect, const Scenari
 	{
 		Report.Lines.push_back("crushed: expected [" + Joined(std::vector<std::string>(WantCrushed.begin(), WantCrushed.end())) + "], engine [" + Joined(std::vector<std::string>(GotCrushed.begin(), GotCrushed.end())) + "]");
 	}
+	if (Expect.BeforeUtilisation)
+	{
+		CompareUtilisation("before", *Expect.BeforeUtilisation, Outcome.BeforeReadings, Report.Lines);
+	}
+	if (Expect.AfterUtilisation)
+	{
+		CompareUtilisation("after", *Expect.AfterUtilisation, Outcome.AfterReadings, Report.Lines);
+	}
+	if (Expect.Forced && *Expect.Forced && Outcome.ForcedClusters.empty())
+	{
+		Report.Lines.push_back("forced: expected a forced release, engine forced none");
+	}
+	if (Expect.Forced && !*Expect.Forced && !Outcome.ForcedClusters.empty())
+	{
+		Report.Lines.push_back("forced: expected none, engine forced " + PartitionText(Outcome.ForcedClusters));
+	}
+	std::vector<std::string> Fallen;
+	for (const std::string& Name : Expect.Stands)
+	{
+		const auto Listed = [&](const std::vector<std::string>& Names) { return std::find(Names.begin(), Names.end(), Name) != Names.end(); };
+		if (Engine.count(Name) != 0 || Listed(Outcome.Crushed) || Listed(Outcome.Removed))
+		{
+			Fallen.push_back(Name);
+		}
+	}
+	if (!Fallen.empty())
+	{
+		Report.Lines.push_back("expected to stand, not standing: " + Joined(Fallen));
+	}
 	Report.bMet = Report.Lines.empty();
 	return Report;
 }
@@ -1681,7 +2094,11 @@ ViewerScene ViewerSceneOf(const Scenario& Value, const ScenarioOutcome& Outcome,
 	for (std::size_t Slot = 0; Slot < Value.BodyNames.size(); ++Slot)
 	{
 		Scene.Boxes.push_back(ViewerBox{Value.BodyIds[Slot], Value.BodyNames[Slot], Value.BodyMaterials[Slot], Value.BodyBoxes[Slot].CentreM,
-			Value.BodyBoxes[Slot].HalfExtentsM, {1.0, 0.0, 0.0, 0.0}, Value.BodyGrounded[Slot], Value.BodyMassesKg[Slot]});
+			Value.BodyBoxes[Slot].HalfExtentsM, Slot < Value.BodyRotations.size() ? Value.BodyRotations[Slot] : Identity, Value.BodyGrounded[Slot], Value.BodyMassesKg[Slot]});
+	}
+	for (const ScenarioJointReading& R : Outcome.BeforeReadings)
+	{
+		Scene.BeforeReadings.push_back(R.Reading);
 	}
 	Scene.RemovedBeforeRun = IdsOf(Value, Outcome.Removed);
 	Scene.Gravity = Outcome.Gravity;

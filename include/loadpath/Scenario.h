@@ -13,6 +13,7 @@
 #include "loadpath/Viewer.h"
 #include "loadpath/geometry/BoxContacts.h"
 
+#include <array>
 #include <cstdint>
 #include <optional>
 #include <span>
@@ -23,6 +24,14 @@
 namespace loadpath
 {
 enum class ScenarioTier : std::uint8_t { Default, SlowInDebug, Slow };
+
+// Met when the highest utilisation lies in [Low, High) and an At joint attains it within 1e-9 relative, governed by Axis when given.
+struct ScenarioUtilisation
+{
+	double Low = 0.0, High = 0.0;
+	std::vector<std::string> At;
+	std::optional<GoverningAxis> Axis;
+};
 
 // Body names are already expanded from patterns; Cracked keeps its "<a>/<b>" patterns, matched when compared.
 struct ScenarioExpect
@@ -36,6 +45,11 @@ struct ScenarioExpect
 	std::optional<std::vector<std::string>> Cracked;
 	// Compared as a set; absent means nothing crushes.
 	std::vector<std::string> Crushed;
+	std::optional<ScenarioUtilisation> BeforeUtilisation, AfterUtilisation;
+	// False: no released cluster is forced; true: at least one is.
+	std::optional<bool> Forced;
+	// Every body here must be live at the end: not released, crushed or removed.
+	std::vector<std::string> Stands;
 };
 
 enum class ScenarioStepKind : std::uint8_t { Cascade, Judge, Remove, Load, Lateral };
@@ -59,7 +73,9 @@ struct Scenario
 	Structure Model;
 	std::vector<BodyId> BodyIds;
 	std::vector<std::string> BodyNames, BodyMaterials;
+	// An arch voussoir's box is the largest one inscribed in its sector, turned by its BodyRotations quaternion (w, x, y, z).
 	std::vector<geometry::Box> BodyBoxes;
+	std::vector<std::array<double, 4>> BodyRotations;
 	std::vector<double> BodyMassesKg;
 	std::vector<bool> BodyGrounded;
 	std::vector<std::string> ProfileNames;
@@ -89,6 +105,13 @@ struct ScenarioStepRecord
 	int Passes = 0;
 };
 
+struct ScenarioJointReading
+{
+	// "<a>/<b>" in the interface's body order.
+	std::string Joint;
+	InterfaceReading Reading;
+};
+
 // States are names: a cascade state, or a judge's component verdict ("Collapses").
 struct ScenarioOutcome
 {
@@ -104,6 +127,10 @@ struct ScenarioOutcome
 	std::vector<CascadeVerdict> Verdicts;
 	// The judge of the structure as the before view draws it: every remove step applied, every load and lateral_g applied, no cascade run.
 	std::optional<ComponentVerdict> Before;
+	// Every live joint as that before judge read it, and as the last cascade or judge step read it.
+	std::vector<ScenarioJointReading> BeforeReadings, AfterReadings;
+	// The bodies of every released cluster that was forced.
+	std::vector<std::vector<std::string>> ForcedClusters;
 	Vec3 Gravity{0.0, 0.0, -GravityMPerS2};
 	std::vector<BodyLoad> Loads;
 	// Set when a step cannot run; the run stops there.

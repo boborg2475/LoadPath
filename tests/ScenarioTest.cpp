@@ -1,5 +1,6 @@
 #include "JsonReader.h"
 #include "ScenarioTestSupport.h"
+#include "StateNames.h"
 
 #include "loadpath/Cascade.h"
 #include "loadpath/Catalogue.h"
@@ -566,6 +567,13 @@ TEST_CASE("Scenario.Load.ErrorsNameTheLineAndTheProblem")
 		{"bad range in a between pattern", 8, "    { \"between\": [\"block[1-]\", \"ground\"], \"row\": \"c24_bearing_perp_to_grain\" }", 0, "", 8, "bad range in a 'between' pattern"},
 		{"unknown expect state", 11, "  \"expect\": { \"state\": \"Falls\" }", 0, "", 11, "unknown state 'Falls'"},
 		{"badly written cracked joint", 11, "  \"expect\": { \"cracked\": [\"block\"] }", 0, "", 11, "a cracked joint is written '<a>/<b>'"},
+		{"unknown utilisation state", 11, "  \"expect\": { \"utilisation\": { \"during\": { \"max\": [0, 1] } } }", 0, "", 11, "unknown key 'during'"},
+		{"utilisation band out of order", 11, "  \"expect\": { \"utilisation\": { \"before\": { \"max\": [1, 0.5] } } }", 0, "", 11, "max must hold 2 finite numbers, lo below hi"},
+		{"utilisation without max", 11, "  \"expect\": { \"utilisation\": { \"before\": { \"axis\": \"Tension\" } } }", 0, "", 11, "missing 'max'"},
+		{"utilisation unknown axis", 11, "  \"expect\": { \"utilisation\": { \"before\": { \"max\": [0, 1], \"axis\": \"Bending\" } } }", 0, "", 11, "unknown axis 'Bending'"},
+		{"utilisation at not a joint", 11, "  \"expect\": { \"utilisation\": { \"before\": { \"max\": [0, 1], \"at\": [\"block\"] } } }", 0, "", 11, "an 'at' joint is written '<a>/<b>'"},
+		{"forced not a bool", 11, "  \"expect\": { \"forced\": \"no\" }", 0, "", 11, "'forced' has the wrong type"},
+		{"stands matching nothing", 11, "  \"expect\": { \"stands\": [\"ghost\"] }", 0, "", 11, "no body matches 'ghost'"},
 	};
 	{
 		const ScenarioLoadResult Valid = LoadWithRows(Lines(Base));
@@ -1447,6 +1455,10 @@ TEST_CASE("Scenario.Viewer.TheScenarioExportIsTheSceneExport")
 	V.RemovedBeforeRun = {BodyOrFail(S, "post.2")};
 	V.Gravity = Vec3{0.0, 0.0, -GravityMPerS2};
 	V.Before = O.Before;
+	for (const ScenarioJointReading& R : O.BeforeReadings)
+	{
+		V.BeforeReadings.push_back(R.Reading);
+	}
 	V.After = O.Verdicts;
 	CHECK(WriteViewerJson(S, O, ColonnadeSlug) == WriteViewerJson(V));
 }
@@ -1718,4 +1730,481 @@ TEST_CASE("Scenario.Viewer.CrushedBodiesAreWrittenUnderAfterAndEachPassRecord")
 	}
 	CHECK(Field(Field(Records.Items[0], "crushed").Items[0], "body").Number == Beam);
 	CHECK(Field(Records.Items[1], "crushed").Items.empty());
+}
+
+namespace
+{
+constexpr double ArchRadiusTestM = 1.0;
+constexpr double ArchThicknessTestM = 0.215;
+constexpr double ArchDepthTestM = 0.1025;
+constexpr double ArchSpringingZM = 0.195;
+constexpr int ArchVoussoirsTest = 5;
+constexpr double PiValue = 3.14159265358979323846;
+
+std::vector<std::string> ArchBase()
+{
+	const std::string Wall = "\"courses\": 3, \"bricks\": 2, \"on\": \"ground\", \"material\": \"clay_brick\", \"bed\": \"clay_gp_mortar_bed_ec6\", \"perpend\": \"clay_gp_mortar_perpend_ec6\"";
+	return {
+		"{",
+		"  \"title\": \"arch\",",
+		"  \"build\": [",
+		"    { \"name\": \"ground\", \"size\": [3, 0.6, 0.2], \"centre\": [0, 0, -0.1], \"grounded\": true },",
+		"    { \"wall\": \"pl\", \"origin\": [-1.215, 0, 0], " + Wall + " },",
+		"    { \"wall\": \"pr\", \"origin\": [0.785, 0, 0], " + Wall + " },",
+		"    { \"arch\": \"v\", \"material\": \"clay_brick\", \"centre\": [0, 0, 0.195], \"radius\": 1.0, \"thickness\": 0.215, \"depth\": 0.1025, \"voussoirs\": 5, "
+		"\"springings\": [\"pl\", \"pr\"], \"joint\": \"clay_gp_mortar_bed_ec6\" }",
+		"  ],",
+		"  \"steps\": [\"cascade\"]",
+		"}",
+	};
+}
+
+double ArchHalfAngleRad() { return 0.5 * PiValue / ArchVoussoirsTest; }
+
+double ArchBisectorRad(int K) { return -0.5 * PiValue + (2 * K + 1) * ArchHalfAngleRad(); }
+
+double ArchCentroidRadiusM()
+{
+	const double Ri = ArchRadiusTestM - 0.5 * ArchThicknessTestM;
+	const double Ro = ArchRadiusTestM + 0.5 * ArchThicknessTestM;
+	const double D = ArchHalfAngleRad();
+	return (2.0 / 3.0) * (std::sin(D) / D) * (Ro * Ro * Ro - Ri * Ri * Ri) / (Ro * Ro - Ri * Ri);
+}
+
+std::vector<InterfaceId> JointsBetween(const Scenario& S, std::string_view A, std::string_view BPrefix)
+{
+	std::vector<InterfaceId> Out;
+	for (const InterfaceId Id : S.Model.LiveInterfaces())
+	{
+		const InterfaceRecord& R = S.Model.Interface(Id);
+		const std::string NA = NameOf(S, R.BodyA);
+		const std::string NB = NameOf(S, R.BodyB);
+		if ((NA == A && NB.starts_with(BPrefix)) || (NB == A && NA.starts_with(BPrefix)))
+		{
+			Out.push_back(Id);
+		}
+	}
+	return Out;
+}
+
+ScenarioJointReading NamedReading(std::string Joint, double Utilisation, GoverningAxis Axis)
+{
+	ScenarioJointReading R;
+	R.Joint = std::move(Joint);
+	R.Reading.Utilisation = Utilisation;
+	R.Reading.Axis = Axis;
+	return R;
+}
+
+bool AnyLineMentions(const ExpectationReport& Report, std::string_view A, std::string_view B = "")
+{
+	return std::any_of(Report.Lines.begin(), Report.Lines.end(), [&](const std::string& L) { return Mentions(L, A) && Mentions(L, B); });
+}
+}
+
+TEST_CASE("Scenario.Load.TheArchMakesNamedSectorVoussoirsJoinedRadially")
+{
+	const Scenario S = LoadScenarioOk(Lines(ArchBase()));
+	const double Ri = ArchRadiusTestM - 0.5 * ArchThicknessTestM;
+	const double Ro = ArchRadiusTestM + 0.5 * ArchThicknessTestM;
+	const double WantKg = 2000.0 * ArchDepthTestM * ArchHalfAngleRad() * (Ro * Ro - Ri * Ri);
+	CHECK_FALSE(S.Model.IsKnown(S.Find("v.5")));
+	for (int K = 0; K < ArchVoussoirsTest; ++K)
+	{
+		const std::string Name = "v." + std::to_string(K);
+		INFO("voussoir " << Name);
+		const BodyId Id = BodyOrFail(S, Name);
+		if (!S.Model.IsKnown(Id))
+		{
+			continue;
+		}
+		const BodyDesc& Body = S.Model.Body(Id);
+		CHECK_FALSE(Body.bGrounded);
+		CHECK(std::abs(Body.MassKg - WantKg) <= 1e-12 * WantKg);
+		const double B = ArchBisectorRad(K);
+		CheckNear(Body.CentroidM, Vec3{ArchCentroidRadiusM() * std::sin(B), 0.0, ArchSpringingZM + ArchCentroidRadiusM() * std::cos(B)}, 1e-12);
+		CHECK(S.BodyMaterials[Id.Index] == "clay_brick");
+	}
+	for (int K = 1; K < ArchVoussoirsTest; ++K)
+	{
+		const std::string A = "v." + std::to_string(K - 1);
+		const std::string B = "v." + std::to_string(K);
+		INFO("ring joint " << A << "/" << B);
+		const std::vector<InterfaceId> Joints = JointsBetween(S, A, B);
+		CHECK(Joints.size() == 1u);
+		if (!(Joints.size() == 1u))
+		{
+			return;
+		}
+		const InterfaceRecord& R = S.Model.Interface(Joints[0]);
+		const double Phi = -0.5 * PiValue + K * 2.0 * ArchHalfAngleRad();
+		CheckNear(R.CentreM, Vec3{ArchRadiusTestM * std::sin(Phi), 0.0, ArchSpringingZM + ArchRadiusTestM * std::cos(Phi)}, 1e-12);
+		const double Sign = NameOf(S, R.BodyA) == A ? 1.0 : -1.0;
+		CheckNear(R.NormalAToB, Vec3{Sign * std::cos(Phi), 0.0, -Sign * std::sin(Phi)}, 1e-12);
+		CHECK(std::abs(R.AreaM2 - ArchThicknessTestM * ArchDepthTestM) <= 1e-15);
+		CHECK(std::abs(std::max(R.HalfExtentUM, R.HalfExtentVM) - 0.5 * ArchThicknessTestM) <= 1e-15);
+		CHECK(S.ProfileNames[R.Profile.Index] == "clay_gp_mortar_bed_ec6");
+	}
+	struct Springing
+	{
+		const char* Voussoir;
+		const char* Brick;
+		double CentreXM;
+	};
+	const Springing Want[] = {{"v.0", "pl.c2.b0", -1.05375}, {"v.0", "pl.c2.b1", -0.94625}, {"v.4", "pr.c2.b0", 0.94625}, {"v.4", "pr.c2.b1", 1.05375}};
+	for (const Springing& W : Want)
+	{
+		INFO("springing " << W.Voussoir << "/" << W.Brick);
+		const std::vector<InterfaceId> Joints = JointsBetween(S, W.Voussoir, W.Brick);
+		CHECK(Joints.size() == 1u);
+		if (!(Joints.size() == 1u))
+		{
+			return;
+		}
+		const InterfaceRecord& R = S.Model.Interface(Joints[0]);
+		CheckNear(R.CentreM, Vec3{W.CentreXM, 0.0, ArchSpringingZM}, 1e-12);
+		CHECK(std::abs(std::abs(R.NormalAToB.Z) - 1.0) <= 1e-12);
+		CHECK(std::abs(R.AreaM2 - 0.1075 * ArchDepthTestM) <= 1e-15);
+		CHECK(S.ProfileNames[R.Profile.Index] == "clay_gp_mortar_bed_ec6");
+	}
+	CHECK(JointsBetween(S, "v.0", "pl.").size() == 2u);
+	CHECK(JointsBetween(S, "v.4", "pr.").size() == 2u);
+	CHECK(JointsBetween(S, "v.2", "p").empty());
+	CHECK(JointsBetween(S, "v.0", "ground").empty());
+}
+
+TEST_CASE("Scenario.Load.ArchErrorsNameTheLineAndTheProblem")
+{
+	const std::vector<std::string> Base = ArchBase();
+	{
+		const ScenarioLoadResult Valid = LoadWithRows(Lines(Base));
+		INFO("the base document must load; line " << Valid.Error.Line << ": " << Valid.Error.Message);
+		CHECK(Valid.Ok());
+	}
+	const std::string Head = "    { \"arch\": \"v\", \"material\": \"clay_brick\", ";
+	const std::string Tail = "\"joint\": \"clay_gp_mortar_bed_ec6\" }";
+	const std::string Ring = "\"thickness\": 0.215, \"depth\": 0.1025, \"voussoirs\": 5, ";
+	const std::string Centre = "\"centre\": [0, 0, 0.195], \"radius\": 1.0, ";
+	const std::string Both = "\"springings\": [\"pl\", \"pr\"], ";
+	struct Fault
+	{
+		const char* Name;
+		int Line;
+		std::string Text;
+		int ErrorLine;
+		const char* Phrase;
+	};
+	const Fault Faults[] = {
+		{"unknown key", 7, Head + Centre + Ring + Both + "\"colour\": \"red\", " + Tail, 7, "unknown key 'colour'"},
+		{"springing naming no wall", 7, Head + Centre + Ring + "\"springings\": [\"pl\", \"ground\"], " + Tail, 7, "names no wall: 'ground'"},
+		{"springing off the wall top", 7, Head + "\"centre\": [0, 0, 0.2], \"radius\": 1.0, " + Ring + Both + Tail, 7, "not at the arch's springing level"},
+		{"end voussoir on no brick", 7, Head + "\"centre\": [0, 0, 0.195], \"radius\": 0.5, " + Ring + Both + Tail, 7, "'v.0' rests on no brick of 'pl'"},
+		{"no voussoirs", 7, Head + Centre + "\"thickness\": 0.215, \"depth\": 0.1025, \"voussoirs\": 0, " + Both + Tail, 7, "voussoirs must be a whole number of at least 1"},
+		{"ring thicker than its diameter", 7, Head + Centre + "\"thickness\": 2.5, \"depth\": 0.1025, \"voussoirs\": 5, " + Both + Tail, 7,
+			"thickness must be positive and less than twice the radius"},
+		{"unknown joint row", 7, Head + Centre + Ring + Both + "\"joint\": \"no_such_row\" }", 7, "unknown row 'no_such_row' for an arch joint"},
+		{"duplicate name", 7, "    { \"arch\": \"pl\", \"material\": \"clay_brick\", " + Centre + Ring + Both + Tail, 7, "duplicate name 'pl'"},
+		{"arch before its springing wall", 5, Head + Centre + Ring + Both + Tail + ",", 5, "must come before the arch"},
+	};
+	for (const Fault& F : Faults)
+	{
+		std::vector<std::string> Doc = Base;
+		Doc[static_cast<std::size_t>(F.Line - 1)] = F.Text;
+		if (F.Line == 5)
+		{
+			Doc[6] = Base[4].substr(0, Base[4].size() - 1);
+		}
+		const std::string Json = Lines(Doc);
+		const ScenarioLoadResult Loaded = LoadWithRows(Json);
+		INFO(std::string(F.Name) << "\n" << Json << "line " << Loaded.Error.Line << ": " << Loaded.Error.Message);
+		CHECK_FALSE(Loaded.Ok());
+		CHECK(Loaded.Error.Line == F.ErrorLine);
+		CHECK_MESSAGE(Mentions(Loaded.Error.Message, F.Phrase), "the message must contain: " << F.Phrase);
+		CHECK(Loaded.Value.BodyNames.empty());
+	}
+}
+
+TEST_CASE("Scenario.Viewer.ArchVoussoirsExportTheirInscribedTurnedBoxes")
+{
+	Scenario S = LoadScenarioOk(Lines(ArchBase()));
+	const ScenarioOutcome O = RunScenario(S);
+	const Parsed P = Parse(WriteViewerJson(S, O, "arch"));
+	CHECK(P.bOk);
+	if (!(P.bOk))
+	{
+		return;
+	}
+	const double Rc = ArchCentroidRadiusM();
+	const double D = ArchHalfAngleRad();
+	const double RadialHalfM = std::min(Rc - (ArchRadiusTestM - 0.5 * ArchThicknessTestM), (ArchRadiusTestM + 0.5 * ArchThicknessTestM) * std::cos(D) - Rc);
+	for (int K = 0; K < ArchVoussoirsTest; ++K)
+	{
+		const std::string Name = "v." + std::to_string(K);
+		INFO("voussoir " << Name);
+		const detail::JsonValue* Box = BodyNamed(P.Root, Name);
+		CHECK(Box != nullptr);
+		if (!(Box != nullptr))
+		{
+			return;
+		}
+		const double B = ArchBisectorRad(K);
+		const std::vector<double> C = Numbers(Field(*Box, "c"));
+		const std::vector<double> H = Numbers(Field(*Box, "h"));
+		const std::vector<double> Q = Numbers(Field(*Box, "q"));
+		CHECK(C.size() == 3u);
+		if (!(C.size() == 3u))
+		{
+			return;
+		}
+		CHECK(H.size() == 3u);
+		if (!(H.size() == 3u))
+		{
+			return;
+		}
+		CHECK(Q.size() == 4u);
+		if (!(Q.size() == 4u))
+		{
+			return;
+		}
+		CheckNear(Vec3{C[0], C[1], C[2]}, Vec3{Rc * std::sin(B), 0.0, ArchSpringingZM + Rc * std::cos(B)}, 1e-12);
+		CheckNear(Vec3{H[0], H[1], H[2]}, Vec3{(Rc - RadialHalfM) * std::tan(D), 0.5 * ArchDepthTestM, RadialHalfM}, 1e-12);
+		CHECK(std::abs(Q[0] - std::cos(0.5 * B)) <= 1e-12);
+		CHECK(std::abs(Q[1]) <= 1e-12);
+		CHECK(std::abs(Q[2] - std::sin(0.5 * B)) <= 1e-12);
+		CHECK(std::abs(Q[3]) <= 1e-12);
+	}
+	const detail::JsonValue* Brick = BodyNamed(P.Root, "pl.c0.b0");
+	CHECK(Brick != nullptr);
+	if (!(Brick != nullptr))
+	{
+		return;
+	}
+	CHECK(Numbers(Field(*Brick, "q")) == std::vector<double>{1.0, 0.0, 0.0, 0.0});
+}
+
+TEST_CASE("Scenario.Load.TheUtilisationForcedAndStandsKeysParse")
+{
+	const std::string Json = R"({
+  "title": "keys",
+  "build": [
+    { "name": "ground", "size": [1.2, 0.6, 0.2], "centre": [0.43, 0, -0.1], "grounded": true },
+    { "wall": "w", "courses": 2, "bricks": 2, "on": "ground", "material": "clay_brick",
+      "bed": "clay_gp_mortar_bed_ec6", "perpend": "clay_gp_mortar_perpend_ec6" }
+  ],
+  "expect": { "stands": ["w.c1.*", "ground"], "forced": false,
+    "utilisation": { "before": { "max": [0.1, 2], "at": ["w.c0.*/ground"], "axis": "Shear" }, "after": { "max": [0, 1] } } }
+}
+)";
+	const Scenario S = LoadScenarioOk(Json);
+	CHECK(S.Expect.has_value());
+	if (!(S.Expect.has_value()))
+	{
+		return;
+	}
+	const ScenarioExpect& E = *S.Expect;
+	CHECK(SortedNames(E.Stands) == std::vector<std::string>{"ground", "w.c1.b0", "w.c1.b1", "w.c1.b2"});
+	CHECK(E.Forced.has_value());
+	if (!(E.Forced.has_value()))
+	{
+		return;
+	}
+	CHECK_FALSE(*E.Forced);
+	CHECK(E.BeforeUtilisation.has_value());
+	if (!(E.BeforeUtilisation.has_value()))
+	{
+		return;
+	}
+	CHECK(E.BeforeUtilisation->Low == 0.1);
+	CHECK(E.BeforeUtilisation->High == 2.0);
+	CHECK(E.BeforeUtilisation->At == std::vector<std::string>{"w.c0.*/ground"});
+	CHECK(E.BeforeUtilisation->Axis.has_value());
+	if (!(E.BeforeUtilisation->Axis.has_value()))
+	{
+		return;
+	}
+	CHECK(*E.BeforeUtilisation->Axis == GoverningAxis::Shear);
+	CHECK(E.AfterUtilisation.has_value());
+	if (!(E.AfterUtilisation.has_value()))
+	{
+		return;
+	}
+	CHECK(E.AfterUtilisation->High == 1.0);
+	CHECK(E.AfterUtilisation->At.empty());
+	CHECK_FALSE(E.AfterUtilisation->Axis.has_value());
+
+	const Scenario Plain = LoadScenarioOk(Replaced(Json, R"("stands": ["w.c1.*", "ground"], "forced": false,)", ""));
+	CHECK(Plain.Expect.has_value());
+	if (!(Plain.Expect.has_value()))
+	{
+		return;
+	}
+	CHECK(Plain.Expect->Stands.empty());
+	CHECK_FALSE(Plain.Expect->Forced.has_value());
+}
+
+TEST_CASE("Scenario.Expect.TheUtilisationBandIsMetAtANamedJointOnItsAxis")
+{
+	ScenarioOutcome Engine = Synthetic({"a", "b", "c"}, {});
+	Engine.BeforeReadings = {NamedReading("b/c", 0.5, GoverningAxis::Shear), NamedReading("a/b", 0.9, GoverningAxis::Tension)};
+	Engine.AfterReadings = {NamedReading("a/b", 0.3, GoverningAxis::Tension)};
+	const auto Before = [](double Low, double High, std::vector<std::string> At, std::optional<GoverningAxis> Axis) {
+		ScenarioExpect E;
+		E.BeforeUtilisation = ScenarioUtilisation{Low, High, std::move(At), Axis};
+		return E;
+	};
+	CHECK(CompareExpectation(Before(0.8, 1.0, {"b/a"}, GoverningAxis::Tension), Engine).bMet);
+	CHECK(CompareExpectation(Before(0.8, 1.0, {"c/*", "*/a"}, GoverningAxis::Tension), Engine).bMet);
+	CHECK(CompareExpectation(Before(0.8, 1.0, {}, std::nullopt), Engine).bMet);
+
+	const ExpectationReport Low = CompareExpectation(Before(0.95, 1.0, {"a/b"}, GoverningAxis::Tension), Engine);
+	INFO("report:" << Joined(Low.Lines));
+	CHECK_FALSE(Low.bMet);
+	CHECK(AnyLineMentions(Low, "utilisation before", "0.9"));
+	CHECK(AnyLineMentions(Low, "utilisation before", "a/b"));
+
+	CHECK_FALSE(CompareExpectation(Before(0.8, 0.9, {"a/b"}, GoverningAxis::Tension), Engine).bMet);
+
+	const ExpectationReport Where = CompareExpectation(Before(0.8, 1.0, {"b/c"}, GoverningAxis::Tension), Engine);
+	INFO("report:" << Joined(Where.Lines));
+	CHECK_FALSE(Where.bMet);
+	CHECK(AnyLineMentions(Where, "utilisation before", "a/b"));
+	CHECK(AnyLineMentions(Where, "utilisation before", "b/c"));
+
+	const ExpectationReport Axis = CompareExpectation(Before(0.8, 1.0, {"a/b"}, GoverningAxis::Shear), Engine);
+	INFO("report:" << Joined(Axis.Lines));
+	CHECK_FALSE(Axis.bMet);
+	CHECK(AnyLineMentions(Axis, "utilisation before", "Tension"));
+
+	ScenarioExpect After;
+	After.AfterUtilisation = ScenarioUtilisation{0.8, 1.0, {}, std::nullopt};
+	const ExpectationReport AfterReport = CompareExpectation(After, Engine);
+	INFO("report:" << Joined(AfterReport.Lines));
+	CHECK_FALSE(AfterReport.bMet);
+	CHECK(AnyLineMentions(AfterReport, "utilisation after", "0.3"));
+
+	const ScenarioOutcome Unread = Synthetic({"a"}, {});
+	const ExpectationReport None = CompareExpectation(Before(0.0, 1.0, {}, std::nullopt), Unread);
+	INFO("report:" << Joined(None.Lines));
+	CHECK_FALSE(None.bMet);
+	CHECK(AnyLineMentions(None, "utilisation before", "no readings"));
+
+	Engine.BeforeReadings.push_back(NamedReading("a/c", std::numeric_limits<double>::quiet_NaN(), GoverningAxis::Tension));
+	CHECK_FALSE(CompareExpectation(Before(0.0, 1.0, {}, std::nullopt), Engine).bMet);
+}
+
+TEST_CASE("Scenario.Expect.ForcedIsCheckedOnlyWhenGiven")
+{
+	ScenarioOutcome Forced = Synthetic({"q0", "q1", "q2"}, {{"q0", "q1"}, {"q2"}});
+	Forced.ForcedClusters = {{"q0", "q1"}};
+	ScenarioExpect Released;
+	Released.bPartition = true;
+	Released.Released = {{"q0", "q1"}, {"q2"}};
+	CHECK(CompareExpectation(Released, Forced).bMet);
+
+	ScenarioExpect NotForced = Released;
+	NotForced.Forced = false;
+	const ExpectationReport Wrong = CompareExpectation(NotForced, Forced);
+	INFO("report:" << Joined(Wrong.Lines));
+	CHECK_FALSE(Wrong.bMet);
+	CHECK(AnyLineMentions(Wrong, "forced", "q0"));
+	CHECK_FALSE(AnyLineMentions(Wrong, "forced", "q2"));
+
+	ScenarioExpect IsForced = Released;
+	IsForced.Forced = true;
+	CHECK(CompareExpectation(IsForced, Forced).bMet);
+
+	const ScenarioOutcome Proven = Synthetic({"q0", "q1", "q2"}, {{"q0", "q1"}, {"q2"}});
+	CHECK(CompareExpectation(NotForced, Proven).bMet);
+	const ExpectationReport Missing = CompareExpectation(IsForced, Proven);
+	INFO("report:" << Joined(Missing.Lines));
+	CHECK_FALSE(Missing.bMet);
+	CHECK(AnyLineMentions(Missing, "forced"));
+}
+
+TEST_CASE("Scenario.Expect.EveryStandsBodyMustRemainLive")
+{
+	ScenarioOutcome Engine = Synthetic({"b0", "b1", "b2", "b3"}, {{"b0"}});
+	Engine.Crushed = {"b1"};
+	Engine.Removed = {"b2"};
+	ScenarioExpect Expect;
+	Expect.bPartition = true;
+	Expect.Released = {{"b0"}};
+	Expect.Crushed = {"b1"};
+	Expect.Stands = {"b3"};
+	CHECK(CompareExpectation(Expect, Engine).bMet);
+
+	Expect.Stands = {"b0", "b1", "b2", "b3"};
+	const ExpectationReport Report = CompareExpectation(Expect, Engine);
+	INFO("report:" << Joined(Report.Lines));
+	CHECK_FALSE(Report.bMet);
+	CHECK(Report.Lines.size() == 1u);
+	CHECK(AnyLineMentions(Report, "stand", "b0"));
+	CHECK(AnyLineMentions(Report, "stand", "b1"));
+	CHECK(AnyLineMentions(Report, "stand", "b2"));
+	CHECK_FALSE(AnyLineMentions(Report, "stand", "b3"));
+}
+
+TEST_CASE("Scenario.Steps.TheOutcomeNamesEveryJointReadingBeforeAndAfter")
+{
+	Scenario S = LoadScenarioOk(ColonnadeJson);
+	const ScenarioOutcome O = RunScenario(S);
+	CHECK_FALSE(O.Verdicts.empty());
+	if (O.Verdicts.empty())
+	{
+		return;
+	}
+	CHECK(O.BeforeReadings.size() == 10u);
+	for (const ScenarioJointReading& R : O.BeforeReadings)
+	{
+		const InterfaceRecord& I = S.Model.Interface(R.Reading.Id);
+		CHECK(R.Joint == NameOf(S, I.BodyA) + "/" + NameOf(S, I.BodyB));
+		CHECK_FALSE(Mentions(R.Joint, "post.2"));
+	}
+	const std::vector<InterfaceReading>& Last = O.Verdicts.back().Readings;
+	CHECK(O.AfterReadings.size() == Last.size());
+	if (!(O.AfterReadings.size() == Last.size()))
+	{
+		return;
+	}
+	CHECK_FALSE(Last.empty());
+	for (std::size_t K = 0; K < Last.size(); ++K)
+	{
+		const InterfaceRecord& I = S.Model.Interface(Last[K].Id);
+		CHECK(O.AfterReadings[K].Reading.Id == Last[K].Id);
+		CHECK(O.AfterReadings[K].Reading.Utilisation == Last[K].Utilisation);
+		CHECK(O.AfterReadings[K].Joint == NameOf(S, I.BodyA) + "/" + NameOf(S, I.BodyB));
+	}
+}
+
+TEST_CASE("Scenario.Viewer.TheBeforeStateCarriesItsJointReadings")
+{
+	Scenario S = LoadScenarioOk(ColonnadeJson);
+	const ScenarioOutcome O = RunScenario(S);
+	const Parsed P = Parse(WriteViewerJson(S, O, ColonnadeSlug));
+	CHECK(P.bOk);
+	if (!(P.bOk))
+	{
+		return;
+	}
+	const detail::JsonValue& Before = Field(P.Root, "before");
+	CHECK(HasKey(Before, "readings"));
+	if (!(HasKey(Before, "readings")))
+	{
+		return;
+	}
+	const detail::JsonValue& Readings = Field(Before, "readings");
+	CHECK(Readings.Items.size() == O.BeforeReadings.size());
+	if (!(Readings.Items.size() == O.BeforeReadings.size()))
+	{
+		return;
+	}
+	CHECK_FALSE(Readings.Items.empty());
+	for (std::size_t K = 0; K < Readings.Items.size(); ++K)
+	{
+		const detail::JsonValue& R = Readings.Items[K];
+		CHECK(Field(R, "interface").Number == static_cast<double>(O.BeforeReadings[K].Reading.Id.Index));
+		CHECK(Field(R, "utilisation").Number == O.BeforeReadings[K].Reading.Utilisation);
+		CHECK(Field(R, "axis").Text == std::string(detail::AxisText(O.BeforeReadings[K].Reading.Axis)));
+		CHECK(Field(R, "corners").Items.size() == 4u);
+	}
 }

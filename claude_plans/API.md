@@ -1268,10 +1268,37 @@ int RunCli(std::span<const std::string_view> Args, IFileStore& Files, std::strin
   engine M`, `cracked, not expected: ...`, `expected to crack, not cracked: ...`, `crushed: expected
   [a], engine [b]`. The expectation's `crushed` (body patterns) is compared as a set and absent means
   nothing crushes, so a crush the file did not expect fails it. Met means no lines.
+  Then (2026-11-08, core case A) the three keys below, each checked only when present:
+  `utilisation before: ...` / `utilisation after: ...` (`no readings`; `max U at <joint> (<axis>),
+  expected [lo, hi)`; `max U at <joint>, not at <patterns>`; `governed by <axis> at <joint>, expected
+  <axis>`), `forced: expected none, engine forced {..}` or `forced: expected a forced release, engine
+  forced none`, and `expected to stand, not standing: a, b`.
+- **The `arch` builder** (2026-11-08, core case A): `{ "arch": "v", "material", "centre": [x, y, z],
+  "radius", "thickness", "depth", "voussoirs": N, "springings": [left wall, right wall], "joint": row }`.
+  A semicircle of N annular-sector voussoirs `v.0` (left, x = cx − R) to `v.N−1`, centreline radius
+  `radius`, radial depth `thickness` (< 2 × radius), barrel width `depth` along y, centred on `centre`
+  (the springing plane). Mass ρ b δ (Rₒ² − Rᵢ²) and the exact sector centroid, δ = π/2N. Radial joints of
+  the `joint` row between neighbours (normal along the ring, U radial, V = −y, half-extents t/2 and b/2).
+  Each end voussoir's lower face (x ∈ ±R ± t/2) gets one horizontal `joint`-row contact per top-course
+  brick of its springing wall that it overlaps (the overlap rectangle, brick below). Errors: a springing
+  that names no wall, a springing wall that comes after the arch, a wall top not at `centre.z`, an end
+  voussoir resting on no brick, `voussoirs` < 1, a bad `thickness`, an unknown joint row, a name
+  (or a generated `v.k`) already used. Voussoirs take part in no `joints` rule and no overlap check.
+  `Scenario::BodyBoxes` holds the largest box inscribed in each sector and `BodyRotations` its
+  quaternion about y by the bisector angle (identity for every other body).
+- **Expectation keys added 2026-11-08:**
+  `"utilisation": { "before" | "after": { "max": [lo, hi], "at": ["<a>/<b>" patterns], "axis": "Tension" | "Compression" | "Shear" } }`
+  holds when the highest `Utilisation` over the state's readings (`ScenarioOutcome::BeforeReadings`,
+  the before judge's; `AfterReadings`, the last cascade's or judge's) lies in [lo, hi) (a NaN fails),
+  an `at` joint attains it within 1e-9 relative, and `axis` governs at one such joint (`at` and `axis`
+  optional). `"forced": false` means no released cluster has `bForced` (`ScenarioOutcome::ForcedClusters`
+  is empty), `true` that one has; absent checks nothing. `"stands": [patterns]` lists bodies that must
+  be live at the end: in no released cluster, not crushed, not removed. Unknown keys stay errors.
 - **Viewer export.** Keys in a fixed order: `slug`, `title`, `test` (when set), `summary`, `units`,
   `gravity`, `lateral`, `loads`, `bodies` (`id`, `name`, `c`, `h`, `q` as (w, x, y, z), `grounded`,
   `mass_kg`, `material`), `interfaces` (every interface ever added, with `state_after`),
-  `removed_before_run`, `before.verdict`, `after` (`state`, `passes`, `clusters` with `motion`,
+  `removed_before_run`, `before.verdict`, `before.readings` (2026-11-08: one joint-shaped entry per
+  reading of the before judge, as in `pass_records[].readings`; written only when not empty), `after` (`state`, `passes`, `clusters` with `motion`,
   `failures` (each with `kind`: `cracked`, `severed` or `crushed`), `crushed` (`body`, `pass`,
   `interface`, `ratio`; always written), `removed` (released and crushed bodies), `elapsed_ms` only
   when timed), and `expected` (with `crushed` body ids) only when it differs from the engine's
