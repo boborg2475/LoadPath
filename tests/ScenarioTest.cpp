@@ -1,5 +1,6 @@
 #include "JsonReader.h"
 #include "ScenarioTestSupport.h"
+#include "SlowInDebug.h"
 #include "StateNames.h"
 
 #include "loadpath/Cascade.h"
@@ -2119,6 +2120,72 @@ TEST_CASE("Scenario.Expect.ForcedIsCheckedOnlyWhenGiven")
 	INFO("report:" << Joined(Missing.Lines));
 	CHECK_FALSE(Missing.bMet);
 	CHECK(AnyLineMentions(Missing, "forced"));
+}
+
+const std::string SoldierCourse61Json = R"({
+  "title": "Soldier course of 61",
+  "summary": "Sixty-one EC6-mortared soldiers between brick piers: the cascade ends in a forced release.",
+  "build": [
+    { "name": "ground", "size": [5.8, 0.6, 0.2], "centre": [1.98, 0, -0.1], "grounded": true },
+    { "wall": "pier_left", "courses": 9, "bricks": 3, "origin": [-0.645, 0, 0], "on": "ground", "material": "clay_brick",
+      "bed": "clay_gp_mortar_bed_ec6", "perpend": "clay_gp_mortar_perpend_ec6" },
+    { "wall": "pier_right", "courses": 9, "bricks": 3, "origin": [3.965, 0, 0], "on": "ground", "material": "clay_brick",
+      "bed": "clay_gp_mortar_bed_ec6", "perpend": "clay_gp_mortar_perpend_ec6" },
+    { "name": "s", "size": [0.065, 0.1025, 0.215], "centre": [0.0325, 0, 0.3475], "material": "clay_brick",
+      "repeat": { "count": 61, "step": [0.065, 0, 0] } }
+  ],
+  "joints": [ { "materials": ["clay_brick", "clay_brick"], "row": "clay_gp_mortar_perpend_ec6" } ],
+  "steps": ["cascade"],
+  "expect": { "released": ["s.*", "pier_left.*", "pier_right.*"], "forced": false }
+}
+)";
+
+TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Scenario.Expect.AForcedReleaseFailsForcedFalseNamingItsBodies")
+{
+	Scenario S = LoadScenarioOk(SoldierCourse61Json);
+	const ScenarioOutcome O = RunScenario(S);
+	CHECK_FALSE(O.ForcedClusters.empty());
+	const bool bPierForced = std::any_of(O.ForcedClusters.begin(), O.ForcedClusters.end(), [](const std::vector<std::string>& Cluster) {
+		return std::find(Cluster.begin(), Cluster.end(), "pier_left.c0.b0") != Cluster.end();
+	});
+	CHECK(bPierForced);
+	CHECK(S.Expect.has_value());
+	if (!S.Expect.has_value())
+	{
+		return;
+	}
+	const ExpectationReport Report = CompareExpectation(*S.Expect, O);
+	INFO("report:" << Joined(Report.Lines));
+	CHECK_FALSE(Report.bMet);
+	CHECK(Report.Lines.size() == 1u);
+	CHECK(AnyLineMentions(Report, "forced", "pier_left.c0.b0"));
+}
+
+TEST_CASE("Scenario.Steps.TheJudgeStepNamesItsReadingsForUtilisationAfter")
+{
+	const std::string Json = Replaced(Replaced(ColonnadeJson, R"("steps": ["cascade", { "remove": ["post.2"] }, "cascade"])", R"("steps": ["judge"])"),
+									  R"("expect": { "released": [["beam.1"], ["beam.2"]] })", R"("expect": { "utilisation": { "after": { "max": [0.08, 0.09] } } })");
+	Scenario S = LoadScenarioOk(Json);
+	const ScenarioOutcome O = RunScenario(S);
+	CHECK(O.AfterReadings.size() == O.BeforeReadings.size());
+	if (!(O.AfterReadings.size() == O.BeforeReadings.size()))
+	{
+		return;
+	}
+	CHECK_FALSE(O.AfterReadings.empty());
+	for (std::size_t K = 0; K < O.AfterReadings.size(); ++K)
+	{
+		CHECK(O.AfterReadings[K].Joint == O.BeforeReadings[K].Joint);
+		CHECK(O.AfterReadings[K].Reading.Utilisation == O.BeforeReadings[K].Reading.Utilisation);
+	}
+	CHECK(S.Expect.has_value());
+	if (!S.Expect.has_value())
+	{
+		return;
+	}
+	const ExpectationReport Report = CompareExpectation(*S.Expect, O);
+	INFO("report:" << Joined(Report.Lines));
+	CHECK(Report.bMet);
 }
 
 TEST_CASE("Scenario.Expect.EveryStandsBodyMustRemainLive")
