@@ -2,7 +2,7 @@
 # and tests/ScenarioFilesTest.cpp) runs in its own loadpath_tests process with LOADPATH_VISUALS set, and writes
 # one JSON file per picture (tests/VisualSupport.h); this script embeds them in viewer/index.html (the animated
 # 3D viewer) and, unless -NoScreenshots, captures each entry's before and after frames with headless Edge into
-# viewer/screenshots.html. Both pages are self-contained files.
+# viewer/screenshots.html. Both pages are self-contained files. Each core suite case also gets its own pair, <case>.html and <case>-screenshots.html (core-a.html, ...).
 #   Scripts/Visuals.ps1                  build Release, run every E2E case with recording on, write both pages
 #   Scripts/Visuals.ps1 -NoScreenshots   the 3D viewer only
 #   . Scripts/Visuals.ps1 -FunctionsOnly define the functions and return (Scripts/Visuals.Tests.ps1)
@@ -109,6 +109,18 @@ function Invoke-VisualRun([string[]]$Cases, [string]$DataDir, [scriptblock]$Runn
     $IndexJson = "[" + ((@($Index.Entries) | ForEach-Object { '"' + $_.slug + '"' }) -join ",") + "]"
     [IO.File]::WriteAllText((Join-Path $DataDir "index.json"), $IndexJson, $Utf8)
     return [pscustomobject]@{ Index = $Index.Entries; Counts = $Index.Counts; Guard = $Guard; Output = $Output; ExitCode = $(if ($Guard.Passed) { 0 } else { 1 }) }
+}
+
+# Core suite entries (slug core-<letter><row>...) grouped by case, in run order; each group gets its own pages.
+function Get-CoreGroups($Entries) {
+    $Groups = [ordered]@{}
+    foreach ($E in @($Entries)) {
+        if ([string]$E.slug -cmatch '^(core-[a-h])\d') {
+            if (-not $Groups.Contains($Matches[1])) { $Groups[$Matches[1]] = @() }
+            $Groups[$Matches[1]] += $E
+        }
+    }
+    return $Groups
 }
 
 function Find-Edge {
@@ -233,10 +245,12 @@ $ErrorActionPreference = "Stop"
 $When = (Get-Date).ToString("yyyy-MM-dd HH:mm")
 $Generated = '{"when":"' + $When + '","commit":"' + $Commit + $Dirty + '","passed":' + $Run.Counts.passed + ',"failed":' + $Run.Counts.failed +
              ',"deferred":' + $Run.Counts.deferred + ',"screenshots":' + $Shots.ToString().ToLower() + '}'
-$Data = '{"generated":' + $Generated + ',"runs":[' + (($Entries | ForEach-Object { '{"status":"' + $_.status + '",' + $_.text.Substring(1) }) -join ',') + ']}'
+$RunsJson = { param($Subset) '{"generated":' + $Generated + ',"runs":[' + ((@($Subset) | ForEach-Object { '{"status":"' + $_.status + '",' + $_.text.Substring(1) }) -join ',') + ']}' }
+$CoreGroups = Get-CoreGroups $Entries
 
 New-Item -ItemType Directory -Force -Path $Out | Out-Null
-Write-Page "index.html" "lp-data" $Data "$Out\index.html"
+Write-Page "index.html" "lp-data" (& $RunsJson $Entries) "$Out\index.html"
+foreach ($Case in $CoreGroups.Keys) { Write-Page "index.html" "lp-data" (& $RunsJson $CoreGroups[$Case]) "$Out\$Case.html" }
 
 if ($Shots) {
     $ShotDir = "$Out\shots"
@@ -257,6 +271,12 @@ if ($Shots) {
     }
     $ShotJson = '{"generated":' + $Generated + ',"viewer":"index.html","entries":' + (ConvertTo-Json -InputObject @($ShotEntries) -Depth 4 -Compress) + '}'
     Write-Page "screenshots.html" "lp-shots" $ShotJson "$Out\screenshots.html"
+    foreach ($Case in $CoreGroups.Keys) {
+        $Slugs = @($CoreGroups[$Case] | ForEach-Object { $_.slug })
+        $CaseShots = @($ShotEntries | Where-Object { $Slugs -contains $_.slug })
+        $CaseJson = '{"generated":' + $Generated + ',"viewer":"' + $Case + '.html","entries":' + (ConvertTo-Json -InputObject $CaseShots -Depth 4 -Compress) + '}'
+        Write-Page "screenshots.html" "lp-shots" $CaseJson "$Out\$Case-screenshots.html"
+    }
     Write-Output ("[Visuals.ps1] {0} screenshots in {1:N0} s -> {2}\screenshots.html" -f ($Entries.Count - $NoShot.Count), $Clock.Elapsed.TotalSeconds, $Out)
     if ($NoShot.Count -gt 0) { Write-Output "[Visuals.ps1] no screenshot captured for: $($NoShot -join ', ')" }
 }

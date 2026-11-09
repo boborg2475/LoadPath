@@ -418,9 +418,9 @@ solves", amended after review). Still to do, in order:
   `Core.Keystone.*`). The brick-level oracle matches the engine to 1e-11, so the agreement test checks
   the engine's elastic assembly against an independent planar one. It is no longer the approximate cross-check
   the plan described.
-- Not done: the nine rows' pictures were checked in a browser on 2026-11-08 (A1.1 renders the ring on its
-  piers; the card list shows all nine) but not published with screenshots (`Visuals.ps1`); the viewer page
-  does not draw `before.readings` yet (joint-stress entry under Deferred).
+- Pictures: `Scripts/Visuals.ps1` writes case A on its own pages, `build/visuals/core-a.html` and
+  `core-a-screenshots.html` (2026-11-09, all nine rows with screenshots; every core case gets the same pair).
+  Not done: the viewer page does not draw `before.readings` yet (joint-stress entry under Deferred).
 
 ## Elastic-only: cases the solver alone gets wrong (2026-11-08)
 

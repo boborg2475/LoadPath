@@ -146,6 +146,19 @@ Invoke-Case "Visuals.Script.AParkedCaseIsExemptFromTheGuardAndMarkedDeferred" {
     Assert-True $C ($Messages -notlike "*Parked.E2E.C*") "a green parked case must not be reported (some are parked green): $Messages"
 }
 
+Invoke-Case "Visuals.Script.CoreCaseEntriesAreGroupedByTheirLetter" {
+    $C = "Visuals.Script.CoreCaseEntriesAreGroupedByTheirLetter"
+    $Entries = @((New-Entry "E2E.S" "core-a2-soldier"), (New-Entry "E2E.S" "core-a1-ring"), (New-Entry "E2E.S" "core-c1-brick"),
+                 (New-Entry "E2E.L" "lintel-wall-3-13"), (New-Entry "E2E.S" "core-adjacent"))
+    $Groups = Get-CoreGroups $Entries
+    $Keys = @($Groups.Keys) -join ","
+    Assert-True $C ($Keys -ceq "core-a,core-c") "groups should be core-a,core-c, got $Keys"
+    $A = @($Groups["core-a"] | ForEach-Object { $_.slug }) -join ","
+    Assert-True $C ($A -ceq "core-a2-soldier,core-a1-ring") "core-a should keep the run order core-a2-soldier,core-a1-ring, got $A"
+    $None = Get-CoreGroups @((New-Entry "E2E.L" "lintel-wall-3-13"))
+    Assert-True $C (@($None.Keys).Count -eq 0) "no core entries must give no groups"
+}
+
 Write-Output ("[Visuals.Tests.ps1] {0} passed, {1} failed" -f $Script:Passed, $Script:Failures.Count)
 if ($Script:Failures.Count -gt 0) { exit 1 }
 exit 0
