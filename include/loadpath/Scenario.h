@@ -73,7 +73,7 @@ struct Scenario
 	Structure Model;
 	std::vector<BodyId> BodyIds;
 	std::vector<std::string> BodyNames, BodyMaterials;
-	// An arch voussoir's box is the largest one inscribed in its sector, turned by its BodyRotations quaternion (w, x, y, z).
+	// An arch voussoir's box is one inscribed at its sector centroid, for drawing only, turned by its BodyRotations quaternion (w, x, y, z).
 	std::vector<geometry::Box> BodyBoxes;
 	std::vector<std::array<double, 4>> BodyRotations;
 	std::vector<double> BodyMassesKg;

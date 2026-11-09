@@ -138,7 +138,7 @@ inline double Dot(const Row2& R, const std::array<double, 6>& G, const std::vect
 	return Sum;
 }
 
-// Lower band storage, row I holding columns I - Band .. I.
+// Lower band storage: row I holds columns I - Width .. I.
 struct Band2
 {
 	int N = 0, Width = 0;

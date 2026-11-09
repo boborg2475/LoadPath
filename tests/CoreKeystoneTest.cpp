@@ -9,8 +9,9 @@
 #include "doctest.h"
 
 #include <algorithm>
-#include <initializer_list>
 #include <cmath>
+#include <initializer_list>
+#include <map>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -168,9 +169,17 @@ void CheckRingFile(const FileGeometry& G)
 	CHECK(std::abs(G.RightOriginXM - (G.RadiusM - 0.215)) <= 1e-12);
 }
 
-const char* const SoldierFiles[] = {"core-a2-soldier-course-17-at-its-limit", "core-a2-soldier-course-17-minus-keystone", "core-a2-soldier-course-15-stands", "core-a2-soldier-course-19-mortar-fails"};
+const char* const SoldierFiles[] = {"core-a2-soldier-course-17-at-its-limit", "core-a2-soldier-course-17-minus-keystone", "core-a2-soldier-course-15-stands", "core-a2-soldier-course-19-cracks-and-stands", "core-a2-soldier-course-55-falls-between-its-piers"};
 
 const char* const RingFiles[] = {"core-a1-brick-ring-at-its-limit", "core-a1-brick-ring-minus-keystone", "core-a1-brick-ring-cracks-and-stands", "core-a1-brick-ring-folds"};
+
+std::string PairKey(const std::string& Joint)
+{
+	const std::size_t Slash = Joint.find('/');
+	const std::string A = Joint.substr(0, Slash);
+	const std::string B = Joint.substr(Slash + 1);
+	return A < B ? A + "/" + B : B + "/" + A;
+}
 
 bool AllRead(std::initializer_list<const FileGeometry*> Files)
 {
@@ -206,10 +215,29 @@ void CheckEngineAgrees(const char* Slug)
 			EngineJoint = R.Joint;
 		}
 	}
-	const Reading2 Oracle = OracleWorst(OracleOf(G));
-	const double Difference = std::abs(Engine - Oracle.Utilisation) / Oracle.Utilisation;
-	MESSAGE(std::string(Slug) << ": engine " << Engine << " at " << EngineJoint << ", oracle " << Oracle.Utilisation << " at " << Oracle.Joint << ", difference " << Difference);
-	CHECK(Difference <= EngineTolerance);
+	Model2 M = OracleOf(G);
+	const Solve2 Oracle = Solve(M);
+	CHECK(Oracle.End == End2::Solved);
+	std::map<std::string, double> OracleByJoint;
+	for (const Reading2& R : Oracle.Readings)
+	{
+		OracleByJoint[PairKey(R.Joint)] = R.Utilisation;
+	}
+	CHECK(OracleByJoint.size() == O.BeforeReadings.size());
+	double Largest = 0.0;
+	for (const ScenarioJointReading& R : O.BeforeReadings)
+	{
+		const auto Found = OracleByJoint.find(PairKey(R.Joint));
+		CHECK_MESSAGE(Found != OracleByJoint.end(), "the oracle has no joint " << R.Joint);
+		if (Found == OracleByJoint.end())
+		{
+			continue;
+		}
+		const double Difference = std::abs(R.Reading.Utilisation - Found->second) / std::max(1.0, Found->second);
+		Largest = std::max(Largest, Difference);
+		CHECK_MESSAGE(Difference <= EngineTolerance, R.Joint << ": engine " << R.Reading.Utilisation << ", oracle " << Found->second);
+	}
+	MESSAGE(std::string(Slug) << ": engine max " << Engine << " at " << EngineJoint << ", " << O.BeforeReadings.size() << " joints, largest difference " << Largest);
 }
 }
 
@@ -245,6 +273,35 @@ TEST_CASE("Core.Keystone.TheSoldierCourseFilesSitOnTheOracleEdges")
 	CHECK(Below.Utilisation < 1.0);
 	CHECK(Above.Utilisation >= A2LimitBelow);
 	CHECK(Above.Utilisation > 1.0);
+
+	const std::string PastLast = "s." + std::to_string(Past.Soldiers - 1);
+	const Sequence2 PastSequence = RunHingeSequence(OracleOf(Past));
+	std::vector<std::string> PastCracked = PastSequence.Cracked;
+	std::sort(PastCracked.begin(), PastCracked.end());
+	const std::vector<std::string> PastExpected = {"s.0/pier_left.c5.b3", "s.0/pier_left.c6.b2", PastLast + "/pier_right.c5.b0", PastLast + "/pier_right.c6.b0"};
+	const Sequence2 MinusSequence = RunHingeSequence(OracleOf(Minus));
+	MESSAGE("A2 hinge sequence: n " << Past.Soldiers << " stands " << PastSequence.bStands << " after " << PastSequence.Cracked.size() << " cracks; minus keystone stands " << MinusSequence.bStands);
+	CHECK(PastSequence.bStands);
+	CHECK(PastCracked == PastExpected);
+	CHECK_FALSE(MinusSequence.bStands);
+}
+
+TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Core.Keystone.TheFallingSoldierCourseSitsOnTheEngineEdge")
+{
+	const FileGeometry Fall = ReadGeometry(SoldierFiles[4]);
+	CHECK(Fall.bRead);
+	if (!Fall.bRead)
+	{
+		return;
+	}
+	CheckSoldierFile(Fall);
+	const Sequence2 Falling = RunHingeSequence(OracleOf(Fall));
+	const Sequence2 Standing = RunHingeSequence(BuildSoldierCourse(SoldierSpec(Fall.Soldiers - 2), Bed(), Perpend()));
+	MESSAGE("A2.5 hinge sequence: n " << Fall.Soldiers - 2 << " stands " << Standing.bStands << " after " << Standing.Cracked.size() << " cracks; n " << Fall.Soldiers << " stands " << Falling.bStands << " after "
+									  << Falling.Cracked.size() << " cracks");
+	CHECK(Standing.bStands);
+	CHECK_FALSE(Falling.bStands);
+	CHECK(Falling.End == End2::Mechanism);
 }
 
 TEST_CASE("Core.Keystone.TheEngineAgreesWithTheOracleOnTheSoldierCourses")

@@ -15,7 +15,8 @@
   "expect": {
     "released": [["s.[0-7]"], ["s.[9-16]"]],
     "stands": ["pier_left.*", "pier_right.*", "ground"],
-    "cracked": ["s.0/pier_left.*", "s.16/pier_right.*"],
+    "cracked": ["s.0/pier_left.c3.b3", "s.0/pier_left.c4.b2", "s.0/pier_left.c5.b3", "s.0/pier_left.c6.b2",
+                "s.16/pier_right.c3.b0", "s.16/pier_right.c4.b0", "s.16/pier_right.c5.b0", "s.16/pier_right.c6.b0"],
     "crushed": [], "forced": false,
     "utilisation": { "before": { "max": [1.70, 2.10], "at": ["s.0/pier_left.c6.*", "s.16/pier_right.c6.*"], "axis": "Tension" } }
   }

@@ -73,8 +73,11 @@
     "core-a2-soldier-course-15-stands": {
       "basis": "Core case A2 sweep, inside: 15 soldiers read 0.557 at the junction (below the rigid-pier bound 0.87); nothing cracks."
     },
-    "core-a2-soldier-course-19-mortar-fails": {
-      "basis": "Core case A2 sweep, past the edge: 19 soldiers read 1.077 at the junction. The top two contacts at each pier face crack; the lower two keep their bond and cohesion and the cracked course arches against the piers, so it stands. The oracle's one-at-a-time hinge sequence cracks the same four contacts and stops; the plan expected a slide-out, which assumed the junction unzips completely (changed 2026-11-08, owner to review)."
+    "core-a2-soldier-course-19-cracks-and-stands": {
+      "basis": "Core case A2 sweep, past the edge: 19 soldiers read 1.077 at the junction. The top two contacts at each pier face crack; the lower two keep their bond and the course carries itself mostly as a beam, its ends still hogging with 149 N of thrust and the shear held on cohesion, so it stands, not forced. The oracle's one-at-a-time hinge sequence cracks exactly these four contacts and stops; the plan expected a slide-out, which assumed the junction unzips completely (changed 2026-11-08, owner to review)."
+    },
+    "core-a2-soldier-course-55-falls-between-its-piers": {
+      "basis": "Core case A2.5, the engine's real edge: 53 soldiers stand and 55 (3.575 m) fall, in the engine and in the oracle's hinge sequence. The junctions read 13.2; the pier faces and then the pier bases crack, the piers rock outward and the thrust drops, the middle 25 soldiers drop between their cracked vertical joints and the end pieces follow, a proven Mechanism with the piers standing. A model edge, not a design span: the elastic small-displacement field credits the stiff bonded piers with full thrust and ignores abutment spread, so real flat arches fail far shorter."
     },
     "core-a1-brick-ring-at-its-limit": {
       "basis": "Core case A1: R = 2.13 m is the largest radius on a 0.01 m grid whose oracle springing reading is below 1 (0.987; 2.14 m reads 1.013). The tension is at the impost contacts, the inner half of each straddled springing; the engine agrees to 1e-13. Nothing cracks."

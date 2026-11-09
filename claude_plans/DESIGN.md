@@ -2261,3 +2261,18 @@ released body's; with body strengths unknown (every fixture built without materi
 crushes, so a pier over its prism strength in every joint loses each joint's lower block in one pass
 and the top block falls next pass. Not done: `ComponentReport` carries no crushed flag (the band,
 not the judge, picks the crushes), and the structure file does not save body strengths.
+
+### 2026-11-08 core case A: the arch builder and three expectation keys
+
+The scenario format gains an `arch` builder (named voussoirs `v.k` as annular sectors between two
+springing walls, radial ring joints and one springing contact per overlapping wall brick; a
+voussoir is skipped by `joints` rules and the overlap check) and three expectation keys:
+`utilisation` (a `[lo, hi)` band on the before or after maximum, optionally at named joints and on
+a governing axis), `forced` (whether any release was forced; checked only when given) and `stands`
+(bodies that must remain live). The case A plan and API.md hold the details. Orchestrator calls:
+voussoir boxes are inscribed at the sector centroid for drawing only, the engine reads the sector;
+a judge step's readings are the outcome's after readings, as the last cascade's are; the in-test
+planar oracle (`tests/KeystoneOracle.h`) is the referee for every core-a reading, compared joint
+by joint to 1e-6. The soldier course of 55 is a model edge, not a design span (the elastic
+small-displacement field gives the stiff bonded piers full thrust and no abutment spread); it is
+pinned as the engine's edge and flagged for the owner.

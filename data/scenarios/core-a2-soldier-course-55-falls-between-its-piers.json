@@ -1,0 +1,23 @@
+{
+  "title": "Core A2.5: a soldier course of 55 falls between its piers",
+  "summary": "Fifty-five EC6-mortared soldiers span 3.575 m, the shortest odd course the engine lets fall (53 stands). The pier bases crack, the piers rock outward and the thrust drops; the middle of the course drops between its cracked joints and the end pieces follow, while the piers stand. This is the model's edge, not a design span: an elastic small-displacement field credits the stiff bonded piers with full thrust and ignores abutment spread, so real flat arches fail at much shorter spans.",
+  "tier": "slow_in_debug",
+  "build": [
+    { "name": "ground", "size": [5.4, 0.6, 0.2], "centre": [1.79, 0, -0.1], "grounded": true },
+    { "wall": "pier_left", "courses": 9, "bricks": 3, "origin": [-0.645, 0, 0], "on": "ground", "material": "clay_brick",
+      "bed": "clay_gp_mortar_bed_ec6", "perpend": "clay_gp_mortar_perpend_ec6" },
+    { "wall": "pier_right", "courses": 9, "bricks": 3, "origin": [3.575, 0, 0], "on": "ground", "material": "clay_brick",
+      "bed": "clay_gp_mortar_bed_ec6", "perpend": "clay_gp_mortar_perpend_ec6" },
+    { "name": "s", "size": [0.065, 0.1025, 0.215], "centre": [0.0325, 0, 0.3475], "material": "clay_brick",
+      "repeat": { "count": 55, "step": [0.065, 0, 0] } }
+  ],
+  "joints": [ { "materials": ["clay_brick", "clay_brick"], "row": "clay_gp_mortar_perpend_ec6" } ],
+  "steps": ["cascade"],
+  "expect": {
+    "released": ["s.*"],
+    "forced": false,
+    "stands": ["pier_left.*", "pier_right.*", "ground"],
+    "crushed": [],
+    "utilisation": { "before": { "max": [12.5, 14.0], "at": ["s.0/pier_left.c6.*", "s.54/pier_right.c6.*"], "axis": "Tension" } }
+  }
+}

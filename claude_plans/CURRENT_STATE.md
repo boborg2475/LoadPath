@@ -386,26 +386,39 @@ solves", amended after review). Still to do, in order:
 
 - **Case A, keystone over a gap: built 2026-11-08, awaiting the owner's review.** Plan and results:
   [test_plans/2026-11-08-core-case-A-keystone.md](test_plans/2026-11-08-core-case-A-keystone.md), section "Built".
-  Eight files `data/scenarios/core-a2-*` (default tier) and `core-a1-*` (`slow_in_debug`), the format
-  additions (`arch` builder, `utilisation`, `forced`, `stands`, viewer `before.readings`; API.md scenario
-  workbench) and the planar oracle `tests/KeystoneOracle.h` with `Core.Keystone.*`. Green: A2.1, A2.2, A2.3,
-  A2.4, A1.1, A1.2, A1.3. Red: A1.4 (`core-a1-brick-ring-folds`, under `deferred`, run by
+  Nine files `data/scenarios/core-a2-*` (default tier; A2.5 `slow_in_debug`) and `core-a1-*`
+  (`slow_in_debug`), the format additions (`arch` builder, `utilisation`, `forced`, `stands`, viewer
+  `before.readings`; API.md scenario workbench) and the planar oracle `tests/KeystoneOracle.h` with
+  `Core.Keystone.*`. Green: A2.1 to A2.5, A1.1, A1.2, A1.3. Red: A1.4 (`core-a1-brick-ring-folds`, under `deferred`, run by
   `Deferred.Scenarios.*`): pass 3 reads RestoreFailedClosed and the forced release takes all 231 bodies,
   piers included (the §1 over-release, a known gap). Green when the solver proves the fold as a Mechanism,
   or a forced release stops taking bodies the fold does not move. Then drop its `deferred` line and update
   `viewer/reasons.json`.
-- **For the owner, from the build** (each fixed as a plan error the oracle shows; the plan's Built section
-  has the reasons): the A2.1 band became [0.75, 1.00) because the true reading is 0.797. A2.4 now *stands
-  cracked* instead of sliding out, so A2 has no falling row; the oracle still stands at n = 41, so widening n
-  does not give one. If a falling flat course is wanted, the owner picks the change: dry or weaker end
-  joints, a taller course, or accept the cracks-and-stands row. The A1.2 band became [22, 29) at the
-  oracle's R. A1's radii moved: R_stand 2.13 (was the estimate 1.76) and A1.3 at 2.30 (was 1.95), now
-  below dry least thickness.
+- **For the owner, from the build and the review** (each change fixed as a plan error the oracle
+  shows; the plan's Built section has the reasons):
+  - The A2.1 band is [0.75, 1.00), moved from the ratified [0.80, 1.00) because n = 17 reads 0.797
+    and no odd n lies between 17 and 19. Tuning the geometry to land at 0.90–0.97 instead would let
+    the × 0.8 tension mutant bite the file again.
+  - The soldier course, as the engine and the oracle's hinge sequence agree: n = 19 to 53 stand. At
+    n = 19 (A2.4, now `…-19-cracks-and-stands`, not forced) the pier-face c6 and c5 contacts crack
+    and the course is still mostly a beam. From about n = 41 every middle joint cracks and it stands
+    as a flat arch; n = 51 also cracks the pier bases and stands. n = 55 (3.575 m) **falls** as a
+    proven Mechanism with the piers standing: the pier bases crack, the piers rock outward and the
+    thrust drops, then in pass 8 the middle block s.15–s.39 drops between its cracked vertical
+    joints and the end pieces follow. n = 61 is a forced collapse that takes the piers.
+  - **A2.5 added (orchestrator decision, for the owner to confirm)**:
+    `core-a2-soldier-course-55-falls-between-its-piers` is the falling flat course at the engine's
+    real edge. It is a model edge, not a design span: an elastic small-displacement field credits
+    the stiff bonded piers with full thrust and ignores abutment spread, so real flat arches fail at
+    much shorter spans. If a falling course at a believable span is wanted, the owner picks the
+    change (dry or weaker end joints, a taller course, or an abutment-spread model).
+  - The A1.2 band became [22, 29) at the oracle's R. A1's radii moved: R_stand 2.13 (was the
+    estimate 1.76) and A1.3 at 2.30 (was 1.95), now below dry least thickness.
 - **Oracle reduction dropped**: the plan's course-rigid pier was 3 to 66 % off (ANCHORS
   `Core.Keystone.*`). The brick-level oracle matches the engine to 1e-11, so the agreement test checks
   the engine's elastic assembly against an independent planar one. It is no longer the approximate cross-check
   the plan described.
-- Not done: the eight rows' pictures were rebuilt by the Release run (`build/visuals`) but not checked in a
+- Not done: the nine rows' pictures were rebuilt by the Release run (`build/visuals`) but not checked in a
   browser or published to the E2E page (the orchestrator's `Visuals.ps1` with screenshots); the viewer page
   does not draw `before.readings` yet (joint-stress entry under Deferred).
 

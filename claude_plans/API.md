@@ -1284,8 +1284,8 @@ int RunCli(std::span<const std::string_view> Args, IFileStore& Files, std::strin
   that names no wall, a springing wall that comes after the arch, a wall top not at `centre.z`, an end
   voussoir resting on no brick, `voussoirs` < 1, a bad `thickness`, an unknown joint row, a name
   (or a generated `v.k`) already used. Voussoirs take part in no `joints` rule and no overlap check.
-  `Scenario::BodyBoxes` holds the largest box inscribed in each sector and `BodyRotations` its
-  quaternion about y by the bisector angle (identity for every other body).
+  `Scenario::BodyBoxes` holds a box inscribed at each sector centroid, for drawing only, and
+  `BodyRotations` its quaternion about y by the bisector angle (identity for every other body).
 - **Expectation keys added 2026-11-08:**
   `"utilisation": { "before" | "after": { "max": [lo, hi], "at": ["<a>/<b>" patterns], "axis": "Tension" | "Compression" | "Shear" } }`
   holds when the highest `Utilisation` over the state's readings (`ScenarioOutcome::BeforeReadings`,

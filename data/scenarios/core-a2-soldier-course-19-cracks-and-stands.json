@@ -1,6 +1,6 @@
 {
   "title": "Core A2.4: a soldier course of 19 is past what the mortar can carry",
-  "summary": "Nineteen EC6-mortared soldiers span 1.235 m. The pier-face junctions read 1.08 in tension; the top two contacts at each face crack, the lower two keep their bond and the course arches against the piers, so it stands cracked. The plan expected it to slide out; the engine and the oracle's hinge sequence both stop after these four cracks.",
+  "summary": "Nineteen EC6-mortared soldiers span 1.235 m. The pier-face junctions read 1.08 in tension; the top two contacts at each face crack and the lower two keep their bond. The course still works mostly as a beam, its ends hogging with a thrust of only 149 N and shear carried on cohesion, so it stands cracked; arching takes over only near 41 soldiers. The plan expected it to slide out; the engine and the oracle's hinge sequence both stop after these four cracks.",
   "build": [
     { "name": "ground", "size": [4.0, 0.6, 0.2], "centre": [0.5, 0, -0.1], "grounded": true },
     { "wall": "pier_left", "courses": 9, "bricks": 3, "origin": [-0.645, 0, 0], "on": "ground", "material": "clay_brick",
@@ -13,6 +13,7 @@
   "joints": [ { "materials": ["clay_brick", "clay_brick"], "row": "clay_gp_mortar_perpend_ec6" } ],
   "steps": ["cascade"],
   "expect": {
+    "forced": false,
     "stands": ["pier_left.*", "pier_right.*", "s.*", "ground"],
     "cracked": ["s.0/pier_left.c[5-6].*", "s.18/pier_right.c[5-6].*"],
     "crushed": [],

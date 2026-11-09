@@ -5,10 +5,15 @@ Status: built 2026-11-08 (approved by the owner 2026-11-08, "go ahead on test ca
 ## Built 2026-11-08
 
 Commits on `solver_rework`: `db2cfa5` (format: `arch`, `utilisation`, `forced`, `stands`,
-`before.readings`), `f1b75cf` (A2 rows and the oracle), then the A1 rows. Tests:
+`before.readings`), `f1b75cf` (A2 rows and the oracle), `4ed07e8` (A1 rows), then the review
+follow-up (A2.5, the A2.4 rename, the `forced` and judge-step tests). Tests:
 `Core.Keystone.TheSoldierCourseFilesSitOnTheOracleEdges`, `…TheBrickRingFilesSitOnTheOracleEdges`
-(default), `…TheEngineAgreesWithTheOracleOnTheSoldierCourses` (default), `…OnTheBrickRings`
-(slow in Debug), and the eight files through `E2E.Scenarios.*`.
+(default), `…TheFallingSoldierCourseSitsOnTheEngineEdge` (slow in Debug),
+`…TheEngineAgreesWithTheOracleOnTheSoldierCourses` (default), `…OnTheBrickRings` (slow in Debug),
+the nine files through `E2E.Scenarios.*`, and `Scenario.Expect.AForcedReleaseFailsForcedFalseNamingItsBodies`
+(the soldier course of 61, a forced release that takes the piers) and
+`Scenario.Steps.TheJudgeStepNamesItsReadingsForUtilisationAfter`. The engine-against-oracle tests
+compare every joint's reading, not only the maximum.
 
 **The oracle changed (§4, §6 Q1).** The reduction treating each pier course as one rigid body was
 measured first, as decided. It is 3 to 7 % off for A2 and up to 66 % off for A1: the impost brick
@@ -16,7 +21,7 @@ projects into the opening and turns on its own, which relieves the springing (th
 put R_stand at 1.79 m, where the engine reads 0.41, governed by the crown). The oracle
 (`tests/KeystoneOracle.h`) therefore models every pier brick as its own rigid body. It is still
 planar, with its own banded assembly and no solver code. It agrees with the engine to ≤ 7.1e-12
-relative on all eight rows, and the pinned tolerance is 1e-6. Its hinge sequence cracks one joint at a
+relative on all nine rows, joint by joint, and the pinned tolerance is 1e-6. Its hinge sequence cracks one joint at a
 time; cracked corners open in tension and slip at friction, and a singular stiffness is a fall.
 
 **Placements.** A2: n = 17 (0.797; 15 reads 0.557, 19 reads 1.077). A1: R_stand = 2.13 m, 103
@@ -27,17 +32,25 @@ A1.4 stays at 2.75 m (≥ 1.05 × 2.60).
 
 | Row | Plan | Solver (Release) | Result |
 |---|---|---|---|
-| A2.1 n 17 | max [0.80, 1.00) at a c6 junction, Tension; nothing cracks; not forced | 0.797 at s.16/pier_right.c6.b0, Tension; Stands, 0 passes, nothing cracked or released | green after **(a)**: band now [0.75, 1.00). The plan's estimate of 0.84 is shown off by the exact oracle (0.797), and no odd n lies between 17 and 19 |
+| A2.1 n 17 | max [0.80, 1.00) at a c6 junction, Tension; nothing cracks; not forced | 0.797 at s.16/pier_right.c6.b0, Tension; Stands, 0 passes, nothing cracked or released | green after **(a)**: band now [0.75, 1.00). The plan's estimate of 0.84 is shown off by the exact oracle (0.797), and no odd n lies between 17 and 19. The ratified band was [0.80, 1.00); tuning the geometry to land at 0.90–0.97 instead would let the × 0.8 mutant bite this file again (owner to review) |
 | A2.2 minus s.8 | [1.70, 2.10); two halves; junction contacts cracked; not forced | 1.973; c6, c5, c4, then the sliver c3 cracks at each face (passes 1 to 4); {s.0–s.7}, {s.9–s.16} on pass 5, not forced; piers stand | green as written |
 | A2.3 n 15 | [0.50, 0.87); nothing cracks | 0.557; Stands | green as written |
-| A2.4 n 19 | [1.05, 1.47); junction unzips, the course slides out whole | 1.077; c6 cracks at each face (pass 1), then c5 (pass 2, 1.191); the c4 and sliver contacts keep their bond and the course stands | green after **(a)**: the expectation is now "stands, cracked `s.0/pier_left.c[5-6].*`, `s.18/pier_right.c[5-6].*`". The oracle's hinge sequence cracks the same four contacts and stands, and still stands at n = 41. §1.2's full-unzip step does not happen, because the bonded c4 and sliver carry the reduced end moment while the cracked course arches against the piers. **Owner to review**: A2 has no falling row now |
+| A2.4 n 19 | [1.05, 1.47); junction unzips, the course slides out whole | 1.077; c6 cracks at each face (pass 1), then c5 (pass 2, 1.191); the c4 and sliver contacts keep their bond and the course stands | green after **(a)**, renamed `core-a2-soldier-course-19-cracks-and-stands`: the expectation is now "stands, not forced, cracked `s.0/pier_left.c[5-6].*`, `s.18/pier_right.c[5-6].*`". The oracle's hinge sequence cracks exactly these four contacts and stands (pinned). §1.2's full-unzip step does not happen. At n = 19 the course is still mostly a beam, not an arch: its ends are cracked but still hogging, the thrust is only 149 N, c4 stays bonded with its top corners at 0.83, and the shear is carried on cohesion by c4 (189 N) and the sliver (78 N). Arching takes over at about n = 41. **Owner to review** |
+| A2.5 n 55 (added at review, orchestrator decision) | — | 13.157 at the c6 junctions, Tension; pier faces c6, c5, c4 crack (passes 1 to 3), the middle joints s.14/s.15 to s.39/s.40 (pass 4), then the pier bases and the lower pier beds (passes 5 to 7); the piers rock outward, the thrust drops, {s.15–s.39} drops between its cracked vertical joints (pass 8) and {s.0–s.14}, {s.40–s.54} follow (pass 10); a proven Mechanism, not forced; the piers stand | green: `core-a2-soldier-course-55-falls-between-its-piers`, released the union `s.*`, not forced, the piers and ground stand, nothing crushed, max [12.5, 14.0) at a c6 junction (53 reads 12.14, 57 reads 14.22). The oracle's hinge sequence stands at 53 (11 cracks) and falls at 55 (a mechanism after 12), pinned. **This is a model edge, not a design span**: an elastic small-displacement field credits the stiff bonded piers with full thrust and ignores abutment spread, so real flat arches fail at much shorter spans. **Owner to review** |
 | A1.1 R 2.13 | [0.95, 1.00) at the impost contacts; nothing cracks; not forced | 0.987 at the impost; Stands, 0 passes | green (R from the oracle) |
 | A1.2 minus v.51 | [15.0, 19.5) at the outer springing contacts; both springing contacts crack; two halves; not forced | 26.25 at v.0/pier_left.c10.b2; outer contacts (pass 1), impost contacts (pass 2, 47.3); two clusters of 51, not forced; piers stand | green after **(a)**: band now [22.0, 29.0). The plan's band was its formula at its estimated R (17.2 at 1.76 m); the same formula at 2.13 m gives 25.5, and the band keeps its relative width |
 | A1.3 R 2.30 | [1.05, 1.80) at the imposts; the imposts crack; stands; not forced | 1.522; both impost contacts crack (pass 1); Stands | green (R moved into the window, as §4 says) |
 | A1.4 R 2.75 | [1.5, 4.0); every voussoir released, the piers stand | 3.271; imposts (pass 1), 14 crown joints v.59/v.60 to v.72/v.73 and the outer springing contacts (pass 2); pass 3 reads RestoreFailedClosed, and **the forced release takes all 231 bodies, piers included** | **(c)**, held red as written under `deferred`: the §1 over-release this plan names (§5) |
 
 Mutants: tension capacity × 0.75 fails A2.1, A2.2 and A2.4, and × 2 fails all four A2 files. The
-plan's × 0.8 no longer reaches A2.1, whose true reading is 0.797.
+plan's × 0.8 no longer reaches A2.1, whose true reading is 0.797. In RecordCascade, `if
+(Cluster.bForced)` made never true fails the forced test, and deleting the judge step's
+`AfterReadings` line fails the judge-step test. In the oracle, a crack threshold of 1.1 fails the
+n = 19 cracked-set pin, and switching off slip fails the n = 55 mechanism pin.
+
+The soldier course from n = 19 to 53 stands. From about n = 41 every middle joint cracks and it
+stands as a flat arch; n = 51 also cracks the pier bases and stands. n = 55 (3.575 m) is A2.5. n =
+61 is a forced collapse that takes the piers.
 
 Owner's text ([decisions/2026-11-08-forced-collapse-and-core-suite.md](../decisions/2026-11-08-forced-collapse-and-core-suite.md) §4, A): one
 keystone holds a span. With it in place the structure stands near its limit (highest utilisation
@@ -304,8 +317,9 @@ so M = 995 N·m. Pier-bed tension ratios are (76,364 − σ_N)/33,333: **1.85** 
 top course, 1.47 at the base. These are over 1, but far outside the band of the springing
 (17.2 → edge 8.6; later passes higher), so they never crack. As a rigid body the pier's restoring
 moment of 1,236 × 0.43 = 531 N·m beats 1,182 × 0.412 = 487 N·m, so it would not tip even if the
-springing held. **The piers stand. No pier joint cracks at band 0.5**; any band fraction below
-1 − 1.85/17.2 = 0.89 keeps it so.
+springing held. **The piers stand. No pier joint cracks at band 0.5**. Measured: pass 2 reads
+the pier joints at 16.9 against the impost's 47.3, so the safe band fraction is below about 1 −
+16.9/47.3 = 0.64, not the 0.89 this estimate gave.
 
 ## 3. Cases and expectations
 
@@ -366,14 +380,15 @@ released as two clusters, the piers standing, the eight junction contacts dashed
 `cracked` matches all four contacts of each end soldier with its pier, and nothing else. The
 release is a rotation about one corner line, a Mechanism, so `forced` is false (§5). Mutant:
 tension capacity × 2 (the junction reads 0.95 and nothing falls). The band setting is not a useful
-mutant here: any fraction below about 0.85 gives the same cracked set. Tier: default.
+mutant here: measured, pass 2 reads a pier perpend at 0.956 against the junction's 3.37, so any
+fraction below about 0.72 gives the same cracked set. Tier: default.
 
 **A2.3 `core-a2-soldier-course-15-stands`** (sweep, inside). `pier_right` origin x = 0.975.
 Expectation: stands `["pier_left.*", "pier_right.*", "s.*", "ground"]`, cracked [], crushed [],
 forced false, utilisation before max [0.50, 0.87] at the c6 junction contacts (0.87 is the
 rigid-pier bound). Visual: …-15-stands. Tier: default.
 
-**A2.4 `core-a2-soldier-course-19-mortar-fails`** (sweep, past the edge). `pier_right` origin x =
+**A2.4 `core-a2-soldier-course-19-cracks-and-stands`** (built as "Built" says; written as `…-19-mortar-fails`) (sweep, past the edge). `pier_right` origin x =
 1.235.
 
 ```json
@@ -388,7 +403,7 @@ rigid-pier bound). Visual: …-15-stands. Tier: default.
 
 `forced` is not asserted. The final release is a friction slide, which the elastic field tends to
 read as Undecided, and forcing it would release the piers with the course (§5). Visual:
-…-19-mortar-fails (expected after: all 19 soldiers in one cluster, the piers standing). Tier:
+…-19-cracks-and-stands (expected after, as first written: all 19 soldiers in one cluster, the piers standing). Tier:
 default.
 
 ### A1 rows (ring and piers from §2; R from the oracle, estimates shown)
@@ -510,7 +525,7 @@ R = 2.75 (V = 1,867 N, H ≈ 713 N): the base resultant sits 0.119 m outward, no
 |---|---|---|---|
 | **Forced release takes the piers with it.** An Undecided component is released whole, and each half or course is one component with its pier. | Every row | `forced: false` on A2.1–A2.3 and A1.1–A1.3, where the hand statics give a stand or a one-line rotation. Unasserted on A2.4 and A1.4; there `stands` still requires the piers to remain. | On a `forced: false` row, a forced release is a **defect**. On A2.4 and A1.4 the piers falling with a forced release is the §1 over-release, a known gap and a solver work-queue item; the row stays red as written until the solver proves the mechanism. |
 | **No hinge split** (§7). | A1.4 physically folds into 5 pieces; A2.2, A2.4 and A1.2 fall as rigid pieces | A1.4 asserts only the union. The others assert the partition, which is physically right. | Known gap, §7. A wrong union is a defect. |
-| **Crack band** of 0.5. | A2.2, A2.4 and A1.2 cracked sets; A1.2's pier beds read about 1.85 | Pinned at 0.5. Each set is the junction or springing contacts, and every other over-1 joint sits far below the band edge. | Changes only above a fraction of about 0.85 (A2) or 0.89 (A1); D2/D3 narrow the band, so the sets hold. Not a defect. |
+| **Crack band** of 0.5. | A2.2, A2.4 and A1.2 cracked sets; A1.2's pier beds read about 1.85 | Pinned at 0.5. Each set is the junction or springing contacts, and every other over-1 joint sits far below the band edge. | Changes only above a fraction of about 0.72 (A2.2: pass 2 reads a pier perpend at 0.956 against 3.37) or 0.64 (A1.2: pass 2 reads the pier joints at 16.9 against the impost's 47.3); D2/D3 narrow the band, so the sets hold. Not a defect. |
 | **Estimate precision**: pier rotation, thrust and the composite share. | A2 n, A1 R | The reduced oracle places both. Bands are wide where only the hand estimate stands. | Engine against oracle beyond tolerance: work it through DEBUG_PLAYBOOK. |
 | **Springing friction near its limit**: H/μN ≈ 0.97 in the hinged states. | A1.3, A1.4 | A1.3 relies on the outer contact staying bonded, so cohesion carries its shear (0.03). | A1.3 sliding or reading Undecided is a defect: an admissible field exists. |
 | **Face-brick perpends in A2.2** may read about 1.1 while the junction unzips. | A2.2 | `cracked` excludes them, and the junction contact failing at the same time reads 7.4 or more. | A pier perpend cracking would be a band defect. |
