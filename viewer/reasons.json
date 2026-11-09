@@ -64,6 +64,18 @@
     }
   },
   "slugs": {
+    "core-a2-soldier-course-17-at-its-limit": {
+      "basis": "Core case A2 (test_plans/2026-11-08-core-case-A-keystone.md). The in-test planar oracle (every brick rigid, EC6 corner springs, its own banded assembly) reads the pier-face junction at 0.797 for 17 soldiers and 1.077 for 19, so 17 is the widest odd course whose mortar carries it; the engine agrees to 1e-13. Nothing cracks."
+    },
+    "core-a2-soldier-course-17-minus-keystone": {
+      "basis": "Core case A2: without s.8 each half is a cantilever hanging on its pier face. The junction reads 1.97 (oracle and engine), unzips, and each half falls as one rigid piece about a corner line, a proven Mechanism (not forced). The course joints read at most 0.57 and the piers' beds about 0.2, far outside the crack band, so neither cracks."
+    },
+    "core-a2-soldier-course-15-stands": {
+      "basis": "Core case A2 sweep, inside: 15 soldiers read 0.557 at the junction (below the rigid-pier bound 0.87); nothing cracks."
+    },
+    "core-a2-soldier-course-19-mortar-fails": {
+      "basis": "Core case A2 sweep, past the edge: 19 soldiers read 1.077 at the junction. The top two contacts at each pier face crack; the lower two keep their bond and cohesion and the cracked course arches against the piers, so it stands. The oracle's one-at-a-time hinge sequence cracks the same four contacts and stops; the plan expected a slide-out, which assumed the junction unzips completely (changed 2026-11-08, owner to review)."
+    },
     "beam-on-piers-load-step": {
       "basis": "As 3.8, written as a file: the load puts each timber bearing at 1.2 times its crushing capacity f_c,90 A, so the bearings crush, the beam falls and the brick piers, at about half their capacity, stand."
     },

@@ -1,0 +1,22 @@
+{
+  "title": "Core A2.2: the soldier course of 17 loses its keystone",
+  "summary": "The middle soldier s.8 goes. Each half hangs as a cantilever on its pier face; the junction reads about 1.9 in tension, it unzips and each half falls as one piece. The piers stand and no course joint cracks.",
+  "build": [
+    { "name": "ground", "size": [4.0, 0.6, 0.2], "centre": [0.5, 0, -0.1], "grounded": true },
+    { "wall": "pier_left", "courses": 9, "bricks": 3, "origin": [-0.645, 0, 0], "on": "ground", "material": "clay_brick",
+      "bed": "clay_gp_mortar_bed_ec6", "perpend": "clay_gp_mortar_perpend_ec6" },
+    { "wall": "pier_right", "courses": 9, "bricks": 3, "origin": [1.105, 0, 0], "on": "ground", "material": "clay_brick",
+      "bed": "clay_gp_mortar_bed_ec6", "perpend": "clay_gp_mortar_perpend_ec6" },
+    { "name": "s", "size": [0.065, 0.1025, 0.215], "centre": [0.0325, 0, 0.3475], "material": "clay_brick",
+      "repeat": { "count": 17, "step": [0.065, 0, 0] } }
+  ],
+  "joints": [ { "materials": ["clay_brick", "clay_brick"], "row": "clay_gp_mortar_perpend_ec6" } ],
+  "steps": ["cascade", { "remove": ["s.8"] }, "cascade"],
+  "expect": {
+    "released": [["s.[0-7]"], ["s.[9-16]"]],
+    "stands": ["pier_left.*", "pier_right.*", "ground"],
+    "cracked": ["s.0/pier_left.*", "s.16/pier_right.*"],
+    "crushed": [], "forced": false,
+    "utilisation": { "before": { "max": [1.70, 2.10], "at": ["s.0/pier_left.c6.*", "s.16/pier_right.c6.*"], "axis": "Tension" } }
+  }
+}

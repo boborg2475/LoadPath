@@ -1,0 +1,19 @@
+{
+  "title": "Core A2.3: a soldier course of 15 stands well inside its limit",
+  "summary": "Fifteen EC6-mortared soldiers span 0.975 m between the same brick piers. The pier-face junctions read about 0.6 in tension (below the rigid-pier bound of 0.87); nothing cracks.",
+  "build": [
+    { "name": "ground", "size": [4.0, 0.6, 0.2], "centre": [0.5, 0, -0.1], "grounded": true },
+    { "wall": "pier_left", "courses": 9, "bricks": 3, "origin": [-0.645, 0, 0], "on": "ground", "material": "clay_brick",
+      "bed": "clay_gp_mortar_bed_ec6", "perpend": "clay_gp_mortar_perpend_ec6" },
+    { "wall": "pier_right", "courses": 9, "bricks": 3, "origin": [0.975, 0, 0], "on": "ground", "material": "clay_brick",
+      "bed": "clay_gp_mortar_bed_ec6", "perpend": "clay_gp_mortar_perpend_ec6" },
+    { "name": "s", "size": [0.065, 0.1025, 0.215], "centre": [0.0325, 0, 0.3475], "material": "clay_brick",
+      "repeat": { "count": 15, "step": [0.065, 0, 0] } }
+  ],
+  "joints": [ { "materials": ["clay_brick", "clay_brick"], "row": "clay_gp_mortar_perpend_ec6" } ],
+  "steps": ["cascade"],
+  "expect": {
+    "stands": ["pier_left.*", "pier_right.*", "s.*", "ground"], "cracked": [], "crushed": [], "forced": false,
+    "utilisation": { "before": { "max": [0.50, 0.87], "at": ["s.0/pier_left.c6.*", "s.14/pier_right.c6.*"], "axis": "Tension" } }
+  }
+}
