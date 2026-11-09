@@ -1,6 +1,7 @@
 #include "JsonReader.h"
 #include "KeystoneOracle.h"
 #include "ScenarioTestSupport.h"
+#include "SlowInDebug.h"
 #include "VisualSupport.h"
 
 #include "loadpath/Scenario.h"
@@ -28,6 +29,7 @@ constexpr double RingThicknessM = 0.215;
 constexpr double RingDepthM = 0.1025;
 constexpr double SpringingZM = 0.715;
 constexpr double A2LimitBelow = 0.98;
+constexpr double FallEdgeMargin = 1.05;
 constexpr double EngineTolerance = 1e-6;
 
 const StrengthProfile& Bed() { return JointOrFail(ScenarioRows(), "clay_gp_mortar_bed_ec6").Profile; }
@@ -144,6 +146,8 @@ Reading2 OracleWorst(Model2 M)
 	return W != nullptr ? *W : Reading2{};
 }
 
+Reading2 RingWorst(double RadiusM) { return OracleWorst(BuildBrickRing(RingSpec(RadiusM, NearestOddVoussoirs(RadiusM)), Bed(), Perpend())); }
+
 bool StartsWithAny(const std::string& Joint, std::initializer_list<std::string> Prefixes)
 {
 	return std::any_of(Prefixes.begin(), Prefixes.end(), [&](const std::string& P) { return Joint.starts_with(P); });
@@ -156,7 +160,17 @@ void CheckSoldierFile(const FileGeometry& G)
 	CHECK(std::abs(G.RightOriginXM - SoldierWidthM * G.Soldiers) <= 1e-12);
 }
 
+void CheckRingFile(const FileGeometry& G)
+{
+	INFO("radius " << G.RadiusM << " voussoirs " << G.Voussoirs);
+	CHECK(G.Voussoirs == NearestOddVoussoirs(G.RadiusM));
+	CHECK(std::abs(G.LeftOriginXM - (-G.RadiusM - 0.645)) <= 1e-12);
+	CHECK(std::abs(G.RightOriginXM - (G.RadiusM - 0.215)) <= 1e-12);
+}
+
 const char* const SoldierFiles[] = {"core-a2-soldier-course-17-at-its-limit", "core-a2-soldier-course-17-minus-keystone", "core-a2-soldier-course-15-stands", "core-a2-soldier-course-19-mortar-fails"};
+
+const char* const RingFiles[] = {"core-a1-brick-ring-at-its-limit", "core-a1-brick-ring-minus-keystone", "core-a1-brick-ring-cracks-and-stands", "core-a1-brick-ring-folds"};
 
 bool AllRead(std::initializer_list<const FileGeometry*> Files)
 {
@@ -236,6 +250,54 @@ TEST_CASE("Core.Keystone.TheSoldierCourseFilesSitOnTheOracleEdges")
 TEST_CASE("Core.Keystone.TheEngineAgreesWithTheOracleOnTheSoldierCourses")
 {
 	for (const char* Slug : SoldierFiles)
+	{
+		CheckEngineAgrees(Slug);
+	}
+}
+
+TEST_CASE("Core.Keystone.TheBrickRingFilesSitOnTheOracleEdges")
+{
+	const FileGeometry Limit = ReadGeometry(RingFiles[0]);
+	const FileGeometry Minus = ReadGeometry(RingFiles[1]);
+	const FileGeometry Window = ReadGeometry(RingFiles[2]);
+	const FileGeometry Fold = ReadGeometry(RingFiles[3]);
+	CHECK(AllRead({&Limit, &Minus, &Window, &Fold}));
+	if (!AllRead({&Limit, &Minus, &Window, &Fold}))
+	{
+		return;
+	}
+	for (const FileGeometry* G : {&Limit, &Minus, &Window, &Fold})
+	{
+		CheckRingFile(*G);
+	}
+	const double R = Limit.RadiusM;
+	const std::string Impost = "v." + std::to_string(Limit.Voussoirs - 1) + "/pier_right.c10.b0";
+	const Reading2 Stand = OracleWorst(OracleOf(Limit));
+	const Reading2 Next = RingWorst(R + 0.01);
+	MESSAGE("A1 oracle: R " << R << " " << Stand.Utilisation << " at " << Stand.Joint << ", R " << R + 0.01 << " " << Next.Utilisation);
+	CHECK(Stand.Utilisation < 1.0);
+	CHECK(Next.Utilisation >= 1.0);
+	CHECK(Stand.Axis == GoverningAxis::Tension);
+	CHECK((Stand.Joint == "v.0/pier_left.c10.b3" || Stand.Joint == Impost));
+	CHECK(Minus.RadiusM == R);
+	CHECK(Minus.Removed == std::vector<std::string>{"v." + std::to_string(Limit.Voussoirs / 2)});
+
+	const Reading2 Cracking = OracleWorst(OracleOf(Window));
+	const Sequence2 WindowSequence = RunHingeSequence(OracleOf(Window));
+	const double FoldCheckM = Fold.RadiusM / FallEdgeMargin;
+	const Sequence2 BelowFold = RunHingeSequence(BuildBrickRing(RingSpec(FoldCheckM, NearestOddVoussoirs(FoldCheckM)), Bed(), Perpend()));
+	const Sequence2 Folding = RunHingeSequence(OracleOf(Fold));
+	MESSAGE("A1 window: R " << Window.RadiusM << " reads " << Cracking.Utilisation << ", hinge sequence stands " << WindowSequence.bStands << " after " << WindowSequence.Cracked.size()
+							<< " cracks; R " << FoldCheckM << " stands " << BelowFold.bStands << "; R " << Fold.RadiusM << " stands " << Folding.bStands);
+	CHECK(Cracking.Utilisation >= 1.0);
+	CHECK(WindowSequence.bStands);
+	CHECK_FALSE(BelowFold.bStands);
+	CHECK_FALSE(Folding.bStands);
+}
+
+TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Core.Keystone.TheEngineAgreesWithTheOracleOnTheBrickRings")
+{
+	for (const char* Slug : RingFiles)
 	{
 		CheckEngineAgrees(Slug);
 	}

@@ -82,6 +82,8 @@ sideways; bonded wall; arch; crushed pier; beam on posts losing one post; lintel
   stands near its limit (highest utilisation just under 1), without it the span bricks fall.
   Two variants: a wedged arch with a wedge keystone, and a flat course with the keystone in the
   middle. Mortared joints. The gap is widened until the real mortar alone cannot carry the span.
+  **Built 2026-11-08** (scenario files `data/scenarios/core-a*`; results and the changes to the plan in
+  [test_plans/2026-11-08-core-case-A-keystone.md](../test_plans/2026-11-08-core-case-A-keystone.md) "Built"; A1.4 held red on the §1 over-release).
 - **B, overhang on a column.** A straight mortared column (2 × 2 or 4 × 4) with a ledge
   cantilevered out near the top. The ledge is one long piece running from inside the column out
   past the face, no joint in the overhang near the face, so failure is at the column face.

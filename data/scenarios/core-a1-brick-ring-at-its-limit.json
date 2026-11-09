@@ -1,0 +1,19 @@
+{
+  "title": "Core A1.1: a brick-on-edge ring at its limit",
+  "summary": "A 103-voussoir EC6 ring of centreline radius 2.13 m (the largest on a 0.01 m grid the oracle reads below 1) springs from two 4-brick, 11-course EC6 piers, each springing straddling two top-course bricks. The impost contacts read just under 1 in tension; nothing cracks.",
+  "tier": "slow_in_debug",
+  "build": [
+    { "name": "ground", "size": [5.8, 0.6, 0.2], "centre": [0, 0, -0.1], "grounded": true },
+    { "wall": "pier_left", "courses": 11, "bricks": 4, "origin": [-2.775, 0, 0], "on": "ground", "material": "clay_brick",
+      "bed": "clay_gp_mortar_bed_ec6", "perpend": "clay_gp_mortar_perpend_ec6" },
+    { "wall": "pier_right", "courses": 11, "bricks": 4, "origin": [1.915, 0, 0], "on": "ground", "material": "clay_brick",
+      "bed": "clay_gp_mortar_bed_ec6", "perpend": "clay_gp_mortar_perpend_ec6" },
+    { "arch": "v", "material": "clay_brick", "centre": [0, 0, 0.715], "radius": 2.13, "thickness": 0.215, "depth": 0.1025,
+      "voussoirs": 103, "springings": ["pier_left", "pier_right"], "joint": "clay_gp_mortar_bed_ec6" }
+  ],
+  "steps": ["cascade"],
+  "expect": {
+    "stands": ["v.*", "pier_left.*", "pier_right.*", "ground"], "cracked": [], "crushed": [], "forced": false,
+    "utilisation": { "before": { "max": [0.95, 1.00], "at": ["v.0/pier_left.c10.b3", "v.102/pier_right.c10.b0"], "axis": "Tension" } }
+  }
+}

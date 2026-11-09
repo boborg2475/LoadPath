@@ -1,0 +1,22 @@
+{
+  "title": "Core A1.2: the brick-on-edge ring loses its keystone",
+  "summary": "The keystone v.51 of the limit ring goes. Each half is a curved cantilever leaning in; the springing's outer contact reads about 26 in tension, both springing contacts crack each side and each half falls as one piece. The piers stand.",
+  "tier": "slow_in_debug",
+  "build": [
+    { "name": "ground", "size": [5.8, 0.6, 0.2], "centre": [0, 0, -0.1], "grounded": true },
+    { "wall": "pier_left", "courses": 11, "bricks": 4, "origin": [-2.775, 0, 0], "on": "ground", "material": "clay_brick",
+      "bed": "clay_gp_mortar_bed_ec6", "perpend": "clay_gp_mortar_perpend_ec6" },
+    { "wall": "pier_right", "courses": 11, "bricks": 4, "origin": [1.915, 0, 0], "on": "ground", "material": "clay_brick",
+      "bed": "clay_gp_mortar_bed_ec6", "perpend": "clay_gp_mortar_perpend_ec6" },
+    { "arch": "v", "material": "clay_brick", "centre": [0, 0, 0.715], "radius": 2.13, "thickness": 0.215, "depth": 0.1025,
+      "voussoirs": 103, "springings": ["pier_left", "pier_right"], "joint": "clay_gp_mortar_bed_ec6" }
+  ],
+  "steps": ["cascade", { "remove": ["v.51"] }, "cascade"],
+  "expect": {
+    "released": [["v.[0-50]"], ["v.[52-102]"]],
+    "stands": ["pier_left.*", "pier_right.*", "ground"],
+    "cracked": ["v.0/pier_left.c10.b[2-3]", "v.102/pier_right.c10.b[0-1]"],
+    "crushed": [], "forced": false,
+    "utilisation": { "before": { "max": [22.0, 29.0], "at": ["v.0/pier_left.c10.b2", "v.102/pier_right.c10.b1"], "axis": "Tension" } }
+  }
+}

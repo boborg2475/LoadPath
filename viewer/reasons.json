@@ -76,6 +76,20 @@
     "core-a2-soldier-course-19-mortar-fails": {
       "basis": "Core case A2 sweep, past the edge: 19 soldiers read 1.077 at the junction. The top two contacts at each pier face crack; the lower two keep their bond and cohesion and the cracked course arches against the piers, so it stands. The oracle's one-at-a-time hinge sequence cracks the same four contacts and stops; the plan expected a slide-out, which assumed the junction unzips completely (changed 2026-11-08, owner to review)."
     },
+    "core-a1-brick-ring-at-its-limit": {
+      "basis": "Core case A1: R = 2.13 m is the largest radius on a 0.01 m grid whose oracle springing reading is below 1 (0.987; 2.14 m reads 1.013). The tension is at the impost contacts, the inner half of each straddled springing; the engine agrees to 1e-13. Nothing cracks."
+    },
+    "core-a1-brick-ring-minus-keystone": {
+      "basis": "Core case A1: without v.51 each half is a curved cantilever leaning in; the springing's outer contact reads 26.2 (the plan's formula at this radius gives 25.5). Both springing contacts each side crack and each half falls whole; the piers' beds read far below the band edge and stand."
+    },
+    "core-a1-brick-ring-cracks-and-stands": {
+      "basis": "Core case A1, inside the window: R = 2.30 m lies between the springing edge (2.13 m) and the oracle's fall edge (2.60 m). The impost contacts read 1.52 and crack; the outer contacts, the crown and the haunches keep their bond and the ring stands. The oracle's hinge sequence stands after the same two cracks."
+    },
+    "core-a1-brick-ring-folds": {
+      "basis": "Core case A1, past the fall edge: R = 2.75 m is at least 1.05 times the oracle's fall edge (2.60 m, the smallest radius whose hinge sequence ends in a mechanism). The imposts crack, then a band of crown joints and the outer springing contacts; the ring folds and every voussoir falls, the piers standing.",
+      "deferred": "The third cascade pass reads RestoreFailedClosed and the forced collapse (decisions 2026-11-08 section 1) releases the whole 231-body component, piers included: the known over-release.",
+      "green_when": "The elastic solver proves the fold as a Mechanism (or a forced release stops taking bodies the mechanism does not move); the file then drops its deferred line."
+    },
     "beam-on-piers-load-step": {
       "basis": "As 3.8, written as a file: the load puts each timber bearing at 1.2 times its crushing capacity f_c,90 A, so the bearings crush, the beam falls and the brick piers, at about half their capacity, stand."
     },

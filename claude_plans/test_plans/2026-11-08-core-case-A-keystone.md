@@ -1,6 +1,43 @@
-Status: approved by the owner 2026-11-08 ("go ahead on test cases A") after the revision with their eight answers; the three questions the revision raised are decided per their recommendations (approximate oracle with a measured tolerance and a [0.80, 1.00) band on the A2 limit row; a fourth `stands` expectation key; the brick-on-edge ring with the straddled impost). Build in progress.
+Status: built 2026-11-08 (approved by the owner 2026-11-08, "go ahead on test cases A" after the revision with their eight answers; the three questions the revision raised are decided per their recommendations (approximate oracle with a measured tolerance and a [0.80, 1.00) band on the A2 limit row; a fourth `stands` expectation key; the brick-on-edge ring with the straddled impost). Results, and the changes the build made to this plan, are in "Built 2026-11-08" below; they supersede the text after it where the two differ.)
 
 # Core case A: keystone over a gap (test plan)
+
+## Built 2026-11-08
+
+Commits on `solver_rework`: `db2cfa5` (format: `arch`, `utilisation`, `forced`, `stands`,
+`before.readings`), `f1b75cf` (A2 rows and the oracle), then the A1 rows. Tests:
+`Core.Keystone.TheSoldierCourseFilesSitOnTheOracleEdges`, `…TheBrickRingFilesSitOnTheOracleEdges`
+(default), `…TheEngineAgreesWithTheOracleOnTheSoldierCourses` (default), `…OnTheBrickRings`
+(slow in Debug), and the eight files through `E2E.Scenarios.*`.
+
+**The oracle changed (§4, §6 Q1).** The reduction treating each pier course as one rigid body was
+measured first, as decided. It is 3 to 7 % off for A2 and up to 66 % off for A1: the impost brick
+projects into the opening and turns on its own, which relieves the springing (the course-rigid model
+put R_stand at 1.79 m, where the engine reads 0.41, governed by the crown). The oracle
+(`tests/KeystoneOracle.h`) therefore models every pier brick as its own rigid body. It is still
+planar, with its own banded assembly and no solver code. It agrees with the engine to ≤ 7.1e-12
+relative on all eight rows, and the pinned tolerance is 1e-6. Its hinge sequence cracks one joint at a
+time; cracked corners open in tension and slip at friction, and a singular stiffness is a fall.
+
+**Placements.** A2: n = 17 (0.797; 15 reads 0.557, 19 reads 1.077). A1: R_stand = 2.13 m, 103
+voussoirs, keystone v.51 (0.987; 2.14 reads 1.013; below 2.0 m the crown governs at ≤ 0.50). The
+fall edge is 2.60 m (2.59 stands). A1.3 moves to R = 2.30 m, 111 voussoirs, inside the window
+2.14–2.59. It is now below dry least thickness (t/R 0.093), so the bonded crown and haunch carry it.
+A1.4 stays at 2.75 m (≥ 1.05 × 2.60).
+
+| Row | Plan | Solver (Release) | Result |
+|---|---|---|---|
+| A2.1 n 17 | max [0.80, 1.00) at a c6 junction, Tension; nothing cracks; not forced | 0.797 at s.16/pier_right.c6.b0, Tension; Stands, 0 passes, nothing cracked or released | green after **(a)**: band now [0.75, 1.00). The plan's estimate of 0.84 is shown off by the exact oracle (0.797), and no odd n lies between 17 and 19 |
+| A2.2 minus s.8 | [1.70, 2.10); two halves; junction contacts cracked; not forced | 1.973; c6, c5, c4, then the sliver c3 cracks at each face (passes 1 to 4); {s.0–s.7}, {s.9–s.16} on pass 5, not forced; piers stand | green as written |
+| A2.3 n 15 | [0.50, 0.87); nothing cracks | 0.557; Stands | green as written |
+| A2.4 n 19 | [1.05, 1.47); junction unzips, the course slides out whole | 1.077; c6 cracks at each face (pass 1), then c5 (pass 2, 1.191); the c4 and sliver contacts keep their bond and the course stands | green after **(a)**: the expectation is now "stands, cracked `s.0/pier_left.c[5-6].*`, `s.18/pier_right.c[5-6].*`". The oracle's hinge sequence cracks the same four contacts and stands, and still stands at n = 41. §1.2's full-unzip step does not happen, because the bonded c4 and sliver carry the reduced end moment while the cracked course arches against the piers. **Owner to review**: A2 has no falling row now |
+| A1.1 R 2.13 | [0.95, 1.00) at the impost contacts; nothing cracks; not forced | 0.987 at the impost; Stands, 0 passes | green (R from the oracle) |
+| A1.2 minus v.51 | [15.0, 19.5) at the outer springing contacts; both springing contacts crack; two halves; not forced | 26.25 at v.0/pier_left.c10.b2; outer contacts (pass 1), impost contacts (pass 2, 47.3); two clusters of 51, not forced; piers stand | green after **(a)**: band now [22.0, 29.0). The plan's band was its formula at its estimated R (17.2 at 1.76 m); the same formula at 2.13 m gives 25.5, and the band keeps its relative width |
+| A1.3 R 2.30 | [1.05, 1.80) at the imposts; the imposts crack; stands; not forced | 1.522; both impost contacts crack (pass 1); Stands | green (R moved into the window, as §4 says) |
+| A1.4 R 2.75 | [1.5, 4.0); every voussoir released, the piers stand | 3.271; imposts (pass 1), 14 crown joints v.59/v.60 to v.72/v.73 and the outer springing contacts (pass 2); pass 3 reads RestoreFailedClosed, and **the forced release takes all 231 bodies, piers included** | **(c)**, held red as written under `deferred`: the §1 over-release this plan names (§5) |
+
+Mutants: tension capacity × 0.75 fails A2.1, A2.2 and A2.4, and × 2 fails all four A2 files. The
+plan's × 0.8 no longer reaches A2.1, whose true reading is 0.797.
 
 Owner's text ([decisions/2026-11-08-forced-collapse-and-core-suite.md](../decisions/2026-11-08-forced-collapse-and-core-suite.md) §4, A): one
 keystone holds a span. With it in place the structure stands near its limit (highest utilisation
