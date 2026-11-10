@@ -46,6 +46,18 @@ These came up in this order on 3.13. Each is answered by a specific experiment i
 - The probes link the Release `loadpath.lib`. Rebuild it after any library change, or the probe tests old code.
 - Listing thresholds differ: certificate 1e-3 of the peak motion, elastic solver 1e-6. The certificate's load-factor cap is 1000, so λ 160 is a real limit.
 
+## 4b. Second worked case: A1.4, an Undecided from the pass recorder (2026-11-10)
+
+Full note: `decisions/2026-11-10-a14-undecided-findings-and-plan.md`. What worked, in order:
+
+1. Run the file with `loadpath_cli scenario <file> --viz <out> --record-passes` and print, per pass, each component's end reason, iteration count and unsettled joints. This names the pass and the joint.
+2. For that pass, print per iteration the corner states and corner normal forces of the joints around the unsettled one. The trajectory showed 14 joints opening in one step, the restore closing them unevenly, and the cycle guard firing.
+3. Rule out noise with `--overrides`: tolerances, the iteration cap, the dense/sparse limit. Unchanged, so the cause is structural.
+4. Sweep the setting that controls the input state (`crack_band_fraction`) to find what the failure depends on. Here it was the count of adjacent cracked joints.
+5. Run every scenario file at the two ends of the sweep before calling a setting a fix. It turned A2.5 red.
+
+Copy `loadpath_cli.exe` before a sweep (it locks the build output). Perl `JSON::PP` reads the viz files.
+
 ## 5. Toward a program and a skill
 
 A `loadpath_cli debug <scenario>` command (or a Scripts wrapper) would replace the hand-written probe:

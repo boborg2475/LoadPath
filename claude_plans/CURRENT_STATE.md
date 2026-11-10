@@ -393,7 +393,9 @@ solves", amended after review). Still to do, in order:
   `Deferred.Scenarios.*`): pass 3 reads RestoreFailedClosed and the forced release takes all 231 bodies,
   piers included (the §1 over-release, a known gap). Green when the solver proves the fold as a Mechanism,
   or a forced release stops taking bodies the fold does not move. Then drop its `deferred` line and update
-  `viewer/reasons.json`.
+  `viewer/reasons.json`. Cause found 2026-11-10 (14 adjacent cracked crown joints opened in one
+  solver step; green at `crack_band_fraction` 0.02 and below, where A2.5 turns red): findings and the unbuilt plan,
+  awaiting the owner, are in `decisions/2026-11-10-a14-undecided-findings-and-plan.md`.
 - **For the owner, from the build and the review** (each change fixed as a plan error the oracle
   shows; the plan's Built section has the reasons):
   - The A2.1 band is [0.75, 1.00), moved from the ratified [0.80, 1.00) because n = 17 reads 0.797
