@@ -152,13 +152,15 @@ private:
 				OnlyKeys(*Object, Path,
 					{"max_active_set_iterations", "pivot_tolerance_relative", "dense_dof_limit", "stick_margin_relative", "held_force_tolerance_relative",
 						"dry_noise_floor_relative", "neutral_load_tolerance_relative", "admissibility_tolerance_relative", "unconstrained_component", "dry_reclose_factor",
-							"sparse_acceptance_margin"})) &&
+							"sparse_acceptance_margin", "open_tension_tolerance_relative", "close_compression_tolerance_relative"})) &&
 			Int(Object, Path, "max_active_set_iterations", Out.MaxActiveSetIterations) && Double(Object, Path, "pivot_tolerance_relative", Out.PivotToleranceRelative) &&
 			Int(Object, Path, "dense_dof_limit", Out.DenseDofLimit) && Double(Object, Path, "stick_margin_relative", Out.StickMarginRelative) &&
 			Double(Object, Path, "held_force_tolerance_relative", Out.HeldForceToleranceRelative) && Double(Object, Path, "dry_noise_floor_relative", Out.DryNoiseFloorRelative) &&
 			Double(Object, Path, "neutral_load_tolerance_relative", Out.NeutralLoadToleranceRelative) &&
 			Double(Object, Path, "admissibility_tolerance_relative", Out.AdmissibilityToleranceRelative) && Double(Object, Path, "unconstrained_component", Out.UnconstrainedComponent) &&
-			Double(Object, Path, "dry_reclose_factor", Out.DryRecloseFactor) && Double(Object, Path, "sparse_acceptance_margin", Out.SparseAcceptanceMargin);
+			Double(Object, Path, "dry_reclose_factor", Out.DryRecloseFactor) && Double(Object, Path, "sparse_acceptance_margin", Out.SparseAcceptanceMargin) &&
+			Double(Object, Path, "open_tension_tolerance_relative", Out.OpenTensionToleranceRelative) &&
+			Double(Object, Path, "close_compression_tolerance_relative", Out.CloseCompressionToleranceRelative);
 	}
 
 	bool ReadCascade(const JsonValue* Object, CascadeSettings& Out)
@@ -220,6 +222,8 @@ StandingOptions ToStandingOptions(const Settings& Value, Vec3 Gravity)
 	Options.UnconstrainedComponent = Value.Solver.UnconstrainedComponent;
 	Options.DryRecloseFactor = Value.Solver.DryRecloseFactor;
 	Options.SparseAcceptanceMargin = Value.Solver.SparseAcceptanceMargin;
+	Options.OpenTensionToleranceRelative = Value.Solver.OpenTensionToleranceRelative;
+	Options.CloseCompressionToleranceRelative = Value.Solver.CloseCompressionToleranceRelative;
 	Options.Debug = &Value.Debug;
 	return Options;
 }

@@ -1007,6 +1007,8 @@ TEST_CASE("Authority.Judge.DifferentOptionsReuseNothing")
 	Add("Standing.MaxActiveSetIterations 49", [](AuthorityOptions& O) { O.Standing.MaxActiveSetIterations = 49; });
 	Add("Standing.DryRecloseFactor 3", [](AuthorityOptions& O) { O.Standing.DryRecloseFactor = 3.0; });
 	Add("Standing.SparseAcceptanceMargin 2", [](AuthorityOptions& O) { O.Standing.SparseAcceptanceMargin = 2.0; });
+	Add("Standing.OpenTensionToleranceRelative 1e-9", [](AuthorityOptions& O) { O.Standing.OpenTensionToleranceRelative = 1e-9; });
+	Add("Standing.CloseCompressionToleranceRelative 1e-9", [](AuthorityOptions& O) { O.Standing.CloseCompressionToleranceRelative = 1e-9; });
 	for (const auto& [Name, Options] : Variants)
 	{
 		INFO("options differing in " << std::string(Name));

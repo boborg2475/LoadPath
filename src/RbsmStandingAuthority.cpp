@@ -590,6 +590,11 @@ void ResetReferenceOnReclosure(const Joint& J, std::size_t C, const TrialForces&
 	State.ReferenceM[C] = Scale(-1.0 / J.TangentialStiffnessNPerM, T.ShearN);
 }
 
+double OpeningFloorN(const Joint& J, const StandingOptions& Options, double ForceScaleN)
+{
+	return (J.bReleasesSlip ? Options.DryNoiseFloorRelative : Options.OpenTensionToleranceRelative) * ForceScaleN;
+}
+
 UpdateOutcome UpdateActiveSet(const Problem& P, const StandingOptions& Options, const Eigen::VectorXd& X, const std::vector<Eigen::VectorXd>& NeutralMotions, std::vector<JointState>& States)
 {
 	UpdateOutcome Outcome;
@@ -600,6 +605,7 @@ UpdateOutcome UpdateActiveSet(const Problem& P, const StandingOptions& Options, 
 		return Outcome;
 	}
 	const double NoiseFloorN = Options.DryNoiseFloorRelative * P.ForceScaleN;
+	const double CloseToleranceN = Options.CloseCompressionToleranceRelative * P.ForceScaleN;
 	for (std::size_t I = 0; I < P.Joints.size(); ++I)
 	{
 		const Joint& J = P.Joints[I];
@@ -613,7 +619,7 @@ UpdateOutcome UpdateActiveSet(const Problem& P, const StandingOptions& Options, 
 			const bool bDry = J.bReleasesOpening && J.bReleasesSlip;
 			if (Status == CornerStatus::Open)
 			{
-				const bool bLoaded = bDry ? T.NormalN > Options.DryRecloseFactor * NoiseFloorN : T.GapM <= 0.0;
+				const bool bLoaded = bDry ? T.NormalN > Options.DryRecloseFactor * NoiseFloorN : T.NormalN > CloseToleranceN;
 				if (bLoaded && !IsGapIndeterminate(P, Options, J, C, NeutralMotions))
 				{
 					const double ClosingCapacityN = SlipCapacityN(J, T.NormalN);
@@ -634,7 +640,7 @@ UpdateOutcome UpdateActiveSet(const Problem& P, const StandingOptions& Options, 
 				}
 				continue;
 			}
-			if ((J.bReleasesOpening && T.NormalN < -NoiseFloorN) || (bDry && std::abs(T.NormalN) <= NoiseFloorN))
+			if ((J.bReleasesOpening && T.NormalN < -OpeningFloorN(J, Options, P.ForceScaleN)) || (bDry && std::abs(T.NormalN) <= NoiseFloorN))
 			{
 				Status = CornerStatus::Open;
 				HeldN = Vec3{};
@@ -848,7 +854,7 @@ std::vector<InterfaceReading> ReadAll(const Problem& P, const StandingOptions& O
 	std::vector<InterfaceReading> Readings;
 	for (std::size_t I = 0; I < P.Joints.size(); ++I)
 	{
-		Readings.push_back(ReadJoint(P.Joints[I], States[I], X, Options.DryNoiseFloorRelative * P.ForceScaleN, bOverstressed));
+		Readings.push_back(ReadJoint(P.Joints[I], States[I], X, OpeningFloorN(P.Joints[I], Options, P.ForceScaleN), bOverstressed));
 	}
 	return Readings;
 }
@@ -976,14 +982,13 @@ CornerState StateOf(CornerStatus Status)
 
 void RecordPass(const Problem& P, const StandingOptions& Options, const std::vector<JointState>& Solved, const std::vector<JointState>& After, const Eigen::VectorXd& X, int Iteration, std::vector<ElasticPassRecord>& Passes)
 {
-	const double NoiseFloorN = Options.DryNoiseFloorRelative * P.ForceScaleN;
 	const ElasticPassRecord* Previous = Passes.empty() ? nullptr : &Passes.back();
 	ElasticPassRecord Pass;
 	Pass.Iteration = Iteration;
 	for (std::size_t I = 0; I < P.Joints.size(); ++I)
 	{
 		bool bIgnored = false;
-		const InterfaceReading Reading = ReadJoint(P.Joints[I], Solved[I], X, NoiseFloorN, bIgnored);
+		const InterfaceReading Reading = ReadJoint(P.Joints[I], Solved[I], X, OpeningFloorN(P.Joints[I], Options, P.ForceScaleN), bIgnored);
 		JointPassRecord Record;
 		Record.Id = Reading.Id;
 		for (std::size_t C = 0; C < CornerCount; ++C)

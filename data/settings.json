@@ -10,7 +10,9 @@
     "admissibility_tolerance_relative": 1e-9,
     "unconstrained_component": 1e-6,
     "dry_reclose_factor": 2.0,
-    "sparse_acceptance_margin": 1.0
+    "sparse_acceptance_margin": 1.0,
+    "open_tension_tolerance_relative": 1e-12,
+    "close_compression_tolerance_relative": 1e-12
   },
   "cascade": {
     "undecided_resolution": "collapse",

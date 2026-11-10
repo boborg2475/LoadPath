@@ -2292,3 +2292,20 @@ corner opens at or below the floor and re-closes only above `dry_reclose_factor`
 ruling 2026-10-11). Owner ruling, 2026-11-10: a dry corner opens whenever it carries no
 compression, as ruled 2026-10-11; that does not change. The open/close hysteresis the review doc
 asks for applies to non-dry joints only.
+
+### 2026-11-10, owner: open/close hysteresis on non-dry joints
+
+A non-dry joint here is one that releases opening but not slip: zero tension, cohesion above
+zero. Two settings in the `solver` section, both default 1e-12, give its corners explicit open
+and close tolerances, each relative to the component's force scale:
+
+- A closed non-dry corner opens when its trial `N < −open_tension_tolerance_relative ×` the force
+  scale (it used the dry noise floor before).
+- An open non-dry corner re-closes when its trial `N > close_compression_tolerance_relative ×` the
+  force scale (it re-closed at zero gap before); the re-closure still waits while the gap is
+  indeterminate. So an open corner with trial compression in `[0, tolerance]` now stays open.
+
+Tension inside the open tolerance on a closed non-dry corner reads 0, the same way noise tension
+inside the dry floor reads 0 on a dry corner, in the readings and the pass records alike. Dry
+corners ignore both settings and keep `dry_noise_floor_relative` and `dry_reclose_factor`.
+Bonded joints are unchanged. No range validation yet (CURRENT_STATE "Deferred").

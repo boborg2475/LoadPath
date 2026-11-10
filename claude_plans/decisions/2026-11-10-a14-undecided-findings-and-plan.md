@@ -1,4 +1,4 @@
-Status: findings and a plan for the owner's sign-off. Nothing here is built. No source, test or scenario file was changed for it.
+Status: the findings (§1 to §5) stand. The plan (§6) is superseded by the owner's 2026-11-10 decision: a closing-rate check replaces the history check in the restore rule; the back-off in §6 is kept only as a fallback. Nothing here is built.
 
 # A1.4's Undecided: why it happens and a plan to remove it (2026-11-10)
 

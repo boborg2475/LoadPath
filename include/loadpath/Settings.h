@@ -23,6 +23,8 @@ struct SolverSettings
 	double UnconstrainedComponent = 1e-6;
 	double DryRecloseFactor = 2.0;
 	double SparseAcceptanceMargin = 1.0;
+	double OpenTensionToleranceRelative = 1e-12;
+	double CloseCompressionToleranceRelative = 1e-12;
 };
 
 struct CascadeSettings

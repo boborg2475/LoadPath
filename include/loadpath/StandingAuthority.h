@@ -39,12 +39,16 @@ struct StandingOptions
 	double StickMarginRelative = 1e-9;
 	// A slipping corner's held force has settled when it moves less than this times the component's force scale.
 	double HeldForceToleranceRelative = 1e-12;
-	// A dry corner inside plus or minus this times the force scale is open; a tensionless corner opens below minus it.
+	// A dry corner inside plus or minus this times the force scale is open; non-dry corners use OpenTensionToleranceRelative instead.
 	double DryNoiseFloorRelative = 1e-12;
 	// An open dry corner re-closes only above this times the noise floor; above 1 it is the floor's hysteresis (DESIGN §10, 2026-10-11).
 	double DryRecloseFactor = 2.0;
 	// The sparse factor is accepted only when its smallest eigenvalue estimate exceeds this times the pivot tolerance times the largest pivot.
 	double SparseAcceptanceMargin = 1.0;
+	// A closed non-dry tensionless corner opens only below minus this times the force scale; dry corners ignore it.
+	double OpenTensionToleranceRelative = 1e-12;
+	// An open non-dry tensionless corner re-closes only above this times the force scale; dry corners ignore it.
+	double CloseCompressionToleranceRelative = 1e-12;
 	// A rank-deficient component is a mechanism only when the load's null-space projection exceeds this times the load.
 	double NeutralLoadToleranceRelative = 1e-12;
 	// A corner closes or slides against friction in a null motion when it moves more than this times the motion's scale.

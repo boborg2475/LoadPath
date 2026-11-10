@@ -395,13 +395,18 @@ public:
   `TensileStrengthPa == 0` opens when its trial `N < 0` and then carries nothing, and (slice 2c,
   DESIGN §10) that opening threshold is `N < −floor`, the force-noise floor (one named constant
   relative to the component's force scale, of the order of the held-force tolerance), so a
-  noise-level negative trial opens nothing; a corner on an interface with zero tension and zero
+  noise-level negative trial opens nothing. On a non-dry joint (zero tension, cohesion above zero)
+  the floor is replaced by two settings (DESIGN §10, 2026-11-10): a closed corner opens when its
+  trial `N < −open_tension_tolerance_relative ×` the force scale, and an open corner re-closes
+  when its trial `N > close_compression_tolerance_relative ×` the force scale (both default 1e-12;
+  `StandingOptions::OpenTensionToleranceRelative`, `CloseCompressionToleranceRelative`); the
+  re-closure still waits while the gap is indeterminate. Dry corners ignore both. A corner on an interface with zero tension and zero
   cohesion whose trial `|N|` lies within the floor is open as well, reading `N = 0`, `S = 0` and zero
   utilisation, re-closing when its trial normal rises above `dry_reclose_factor` (default 2) times the floor (hysteresis, so a
   corner at the floor cannot chatter) or when the restore step finds it closing under a motion,
   so a dry perpend carrying nothing cannot flip the active set (the slip test itself has no slack: it
   drove no test, DESIGN §10). A closed tensionless corner whose trial `N` lies in `[−floor, 0)`
-  reports `N = 0`, so the interface's reported normal force, moment and tension demand agree at
+  (`[−open tolerance, 0)` on a non-dry joint) reports `N = 0`, in the readings and the pass records alike, so the interface's reported normal force, moment and tension demand agree at
   zero rather than reading noise over a zero tensile capacity as +inf. A component whose force
   scale (the sum of |weight| and |load| over its free bodies) is not finite reads Undecided,
   never Stands, with its readings filled from the overflowed solve (tensile normal forces reported as computed, not clamped as noise); a corner on an interface whose profile has `ShearCohesionPa == 0`
@@ -1330,7 +1335,8 @@ only the keys a user changed; reset discards the overrides ([decisions/2026-11-0
 struct SolverSettings  { int MaxActiveSetIterations = 50; double PivotToleranceRelative = 1e-10; int DenseDofLimit = 600;
                          double StickMarginRelative = 1e-9, HeldForceToleranceRelative = 1e-12, DryNoiseFloorRelative = 1e-12,
                          NeutralLoadToleranceRelative = 1e-12, AdmissibilityToleranceRelative = 1e-9, UnconstrainedComponent = 1e-6,
-                         DryRecloseFactor = 2.0, SparseAcceptanceMargin = 1.0; };
+                         DryRecloseFactor = 2.0, SparseAcceptanceMargin = 1.0, OpenTensionToleranceRelative = 1e-12,
+                         CloseCompressionToleranceRelative = 1e-12; };
 struct CascadeSettings { double CrackBandFraction = 0.5, CrackBandEdgeRelative = 1e-9, CrushEdgeRelative = 1e-9,
                          MotionAxisThresholdRelative = 1e-3; int MaxPasses = 32; UndecidedResolution OnUndecided = UndecidedResolution::Collapse; };
 struct DebugSettings   { bool bRecordPasses = false; };
