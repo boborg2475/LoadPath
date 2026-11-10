@@ -397,7 +397,7 @@ public:
   relative to the component's force scale, of the order of the held-force tolerance), so a
   noise-level negative trial opens nothing; a corner on an interface with zero tension and zero
   cohesion whose trial `|N|` lies within the floor is open as well, reading `N = 0`, `S = 0` and zero
-  utilisation, re-closing when its trial normal rises above twice the floor (hysteresis, so a
+  utilisation, re-closing when its trial normal rises above `dry_reclose_factor` (default 2) times the floor (hysteresis, so a
   corner at the floor cannot chatter) or when the restore step finds it closing under a motion,
   so a dry perpend carrying nothing cannot flip the active set (the slip test itself has no slack: it
   drove no test, DESIGN §10). A closed tensionless corner whose trial `N` lies in `[−floor, 0)`
@@ -657,6 +657,9 @@ struct ReleasedCluster {
 struct CascadeOptions {
 	AuthorityOptions Authority;
 	double CrackBandFraction = 0.5;       // delta: joints with ratio >= R_max (1 - delta) crack this pass; 0 = one event per pass (ties together), 1 = all at once
+	double CrackBandEdgeRelative = 1e-9;  // the band's edge is lowered by this fraction
+	double CrushEdgeRelative = 1e-9;      // a joint crushes only above compression utilisation 1 + this
+	double MotionAxisThresholdRelative = 1e-3;  // a severed joint's axis comes from corners moving faster than this times the fastest
 	int MaxPasses = 32;                   // counted passes before PassCapReached
 };
 
@@ -698,7 +701,7 @@ the run is dropped from later passes and not listed. Then, with `Pass = HighestP
    certified rigid motion; TRAPS: a cluster released as one body must be a certified mechanism,
    and this one is the certificate's). For each cluster, ascending by lowest body slot: sever
    every live interface between a cluster body and a body outside it (stamped `Pass`, recorded
-   as a `FailedInterface` with `bSevered`, the elastic reading's utilisation as `Ratio`, and an `Axis` from the mechanism: relative velocity B minus A at the joint's four corners, a body outside the mechanism still; `Tension` if some corner's normal opening less μ times its tangential speed exceeds 1e-3 of the fastest corner's relative speed, else `Compression` if some corner closes faster than that threshold, else `Shear` if a tangential speed exceeds it, else the reading's axis; a zero-cap joint (`MaxShearStrengthPa = 0`, NormalOnly in the certificate) subtracts no friction lift), then
+   as a `FailedInterface` with `bSevered`, the elastic reading's utilisation as `Ratio`, and an `Axis` from the mechanism: relative velocity B minus A at the joint's four corners, a body outside the mechanism still; `Tension` if some corner's normal opening less μ times its tangential speed exceeds `motion_axis_threshold_relative` (default 1e-3) of the fastest corner's relative speed, else `Compression` if some corner closes faster than that threshold, else `Shear` if a tangential speed exceeds it, else the reading's axis; a zero-cap joint (`MaxShearStrengthPa = 0`, NormalOnly in the certificate) subtracts no friction lift), then
    `RemoveBody` every cluster body (its internal joints go with it, `Removed`, no stamp). The
    cluster's `Motion` is the certificate's motion of its lowest-slot body.
 3. **Crush and crack, one band** (crushing as rubble, 2026-11-08, decisions
@@ -1326,8 +1329,10 @@ only the keys a user changed; reset discards the overrides ([decisions/2026-11-0
 ```cpp
 struct SolverSettings  { int MaxActiveSetIterations = 50; double PivotToleranceRelative = 1e-10; int DenseDofLimit = 600;
                          double StickMarginRelative = 1e-9, HeldForceToleranceRelative = 1e-12, DryNoiseFloorRelative = 1e-12,
-                         NeutralLoadToleranceRelative = 1e-12, AdmissibilityToleranceRelative = 1e-9, UnconstrainedComponent = 1e-6; };
-struct CascadeSettings { double CrackBandFraction = 0.5; int MaxPasses = 32; UndecidedResolution OnUndecided = UndecidedResolution::Collapse; };
+                         NeutralLoadToleranceRelative = 1e-12, AdmissibilityToleranceRelative = 1e-9, UnconstrainedComponent = 1e-6,
+                         DryRecloseFactor = 2.0, SparseAcceptanceMargin = 1.0; };
+struct CascadeSettings { double CrackBandFraction = 0.5, CrackBandEdgeRelative = 1e-9, CrushEdgeRelative = 1e-9,
+                         MotionAxisThresholdRelative = 1e-3; int MaxPasses = 32; UndecidedResolution OnUndecided = UndecidedResolution::Collapse; };
 struct DebugSettings   { bool bRecordPasses = false; };
 struct Settings        { SolverSettings Solver; CascadeSettings Cascade; DebugSettings Debug; };
 struct SettingsResult  { Settings Value; FileError Error; bool Ok() const; };

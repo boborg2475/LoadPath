@@ -18,8 +18,6 @@ namespace
 {
 constexpr double NaN = std::numeric_limits<double>::quiet_NaN();
 constexpr double Infinity = std::numeric_limits<double>::infinity();
-constexpr double CrackBandRelativeEdge = 1.0e-9;
-constexpr double CrushRelativeEdge = 1.0e-9;
 
 bool AreOptionsValid(const CascadeOptions& Options)
 {
@@ -189,7 +187,7 @@ Vec3 PointVelocity(const MechanismMotion& Motion, const Vec3& CentroidM, const V
 	return Vec3{Motion.TranslationM.X + Spin.X, Motion.TranslationM.Y + Spin.Y, Motion.TranslationM.Z + Spin.Z};
 }
 
-GoverningAxis MechanismAxis(const Structure& Model, const ComponentReport& Component, InterfaceId Id, GoverningAxis Fallback)
+GoverningAxis MechanismAxis(const Structure& Model, const ComponentReport& Component, InterfaceId Id, GoverningAxis Fallback, double ThresholdRelative)
 {
 	const InterfaceRecord& Record = Model.Interface(Id);
 	const MechanismMotion MotionA = StillUnlessMoving(Component, Record.BodyA);
@@ -214,7 +212,7 @@ GoverningAxis MechanismAxis(const Structure& Model, const ComponentReport& Compo
 		Closing = std::min(Closing, Normal);
 		Sliding = std::max(Sliding, Length(Tangential));
 	}
-	const double Threshold = 1.0e-3 * Fastest;
+	const double Threshold = ThresholdRelative * Fastest;
 	if (!(Fastest > 0.0))
 	{
 		return Fallback;
@@ -291,7 +289,8 @@ struct CrackCandidate
 	GoverningAxis Axis = GoverningAxis::None;
 };
 
-bool Release(Structure& Model, const AuthorityResult& Judged, std::uint32_t Pass, CascadeVerdict& Verdict, std::vector<BodyId>& ReleasedThisRun)
+bool Release(Structure& Model, const AuthorityResult& Judged, std::uint32_t Pass, const CascadeOptions& Options, CascadeVerdict& Verdict,
+	std::vector<BodyId>& ReleasedThisRun)
 {
 	std::vector<std::size_t> PositionOf;
 	std::vector<PendingCluster> Pending;
@@ -362,7 +361,7 @@ bool Release(Structure& Model, const AuthorityResult& Judged, std::uint32_t Pass
 			FailedInterface Failure;
 			Failure.Id = Id;
 			Failure.Pass = Pass;
-			Failure.Axis = MechanismAxis(Model, *Cluster.Component, Id, Reading != nullptr ? Reading->Axis : GoverningAxis::None);
+			Failure.Axis = MechanismAxis(Model, *Cluster.Component, Id, Reading != nullptr ? Reading->Axis : GoverningAxis::None, Options.MotionAxisThresholdRelative);
 			Failure.Ratio = Reading != nullptr ? Reading->Utilisation : NaN;
 			Failure.bSevered = true;
 			Failure.Kind = FailureKind::Severed;
@@ -467,7 +466,7 @@ bool FailBand(Structure& Model, const AuthorityResult& Judged, std::uint32_t Pas
 		{
 			const InterfaceReading& Reading = Judged.Readings[R];
 			const InterfaceRecord& Record = Model.Interface(Reading.Id);
-			if (Model.IsLive(Reading.Id) && IsFinite(Reading.CompressionUtilisation) && Reading.CompressionUtilisation > 1.0 + CrushRelativeEdge)
+			if (Model.IsLive(Reading.Id) && IsFinite(Reading.CompressionUtilisation) && Reading.CompressionUtilisation > 1.0 + Options.CrushEdgeRelative)
 			{
 				Crushing.push_back(CrushCandidate{Reading.Id, CrushingBody(Model, Record, Options.Authority.Standing.Gravity), Reading.CompressionUtilisation});
 				RMax = std::max(RMax, Reading.CompressionUtilisation);
@@ -494,7 +493,7 @@ bool FailBand(Structure& Model, const AuthorityResult& Judged, std::uint32_t Pas
 				RMax = std::max(RMax, Ratio);
 			}
 		}
-		const double Threshold = RMax * (1.0 - Options.CrackBandFraction) * (1.0 - CrackBandRelativeEdge);
+		const double Threshold = RMax * (1.0 - Options.CrackBandFraction) * (1.0 - Options.CrackBandEdgeRelative);
 		std::sort(Crushing.begin(), Crushing.end(), IsWorseCrush);
 		for (const CrushCandidate& Each : Crushing)
 		{
@@ -577,7 +576,7 @@ private:
 			ResolveUndecided(Judged, Options.OnUndecided, Verdict.ForcedByReason);
 			const std::size_t FailuresBefore = Verdict.Failures.size();
 			const std::size_t ClustersBefore = Verdict.Clusters.size();
-			const bool bReleased = Release(Model, Judged, Pass, Verdict, ReleasedThisRun);
+			const bool bReleased = Release(Model, Judged, Pass, Options, Verdict, ReleasedThisRun);
 			const std::size_t CrushedBefore = Verdict.CrushedBodies.size();
 			const bool bFailed = FailBand(Model, Judged, Pass, Options, Verdict, ReleasedThisRun);
 			std::stable_sort(Verdict.Failures.begin() + static_cast<std::ptrdiff_t>(FailuresBefore), Verdict.Failures.end(),

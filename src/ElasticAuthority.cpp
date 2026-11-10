@@ -34,10 +34,10 @@ bool SameVector(const Vec3& A, const Vec3& B)
 
 bool SameStanding(const StandingOptions& A, const StandingOptions& B)
 {
-	const auto& [AGravity, AIterations, APivot, ADense, AStick, AHeld, ADry, ANeutral, AAdmissible, AUnconstrained, ADebug] = A;
-	const auto& [BGravity, BIterations, BPivot, BDense, BStick, BHeld, BDry, BNeutral, BAdmissible, BUnconstrained, BDebug] = B;
+	const auto& [AGravity, AIterations, APivot, ADense, AStick, AHeld, ADry, AReclose, ASparseMargin, ANeutral, AAdmissible, AUnconstrained, ADebug] = A;
+	const auto& [BGravity, BIterations, BPivot, BDense, BStick, BHeld, BDry, BReclose, BSparseMargin, BNeutral, BAdmissible, BUnconstrained, BDebug] = B;
 	return SameVector(AGravity, BGravity) && AIterations == BIterations && APivot == BPivot && ADense == BDense && AStick == BStick && AHeld == BHeld &&
-		ADry == BDry && ANeutral == BNeutral && AAdmissible == BAdmissible && AUnconstrained == BUnconstrained && ADebug == BDebug;
+		ADry == BDry && AReclose == BReclose && ASparseMargin == BSparseMargin && ANeutral == BNeutral && AAdmissible == BAdmissible && AUnconstrained == BUnconstrained && ADebug == BDebug;
 }
 
 bool SameOptions(const AuthorityOptions& A, const AuthorityOptions& B)

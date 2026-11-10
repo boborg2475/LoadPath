@@ -21,11 +21,16 @@ struct SolverSettings
 	double NeutralLoadToleranceRelative = 1e-12;
 	double AdmissibilityToleranceRelative = 1e-9;
 	double UnconstrainedComponent = 1e-6;
+	double DryRecloseFactor = 2.0;
+	double SparseAcceptanceMargin = 1.0;
 };
 
 struct CascadeSettings
 {
 	double CrackBandFraction = 0.5;
+	double CrackBandEdgeRelative = 1e-9;
+	double CrushEdgeRelative = 1e-9;
+	double MotionAxisThresholdRelative = 1e-3;
 	int MaxPasses = 32;
 	UndecidedResolution OnUndecided = UndecidedResolution::Collapse;
 };

@@ -613,7 +613,7 @@ UpdateOutcome UpdateActiveSet(const Problem& P, const StandingOptions& Options, 
 			const bool bDry = J.bReleasesOpening && J.bReleasesSlip;
 			if (Status == CornerStatus::Open)
 			{
-				const bool bLoaded = bDry ? T.NormalN > 2.0 * NoiseFloorN : T.GapM <= 0.0;
+				const bool bLoaded = bDry ? T.NormalN > Options.DryRecloseFactor * NoiseFloorN : T.GapM <= 0.0;
 				if (bLoaded && !IsGapIndeterminate(P, Options, J, C, NeutralMotions))
 				{
 					const double ClosingCapacityN = SlipCapacityN(J, T.NormalN);
@@ -880,7 +880,6 @@ bool IsAllFinite(const SparseMatrix& M)
 }
 
 constexpr int InverseIterationCount = 5;
-constexpr double SparseAcceptanceMargin = 1.0;
 
 using SparseFactor = Eigen::SimplicialLDLT<SparseMatrix, Eigen::Lower, Eigen::AMDOrdering<int>>;
 
@@ -912,7 +911,8 @@ struct SparseAttempt
 	std::optional<Eigen::VectorXd> ScaledX;
 };
 
-SparseAttempt SolveSparseFullRank(const Problem& P, const std::vector<JointState>& States, const Eigen::VectorXd& Load, double PivotToleranceRelative, PhaseTimings& Timings)
+SparseAttempt SolveSparseFullRank(const Problem& P, const std::vector<JointState>& States, const Eigen::VectorXd& Load, double PivotToleranceRelative, double SparseAcceptanceMargin,
+	PhaseTimings& Timings)
 {
 	SparseAttempt Attempt;
 	const SparseMatrix K = profile::Timed(Timings.AssemblySeconds, [&] { return AssembleScaledSparseStiffness(P, States); });
@@ -1089,7 +1089,7 @@ StandingResult SolveProblem(const Problem& P, const StandingOptions& Options, Ph
 		std::vector<Eigen::VectorXd> NeutralMotions;
 		if (P.DofCount > Options.DenseDofLimit)
 		{
-			const SparseAttempt Attempt = SolveSparseFullRank(P, States, Load, Options.PivotToleranceRelative, Timings);
+			const SparseAttempt Attempt = SolveSparseFullRank(P, States, Load, Options.PivotToleranceRelative, Options.SparseAcceptanceMargin, Timings);
 			if (Iteration == 1 && Attempt.bNonFinite)
 			{
 				Result.State = StandingState::InvalidInput;

@@ -323,3 +323,22 @@ TEST_CASE("Statics.Solver.ADryPerpendNormalScalesWithTheEndPush")
 		CHECK(SmallPerpends[I]->NormalForceN == doctest::Approx(Ratio * LargePerpends[I]->NormalForceN).epsilon(1e-6));
 	}
 }
+
+TEST_CASE("Statics.Solver.ADryRecloseFactorOfOneChattersNearTheNoiseFloor")
+{
+	const NoiseFloorWall W = BuildDry(1, 3);
+	REQUIRE(W.Value.bComplete);
+	const double WeightN = BrickWeightN(W.Spec);
+	const BodyId End = W.Value.Courses[0].front();
+	StandingOptions SingleThreshold;
+	SingleThreshold.DryRecloseFactor = 1.0;
+	int NotStanding = 0;
+	for (int K = -260; K <= -140; ++K)
+	{
+		const double PushN = WeightN * std::pow(10.0, K / 20.0);
+		const std::vector<BodyLoad> Push = {BodyLoad{End, Vec3{PushN, 0.0, 0.0}, W.Model.Body(End).CentroidM}};
+		NotStanding += SolveWith(W.Model, SingleThreshold, Push).State != StandingState::Stands ? 1 : 0;
+	}
+	MESSAGE("re-close factor 1: " << NotStanding << " of 121 pushes do not stand");
+	CHECK(NotStanding > 0);
+}

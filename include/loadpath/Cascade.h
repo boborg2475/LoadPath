@@ -80,6 +80,12 @@ struct CascadeOptions
 	AuthorityOptions Authority;
 	// Joints with ratio >= R_max (1 - delta) crack this pass; 0 is one event per pass (ties together), 1 all at once.
 	double CrackBandFraction = 0.5;
+	// The band's lower edge is lowered by this fraction so a ratio equal to the edge up to rounding still cracks.
+	double CrackBandEdgeRelative = 1e-9;
+	// A joint crushes only when its compression utilisation exceeds 1 plus this.
+	double CrushEdgeRelative = 1e-9;
+	// A severed joint's axis comes from the motion only when a corner moves more than this times the fastest corner speed.
+	double MotionAxisThresholdRelative = 1e-3;
 	// Counted passes before PassCapReached.
 	int MaxPasses = 32;
 	// Collapse releases a whole Undecided component; Stands keeps it standing; either marks it Forced.

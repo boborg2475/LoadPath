@@ -2276,3 +2276,19 @@ planar oracle (`tests/KeystoneOracle.h`) is the referee for every core-a reading
 by joint to 1e-6. The soldier course of 55 is a model edge, not a design span (the elastic
 small-displacement field gives the stiff bonded piers full thrust and no abutment spread); it is
 pinned as the engine's edge and flagged for the owner.
+
+### 2026-11-10, owner: every engine tolerance is a setting
+
+The five tolerances that were literals in the solver and the cascade are now keys in
+`data/settings.json`: `solver.dry_reclose_factor` (2.0, an open dry corner re-closes above this
+times the noise floor), `solver.sparse_acceptance_margin` (1.0, the sparse factor's eigenvalue
+check), `cascade.crack_band_edge_relative` (1e-9), `cascade.crush_edge_relative` (1e-9) and
+`cascade.motion_axis_threshold_relative` (1e-3, a severed joint's axis from the motion). Each
+default equals the former literal, so no result changes. No range validation is added yet
+(CURRENT_STATE "Deferred").
+
+On the open/close hysteresis the owner's review asks for: dry corners already have it (a dry
+corner opens at or below the floor and re-closes only above `dry_reclose_factor` times the floor,
+ruling 2026-10-11). Owner ruling, 2026-11-10: a dry corner opens whenever it carries no
+compression, as ruled 2026-10-11; that does not change. The open/close hysteresis the review doc
+asks for applies to non-dry joints only.

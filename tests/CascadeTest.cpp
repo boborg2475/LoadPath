@@ -1020,7 +1020,7 @@ struct ScriptedSever
 	InterfaceId Bed;
 };
 
-ScriptedSever SeverUnderMotion(const StrengthProfile& Profile, const Vec3& TranslationM, const Vec3& RotationRad, GoverningAxis ReadingAxis)
+ScriptedSever SeverUnderMotion(const StrengthProfile& Profile, const Vec3& TranslationM, const Vec3& RotationRad, GoverningAxis ReadingAxis, const CascadeOptions& Options = CascadeOptions{})
 {
 	BrickOnGround F = MakeBrickOnGround(Profile);
 	AuthorityResult Script = CollapsesScript(F.Model, {F.Brick});
@@ -1029,7 +1029,7 @@ ScriptedSever SeverUnderMotion(const StrengthProfile& Profile, const Vec3& Trans
 	{
 		Reading.Axis = ReadingAxis;
 	}
-	ScriptedSever Result{RunScripted(F.Model, {Script, StandsScript()}), F.Bed};
+	ScriptedSever Result{RunScripted(F.Model, {Script, StandsScript()}, Options), F.Bed};
 	return Result;
 }
 
@@ -1132,4 +1132,57 @@ TEST_CASE("Cascade.AJointRockingAboutItsCentreLineSeversInTension")
 TEST_CASE("Cascade.AJointThatClosesWhileItSlidesSeversInCompression")
 {
 	CheckSeveredAxis(SeverUnderMotion(DryJoint(PastFriction), Vec3{1.0, 0.0, -1.0}, Vec3{}, GoverningAxis::Shear), GoverningAxis::Compression);
+}
+
+TEST_CASE("Cascade.Crack.TheBandEdgeSettingLowersTheBandsEdge")
+{
+	struct Case
+	{
+		double EdgeRelative;
+		bool bSecondCracks;
+	};
+	const Case Cases[] = {{CascadeOptions{}.CrackBandEdgeRelative, false}, {0.05, true}};
+	for (const Case& Each : Cases)
+	{
+		INFO("crack band edge " << Each.EdgeRelative);
+		BondedRow Row = MakeBondedRow(2);
+		CascadeOptions Options;
+		Options.CrackBandFraction = 0.0;
+		Options.CrackBandEdgeRelative = Each.EdgeRelative;
+		const CascadeVerdict V = RunScripted(Row.Model, {OverstressedScript(Row.Model, {{Row.Joints[0], 3.0, 0.0}, {Row.Joints[1], 2.9, 0.0}}), StandsScript()}, Options);
+		INFO(DescribeVerdict(V));
+		const std::vector<InterfaceId> Want = Each.bSecondCracks ? std::vector<InterfaceId>{Row.Joints[0], Row.Joints[1]} : std::vector<InterfaceId>{Row.Joints[0]};
+		CHECK(SameIdList(CrackedOnPass(V, 1), Want));
+	}
+}
+
+TEST_CASE("Cascade.Crush.TheEdgeSettingDecidesAJustOverloadedBed")
+{
+	struct Case
+	{
+		double EdgeRelative;
+		bool bCrushes;
+	};
+	const Case Cases[] = {{CascadeOptions{}.CrushEdgeRelative, true}, {0.01, false}};
+	for (const Case& Each : Cases)
+	{
+		INFO("crush edge " << Each.EdgeRelative);
+		BondedRow Row = MakeBondedRow(1);
+		CascadeOptions Options;
+		Options.CrushEdgeRelative = Each.EdgeRelative;
+		const CascadeVerdict V = RunScripted(Row.Model, {OverstressedScript(Row.Model, {{Row.Joints[0], 0.0, 0.0, 1.001}}), StandsScript()}, Options);
+		INFO(DescribeVerdict(V));
+		CHECK(V.CrushedBodies.size() == (Each.bCrushes ? 1u : 0u));
+		CHECK(Row.Model.IsLive(Row.Bricks[0]) == !Each.bCrushes);
+	}
+}
+
+TEST_CASE("Cascade.AMotionAxisThresholdAboveTheLiftMarginReadsShear")
+{
+	const double Lift = LiftForMargin(PastFriction, 2.0e-3);
+	CascadeOptions Options;
+	Options.MotionAxisThresholdRelative = 3.0e-3;
+	CheckSeveredAxis(SeverUnderMotion(DryJoint(PastFriction), Vec3{1.0, 0.0, Lift}, Vec3{}, GoverningAxis::Tension, Options), GoverningAxis::Shear);
+	Options.MotionAxisThresholdRelative = 1.0e-3;
+	CheckSeveredAxis(SeverUnderMotion(DryJoint(PastFriction), Vec3{1.0, 0.0, Lift}, Vec3{}, GoverningAxis::Shear, Options), GoverningAxis::Tension);
 }

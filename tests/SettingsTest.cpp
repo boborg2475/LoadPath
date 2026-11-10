@@ -55,6 +55,9 @@ bool SameSettings(const Settings& A, const Settings& B)
 		A.Solver.HeldForceToleranceRelative == B.Solver.HeldForceToleranceRelative && A.Solver.DryNoiseFloorRelative == B.Solver.DryNoiseFloorRelative &&
 		A.Solver.NeutralLoadToleranceRelative == B.Solver.NeutralLoadToleranceRelative &&
 		A.Solver.AdmissibilityToleranceRelative == B.Solver.AdmissibilityToleranceRelative && A.Solver.UnconstrainedComponent == B.Solver.UnconstrainedComponent &&
+		A.Solver.DryRecloseFactor == B.Solver.DryRecloseFactor && A.Solver.SparseAcceptanceMargin == B.Solver.SparseAcceptanceMargin &&
+		A.Cascade.CrackBandEdgeRelative == B.Cascade.CrackBandEdgeRelative && A.Cascade.CrushEdgeRelative == B.Cascade.CrushEdgeRelative &&
+		A.Cascade.MotionAxisThresholdRelative == B.Cascade.MotionAxisThresholdRelative &&
 		A.Cascade.CrackBandFraction == B.Cascade.CrackBandFraction && A.Cascade.MaxPasses == B.Cascade.MaxPasses && A.Cascade.OnUndecided == B.Cascade.OnUndecided && A.Debug.bRecordPasses == B.Debug.bRecordPasses;
 }
 
@@ -86,7 +89,12 @@ Settings DistinctSettings()
 	S.Solver.NeutralLoadToleranceRelative = 6e-3;
 	S.Solver.AdmissibilityToleranceRelative = 7e-3;
 	S.Solver.UnconstrainedComponent = 8e-3;
+	S.Solver.DryRecloseFactor = 9e-3;
+	S.Solver.SparseAcceptanceMargin = 1.1e-2;
 	S.Cascade.CrackBandFraction = 0.25;
+	S.Cascade.CrackBandEdgeRelative = 1.2e-2;
+	S.Cascade.CrushEdgeRelative = 1.3e-2;
+	S.Cascade.MotionAxisThresholdRelative = 1.4e-2;
 	S.Cascade.MaxPasses = 3;
 	S.Debug.bRecordPasses = true;
 	return S;
@@ -111,6 +119,61 @@ DryStack BuildDryTwoBrickStack()
 	S.Bed = AddInterfaceOk(S.Model, *StackedFaces(LowerId, Lower, UpperId, Upper, Dry));
 	return S;
 }
+
+std::string WithoutKey(std::string Text, std::string_view Key)
+{
+	const std::string Quoted = "\"" + std::string(Key) + "\"";
+	const std::size_t At = Text.find(Quoted);
+	INFO("fixture text must contain " << Quoted);
+	REQUIRE(At != std::string::npos);
+	if (At == std::string::npos)
+	{
+		return Text;
+	}
+	const std::size_t Start = Text.rfind('\n', At) + 1;
+	const std::size_t End = Text.find('\n', At) + 1;
+	const bool bHadComma = Text.find(',', At) < End;
+	Text.erase(Start, End - Start);
+	if (!bHadComma)
+	{
+		const std::size_t Comma = Text.rfind(',', Start);
+		REQUIRE(Comma != std::string::npos);
+		Text.erase(Comma, 1);
+	}
+	return Text;
+}
+
+std::string WithValue(std::string Text, std::string_view Key, std::string_view Value)
+{
+	const std::string Quoted = "\"" + std::string(Key) + "\":";
+	const std::size_t At = Text.find(Quoted);
+	INFO("fixture text must contain " << Quoted);
+	REQUIRE(At != std::string::npos);
+	if (At == std::string::npos)
+	{
+		return Text;
+	}
+	const std::size_t ValueAt = Text.find_first_not_of(' ', At + Quoted.size());
+	const std::size_t ValueEnd = Text.find_first_of(",\r\n", ValueAt);
+	Text.replace(ValueAt, ValueEnd - ValueAt, Value);
+	return Text;
+}
+
+struct ToleranceKey
+{
+	const char* Section;
+	const char* Key;
+	double Default;
+	double (*Read)(const Settings&);
+};
+
+const ToleranceKey EngineTolerances[] = {
+	{"solver", "dry_reclose_factor", 2.0, [](const Settings& S) { return S.Solver.DryRecloseFactor; }},
+	{"solver", "sparse_acceptance_margin", 1.0, [](const Settings& S) { return S.Solver.SparseAcceptanceMargin; }},
+	{"cascade", "crack_band_edge_relative", 1e-9, [](const Settings& S) { return S.Cascade.CrackBandEdgeRelative; }},
+	{"cascade", "crush_edge_relative", 1e-9, [](const Settings& S) { return S.Cascade.CrushEdgeRelative; }},
+	{"cascade", "motion_axis_threshold_relative", 1e-3, [](const Settings& S) { return S.Cascade.MotionAxisThresholdRelative; }},
+};
 
 int OpenCorners(const StandingResult& Result)
 {
@@ -141,10 +204,69 @@ TEST_CASE("Settings.DefaultsFileLoadsAndMatchesTheCompiledDefaults")
 	CHECK(Loaded.Solver.NeutralLoadToleranceRelative == 1e-12);
 	CHECK(Loaded.Solver.AdmissibilityToleranceRelative == 1e-9);
 	CHECK(Loaded.Solver.UnconstrainedComponent == 1e-6);
+	CHECK(Loaded.Solver.DryRecloseFactor == 2.0);
+	CHECK(Loaded.Solver.SparseAcceptanceMargin == 1.0);
 	CHECK(Loaded.Cascade.CrackBandFraction == 0.5);
+	CHECK(Loaded.Cascade.CrackBandEdgeRelative == 1e-9);
+	CHECK(Loaded.Cascade.CrushEdgeRelative == 1e-9);
+	CHECK(Loaded.Cascade.MotionAxisThresholdRelative == 1e-3);
 	CHECK(Loaded.Cascade.MaxPasses == 32);
 	CHECK(Loaded.Cascade.OnUndecided == UndecidedResolution::Collapse);
 	CHECK(Loaded.Debug.bRecordPasses == false);
+}
+
+TEST_CASE("Settings.EngineTolerances.EachIsAKeyInTheDefaultsFileWithTodaysValue")
+{
+	const std::string Json = ReadSettingsFile();
+	REQUIRE_FALSE(Json.empty());
+	const Settings Compiled{};
+	for (const ToleranceKey& Each : EngineTolerances)
+	{
+		INFO(std::string(Each.Section) << "." << std::string(Each.Key));
+		CHECK(Json.find("\"" + std::string(Each.Key) + "\"") != std::string::npos);
+		CHECK(Each.Read(Compiled) == Each.Default);
+		CHECK(Each.Read(LoadOk(Json)) == Each.Default);
+		CHECK(Each.Read(LoadOk(WithValue(Json, Each.Key, "0.375"))) == 0.375);
+	}
+}
+
+TEST_CASE("Settings.EngineTolerances.AMissingOneIsAnErrorNamingIt")
+{
+	const std::string Json = ReadSettingsFile();
+	for (const ToleranceKey& Each : EngineTolerances)
+	{
+		const std::string Name = std::string(Each.Section) + "." + Each.Key;
+		INFO(Name);
+		const std::string Missing = WithoutKey(Json, Each.Key);
+		CheckNames(LoadSettings(Missing), Name, LineOf(Missing, "\"" + std::string(Each.Section) + "\""));
+	}
+}
+
+TEST_CASE("Settings.EngineTolerances.AnOverrideSetsOnlyItsKey")
+{
+	const Settings Defaults{};
+	for (const ToleranceKey& Each : EngineTolerances)
+	{
+		const std::string Name = std::string(Each.Section) + "." + Each.Key;
+		INFO(Name);
+		const std::string Overrides = "{\n  \"" + std::string(Each.Section) + "\": {\n    \"" + Each.Key + "\": 0.625\n  }\n}\n";
+		const SettingsResult Applied = ApplyOverrides(Defaults, Overrides);
+		INFO("error line " << Applied.Error.Line << ": " << Applied.Error.Message);
+		CHECK(Applied.Ok());
+		CHECK(Each.Read(Applied.Value) == 0.625);
+		for (const ToleranceKey& Other : EngineTolerances)
+		{
+			if (&Other != &Each)
+			{
+				INFO("untouched " << std::string(Other.Key));
+				CHECK(Other.Read(Applied.Value) == Other.Default);
+			}
+		}
+		const std::string Wrong = "{\n  \"" + std::string(Each.Section) + "\": {\n    \"" + Each.Key + "\": \"0.625\"\n  }\n}\n";
+		const SettingsResult Typed = ApplyOverrides(Defaults, Wrong);
+		CheckNames(Typed, Name, 3);
+		CHECK(Typed.Error.Message.find("wrong type") != std::string::npos);
+	}
 }
 
 TEST_CASE("Settings.UndecidedResolutionReadsItsTwoNamesAndRejectsAnyOther")
@@ -290,9 +412,16 @@ TEST_CASE("Settings.ToOptionsCarriesEveryField")
 	CHECK(Standing.NeutralLoadToleranceRelative == 6e-3);
 	CHECK(Standing.AdmissibilityToleranceRelative == 7e-3);
 	CHECK(Standing.UnconstrainedComponent == 8e-3);
+	CHECK(Standing.DryRecloseFactor == 9e-3);
+	CHECK(Standing.SparseAcceptanceMargin == 1.1e-2);
 	CHECK(Standing.Debug == &S.Debug);
 	const CascadeOptions Cascade = ToCascadeOptions(S, Gravity);
 	CHECK(Cascade.CrackBandFraction == 0.25);
+	CHECK(Cascade.CrackBandEdgeRelative == 1.2e-2);
+	CHECK(Cascade.CrushEdgeRelative == 1.3e-2);
+	CHECK(Cascade.MotionAxisThresholdRelative == 1.4e-2);
+	CHECK(Cascade.Authority.Standing.DryRecloseFactor == 9e-3);
+	CHECK(Cascade.Authority.Standing.SparseAcceptanceMargin == 1.1e-2);
 	CHECK(Cascade.MaxPasses == 3);
 	CHECK(Cascade.Authority.Standing.Gravity.Z == -3.0);
 	CHECK(Cascade.Authority.Standing.DryNoiseFloorRelative == 5e-3);
@@ -309,6 +438,13 @@ TEST_CASE("Settings.ToOptionsCarriesEveryField")
 	CHECK(Plain.NeutralLoadToleranceRelative == Compiled.NeutralLoadToleranceRelative);
 	CHECK(Plain.AdmissibilityToleranceRelative == Compiled.AdmissibilityToleranceRelative);
 	CHECK(Plain.UnconstrainedComponent == Compiled.UnconstrainedComponent);
+	CHECK(Plain.DryRecloseFactor == Compiled.DryRecloseFactor);
+	CHECK(Plain.SparseAcceptanceMargin == Compiled.SparseAcceptanceMargin);
+	const CascadeOptions PlainCascade = ToCascadeOptions(Settings{}, Vec3{0.0, 0.0, -GravityMPerS2});
+	const CascadeOptions CompiledCascade{};
+	CHECK(PlainCascade.CrackBandEdgeRelative == CompiledCascade.CrackBandEdgeRelative);
+	CHECK(PlainCascade.CrushEdgeRelative == CompiledCascade.CrushEdgeRelative);
+	CHECK(PlainCascade.MotionAxisThresholdRelative == CompiledCascade.MotionAxisThresholdRelative);
 }
 
 TEST_CASE("Statics.Settings.TheSolverReadsItsTolerancesFromTheOptions")

@@ -327,6 +327,22 @@ TEST_CASE("Statics.Sparse.ADenseFixtureKeepsItsPath")
 	}
 }
 
+TEST_CASE("Statics.Sparse.AnUnreachableAcceptanceMarginDeclinesToTheDensePath")
+{
+	const Structure Model = RunningBondWall(DryJoint(0.7), DryJoint(0.7), 8, 12);
+	const StandingOptions Sparse = WithDenseDofLimit(StandingOptions{}, 599);
+	const StandingResult Dense = SolveWith(Model, WithDenseDofLimit(StandingOptions{}, INT_MAX));
+	const StandingResult Accepted = SolveWith(Model, Sparse);
+	MESSAGE("8 x 12 dry wall at rest: dense " << Dense.State << ", sparse at the default margin " << Accepted.State << " differing in " << CountDifferences(Accepted, Dense) << " readings");
+	REQUIRE(Dense.State == StandingState::Stands);
+	REQUIRE(CountDifferences(Accepted, Dense) > 0);
+	StandingOptions Unreachable = Sparse;
+	Unreachable.SparseAcceptanceMargin = 1.0e30;
+	const StandingResult Declined = SolveWith(Model, Unreachable);
+	CHECK(Declined.State == Dense.State);
+	CheckBitIdentical(Declined, Dense);
+}
+
 #if defined(NDEBUG)
 TEST_CASE("Slow.Statics.Sparse.TheLargeWallSolvesInsideItsBudget")
 {

@@ -1005,6 +1005,8 @@ TEST_CASE("Authority.Judge.DifferentOptionsReuseNothing")
 		Variants.emplace_back(Name, Options);
 	};
 	Add("Standing.MaxActiveSetIterations 49", [](AuthorityOptions& O) { O.Standing.MaxActiveSetIterations = 49; });
+	Add("Standing.DryRecloseFactor 3", [](AuthorityOptions& O) { O.Standing.DryRecloseFactor = 3.0; });
+	Add("Standing.SparseAcceptanceMargin 2", [](AuthorityOptions& O) { O.Standing.SparseAcceptanceMargin = 2.0; });
 	for (const auto& [Name, Options] : Variants)
 	{
 		INFO("options differing in " << std::string(Name));

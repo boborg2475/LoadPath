@@ -242,10 +242,15 @@ inline AuthorityResult StandsScript()
 	return Result;
 }
 
+inline CascadeVerdict RunScripted(Structure& Model, std::vector<AuthorityResult> Script, const CascadeOptions& Options)
+{
+	return MakeCascade(std::make_unique<ScriptedAuthority>(std::move(Script)))->Run(Model, {}, Options, nullptr);
+}
+
 inline CascadeVerdict RunScripted(Structure& Model, std::vector<AuthorityResult> Script, double CrackBandFraction = 0.5)
 {
 	CascadeOptions Options;
 	Options.CrackBandFraction = CrackBandFraction;
-	return MakeCascade(std::make_unique<ScriptedAuthority>(std::move(Script)))->Run(Model, {}, Options, nullptr);
+	return RunScripted(Model, std::move(Script), Options);
 }
 }
