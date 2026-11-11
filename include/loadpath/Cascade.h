@@ -59,6 +59,8 @@ struct ReleasedCluster
 	std::vector<BodyId> Bodies;
 	// The elastic MechanismMotion of the lowest-slot body; the others share it.
 	MechanismMotion Motion;
+	// Spike: every body's own elastic MechanismMotion, empty when forced.
+	std::vector<MechanismMotion> BodyMotions;
 	// Every live interface that crossed the cluster boundary, now Severed.
 	std::vector<InterfaceId> Severed;
 	// Released by resolving an Undecided component; its Motion is zero.

@@ -292,9 +292,23 @@ void WriteCluster(JsonWriter& W, const ViewerScene& Scene, const ReleasedCluster
 	{
 		W.FieldBool("forced", true);
 	}
+	if (!Cluster.BodyMotions.empty())
+	{
+		W.FieldString("motion_kind", "per_body");
+	}
 	W.FieldInteger("motion_body", Cluster.Motion.Body.Index);
 	W.Key("motion");
 	W.Open('{');
+	for (const MechanismMotion& Own : Cluster.BodyMotions)
+	{
+		W.Key(std::to_string(Own.Body.Index));
+		W.Open('{');
+		W.FieldVec("t", Own.TranslationM);
+		W.FieldVec("r", Own.RotationRad);
+		W.Close('}');
+	}
+	if (Cluster.BodyMotions.empty())
+	{
 	const Vec3 Reference = BoxCentre(Scene, Cluster.Motion.Body);
 	const Vec3& T = Cluster.Motion.TranslationM;
 	for (const BodyId Id : Cluster.Bodies)
@@ -306,6 +320,7 @@ void WriteCluster(JsonWriter& W, const ViewerScene& Scene, const ReleasedCluster
 		W.FieldVec("t", Vec3{T.X + Spin.X, T.Y + Spin.Y, T.Z + Spin.Z});
 		W.FieldVec("r", Cluster.Motion.RotationRad);
 		W.Close('}');
+	}
 	}
 	W.Close('}');
 	W.Close('}');
