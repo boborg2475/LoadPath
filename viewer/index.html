@@ -563,9 +563,11 @@ function jointFrame(it) {
   return { n, u, v, p, corner: (su, sv, s = 1) => p.clone().addScaledVector(u, su * it.hu * s).addScaledVector(v, sv * it.hv * s) };
 }
 
+const RESTORE_MARK = { restored: "--stand", restored_against_history: "--stand", blocked_by_history: "--sever", left_open_below_threshold: "--undecided" };
 function glyphTexture(state, flipped) {
   const c = document.createElement("canvas"); c.width = c.height = 64;
   const g = c.getContext("2d");
+  if (state.startsWith("restore:")) { g.lineWidth = 8; g.strokeStyle = css(state.slice(8)); g.strokeRect(6, 6, 52, 52); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t; }
   if (flipped) { g.beginPath(); g.arc(32, 32, 27, 0, 2 * Math.PI); g.lineWidth = 8; g.strokeStyle = css("--flip"); g.stroke(); }
   g.beginPath(); g.arc(32, 32, flipped ? 15 : 20, 0, 2 * Math.PI);
   if (state !== "open") { g.fillStyle = css(state === "slipping" ? "--accent" : "--body"); g.fill(); }
@@ -614,6 +616,12 @@ function replayOverlay(P, k, eff) {
         s.position.copy(f.corner(su, sv, 0.85)); s.scale.set(size, size, 1); s.renderOrder = 12;
         s.userData.joint = { id: j.interface, kind: "iteration", rec: j, corner: c };
         scene.add(s); pickers.push(s);
+        const ra = j.restore?.[c], rv = RESTORE_MARK[ra];
+        if (rv) {
+          const m = new THREE.Sprite(mat("restore:" + rv, false));
+          m.position.copy(f.corner(su, sv, 0.85)); m.scale.set(size * 2.2, size * 2.2, 1); m.renderOrder = 11;
+          scene.add(m);
+        }
       });
       addPicker(it, { id: j.interface, kind: "iteration", rec: j });
     }
@@ -651,7 +659,9 @@ function replayPanel(P) {
   $("rp-iter").max = Math.max(0, inner.length - 1); $("rp-iter").value = replay.iter; $("rp-iter").disabled = inner.length <= 1;
   $("rp-iprev").disabled = replay.iter <= 0; $("rp-inext").disabled = replay.iter >= inner.length - 1;
   const flips = rec ? (rec.joints || []).reduce((n, j) => n + (j.flipped || []).filter(Boolean).length, 0) : 0;
-  $("rp-iter-label").textContent = rec ? `iteration ${rec.iteration ?? replay.iter + 1} of ${inner.length} · ${(rec.joints || []).length} joints · ${flips} ${flips === 1 ? "corner" : "corners"} flipped` : "no iterations recorded for this component";
+  const tally = {}; if (rec) for (const j of rec.joints || []) for (const a of j.restore || []) if (a && a !== "within_tolerance") tally[a] = (tally[a] || 0) + 1;
+  const kindText = rec && rec.kind ? ` · ${rec.kind === "restore" ? "restore step" : rec.kind === "full_rank" ? "full-rank solve" : "singular, neutral load"}, ${rec.free_motions ?? 0} free motions${Object.keys(tally).length ? ` · ${Object.entries(tally).map(([a, n]) => `${n} ${a.replace(/_/g, " ")}`).join(", ")}` : ""}` : "";
+  $("rp-iter-label").textContent = rec ? `iteration ${rec.iteration ?? replay.iter + 1} of ${inner.length} · ${(rec.joints || []).length} joints · ${flips} ${flips === 1 ? "corner" : "corners"} flipped${kindText}` : "no iterations recorded for this component";
   renderInspect();
 }
 
@@ -698,6 +708,7 @@ function jointInspect(P, info) {
       ["Utilisation", fmt(rec.utilisation)],
       ["Axis", escHtml(rec.axis ?? "n/a")]);
     if (rec.corners) rows.push(["Corners", rec.corners.map((s, c) => `${["+u+v", "−u+v", "−u−v", "+u−v"][c]} ${escHtml(s)}${rec.flipped?.[c] ? " (flipped)" : ""}${rec.corner_n ? ` ${fmt(rec.corner_n[c], 3)} N` : ""}`).join(" · ")]);
+    if (rec.restore) rows.push(["Restore", rec.restore.map((a, c) => `${["+u+v", "−u+v", "−u−v", "+u−v"][c]} ${rec.closing_rate?.[c] == null ? "no closing gap" : `rate ${fmt(rec.closing_rate[c], 3)}, ${escHtml((a || "none").replace(/_/g, " "))}`}`).join(" · ")]);
   } else rows.push(["Forces", info.kind === "severed" ? "none: the joint is severed" : `no reading recorded at ${passName(P, replay.k)}`]);
   return `<h4>Joint ${info.id}</h4><dl>${rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("")}</dl>`;
 }

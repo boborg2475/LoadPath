@@ -41,6 +41,7 @@ add_library(loadpath STATIC
 	src/ElasticAuthority.cpp
 	src/Handles.cpp
 	src/RbsmStandingAuthority.cpp
+	src/RestoreSpikeLog.cpp
 	src/Scenario.cpp
 	src/Settings.cpp
 	src/StaticsCommon.cpp

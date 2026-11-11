@@ -49,6 +49,10 @@ struct StandingOptions
 	double OpenTensionToleranceRelative = 1e-12;
 	// An open non-dry tensionless corner re-closes only above this times the force scale; dry corners ignore it.
 	double CloseCompressionToleranceRelative = 1e-12;
+	// Spike: negative keeps the history check; otherwise an Open corner closing faster than this fraction of the motion scale re-closes, slower ones stay open.
+	double RestoreClosingRateThreshold = -1.0;
+	// Spike: 0 re-enters slipping with the last full-rank normal (0 when none), 1 re-closes Stuck when that normal is not compressive or missing.
+	double RestoreAwkwardMode = 0.0;
 	// A rank-deficient component is a mechanism only when the load's null-space projection exceeds this times the load.
 	double NeutralLoadToleranceRelative = 1e-12;
 	// A corner closes or slides against friction in a null motion when it moves more than this times the motion's scale.
@@ -143,11 +147,17 @@ struct JointPassRecord
 	Vec3 MomentNm;
 	double Utilisation = 0;
 	GoverningAxis Axis = GoverningAxis::None;
+	// Spike: NaN unless the corner is Open with a negative gap in the restore motion; action text empty otherwise.
+	std::array<double, 4> ClosingRate{};
+	std::array<const char*, 4> RestoreAction{};
 };
 
 struct ElasticPassRecord
 {
 	int Iteration = 0;
+	// Spike: "full_rank", "singular_neutral" or "restore"; FreeMotions is the null-space dimension.
+	const char* Kind = "";
+	int FreeMotions = 0;
 	std::vector<JointPassRecord> Joints;
 };
 

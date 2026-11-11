@@ -395,6 +395,23 @@ void WriteJoint(JsonWriter& W, const JointPassRecord& J)
 	W.FieldVec("moment", J.MomentNm);
 	W.FieldNumber("utilisation", J.Utilisation);
 	W.FieldString("axis", detail::AxisText(J.Axis));
+	if (std::any_of(J.RestoreAction.begin(), J.RestoreAction.end(), [](const char* A) { return A != nullptr && *A != 0; }))
+	{
+		W.Key("closing_rate");
+		W.Open('[');
+		for (const double R : J.ClosingRate)
+		{
+			W.Item(R);
+		}
+		W.Close(']');
+		W.Key("restore");
+		W.Open('[');
+		for (const char* A : J.RestoreAction)
+		{
+			W.ItemString(A ? A : "");
+		}
+		W.Close(']');
+	}
 	W.Close('}');
 }
 
@@ -434,6 +451,8 @@ void WritePassComponent(JsonWriter& W, const ComponentReport& Component)
 	{
 		W.Open('{');
 		W.FieldInteger("iteration", static_cast<std::uint64_t>(Pass.Iteration));
+		W.FieldString("kind", Pass.Kind ? Pass.Kind : "");
+		W.FieldInteger("free_motions", static_cast<std::uint64_t>(Pass.FreeMotions));
 		W.Key("joints");
 		W.Open('[');
 		for (const JointPassRecord& Joint : Pass.Joints)

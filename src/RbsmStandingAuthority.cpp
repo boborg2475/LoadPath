@@ -1,6 +1,8 @@
+#pragma warning(disable : 4996)
 #include "loadpath/StandingAuthority.h"
 
 #include "loadpath/Settings.h"
+#include "loadpath/RestoreSpikeLog.h"
 
 #include "EigenInclude.h"
 #include "PhaseClock.h"
@@ -8,6 +10,10 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
+#include <cstdio>
+#include <cstdlib>
+#include <string>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -683,9 +689,40 @@ UpdateOutcome UpdateActiveSet(const Problem& P, const StandingOptions& Options, 
 	return Outcome;
 }
 
+thread_local long long GSpikeSolve = 0;
+thread_local const char* GSpikeKind = "";
+thread_local int GSpikeFree = 0;
+thread_local bool GSpikeRestoreStep = false;
+thread_local std::vector<std::array<double, CornerCount>> GSpikeRates;
+thread_local std::vector<std::array<const char*, CornerCount>> GSpikeActions;
+thread_local int GSpikeIteration = 0;
+thread_local int GSpikeNullDim = 0;
+std::atomic<long long> GSpikeSolveCounter{0};
+
+const char* SpikeStatus(CornerStatus S)
+{
+	return S == CornerStatus::Open ? "Open" : S == CornerStatus::Stuck ? "Stuck" : "Slipping";
+}
+
+int SpikeBody(const Problem& P, int Offset)
+{
+	return Offset < 0 ? -1 : static_cast<int>(P.FreeBodies[static_cast<std::size_t>(Offset / DofPerBody)].Index);
+}
+
 Restoration RestoreInadmissibleReleases(const Problem& P, const StandingOptions& Options, const Eigen::VectorXd& Motion, const std::vector<JointState>* FullRankStates, const Eigen::VectorXd& FullRankX, std::vector<JointState>& States, std::vector<InterfaceId>& Blocking)
 {
-	const double ToleranceM = Options.AdmissibilityToleranceRelative * MotionScaleM(P, Motion);
+	const double ScaleM = MotionScaleM(P, Motion);
+	const double ToleranceM = Options.AdmissibilityToleranceRelative * ScaleM;
+	static const double EnvThreshold = [] { const char* V = std::getenv("LOADPATH_SPIKE_RATE_THRESHOLD"); return V ? std::atof(V) : std::numeric_limits<double>::quiet_NaN(); }();
+	static const double EnvAwkward = [] { const char* V = std::getenv("LOADPATH_SPIKE_AWKWARD_MODE"); return V ? std::atof(V) : std::numeric_limits<double>::quiet_NaN(); }();
+	const double RateThreshold = std::isnan(EnvThreshold) ? Options.RestoreClosingRateThreshold : EnvThreshold;
+	const double AwkwardMode = std::isnan(EnvAwkward) ? Options.RestoreAwkwardMode : EnvAwkward;
+	const bool bRateRule = RateThreshold >= 0.0;
+	const bool bLog = spike::Enabled();
+	const std::string LogPrefix = bLog ? spike::Prefix() + "," + std::to_string(GSpikeSolve) + "," + std::to_string(GSpikeIteration) + "," + std::to_string(P.FreeBodies.size()) + "," + std::to_string(P.DofCount) + "," + std::to_string(GSpikeNullDim) + "," + (FullRankStates ? "1" : "0") : std::string();
+	int Closing = 0;
+	GSpikeRates.assign(P.Joints.size(), {std::numeric_limits<double>::quiet_NaN(), std::numeric_limits<double>::quiet_NaN(), std::numeric_limits<double>::quiet_NaN(), std::numeric_limits<double>::quiet_NaN()});
+	GSpikeActions.assign(P.Joints.size(), {"", "", "", ""});
 	Restoration Outcome = Restoration::None;
 	bool bBlocked = false;
 	for (std::size_t I = 0; I < P.Joints.size(); ++I)
@@ -699,12 +736,40 @@ Restoration RestoreInadmissibleReleases(const Problem& P, const StandingOptions&
 			const double GapM = Dot(Delta, J.Normal);
 			const Vec3 TangentialM = Sub(Delta, Scale(GapM, J.Normal));
 			const double HeldSizeN = Length(State.HeldN[C]);
+			const bool bOpenBefore = State.Status[C] == CornerStatus::Open;
 			const bool bCloses = State.Status[C] == CornerStatus::Open && GapM < -ToleranceM;
 			const bool bSlidesWithFriction = State.Status[C] == CornerStatus::Slipping && HeldSizeN > 0.0 &&
 				Dot(TangentialM, State.HeldN[C]) > ToleranceM * HeldSizeN;
+			const double Rate = ScaleM > 0.0 ? -GapM / ScaleM : 0.0;
+			const bool bHistoryBlocks = FullRankStates == nullptr || (*FullRankStates)[I].Status[C] == CornerStatus::Open;
+			const double FullRankNormalN = FullRankStates ? Trial(J, C, FullRankX).NormalN : 0.0;
+			const char* Action = "";
 			if (bCloses)
 			{
-				if (FullRankStates == nullptr || (*FullRankStates)[I].Status[C] == CornerStatus::Open)
+				++Closing;
+				if (bRateRule)
+				{
+					if (!(Rate > RateThreshold))
+					{
+						Action = "rate-left-open";
+					}
+					else
+					{
+						const bool bAwkward = bHistoryBlocks || !(FullRankNormalN > 0.0);
+						if (J.bReleasesSlip && !(bAwkward && AwkwardMode == 1.0))
+						{
+							ReEnterSlipping(J, C, TangentialM, FullRankNormalN, State);
+						}
+						else
+						{
+							State.Status[C] = CornerStatus::Stuck;
+							State.HeldN[C] = Vec3{};
+						}
+						Outcome = Restoration::Restored;
+						Action = bHistoryBlocks ? "rate-closed-against-history" : "rate-closed";
+					}
+				}
+				else if (bHistoryBlocks)
 				{
 					if (!bListed)
 					{
@@ -712,22 +777,26 @@ Restoration RestoreInadmissibleReleases(const Problem& P, const StandingOptions&
 						bListed = true;
 					}
 					bBlocked = true;
-					continue;
+					Action = "blocked";
 				}
-				if (bBlocked)
+				else if (bBlocked)
 				{
-					continue;
-				}
-				if (J.bReleasesSlip)
-				{
-					ReEnterSlipping(J, C, TangentialM, Trial(J, C, FullRankX).NormalN, State);
+					Action = "skipped-after-block";
 				}
 				else
 				{
-					State.Status[C] = CornerStatus::Stuck;
-					State.HeldN[C] = Vec3{};
+					if (J.bReleasesSlip)
+					{
+						ReEnterSlipping(J, C, TangentialM, FullRankNormalN, State);
+					}
+					else
+					{
+						State.Status[C] = CornerStatus::Stuck;
+						State.HeldN[C] = Vec3{};
+					}
+					Outcome = Restoration::Restored;
+					Action = "restored";
 				}
-				Outcome = Restoration::Restored;
 			}
 			else if (bSlidesWithFriction && !bBlocked)
 			{
@@ -735,9 +804,31 @@ Restoration RestoreInadmissibleReleases(const Problem& P, const StandingOptions&
 				State.HeldN[C] = Vec3{};
 				Outcome = Restoration::Restored;
 			}
+			if (bLog && State.Status[C] == CornerStatus::Open && GapM < 0.0 && !bCloses)
+			{
+				Action = "within-tolerance";
+			}
+			if (bOpenBefore && GapM < 0.0)
+			{
+				const std::string A = Action;
+				GSpikeRates[I][C] = Rate;
+				GSpikeActions[I][C] = A == "restored" || A == "rate-closed" ? "restored" : A == "rate-closed-against-history" ? "restored_against_history" : A == "blocked" ? "blocked_by_history" : A == "rate-left-open" ? "left_open_below_threshold" : A == "skipped-after-block" ? "not_tried_after_block" : "within_tolerance";
+			}
+			if (bLog && *Action != 0)
+			{
+				char Buffer[512];
+				std::snprintf(Buffer, sizeof(Buffer), "CORNER,%s,%u,%d,%d,%zu,%.6e,%.6e,%.6e,%s,%.6e,%d,%d,%d,%s", LogPrefix.c_str(), J.Id.Index, SpikeBody(P, J.OffsetA), SpikeBody(P, J.OffsetB), C, Rate, GapM, ScaleM,
+					FullRankStates ? SpikeStatus((*FullRankStates)[I].Status[C]) : "none", FullRankNormalN, bHistoryBlocks ? 1 : 0, J.bReleasesSlip ? 1 : 0, J.bReleasesOpening ? 1 : 0, Action);
+				spike::Line(Buffer);
+			}
 		}
 	}
-	return bBlocked ? Restoration::Undecided : Outcome;
+	const Restoration Final = bBlocked ? Restoration::Undecided : Outcome;
+	if (bLog)
+	{
+		spike::Line("CALL," + LogPrefix + "," + std::to_string(Closing) + "," + (Final == Restoration::Undecided ? "Undecided" : Final == Restoration::Restored ? "Restored" : "None"));
+	}
+	return Final;
 }
 
 double CohesiveDissipationW(const Problem& P, const StandingOptions& Options, const std::vector<JointState>& States, const Eigen::VectorXd& Motion)
@@ -985,6 +1076,8 @@ void RecordPass(const Problem& P, const StandingOptions& Options, const std::vec
 	const ElasticPassRecord* Previous = Passes.empty() ? nullptr : &Passes.back();
 	ElasticPassRecord Pass;
 	Pass.Iteration = Iteration;
+	Pass.Kind = GSpikeKind;
+	Pass.FreeMotions = GSpikeFree;
 	for (std::size_t I = 0; I < P.Joints.size(); ++I)
 	{
 		bool bIgnored = false;
@@ -997,6 +1090,8 @@ void RecordPass(const Problem& P, const StandingOptions& Options, const std::vec
 			Record.bFlipped[C] = Previous != nullptr && Previous->Joints[I].Corners[C] != Record.Corners[C];
 			Record.CornerNormalN[C] = Reading.Corners[C].NormalForceN;
 			Record.CornerShearN[C] = Reading.Corners[C].ShearForceN;
+			Record.ClosingRate[C] = GSpikeRestoreStep && I < GSpikeRates.size() ? GSpikeRates[I][C] : std::numeric_limits<double>::quiet_NaN();
+			Record.RestoreAction[C] = GSpikeRestoreStep && I < GSpikeActions.size() ? GSpikeActions[I][C] : "";
 		}
 		Record.NormalForceN = Reading.NormalForceN;
 		Record.ShearForceN = Reading.ShearForceN;
@@ -1057,7 +1152,7 @@ StandingResult FallRigid(const Problem& P, const StandingOptions& Options)
 	return Result;
 }
 
-StandingResult SolveProblem(const Problem& P, const StandingOptions& Options, PhaseTimings& Timings, Ending& E)
+StandingResult SolveProblemSpiked(const Problem& P, const StandingOptions& Options, PhaseTimings& Timings, Ending& E)
 {
 	StandingResult Result;
 	std::vector<JointState> States(P.Joints.size());
@@ -1107,6 +1202,8 @@ StandingResult SolveProblem(const Problem& P, const StandingOptions& Options, Ph
 				FullRankStates = States;
 				FullRankX = X;
 				bHaveFullRank = true;
+				GSpikeKind = "full_rank";
+				GSpikeFree = 0;
 				if (AdvanceActiveSet(P, Options, X, NeutralMotions, bOverstressed, States, Result, Timings, Iteration, E) == StepOutcome::Finished)
 				{
 					return Result;
@@ -1131,10 +1228,16 @@ StandingResult SolveProblem(const Problem& P, const StandingOptions& Options, Ph
 				const Eigen::VectorXd Motion = D * Projection;
 				X = profile::Timed(Timings.SolveSeconds, [&]() -> Eigen::VectorXd { return D * SolveInRange(F, Load); });
 				const std::vector<JointState> Solved = bRecord ? States : std::vector<JointState>{};
+				GSpikeIteration = Iteration;
+				GSpikeNullDim = static_cast<int>(Basis.size());
 				const Restoration Outcome = RestoreInadmissibleReleases(P, Options, Motion, bHaveFullRank ? &FullRankStates : nullptr, FullRankX, States, E.Blocking);
 				if (bRecord)
 				{
+					GSpikeKind = "restore";
+					GSpikeFree = static_cast<int>(Basis.size());
+					GSpikeRestoreStep = true;
 					RecordPass(P, Options, Solved, States, X, Iteration, E.Passes);
+					GSpikeRestoreStep = false;
 				}
 				if (Outcome == Restoration::Undecided)
 				{
@@ -1173,6 +1276,8 @@ StandingResult SolveProblem(const Problem& P, const StandingOptions& Options, Ph
 			FullRankX = X;
 			bHaveFullRank = true;
 		}
+		GSpikeKind = F.Rank == P.DofCount ? "full_rank" : "singular_neutral";
+		GSpikeFree = static_cast<int>(P.DofCount - F.Rank);
 		if (AdvanceActiveSet(P, Options, X, NeutralMotions, bOverstressed, States, Result, Timings, Iteration, E) == StepOutcome::Finished)
 		{
 			return Result;
@@ -1182,6 +1287,19 @@ StandingResult SolveProblem(const Problem& P, const StandingOptions& Options, Ph
 	Result.State = StandingState::Undecided;
 	E.End = SolveEnd::IterationCap;
 	return Result;
+}
+
+StandingResult SolveProblem(const Problem& P, const StandingOptions& Options, PhaseTimings& Timings, Ending& E)
+{
+	GSpikeSolve = ++GSpikeSolveCounter;
+	StandingResult R = SolveProblemSpiked(P, Options, Timings, E);
+	if (spike::Enabled())
+	{
+		const SolveEnd End = E.End;
+		const char* Name = End == SolveEnd::Converged ? "Converged" : End == SolveEnd::Mechanism ? "Mechanism" : End == SolveEnd::RestoreFailedClosed ? "RestoreFailedClosed" : End == SolveEnd::IterationCap ? "IterationCap" : End == SolveEnd::PowerCheckFailed ? "PowerCheckFailed" : End == SolveEnd::InvalidInput ? "InvalidInput" : "None";
+		spike::Line("END," + spike::Prefix() + "," + std::to_string(GSpikeSolve) + "," + std::to_string(R.ActiveSetIterations) + "," + std::to_string(P.FreeBodies.size()) + "," + std::to_string(P.DofCount) + "," + Name);
+	}
+	return R;
 }
 
 bool ChooseComponents(const Structure& Model, std::span<const BodyId> Only, std::vector<bool>& Chosen)

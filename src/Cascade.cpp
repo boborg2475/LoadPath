@@ -1,4 +1,5 @@
 #include "loadpath/Cascade.h"
+#include "loadpath/RestoreSpikeLog.h"
 
 #include "loadpath/Settings.h"
 #include "loadpath/Units.h"
@@ -553,9 +554,11 @@ private:
 		const AuthorityResult* Before = Previous;
 		const DebugSettings* Debug = Options.Authority.Standing.Debug;
 		const bool bRecord = Debug != nullptr && Debug->bRecordPasses;
+		struct PassReset { ~PassReset() { spike::SetCascadePass(0); } } ResetPass;
 		while (true)
 		{
 			const std::uint32_t Pass = Model.HighestPass() + 1;
+			spike::SetCascadePass(static_cast<int>(Pass));
 			std::vector<BodyLoad> PassLoads;
 			for (const BodyLoad& Load : Loads)
 			{
@@ -614,6 +617,7 @@ private:
 						CapLoads.push_back(Load);
 					}
 				}
+				spike::SetCascadePass(static_cast<int>(Pass + 1));
 				AuthorityResult Rejudged = Authority->Judge(Model, CapLoads, Options.Authority, &Last);
 				if (bRecord)
 				{

@@ -152,7 +152,9 @@ private:
 				OnlyKeys(*Object, Path,
 					{"max_active_set_iterations", "pivot_tolerance_relative", "dense_dof_limit", "stick_margin_relative", "held_force_tolerance_relative",
 						"dry_noise_floor_relative", "neutral_load_tolerance_relative", "admissibility_tolerance_relative", "unconstrained_component", "dry_reclose_factor",
-							"sparse_acceptance_margin", "open_tension_tolerance_relative", "close_compression_tolerance_relative"})) &&
+							"sparse_acceptance_margin", "open_tension_tolerance_relative", "close_compression_tolerance_relative", "restore_closing_rate_threshold", "restore_awkward_mode"})) &&
+			(Object == nullptr || Find(*Object, "restore_closing_rate_threshold") == nullptr || Double(Object, Path, "restore_closing_rate_threshold", Out.RestoreClosingRateThreshold)) &&
+			(Object == nullptr || Find(*Object, "restore_awkward_mode") == nullptr || Double(Object, Path, "restore_awkward_mode", Out.RestoreAwkwardMode)) &&
 			Int(Object, Path, "max_active_set_iterations", Out.MaxActiveSetIterations) && Double(Object, Path, "pivot_tolerance_relative", Out.PivotToleranceRelative) &&
 			Int(Object, Path, "dense_dof_limit", Out.DenseDofLimit) && Double(Object, Path, "stick_margin_relative", Out.StickMarginRelative) &&
 			Double(Object, Path, "held_force_tolerance_relative", Out.HeldForceToleranceRelative) && Double(Object, Path, "dry_noise_floor_relative", Out.DryNoiseFloorRelative) &&
@@ -224,6 +226,8 @@ StandingOptions ToStandingOptions(const Settings& Value, Vec3 Gravity)
 	Options.SparseAcceptanceMargin = Value.Solver.SparseAcceptanceMargin;
 	Options.OpenTensionToleranceRelative = Value.Solver.OpenTensionToleranceRelative;
 	Options.CloseCompressionToleranceRelative = Value.Solver.CloseCompressionToleranceRelative;
+	Options.RestoreClosingRateThreshold = Value.Solver.RestoreClosingRateThreshold;
+	Options.RestoreAwkwardMode = Value.Solver.RestoreAwkwardMode;
 	Options.Debug = &Value.Debug;
 	return Options;
 }
