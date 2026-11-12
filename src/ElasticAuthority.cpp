@@ -34,10 +34,10 @@ bool SameVector(const Vec3& A, const Vec3& B)
 
 bool SameStanding(const StandingOptions& A, const StandingOptions& B)
 {
-	const auto& [AGravity, AIterations, APivot, ADense, AStick, AHeld, ADry, AReclose, ASparseMargin, AOpenTolerance, ACloseTolerance, ANeutral, AAdmissible, AUnconstrained, ADebug] = A;
-	const auto& [BGravity, BIterations, BPivot, BDense, BStick, BHeld, BDry, BReclose, BSparseMargin, BOpenTolerance, BCloseTolerance, BNeutral, BAdmissible, BUnconstrained, BDebug] = B;
+	const auto& [AGravity, AIterations, APivot, ADense, AStick, AHeld, ADry, AReclose, ASparseMargin, AOpenTolerance, ACloseTolerance, ASoft, ASoftRatio, ANeutral, AAdmissible, AUnconstrained, ADebug] = A;
+	const auto& [BGravity, BIterations, BPivot, BDense, BStick, BHeld, BDry, BReclose, BSparseMargin, BOpenTolerance, BCloseTolerance, BSoft, BSoftRatio, BNeutral, BAdmissible, BUnconstrained, BDebug] = B;
 	return SameVector(AGravity, BGravity) && AIterations == BIterations && APivot == BPivot && ADense == BDense && AStick == BStick && AHeld == BHeld &&
-		ADry == BDry && AReclose == BReclose && ASparseMargin == BSparseMargin && AOpenTolerance == BOpenTolerance && ACloseTolerance == BCloseTolerance && ANeutral == BNeutral && AAdmissible == BAdmissible && AUnconstrained == BUnconstrained && ADebug == BDebug;
+		ADry == BDry && AReclose == BReclose && ASparseMargin == BSparseMargin && AOpenTolerance == BOpenTolerance && ACloseTolerance == BCloseTolerance && ASoft == BSoft && ASoftRatio == BSoftRatio && ANeutral == BNeutral && AAdmissible == BAdmissible && AUnconstrained == BUnconstrained && ADebug == BDebug;
 }
 
 bool SameOptions(const AuthorityOptions& A, const AuthorityOptions& B)

@@ -1,5 +1,9 @@
 #include "loadpath/StandingAuthority.h"
 
+#ifdef _MSC_VER
+#pragma warning(disable : 4996)
+#endif
+
 #include "loadpath/Settings.h"
 
 #include "EigenInclude.h"
@@ -9,6 +13,8 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstdio>
+#include <cstdlib>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
@@ -1057,6 +1063,178 @@ StandingResult FallRigid(const Problem& P, const StandingOptions& Options)
 	return Result;
 }
 
+struct SoftSprings
+{
+	double Relative = 0.0;
+	double MechanismRatio = 0.0;
+};
+
+SoftSprings EffectiveSoftSprings(const StandingOptions& Options)
+{
+	SoftSprings Soft{Options.SoftSpringRelative, Options.SoftSpringMechanismRatio};
+	if (const char* Value = std::getenv("LOADPATH_SOFT_SPRING"); Value != nullptr && Soft.Relative == 0.0)
+	{
+		Soft.Relative = std::atof(Value);
+	}
+	if (const char* Value = std::getenv("LOADPATH_SOFT_RATIO"); Value != nullptr)
+	{
+		Soft.MechanismRatio = std::atof(Value);
+	}
+	return Soft;
+}
+
+Eigen::VectorXd ScaledSoftDiagonal(const Problem& P, double Relative)
+{
+	Eigen::VectorXd Diagonal = Eigen::VectorXd::Zero(P.DofCount);
+	const std::vector<JointState> Closed(P.Joints.size());
+	ForEachStiffnessBlock(P, Closed, [&](int Row, int Col, const Eigen::Matrix<double, 6, 6>& Block) {
+		if (Row == Col)
+		{
+			Diagonal.segment(Row, 6) += Block.diagonal();
+		}
+	});
+	return Relative * Diagonal.cwiseProduct(P.Scaling).cwiseProduct(P.Scaling);
+}
+
+std::optional<Eigen::VectorXd> SolveSoft(const Problem& P, const StandingOptions& Options, const std::vector<JointState>& States, const Eigen::VectorXd& SoftDiagonal, const Eigen::VectorXd& Load, PhaseTimings& Timings)
+{
+	if (P.DofCount > Options.DenseDofLimit)
+	{
+		SparseMatrix K = profile::Timed(Timings.AssemblySeconds, [&] { return AssembleScaledSparseStiffness(P, States); });
+		for (int I = 0; I < P.DofCount; ++I)
+		{
+			K.coeffRef(I, I) += SoftDiagonal[I];
+		}
+		if (!IsAllFinite(K))
+		{
+			return std::nullopt;
+		}
+		SparseFactor Factor;
+		profile::AnalyseAndFactorise(Factor, K, Timings);
+		if (Factor.info() != Eigen::Success)
+		{
+			return std::nullopt;
+		}
+		return profile::Timed(Timings.SolveSeconds, [&]() -> Eigen::VectorXd { return Factor.solve(Load); });
+	}
+	const auto D = P.Scaling.asDiagonal();
+	Eigen::MatrixXd K = profile::Timed(Timings.AssemblySeconds, [&]() -> Eigen::MatrixXd { return D * AssembleStiffness(P, States) * D; });
+	K.diagonal() += SoftDiagonal;
+	if (!IsAllFinite(K))
+	{
+		return std::nullopt;
+	}
+	const Eigen::LDLT<Eigen::MatrixXd> Factor = profile::Timed(Timings.FactorizationSeconds, [&] { return Eigen::LDLT<Eigen::MatrixXd>(K); });
+	if (Factor.info() != Eigen::Success)
+	{
+		return std::nullopt;
+	}
+	return profile::Timed(Timings.SolveSeconds, [&]() -> Eigen::VectorXd { return Factor.solve(Load); });
+}
+
+std::vector<double> SoftForceRatios(const Problem& P, const Eigen::VectorXd& SoftDiagonal, const Eigen::VectorXd& ScaledX)
+{
+	const double MeanLoadN = P.ForceScaleN / static_cast<double>(P.FreeBodies.size());
+	std::vector<double> Ratios(P.FreeBodies.size());
+	for (std::size_t K = 0; K < P.FreeBodies.size(); ++K)
+	{
+		const int O = static_cast<int>(K) * DofPerBody;
+		Ratios[K] = SoftDiagonal.segment(O, DofPerBody).cwiseProduct(ScaledX.segment(O, DofPerBody)).norm() / MeanLoadN;
+	}
+	return Ratios;
+}
+
+void PrintSoftHistogram(const std::vector<double>& Ratios, double Threshold)
+{
+	if (std::getenv("LOADPATH_SOFT_HIST") == nullptr)
+	{
+		return;
+	}
+	std::array<int, 40> Bins{};
+	int Above = 0;
+	for (const double R : Ratios)
+	{
+		const int Bin = std::clamp(static_cast<int>(std::floor(std::log10(std::max(R, 1e-30)))) + 30, 0, 39);
+		++Bins[static_cast<std::size_t>(Bin)];
+		Above += R > Threshold ? 1 : 0;
+	}
+	std::fprintf(stderr, "SOFTHIST bodies=%zu above=%d threshold=%g :", Ratios.size(), Above, Threshold);
+	for (std::size_t B = 0; B < Bins.size(); ++B)
+	{
+		if (Bins[B] != 0)
+		{
+			std::fprintf(stderr, " [1e%d,1e%d):%d", static_cast<int>(B) - 30, static_cast<int>(B) - 29, Bins[B]);
+		}
+	}
+	std::fprintf(stderr, "\n");
+	if (const char* Path = std::getenv("LOADPATH_SOFT_DUMP"); Path != nullptr)
+	{
+		if (std::FILE* F = std::fopen(Path, "a"))
+		{
+			for (std::size_t K = 0; K < Ratios.size(); ++K)
+			{
+				std::fprintf(F, "%zu,%.6e\n", K, Ratios[K]);
+			}
+			std::fclose(F);
+		}
+	}
+}
+
+StandingResult SolveSoftProblem(const Problem& P, const StandingOptions& Options, const SoftSprings& Soft, PhaseTimings& Timings, Ending& E)
+{
+	StandingResult Result;
+	std::vector<JointState> States(P.Joints.size());
+	Eigen::VectorXd X = Eigen::VectorXd::Zero(P.DofCount);
+	bool bOverstressed = false;
+	const auto D = P.Scaling.asDiagonal();
+	const Eigen::VectorXd SoftDiagonal = ScaledSoftDiagonal(P, Soft.Relative);
+	const std::vector<Eigen::VectorXd> NeutralMotions;
+	for (int Iteration = 1; Iteration <= Options.MaxActiveSetIterations; ++Iteration)
+	{
+		Result.ActiveSetIterations = Iteration;
+		const Eigen::VectorXd Load = profile::Timed(Timings.AssemblySeconds, [&]() -> Eigen::VectorXd { return D * AssembleLoad(P, States); });
+		const std::optional<Eigen::VectorXd> ScaledX = SolveSoft(P, Options, States, SoftDiagonal, Load, Timings);
+		if (!ScaledX)
+		{
+			Result.State = StandingState::InvalidInput;
+			E.End = SolveEnd::InvalidInput;
+			return Result;
+		}
+		X = D * *ScaledX;
+		if (AdvanceActiveSet(P, Options, X, NeutralMotions, bOverstressed, States, Result, Timings, Iteration, E) == StepOutcome::Continue)
+		{
+			continue;
+		}
+		if (Result.State != StandingState::Stands && Result.State != StandingState::Overstressed)
+		{
+			return Result;
+		}
+		const std::vector<double> Ratios = SoftForceRatios(P, SoftDiagonal, *ScaledX);
+		PrintSoftHistogram(Ratios, Soft.MechanismRatio);
+		const double Largest = X.cwiseAbs().maxCoeff();
+		for (std::size_t K = 0; K < P.FreeBodies.size(); ++K)
+		{
+			if (!(Ratios[K] > Soft.MechanismRatio))
+			{
+				continue;
+			}
+			const int O = static_cast<int>(K) * DofPerBody;
+			Result.UnconstrainedBodies.push_back(P.FreeBodies[K]);
+			Result.Mechanism.push_back(MechanismMotion{P.FreeBodies[K], Vec3{X(O + 0) / Largest, X(O + 1) / Largest, X(O + 2) / Largest}, Vec3{X(O + 3) / Largest, X(O + 4) / Largest, X(O + 5) / Largest}});
+		}
+		if (!Result.UnconstrainedBodies.empty())
+		{
+			Result.State = StandingState::Mechanism;
+			E.End = SolveEnd::Mechanism;
+		}
+		return Result;
+	}
+	Result.Readings = ReadAll(P, Options, States, X, bOverstressed, Timings);
+	Result.State = StandingState::Undecided;
+	E.End = SolveEnd::IterationCap;
+	return Result;
+}
+
 StandingResult SolveProblem(const Problem& P, const StandingOptions& Options, PhaseTimings& Timings, Ending& E)
 {
 	StandingResult Result;
@@ -1081,6 +1259,10 @@ StandingResult SolveProblem(const Problem& P, const StandingOptions& Options, Ph
 		}
 		E.End = SolveEnd::Mechanism;
 		return profile::Timed(Timings.ReadoutSeconds, [&] { return FallRigid(P, Options); });
+	}
+	if (const SoftSprings Soft = EffectiveSoftSprings(Options); Soft.Relative > 0.0)
+	{
+		return SolveSoftProblem(P, Options, Soft, Timings, E);
 	}
 	const bool bRecord = IsRecording(Options);
 	std::vector<JointState> FullRankStates;
