@@ -396,8 +396,11 @@ solves", amended after review). Still to do, in order:
   `viewer/reasons.json`. Cause found 2026-11-10 (14 adjacent cracked crown joints opened in one
   solver step; green at `crack_band_fraction` 0.02 and below, where A2.5 turns red): findings and the unbuilt plan are in
   `decisions/2026-11-10-a14-undecided-findings-and-plan.md`. The owner decided 2026-11-10 on a
-  different fix, a closing-rate check replacing the history check in the restore rule (next item,
-  not built); the back-off plan in that note is kept only as a fallback.
+  different fix, a closing-rate check replacing the history check in the restore rule; the back-off
+  plan in that note is kept only as a fallback. A spike measured the rule 2026-11-11 and the owner
+  decided 2026-11-12 to build it at threshold 0.1 with no stopping rule (in progress): measurements,
+  the five suite tests it turns red and what is not yet measured are in
+  `decisions/2026-11-12-closing-rate-restore-rule.md`.
 - **For the owner, from the build and the review** (each change fixed as a plan error the oracle
   shows; the plan's Built section has the reasons):
   - The A2.1 band is [0.75, 1.00), moved from the ratified [0.80, 1.00) because n = 17 reads 0.797
