@@ -103,11 +103,39 @@ Measured on the spike at 0.1, slipping re-entry, default suite only.
 - **No clean gap in the rate across fixtures.** Corners the old rule blocked sit at 0.94 (arch keystone), 0.18
   (two-brick stack), 0.007 to 0.79 (bridge), 0.002 to 1.0 (oracle property test), 1.3e-9 to 7.2e-4 (Orduna
   pile).
-- **Not measured:** the shed, the 3.13 wall, the warehouse, the Slow and Measure tiers, thresholds between 0.1
-  and 0.5.
+- **Not measured:** the 3.13 wall, the Slow tier, the Measure rows other than the four in §7, thresholds
+  between 0.1 and 0.5.
 
 ## 6. The released-cluster picture
 
 `ReleasedCluster::Motion` keeps one body's mechanism motion and the viewer applies it to the whole cluster, so
 a fold is drawn as a rigid tip about one corner. The spike records every body's own motion and the viewer
 moves each body by it. The owner approved that change on 2026-11-12.
+
+## 7. The shed and the warehouse (measured 2026-11-12 on the spike build)
+
+`Measure.Scale.Shed`, `ShedPostRemovedWarm`, `Warehouse` and `WarehousePostRemovedWarm`, one per process,
+Release, at the old rule and at 1e-9, 1e-3, 0.01, 0.1, 0.5 and 0.95. Times are medians of 3 to 5 runs taken
+while another build was running, so differences under about 20% are noise.
+
+- **The rule fixes neither structure's undecided component.**
+  - Shed, one post removed: a 15-body component. Old rule: `RestoreFailedClosed` after 18 iterations. Rule at
+    1e-9 to 0.5: `IterationCap` at 50. Still undecided, so the forced release takes the same component. At
+    0.95 it ends Mechanism after 29 iterations, but 0.95 is wrong for the arch (§4).
+  - Warehouse, one post removed: a 33-body component ends `IterationCap` at 50 under every setting. The
+    restore step never runs anywhere in the warehouse, so the rule cannot change it.
+- **Standing, nothing removed:** both stand under every setting.
+- **What was not read:** the measurement prints the end state and the solver endings, not the released bodies.
+  That the release is unchanged is inferred from the undecided component being the same size.
+
+| Row | Old rule | 1e-3 | 0.01 | 0.1 | 0.5 |
+|---|---|---|---|---|---|
+| Shed, one elastic solve | 50 ms | 39 ms | 66 ms | 52 ms | 48 ms |
+| Shed, post removed, warm cascade | 5.5 ms | 9.5 ms | 11.8 ms | 11.4 ms | 10.7 ms |
+| Warehouse, one elastic solve | 510 ms | 496 ms | 507 ms | 510 ms | 485 ms |
+| Warehouse, post removed, cold cascade | 580 ms | 549 ms | 530 ms | 550 ms | 530 ms |
+| Warehouse, post removed, warm cascade | 55 ms | 49 ms | 49 ms | 51 ms | 60 ms |
+
+The one real change is the shed's warm cascade, about 6 ms to about 11 ms: its undecided component now runs
+to the 50-iteration cap where the old rule stopped at 18. The warehouse rows do identical work under every
+setting.
