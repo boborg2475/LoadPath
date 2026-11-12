@@ -247,7 +247,7 @@ int Severity(ComponentVerdict Verdict)
 
 SolveEnd ForcedReasonOf(SolveEnd End)
 {
-	return End == SolveEnd::IterationCap || End == SolveEnd::RestoreFailedClosed || End == SolveEnd::PowerCheckFailed ? End : SolveEnd::None;
+	return End == SolveEnd::IterationCap || End == SolveEnd::PowerCheckFailed ? End : SolveEnd::None;
 }
 
 void ResolveUndecided(AuthorityResult& Judged, UndecidedResolution Resolution, std::array<std::uint32_t, SolveEndCount>& Tally)

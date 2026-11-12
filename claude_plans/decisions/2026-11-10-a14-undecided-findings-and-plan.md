@@ -1,4 +1,4 @@
-Status: the findings (§1 to §5) stand. The plan (§6) is superseded by the owner's 2026-11-10 decision: a closing-rate check replaces the history check in the restore rule; the back-off in §6 is kept only as a fallback. Nothing here is built.
+Status: the findings (§1 to §5) stand. The plan (§6) is superseded by the owner's 2026-11-10 decision: a closing-rate check replaces the history check in the restore rule; the back-off in §6 is kept only as a fallback and was never built. The closing-rate rule was built 2026-11-12 (`2026-11-12-closing-rate-restore-rule.md`), and it removed `RestoreFailedClosed`, so §1 to §5 describe the solver as it was.
 
 # A1.4's Undecided: why it happens and a plan to remove it (2026-11-10)
 

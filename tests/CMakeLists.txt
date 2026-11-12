@@ -35,6 +35,7 @@ add_executable(loadpath_tests
 	GeometryAnchorsTest.cpp
 	DryCornerNoiseFloorTest.cpp
 	NonDryHysteresisTest.cpp
+	RestoreClosingRateTest.cpp
 	StandingFieldPropertyTest.cpp
 	StandingLateralDryWallTest.cpp
 	StandingLateralLimeWallTest.cpp

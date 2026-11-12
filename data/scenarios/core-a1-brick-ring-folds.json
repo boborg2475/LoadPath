@@ -1,7 +1,6 @@
 {
   "title": "Core A1.4: a brick-on-edge ring past its fall edge folds",
   "summary": "A 133-voussoir ring of radius 2.75 m (at least 1.05 times the oracle's fall edge of 2.60 m), below least thickness for its span. The imposts crack, then the crown and the haunches hinge; every voussoir falls and the piers stand.",
-  "deferred": "forced collapse over-release (decisions 2026-11-08 section 1, a known gap): the third pass reads RestoreFailedClosed and releases the whole 231-body component, piers included; green when the solver proves the fold as a Mechanism",
   "tier": "slow_in_debug",
   "build": [
     { "name": "ground", "size": [7.0, 0.6, 0.2], "centre": [0, 0, -0.1], "grounded": true },

@@ -49,6 +49,8 @@ struct StandingOptions
 	double OpenTensionToleranceRelative = 1e-12;
 	// An open non-dry tensionless corner re-closes only above this times the force scale; dry corners ignore it.
 	double CloseCompressionToleranceRelative = 1e-12;
+	// Under a motion the load drives, an open corner is re-closed only when its closing rate, -gap / motion scale (the largest corner movement in the component), exceeds this.
+	double RestoreClosingRateThreshold = 0.1;
 	// A rank-deficient component is a mechanism only when the load's null-space projection exceeds this times the load.
 	double NeutralLoadToleranceRelative = 1e-12;
 	// A corner closes or slides against friction in a null motion when it moves more than this times the motion's scale.
@@ -122,7 +124,6 @@ enum class SolveEnd : std::uint8_t
 	None,
 	Converged,
 	Mechanism,
-	RestoreFailedClosed,
 	PowerCheckFailed,
 	IterationCap,
 	InvalidInput
@@ -163,8 +164,6 @@ struct StandingComponent
 	// Empty unless Options.Debug->bRecordPasses; recording changes no answer.
 	std::vector<ElasticPassRecord> Passes;
 	SolveEnd End = SolveEnd::None;
-	// RestoreFailedClosed only: the interfaces whose corners blocked the restore.
-	std::vector<InterfaceId> Blocking;
 };
 
 struct StandingResult

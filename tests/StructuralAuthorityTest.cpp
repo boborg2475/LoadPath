@@ -188,7 +188,7 @@ TEST_CASE("Statics.Combined.PureElasticStandsPassesThrough")
 	CHECK(Only.Release.empty());
 }
 
-TEST_CASE("Parked.Statics.Combined.TwoBrickStackPastFrictionCollapses")
+TEST_CASE("Statics.Combined.TwoBrickStackPastFrictionCollapses")
 {
 	const double Friction = 0.6;
 	const double LambdaX = 0.625;

@@ -34,10 +34,10 @@ bool SameVector(const Vec3& A, const Vec3& B)
 
 bool SameStanding(const StandingOptions& A, const StandingOptions& B)
 {
-	const auto& [AGravity, AIterations, APivot, ADense, AStick, AHeld, ADry, AReclose, ASparseMargin, AOpenTolerance, ACloseTolerance, ANeutral, AAdmissible, AUnconstrained, ADebug] = A;
-	const auto& [BGravity, BIterations, BPivot, BDense, BStick, BHeld, BDry, BReclose, BSparseMargin, BOpenTolerance, BCloseTolerance, BNeutral, BAdmissible, BUnconstrained, BDebug] = B;
+	const auto& [AGravity, AIterations, APivot, ADense, AStick, AHeld, ADry, AReclose, ASparseMargin, AOpenTolerance, ACloseTolerance, ARestoreRate, ANeutral, AAdmissible, AUnconstrained, ADebug] = A;
+	const auto& [BGravity, BIterations, BPivot, BDense, BStick, BHeld, BDry, BReclose, BSparseMargin, BOpenTolerance, BCloseTolerance, BRestoreRate, BNeutral, BAdmissible, BUnconstrained, BDebug] = B;
 	return SameVector(AGravity, BGravity) && AIterations == BIterations && APivot == BPivot && ADense == BDense && AStick == BStick && AHeld == BHeld &&
-		ADry == BDry && AReclose == BReclose && ASparseMargin == BSparseMargin && AOpenTolerance == BOpenTolerance && ACloseTolerance == BCloseTolerance && ANeutral == BNeutral && AAdmissible == BAdmissible && AUnconstrained == BUnconstrained && ADebug == BDebug;
+		ADry == BDry && AReclose == BReclose && ASparseMargin == BSparseMargin && AOpenTolerance == BOpenTolerance && ACloseTolerance == BCloseTolerance && ARestoreRate == BRestoreRate && ANeutral == BNeutral && AAdmissible == BAdmissible && AUnconstrained == BUnconstrained && ADebug == BDebug;
 }
 
 bool SameOptions(const AuthorityOptions& A, const AuthorityOptions& B)
@@ -320,10 +320,6 @@ private:
 
 	static std::vector<InterfaceId> UnsettledOf(const StandingComponent& Part)
 	{
-		if (Part.End == SolveEnd::RestoreFailedClosed)
-		{
-			return Part.Blocking;
-		}
 		std::vector<InterfaceId> Out;
 		if (Part.End != SolveEnd::IterationCap || Part.Passes.empty())
 		{

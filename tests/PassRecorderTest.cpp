@@ -44,7 +44,6 @@ const char* EndName(SolveEnd End)
 	case SolveEnd::None: return "None";
 	case SolveEnd::Converged: return "Converged";
 	case SolveEnd::Mechanism: return "Mechanism";
-	case SolveEnd::RestoreFailedClosed: return "RestoreFailedClosed";
 	case SolveEnd::PowerCheckFailed: return "PowerCheckFailed";
 	case SolveEnd::IterationCap: return "IterationCap";
 	case SolveEnd::InvalidInput: return "InvalidInput";
@@ -205,7 +204,6 @@ TEST_CASE("Statics.Recorder.TheEndReasonNamesWhyTheSolveStopped")
 		INFO("end " << EndName(R.Components[0].End));
 		CHECK(R.State == StandingState::Stands);
 		CHECK(R.Components[0].End == SolveEnd::Converged);
-		CHECK(R.Components[0].Blocking.empty());
 	}
 	SUBCASE("an ungrounded body is a mechanism")
 	{
@@ -238,7 +236,6 @@ TEST_CASE("Statics.Recorder.TheEndReasonNamesWhyTheSolveStopped")
 		INFO("end " << EndName(R.Components[0].End));
 		CHECK(R.State == StandingState::Undecided);
 		CHECK(R.Components[0].End == SolveEnd::IterationCap);
-		CHECK(R.Components[0].Blocking.empty());
 	}
 }
 

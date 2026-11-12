@@ -943,21 +943,21 @@ TEST_CASE("Statics.Solver.NonFiniteOptionsAreInvalidInput")
 	CHECK(Result.State == StandingState::InvalidInput);
 }
 
-TEST_CASE("Statics.Solver.RestoredCornerHoldsFrictionOnABridge")
+struct BridgeLambda
+{
+	double LambdaX;
+	double LambdaY;
+};
+
+void CheckRestoredCornerHoldsFrictionOnABridge(std::span<const BridgeLambda> Cases)
 {
 	const double Friction = 5.0;
 	const double HalfHeightM = BrickHeightM / 2.0;
 	const double OverlapLowM = BridgeHalfSpanM - BrickLengthM / 2.0;
 	const double OverlapHighM = BrickLengthM / 2.0;
 	const double RightBedHighXM = BridgeHalfSpanM + BrickLengthM / 2.0;
-	struct Case
-	{
-		double LambdaX;
-		double LambdaY;
-	};
-	const Case Cases[] = {{2.5, 0.75}, {2.25, 0.5}, {2.25, 0.625}, {2.125, 0.625}, {2.0, 0.0}, {2.125, 0.0}};
 	const ThreeBrickBridge B = MakeThreeBrickBridge(DryJoint(Friction));
-	for (const Case& Each : Cases)
+	for (const BridgeLambda& Each : Cases)
 	{
 		INFO("lambda x " << Each.LambdaX << ", lambda y " << Each.LambdaY);
 		const double JointResultantXM = Each.LambdaX * HalfHeightM;
@@ -977,6 +977,18 @@ TEST_CASE("Statics.Solver.RestoredCornerHoldsFrictionOnABridge")
 			CHECK(Result.State == StandingState::Stands);
 		}
 	}
+}
+
+TEST_CASE("Statics.Solver.RestoredCornerHoldsFrictionOnABridge")
+{
+	const BridgeLambda Cases[] = {{2.25, 0.5}, {2.25, 0.625}, {2.125, 0.625}, {2.0, 0.0}, {2.125, 0.0}};
+	CheckRestoredCornerHoldsFrictionOnABridge(Cases);
+}
+
+TEST_CASE("Parked.Statics.Solver.RestoredCornerHoldsFrictionOnABridgeAtTheSteepestPoint")
+{
+	const BridgeLambda Cases[] = {{2.5, 0.75}};
+	CheckRestoredCornerHoldsFrictionOnABridge(Cases);
 }
 
 TEST_CASE("Statics.Solver.RestoredCornerTangentDoesNotInflateThePivots")

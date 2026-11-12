@@ -352,8 +352,7 @@ public:
   The slice-4 kinematic certificate referees Mechanism verdicts as well as Undecided ones, and a
   host treats a combined Collapses as a release. A neutral singular set (zero load
   projection) reads Stands, so Stands does not require a non-singular stiffness.
-- **Undecided**: the active set did not converge within the cap, a restoration needed a
-  value the last full-rank solve does not supply (the fail-closed clause below), or a
+- **Undecided**: the active set did not converge within the cap, or a
   null-space motion's load power did not exceed the cohesion it would break (the readings are
   then the last full-rank solve's, and an interface's utilisation can read +inf there where the
   Mechanism path read a finite value). Never Stands, never a release.
@@ -491,8 +490,13 @@ public:
   joint, keeping its tangential reference and not counting as a re-closure (the restore step
   rebuilds the full-rank state, it is not an iterate); on a dry joint slipping with held force `μ · N⁺` taken from **that corner's own**
   normal in the last full-rank solve, opposite the motion's tangential part, and zero transverse
-  tangent on the re-entry pass. If that corner was open in the last full-rank solve too (no
-  physical value exists), the component is `Undecided`. Nothing is ever seeded from a singular
+  tangent on the re-entry pass. Under a motion the load drives, only a corner whose closing rate,
+  `-gap / motion scale` (its closing movement over the largest corner movement in the component), exceeds
+  `solver.restore_closing_rate_threshold` (default 0.1, `StandingOptions::RestoreClosingRateThreshold`;
+  owner decision 2026-11-12, [decisions/2026-11-12-closing-rate-restore-rule.md](decisions/2026-11-12-closing-rate-restore-rule.md))
+  is restored; a slower one stays open. A corner open in the last full-rank solve too is restored
+  like any other, re-entering with that solve's normal force, or zero when there has been no
+  full-rank solve. The restore step never ends a solve Undecided. Nothing is ever seeded from a singular
   solution. Three clauses drafted with this ruling are **withdrawn** (third review,
   2026-10-11), none can produce a false release: a second restoration of the same corner as
   `Undecided` is reachable at 34 of 4,488 probe points, 32 end Undecided anyway and the other
@@ -512,7 +516,7 @@ public:
   with the released corners marked; they are informative, not a certificate, and may show a
   dry slipping corner that re-entered with zero held force in tension, which reads `+inf` on
   the tension axis. An undecided component's readings come from the last full-rank solve on
-  the fail-closed path (the current pass when there is none, which no fixture reaches) and
+  the fail-closed path, which is now only `PowerCheckFailed` (the current pass when there is none, which no fixture reaches), and
   from the last pass on the cap path; neither is an equilibrium field (slipping corners read
   the held force while the solve also carried the transverse spring). **Slice 3 consumes
   readings only from standing components.**
@@ -1336,7 +1340,7 @@ struct SolverSettings  { int MaxActiveSetIterations = 50; double PivotToleranceR
                          double StickMarginRelative = 1e-9, HeldForceToleranceRelative = 1e-12, DryNoiseFloorRelative = 1e-12,
                          NeutralLoadToleranceRelative = 1e-12, AdmissibilityToleranceRelative = 1e-9, UnconstrainedComponent = 1e-6,
                          DryRecloseFactor = 2.0, SparseAcceptanceMargin = 1.0, OpenTensionToleranceRelative = 1e-12,
-                         CloseCompressionToleranceRelative = 1e-12; };
+                         CloseCompressionToleranceRelative = 1e-12, RestoreClosingRateThreshold = 0.1; };
 struct CascadeSettings { double CrackBandFraction = 0.5, CrackBandEdgeRelative = 1e-9, CrushEdgeRelative = 1e-9,
                          MotionAxisThresholdRelative = 1e-3; int MaxPasses = 32; UndecidedResolution OnUndecided = UndecidedResolution::Collapse; };
 struct DebugSettings   { bool bRecordPasses = false; };
@@ -1370,7 +1374,7 @@ including the final judge that changed nothing); otherwise both stay empty and r
 
 ```cpp
 enum class CornerState : uint8_t { Closed, Open, Slipping };
-enum class SolveEnd : uint8_t { None, Converged, Mechanism, RestoreFailedClosed, PowerCheckFailed, IterationCap, InvalidInput };
+enum class SolveEnd : uint8_t { None, Converged, Mechanism, PowerCheckFailed, IterationCap, InvalidInput };  // no value names the restore step: it never ends a solve
 struct JointPassRecord {
 	InterfaceId Id; std::array<CornerState, 4> Corners;   // after this iteration's update
 	std::array<bool, 4> bFlipped;                          // differs from the previous iteration; all false on iteration 1
@@ -1378,7 +1382,7 @@ struct JointPassRecord {
 	double NormalForceN; Vec3 ShearForceN; Vec3 MomentNm; double Utilisation; GoverningAxis Axis;
 };
 struct ElasticPassRecord { int Iteration; std::vector<JointPassRecord> Joints; };
-// StandingComponent: std::vector<ElasticPassRecord> Passes; SolveEnd End; std::vector<InterfaceId> Blocking (RestoreFailedClosed only)
+// StandingComponent: std::vector<ElasticPassRecord> Passes; SolveEnd End
 // ComponentReport:   SolveEnd End; std::vector<ElasticPassRecord> Passes (carried from the elastic component)
 struct CascadePassRecord { uint32_t Pass; std::vector<ComponentReport> Components; std::vector<InterfaceReading> Readings;
                            std::vector<ReleasedCluster> Clusters; std::vector<FailedInterface> Failures;
@@ -1406,7 +1410,7 @@ value is an error naming `cascade.undecided_resolution` and its line.
 enum class UndecidedResolution : uint8_t { Collapse, Stands };
 // CascadeOptions / CascadeSettings: UndecidedResolution OnUndecided = UndecidedResolution::Collapse;
 // ComponentReport: int PassCount;                         // the elastic ActiveSetIterations
-//                  bool Forced; SolveEnd ForcedReason;    // IterationCap, RestoreFailedClosed, PowerCheckFailed, or None (non-finite force scale)
+//                  bool Forced; SolveEnd ForcedReason;    // IterationCap, PowerCheckFailed, or None (non-finite force scale)
 //                  std::vector<InterfaceId> UnsettledJoints;
 // ReleasedCluster: bool bForced;                          // a forced release; Motion is zero
 // CascadeVerdict:  std::array<uint32_t, SolveEndCount> ForcedByReason;  // forced components solved this run, by SolveEnd
@@ -1416,8 +1420,7 @@ enum class UndecidedResolution : uint8_t { Collapse, Stands };
   `Collapses` and its whole `Bodies` list is released (not the elastic `UnconstrainedBodies`); under `Stands` it reads
   `Stands` and the cascade carries on, readings as read. Both set `Forced` and `ForcedReason`; a Mechanism component reads
   `Collapses` with `Forced` false. The authority alone (`IStructuralAuthority::Judge`) still reports Undecided.
-- `UnsettledJoints` (filled by the authority on any Undecided component): the `Blocking` list at `RestoreFailedClosed`;
-  at `IterationCap` with the pass recorder on, the joints with a corner flipped in the last iteration; otherwise empty.
+- `UnsettledJoints` (filled by the authority on any Undecided component): at `IterationCap` with the pass recorder on, the joints with a corner flipped in the last iteration; otherwise empty.
 - A reused component is not counted twice in `ForcedByReason`. The re-judge after `PassCapReached` is not resolved.
 - Viewer JSON: `after.components` (the last verdict's components: `bodies`, `verdict`, `end`) and every
   `pass_records[].components[]` carry `forced`, `forced_reason`, `pass_count`, `unsettled_joints` when `Forced` is true;

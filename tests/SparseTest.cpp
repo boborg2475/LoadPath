@@ -220,7 +220,7 @@ TEST_CASE("Statics.Sparse.HiddenPivotsAreCaughtByTheEstimate")
 		{423, "bridge half span 0.128871, top offset -0.00122245", StandingState::Mechanism, 4},
 		{556, "bridge half span 0.100377, top offset 0.000650907", StandingState::Mechanism, 3},
 		{708, "bridge half span 0.107515, top offset 0.0131901", StandingState::Undecided, 50},
-		{715, "bridge half span 0.124973, top offset -0.0118885", StandingState::Undecided, 5},
+		{715, "bridge half span 0.124973, top offset -0.0118885", StandingState::Mechanism, 41},
 	};
 	for (const HiddenPivotDraw& D : Draws)
 	{

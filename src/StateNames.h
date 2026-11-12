@@ -64,7 +64,6 @@ inline const char* EndText(SolveEnd End)
 	case SolveEnd::None: return "None";
 	case SolveEnd::Converged: return "Converged";
 	case SolveEnd::Mechanism: return "Mechanism";
-	case SolveEnd::RestoreFailedClosed: return "RestoreFailedClosed";
 	case SolveEnd::PowerCheckFailed: return "PowerCheckFailed";
 	case SolveEnd::IterationCap: return "IterationCap";
 	case SolveEnd::InvalidInput: return "InvalidInput";

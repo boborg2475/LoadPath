@@ -20,7 +20,7 @@ enum class UndecidedResolution : std::uint8_t
 	Stands
 };
 
-inline constexpr std::size_t SolveEndCount = 7;
+inline constexpr std::size_t SolveEndCount = 6;
 
 enum class CascadeState : std::uint8_t
 {

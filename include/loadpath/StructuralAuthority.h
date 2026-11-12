@@ -43,7 +43,7 @@ struct ComponentReport
 	bool Forced = false;
 	// The elastic end behind a forced verdict; None when the solve stopped on a non-finite force scale or nothing was forced.
 	SolveEnd ForcedReason = SolveEnd::None;
-	// RestoreFailedClosed: the blocking joints; IterationCap with recording on: the joints with a corner flipped in the last iteration.
+	// IterationCap with recording on: the joints with a corner flipped in the last iteration.
 	std::vector<InterfaceId> UnsettledJoints;
 };
 

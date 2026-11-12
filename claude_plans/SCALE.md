@@ -383,7 +383,9 @@ unsettled component reads, from the pass recorder (`Measure.Scale.*PostRemovedWa
 it): the warehouse's 33-body frame stops at `IterationCap` (50 iterations) with one joint, 10638,
 still flipping in the last iteration at utilisation 1.017 (the IMMEDIATE_UPDATES §4 chatter, one
 corner Stuck ↔ Slipping at its friction limit); the shed's 15-body component stops at
-`RestoreFailedClosed` after 18 iterations with nothing flipping. Both are `Measure.*` rows whose
+`RestoreFailedClosed` after 18 iterations with nothing flipping (since the closing-rate restore
+rule of 2026-11-12 it stops at `IterationCap`, and the warm shed cascade is about 9 to 11 ms where
+it was about 6: `decisions/2026-11-12-closing-rate-restore-rule.md` §7). Both are `Measure.*` rows whose
 `CHECK(Stands)` fails, and they stay failing on purpose: they are the speed target's real state.
 
 The cold rows are unchanged within noise from 2026-10-15 (elastic 452 vs 419 ms on the warehouse,

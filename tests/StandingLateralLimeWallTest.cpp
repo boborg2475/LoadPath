@@ -154,8 +154,8 @@ TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Statics.Lime.TheLateralGridStandsInItsOwnField
 		int Courses, BricksPerCourse;
 		double LambdaX, LambdaY;
 	};
-	const std::vector<GridPoint> KnownUndecided{{10, 8, 1.0, 0.15}, {10, 8, 1.2, 0.0}, {10, 8, 1.2, 0.05}, {10, 8, 1.2, 0.1}, {10, 8, 1.2, 0.15}, {5, 5, 1.2, 0.05}, {5, 5, 1.2, 0.1}, {5, 5, 1.2, 0.15}, {6, 8, 1.2, 0.0}, {6, 8, 1.2, 0.05}, {6, 8, 1.2, 0.1}, {6, 8, 1.2, 0.15}};
-	CHECK(KnownUndecided.size() == 12);
+	const std::vector<GridPoint> KnownUndecided{{10, 8, 1.2, 0.0}, {10, 8, 1.2, 0.05}, {10, 8, 1.2, 0.1}, {10, 8, 1.2, 0.15}, {5, 5, 1.2, 0.05}, {5, 5, 1.2, 0.1}, {5, 5, 1.2, 0.15}, {6, 8, 1.2, 0.0}, {6, 8, 1.2, 0.05}, {6, 8, 1.2, 0.1}, {6, 8, 1.2, 0.15}};
+	CHECK(KnownUndecided.size() == 11);
 	const auto Start = std::chrono::steady_clock::now();
 	const StrengthProfile Lime = LoadLime();
 	int Points = 0, Standing = 0, Undecided = 0, Mechanisms = 0, UnexpectedUndecided = 0, FieldFailures = 0;
@@ -175,7 +175,7 @@ TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Statics.Lime.TheLateralGridStandsInItsOwnField
 				{
 					++Undecided;
 					const bool bKnownException = std::any_of(KnownUndecided.begin(), KnownUndecided.end(), [&](const GridPoint& K) { return K.Courses == S.Courses && K.BricksPerCourse == S.BricksPerCourse && K.LambdaX == LambdaX && K.LambdaY == LambdaY; });
-					CHECK_MESSAGE(bKnownException, "Undecided outside the twelve known points");
+					CHECK_MESSAGE(bKnownException, "Undecided outside the eleven known points");
 					UnexpectedUndecided += bKnownException ? 0 : 1;
 					continue;
 				}
@@ -195,8 +195,8 @@ TEST_CASE(LOADPATH_SLOW_IN_DEBUG "Statics.Lime.TheLateralGridStandsInItsOwnField
 	const double Seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - Start).count();
 	MESSAGE("lateral lime grid: " << Points << " points, " << Standing << " Stand, " << Mechanisms << " Mechanism, " << Undecided << " Undecided (" << UnexpectedUndecided << " outside the known exceptions), " << FieldFailures << " fail their own field, " << Seconds << " s");
 	CHECK(Points == 140);
-	CHECK(Undecided == 12);
-	CHECK(Standing == 128);
+	CHECK(Undecided == 11);
+	CHECK(Standing == 129);
 	CHECK(Mechanisms == 0);
 	CHECK(UnexpectedUndecided == 0);
 }

@@ -2309,3 +2309,30 @@ Tension inside the open tolerance on a closed non-dry corner reads 0, the same w
 inside the dry floor reads 0 on a dry corner, in the readings and the pass records alike. Dry
 corners ignore both settings and keep `dry_noise_floor_relative` and `dry_reclose_factor`.
 Bonded joints are unchanged. No range validation yet (CURRENT_STATE "Deferred").
+
+### 2026-11-12, owner: the restore step re-closes by closing rate
+
+The restore step runs when the stiffness is singular and the load drives a free motion. It used to
+re-close any open corner the motion closed, and to end Undecided (`RestoreFailedClosed`) when that
+corner was open in the last full-rank solve. That history check is gone. Now:
+
+- A corner's closing rate is `-gap / scale`: its normal relative movement under the motion over the
+  largest relative movement of any joint corner in the component.
+- An open corner is re-closed when it closes past `admissibility_tolerance_relative` and its rate is
+  above `solver.restore_closing_rate_threshold` (default 0.1). Otherwise it stays open.
+- When no corner is re-closed and the load does positive work past the cohesive dissipation, the
+  component is a Mechanism, as before.
+
+Re-entry is unchanged: on a slip-releasing joint the corner re-enters Slipping with its capacity
+from the last full-rank normal force (zero when there has been none), otherwise Stuck. The
+slides-with-friction re-stick is not gated by the rate.
+
+`SolveEnd::RestoreFailedClosed`, `StandingComponent::Blocking` and the forced-collapse reason they
+fed are removed; the restore step cannot end Undecided. A solve that never settles now ends
+`IterationCap`. No stopping rule was added (owner). The shed's 15-body component named under
+"2026-11-08 forced collapse as a setting" ends `IterationCap` now and is still a forced release.
+
+Why 0.1, what it costs and what it does not fix are in
+`decisions/2026-11-12-closing-rate-restore-rule.md` and CURRENT_STATE "Closing-rate restore rule".
+Known wrong answer, deferred by the owner: a re-closed corner has zero friction capacity, which
+reads a false Mechanism on the three-brick bridge at lambda (2.5, 0.75).

@@ -67,6 +67,6 @@ A `loadpath_cli debug <scenario>` command (or a Scripts wrapper) would replace t
 - Write the heatmap page from the same export.
 - Print a summary: who decided, the expected motion's admissibility, why the elastic solver ended, and which bounds of §3 apply.
 
-The elastic end reason and its blocking corners are on `StandingComponent::End` and `StandingComponent::Blocking` (and `ComponentReport::End`) since build-order item 1 package B (2026-11-08); with `debug.record_passes` on, every inner iteration is in `StandingComponent::Passes` and every cascade pass in `CascadeVerdict::PassRecords`, written to the viewer JSON as `after.pass_records`.
+The elastic end reason is on `StandingComponent::End` (and `ComponentReport::End`) since build-order item 1 package B (2026-11-08); the blocking-corner list went with `RestoreFailedClosed` on 2026-11-12; with `debug.record_passes` on, every inner iteration is in `StandingComponent::Passes` and every cascade pass in `CascadeVerdict::PassRecords`, written to the viewer JSON as `after.pass_records`.
 
 The skill would be the checklist in §1, with the experiment table of §2 as its toolbox and §3 as the rules for judging an expectation.

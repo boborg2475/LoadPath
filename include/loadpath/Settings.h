@@ -25,6 +25,7 @@ struct SolverSettings
 	double SparseAcceptanceMargin = 1.0;
 	double OpenTensionToleranceRelative = 1e-12;
 	double CloseCompressionToleranceRelative = 1e-12;
+	double RestoreClosingRateThreshold = 0.1;
 };
 
 struct CascadeSettings

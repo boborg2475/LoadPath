@@ -87,8 +87,7 @@ struct Factorisation
 enum class Restoration : std::uint8_t
 {
 	None,
-	Restored,
-	Undecided
+	Restored
 };
 
 struct UpdateOutcome
@@ -101,7 +100,6 @@ struct UpdateOutcome
 struct Ending
 {
 	SolveEnd End = SolveEnd::None;
-	std::vector<InterfaceId> Blocking;
 	std::vector<ElasticPassRecord> Passes;
 };
 
@@ -683,44 +681,30 @@ UpdateOutcome UpdateActiveSet(const Problem& P, const StandingOptions& Options, 
 	return Outcome;
 }
 
-Restoration RestoreInadmissibleReleases(const Problem& P, const StandingOptions& Options, const Eigen::VectorXd& Motion, const std::vector<JointState>* FullRankStates, const Eigen::VectorXd& FullRankX, std::vector<JointState>& States, std::vector<InterfaceId>& Blocking)
+Restoration RestoreInadmissibleReleases(const Problem& P, const StandingOptions& Options, const Eigen::VectorXd& Motion, const Eigen::VectorXd* FullRankX, std::vector<JointState>& States)
 {
-	const double ToleranceM = Options.AdmissibilityToleranceRelative * MotionScaleM(P, Motion);
+	const double ScaleM = MotionScaleM(P, Motion);
+	const double ToleranceM = Options.AdmissibilityToleranceRelative * ScaleM;
+	const double ClosingM = Options.RestoreClosingRateThreshold * ScaleM;
 	Restoration Outcome = Restoration::None;
-	bool bBlocked = false;
 	for (std::size_t I = 0; I < P.Joints.size(); ++I)
 	{
 		const Joint& J = P.Joints[I];
 		JointState& State = States[I];
-		bool bListed = false;
 		for (std::size_t C = 0; C < CornerCount; ++C)
 		{
 			const Vec3 Delta = RelativeDisplacement(J, C, Motion);
 			const double GapM = Dot(Delta, J.Normal);
 			const Vec3 TangentialM = Sub(Delta, Scale(GapM, J.Normal));
 			const double HeldSizeN = Length(State.HeldN[C]);
-			const bool bCloses = State.Status[C] == CornerStatus::Open && GapM < -ToleranceM;
+			const bool bCloses = State.Status[C] == CornerStatus::Open && GapM < -ToleranceM && -GapM > ClosingM;
 			const bool bSlidesWithFriction = State.Status[C] == CornerStatus::Slipping && HeldSizeN > 0.0 &&
 				Dot(TangentialM, State.HeldN[C]) > ToleranceM * HeldSizeN;
 			if (bCloses)
 			{
-				if (FullRankStates == nullptr || (*FullRankStates)[I].Status[C] == CornerStatus::Open)
-				{
-					if (!bListed)
-					{
-						Blocking.push_back(J.Id);
-						bListed = true;
-					}
-					bBlocked = true;
-					continue;
-				}
-				if (bBlocked)
-				{
-					continue;
-				}
 				if (J.bReleasesSlip)
 				{
-					ReEnterSlipping(J, C, TangentialM, Trial(J, C, FullRankX).NormalN, State);
+					ReEnterSlipping(J, C, TangentialM, FullRankX == nullptr ? 0.0 : Trial(J, C, *FullRankX).NormalN, State);
 				}
 				else
 				{
@@ -729,7 +713,7 @@ Restoration RestoreInadmissibleReleases(const Problem& P, const StandingOptions&
 				}
 				Outcome = Restoration::Restored;
 			}
-			else if (bSlidesWithFriction && !bBlocked)
+			else if (bSlidesWithFriction)
 			{
 				State.Status[C] = CornerStatus::Stuck;
 				State.HeldN[C] = Vec3{};
@@ -737,7 +721,7 @@ Restoration RestoreInadmissibleReleases(const Problem& P, const StandingOptions&
 			}
 		}
 	}
-	return bBlocked ? Restoration::Undecided : Outcome;
+	return Outcome;
 }
 
 double CohesiveDissipationW(const Problem& P, const StandingOptions& Options, const std::vector<JointState>& States, const Eigen::VectorXd& Motion)
@@ -1131,17 +1115,10 @@ StandingResult SolveProblem(const Problem& P, const StandingOptions& Options, Ph
 				const Eigen::VectorXd Motion = D * Projection;
 				X = profile::Timed(Timings.SolveSeconds, [&]() -> Eigen::VectorXd { return D * SolveInRange(F, Load); });
 				const std::vector<JointState> Solved = bRecord ? States : std::vector<JointState>{};
-				const Restoration Outcome = RestoreInadmissibleReleases(P, Options, Motion, bHaveFullRank ? &FullRankStates : nullptr, FullRankX, States, E.Blocking);
+				const Restoration Outcome = RestoreInadmissibleReleases(P, Options, Motion, bHaveFullRank ? &FullRankX : nullptr, States);
 				if (bRecord)
 				{
 					RecordPass(P, Options, Solved, States, X, Iteration, E.Passes);
-				}
-				if (Outcome == Restoration::Undecided)
-				{
-					Result.Readings = bHaveFullRank ? ReadAll(P, Options, FullRankStates, FullRankX, bOverstressed, Timings) : ReadAll(P, Options, States, X, bOverstressed, Timings);
-					Result.State = StandingState::Undecided;
-					E.End = SolveEnd::RestoreFailedClosed;
-					return Result;
 				}
 				if (Outcome == Restoration::None)
 				{
@@ -1282,7 +1259,6 @@ StandingResult SolveComponents(const std::vector<Problem>& Problems, std::size_t
 			StandingComponent Part{P.FreeBodies, Component.State, Component.ActiveSetIterations, std::move(Slots), Component.Timings};
 			Part.Passes = std::move(Endings[K].Passes);
 			Part.End = Endings[K].End;
-			Part.Blocking = std::move(Endings[K].Blocking);
 			Result.Components.push_back(std::move(Part));
 		}
 	}

@@ -1,4 +1,4 @@
-Status: decided by the owner 2026-11-12, not yet built. The measurements are from a spike that is not merged.
+Status: decided by the owner 2026-11-12 and built on `solver_rework` the same day (§8). The measurements in §4 to §7 are from a spike that is not merged.
 
 # The closing-rate restore rule: spike measurements and the owner's decision (2026-11-12)
 
@@ -16,7 +16,7 @@ decided from it on 2026-11-12.
 
 ## 2. The rule
 
-The restore step runs when the stiffness is singular and gravity drives a free motion. For each open corner:
+The restore step runs when the stiffness is singular and the load drives a free motion. For each open corner:
 
 - `Rate = -GapM / MotionScaleM`, where `GapM` is the normal relative movement of the corner under the motion
   and `MotionScaleM` is the largest relative movement of any joint corner in the component. It runs 0 to 1.
@@ -139,3 +139,53 @@ while another build was running, so differences under about 20% are noise.
 The one real change is the shed's warm cascade, about 6 ms to about 11 ms: its undecided component now runs
 to the 50-iteration cap where the old rule stopped at 18. The warehouse rows do identical work under every
 setting.
+
+## 8. As built (2026-11-12)
+
+The rule is on `solver_rework` at threshold 0.1 (DESIGN §10 "the restore step re-closes by closing rate").
+`SolveEnd::RestoreFailedClosed` and `StandingComponent::Blocking` are removed.
+
+- **Default tier:** 478 passed, 0 failed. Picture page 46 passed, 0 failed, 9 deferred (A1.4 moved from
+  deferred to passing).
+- **Slow tier:** 11 passed, 3 failed, the same three as before the rule. The Minho wall now reads Mechanism
+  above its limit (Undecided before) and is still Undecided below it.
+- **Measure rows on the built rule:** shed warm cascade 9.2 ms, warehouse warm cascade 54 ms, both as §7.
+- **`tests/FactorPins.h` regenerated.** Of 6,128 rows: 1,074 Undecided to Mechanism, 17 Mechanism to
+  Undecided, 1 Undecided to Stands (seeded draw 2619), 28 Mechanism with a different unconstrained count.
+  The spike's "1,088 traded" in §5 counted both directions together.
+- **The review's oracle audit of the state-changed pins** (a throwaway probe of `oracle::StaticAdmissibility`).
+  - The 17 Mechanism to Undecided draws are all bridges ending `IterationCap` after 50 iterations, and the
+    oracle reads all 17 CannotStand. They are correct collapses the solver no longer proves.
+  - Of the 1,074 Undecided to Mechanism pins, 1,071 read CannotStand and 2 Ambiguous (seeded 5524, wall 51).
+  - **One is wrong:** seeded draw 3550 (bridge, mu 0.892, lambda (0.884, 0.041)) reads CanStand and is now
+    pinned Mechanism. It was Undecided before, so this is a new false collapse, of the zero-friction class.
+  - Draw 2619 (Undecided to Stands) is legitimate: friction 0.954 above the load ratio 0.948.
+  - The 28 changed unconstrained counts were not audited.
+- **Two hand pins moved:** `Statics.Sparse.HiddenPivotsAreCaughtByTheEstimate` draw 715 (Undecided to
+  Mechanism), and `Statics.Lime.TheLateralGridStandsInItsOwnField` cell (10, 8, 1.0, 0.15) (Undecided to
+  Stands).
+- **Parked:** the bridge point at lambda (2.5, 0.75),
+  `Parked.Statics.Solver.RestoredCornerHoldsFrictionOnABridgeAtTheSteepestPoint`.
+
+## 9. Where the work stopped (2026-11-12, owner redirect to the soft-spring spike)
+
+This work is parked on branch `wip/closing-rate-restore`. It is NOT on `solver_rework`, which stays at
+`b728d55` (notes only). Nothing here has passed review.
+
+- **State of the tree on this branch:** it builds, and the default Release tier reads 479 passed, 0 failed
+  (run after the last edit, without the picture page). The Slow tier and the Measure rows were last run
+  before the review round (§8) and not since.
+- **Review verdict: REJECT**, three blocking items.
+  1. A re-pin hid a known wrong answer (seeded draw 3550). Recorded in §8 and in CURRENT_STATE. The ANCHORS
+     regeneration entry was being updated when the work stopped; check it says so.
+  2. The branch `FullRankX == nullptr ? 0.0 :` in `RestoreInadmissibleReleases` had no test. The test agent
+     added `Statics.Restore.ACornerReclosedBeforeAnyFullRankSolveSlipsWithNoFrictionCapacity`; it passes, but
+     whether it kills the `? 1.0e6 :` mutant was not confirmed.
+  3. Stale docs naming `RestoreFailedClosed` and `Blocking`. DEBUG_PLAYBOOK, CURRENT_STATE, SCALE and both
+     decisions notes are fixed. ANCHORS rows 42, 49 and 85 and API.md lines near 519 and 1377 were with the
+     test agent and may be half done.
+- **Also asked of the test agent, state unknown:** pinning the precondition of Restore test 1 with the pass
+  recorder, removing the incidental corner index from Restore test 2, and the header comment wording
+  ("-gap / motion scale", "the load drives").
+- **To finish:** check the items above, confirm the mutant, re-run the default tier with pictures, the Slow
+  tier and the Measure rows, send it back to review, then merge to `solver_rework`.
