@@ -59,6 +59,15 @@ Correct means pass 4 ends Mechanism, the 133 voussoirs are released and both pie
 - **Cost.** Time divided by singular iterations is about 0.27 s at every threshold (by division, not
   profiled). The arch has 1,386 unknowns, above `dense_dof_limit`, so every singular iteration is a dense
   factorisation; full-rank iterations use the sparse path and cost almost nothing.
+- **Where the 5.6 s at 0.1 goes** (estimated from the iteration counts, not timed per pass): passes 1, 2 and
+  5 have no singular iterations and cost almost nothing; pass 3 has 6 (about 1.6 s); pass 4, the one that
+  decides the fold, has 15 (about 4 s).
+- **Why pass 4 is long.** The restore step re-closes one joint pair on each side per iteration as it walks
+  along the haunch, and each of those iterations pays for the dense factorisation.
+- **The old rule's 1.1 s is not a fair baseline.** It stops in pass 3 and never runs pass 4. Any rule that
+  reaches the right answer pays for pass 4.
+- **Neither cost has been worked on**: the price of one singular iteration, or how many the restore step
+  needs. Per-iteration timing (findings review item 6) would replace these estimates with measurements.
 - **Pass 3 ends the same at every threshold from 1e-9 to 0.95**: same corner states, same 30 haunch cracks.
   Only the iteration count differs (18, 15, 8, 10, 10 for 1e-3 and below, 0.01, 0.1, 0.5, 0.95).
 - **At 0.1 the threshold decides twice.** Pass 3 iteration 5 leaves `v.72/v.73` open at 0.077; pass 4
