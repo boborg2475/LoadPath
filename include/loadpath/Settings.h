@@ -26,7 +26,7 @@ struct SolverSettings
 	double OpenTensionToleranceRelative = 1e-12;
 	double CloseCompressionToleranceRelative = 1e-12;
 	double SoftSpringRelative = 0.0;
-	double SoftSpringMechanismRatio = 1e-2;
+	double SoftSpringMechanismRatio = 3.1622776601683795;
 };
 
 struct CascadeSettings

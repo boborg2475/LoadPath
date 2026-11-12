@@ -51,8 +51,8 @@ struct StandingOptions
 	double CloseCompressionToleranceRelative = 1e-12;
 	// Above 0, every free unknown gets a spring to the world of this times its all-closed diagonal stiffness; 0 is off.
 	double SoftSpringRelative = 0.0;
-	// With soft springs on, a body whose soft-spring force exceeds this times the mean body load is unconstrained.
-	double SoftSpringMechanismRatio = 1e-2;
+	// With soft springs on, a body is unconstrained when softening the springs tenfold grows its displacement by more than this.
+	double SoftSpringMechanismRatio = 3.1622776601683795;
 	// A rank-deficient component is a mechanism only when the load's null-space projection exceeds this times the load.
 	double NeutralLoadToleranceRelative = 1e-12;
 	// A corner closes or slides against friction in a null motion when it moves more than this times the motion's scale.

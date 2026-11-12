@@ -366,6 +366,12 @@ function build(sc, opts = {}) {
     const refId = cl.motion_body ?? (cl.bodies || [])[0];
     const m = (cl.motion || {})[refId];
     const ref = byId.get(refId);
+    if (cl.motion_kind === "per_body") {
+      let maxAng = 0;
+      for (const id of cl.bodies || []) { const own = (cl.motion || {})[id]; if (own && own.r) maxAng = Math.max(maxAng, Math.hypot(...own.r)); }
+      for (const id of cl.bodies || []) { const own = (cl.motion || {})[id], b = byId.get(id); reference.set(id, own && b && own.t ? { c: b.c, t: own.t, r: own.r || [0, 0, 0], ang: maxAng } : null); }
+      continue;
+    }
     for (const id of cl.bodies || []) reference.set(id, m && ref ? { c: ref.c, t: m.t || [0, 0, 0], r: m.r || [0, 0, 0] } : null);
   }
   let maxT = 0;
@@ -375,7 +381,7 @@ function build(sc, opts = {}) {
   const motions = movers.map(b => {
     const g = reference.get(b.id);
     if (!g) return { c: b.c, t: [0, 0, -reach], r: [0, 0, 0] };
-    const ang = Math.hypot(...g.r);
+    const ang = g.ang ?? Math.hypot(...g.r);
     const kc = ang > 0 ? Math.min(k, 0.6 / ang) : k;
     return { c: g.c, t: g.t.map(v => v * kc), r: g.r.map(v => v * kc) };
   });

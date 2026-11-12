@@ -350,6 +350,13 @@ bool Release(Structure& Model, const AuthorityResult& Judged, std::uint32_t Pass
 		Released.Bodies = Cluster.Bodies;
 		Released.bForced = Cluster.Component->Forced;
 		Released.Motion = Released.bForced ? MechanismMotion{Cluster.Bodies.front(), Vec3{}, Vec3{}} : MotionOf(*Cluster.Component, Cluster.Bodies.front());
+		if (!Released.bForced)
+		{
+			for (const BodyId Body : Cluster.Bodies)
+			{
+				Released.BodyMotions.push_back(MotionOf(*Cluster.Component, Body));
+			}
+		}
 		for (const InterfaceId Id : Crossing[C])
 		{
 			if (!Model.Sever(Id, Pass))

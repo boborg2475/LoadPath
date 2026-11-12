@@ -1144,7 +1144,19 @@ std::vector<double> SoftForceRatios(const Problem& P, const Eigen::VectorXd& Sof
 	return Ratios;
 }
 
-void PrintSoftHistogram(const std::vector<double>& Ratios, double Threshold)
+std::vector<double> SofteningRatios(const Problem& P, const Eigen::VectorXd& ScaledX, const Eigen::VectorXd& SofterX)
+{
+	std::vector<double> Ratios(P.FreeBodies.size());
+	for (std::size_t K = 0; K < P.FreeBodies.size(); ++K)
+	{
+		const int O = static_cast<int>(K) * DofPerBody;
+		const double Before = ScaledX.segment(O, DofPerBody).norm();
+		Ratios[K] = Before > 0.0 ? SofterX.segment(O, DofPerBody).norm() / Before : 1.0;
+	}
+	return Ratios;
+}
+
+void PrintSoftHistogram(const Problem& P, const Eigen::VectorXd& X, const std::vector<double>& Ratios, double Threshold)
 {
 	if (std::getenv("LOADPATH_SOFT_HIST") == nullptr)
 	{
@@ -1173,12 +1185,15 @@ void PrintSoftHistogram(const std::vector<double>& Ratios, double Threshold)
 		{
 			for (std::size_t K = 0; K < Ratios.size(); ++K)
 			{
-				std::fprintf(F, "%zu,%.6e\n", K, Ratios[K]);
+				const int O = static_cast<int>(K) * DofPerBody;
+				std::fprintf(F, "%zu,%u,%s,%.6e,%.6e,%.6e\n", Ratios.size(), P.FreeBodies[K].Index, Threshold > 1e299 ? "force" : "soften", Ratios[K], X.segment(O, 3).norm(), X.segment(O + 3, 3).norm());
 			}
 			std::fclose(F);
 		}
 	}
 }
+
+constexpr double SofteningFactor = 10.0;
 
 StandingResult SolveSoftProblem(const Problem& P, const StandingOptions& Options, const SoftSprings& Soft, PhaseTimings& Timings, Ending& E)
 {
@@ -1209,8 +1224,14 @@ StandingResult SolveSoftProblem(const Problem& P, const StandingOptions& Options
 		{
 			return Result;
 		}
-		const std::vector<double> Ratios = SoftForceRatios(P, SoftDiagonal, *ScaledX);
-		PrintSoftHistogram(Ratios, Soft.MechanismRatio);
+		PrintSoftHistogram(P, X, SoftForceRatios(P, SoftDiagonal, *ScaledX), 1e300);
+		const std::optional<Eigen::VectorXd> SofterX = SolveSoft(P, Options, States, SoftDiagonal / SofteningFactor, D * AssembleLoad(P, States), Timings);
+		if (!SofterX)
+		{
+			return Result;
+		}
+		const std::vector<double> Ratios = SofteningRatios(P, *ScaledX, *SofterX);
+		PrintSoftHistogram(P, X, Ratios, Soft.MechanismRatio);
 		const double Largest = X.cwiseAbs().maxCoeff();
 		for (std::size_t K = 0; K < P.FreeBodies.size(); ++K)
 		{
