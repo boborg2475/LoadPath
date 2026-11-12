@@ -42,6 +42,7 @@ add_executable(loadpath_tests
 	CascadeFloatingWallTest.cpp
 	GeometryWarehouseTest.cpp
 	ScaleMeasurementTest.cpp
+	SoftSpringSpikeTest.cpp
 	FactorTest.cpp
 	SparseTest.cpp
 	ComponentResultsTest.cpp

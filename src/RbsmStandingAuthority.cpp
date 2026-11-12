@@ -15,6 +15,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
+#include <mutex>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
@@ -1387,6 +1388,22 @@ StandingResult SolveProblem(const Problem& P, const StandingOptions& Options, Ph
 	return Result;
 }
 
+void LogEnding(const Problem& P, const StandingResult& Result, const Ending& E)
+{
+	static const char* Path = std::getenv("LOADPATH_END_LOG");
+	if (Path == nullptr)
+	{
+		return;
+	}
+	static std::mutex Lock;
+	const std::lock_guard<std::mutex> Guard(Lock);
+	if (std::FILE* F = std::fopen(Path, "a"))
+	{
+		std::fprintf(F, "%d,%d,%d,%d\n", P.DofCount, static_cast<int>(E.End), static_cast<int>(Result.State), Result.ActiveSetIterations);
+		std::fclose(F);
+	}
+}
+
 bool ChooseComponents(const Structure& Model, std::span<const BodyId> Only, std::vector<bool>& Chosen)
 {
 	if (Only.empty())
@@ -1441,6 +1458,7 @@ StandingResult SolveComponents(const std::vector<Problem>& Problems, std::size_t
 		PhaseTimings Timings;
 		Solved[K] = profile::Timed(Timings.TotalSeconds, [&] { return SolveProblem(Problems[Work[K]], Options, Timings, Endings[K]); });
 		Solved[K].Timings = Timings;
+		LogEnding(Problems[Work[K]], Solved[K], Endings[K]);
 	};
 	if (Workers != nullptr)
 	{
