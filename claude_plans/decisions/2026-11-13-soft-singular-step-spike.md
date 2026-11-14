@@ -179,7 +179,7 @@ Default tier, 479 tests, measured by an agent; the 1e-9 dense row was re-run by 
 
 - **1e-11 and 1e-9 fail the same one test.** `Statics.Factor.TheBlockedFactorReadsItsPinsAcrossPanels`:
   three dry walls (draws 13, 34 and 51, friction 0.40 to 0.49, pushed at or past sliding) go from Mechanism
-  to Undecided. A real collapse is lost to "undecided", not to a false stand. Why was not looked into.
+  to Undecided. Not a false stand. §9.5 shows the three Mechanisms were proven on noise.
 - **No test at 1e-11 or 1e-9 turns a collapse into a stand.**
 - **1e-6 is unusable.** Collapses just past their limit now stand: the free wall overturning, the incline
   tipping, the Housner block, the coursed free wall, the harmonic stack. The incline slide and a dry-bed slip
@@ -212,9 +212,60 @@ Singular steps with the soft step forced on for every size:
   reaches large components.
 - An earlier count of "about 450" fallbacks was low; 596 is the measured figure.
 
-### 9.5 Open
+### 9.5 The three dry walls (2026-11-14)
 
-- Why three dry walls go from Mechanism to Undecided under the floor.
+The owner asked to look at them. Traced per iteration with the spike-only `LOADPATH_TRACE_LOG` and the case
+`Measure.Spike.FloorLostWallDraws` (commit `88665e8`).
+
+- **The floor did not break three good collapses. It removed three false proofs.** Without the floor each
+  wall's Mechanism is declared on a motion the load drives at about 1e-12 of itself:
+
+| Draw | Wall | Declared at iteration | Drive at the declaration | With the floor |
+|---|---|---|---|---|
+| 13 | 4 x 4, mu 0.405, lambda (0.407, 0.376) | 18 | 2.6e-11 | `IterationCap` at 50 |
+| 34 | 3 x 3, mu 0.404, lambda (0.255, 0.452) | 46 | 2.0e-12 | `IterationCap` at 50 |
+| 51 | 5 x 4, mu 0.488, lambda (0.418, 0.250) | 15 | 2.2e-12 | `IterationCap` at 50 |
+
+- **The declared motions are not what the loads do.** Draw 13: two top-course bricks tip about their long
+  edge, which needs a sideways push of 1.58 of weight against the 0.376 applied. Draw 34: an end half-brick
+  tips against the push and a top brick lifts straight up. Draw 51: one half-brick twists and moves against
+  the load.
+- **The power check cannot reject them.** On a dry joint the dissipation is 0 and the load's power on the
+  motion is the squared size of the projection, which is positive for any non-zero projection however small
+  (read from the code, not measured separately).
+- **Is collapse the right answer?** Draws 13 and 34: yes. The push is 0.55 and 0.52 of weight against
+  friction of 0.405 and 0.404, and the admissibility oracle says they cannot stand. They should slide. Draw
+  51: not established. The push is 0.13% inside the friction cone and the oracle says Ambiguous.
+- **So two were right by accident and one is unknown.** Before the closing-rate rule all three were pinned
+  Undecided (`solver_rework`); the pin regeneration on `wip/closing-rate-restore` made them Mechanism.
+- **Why they are undecided underneath.** In every run, with and without the floor, the strongly driven
+  candidates (0.2 to 0.7 of the load) are each turned down by the restore step re-closing corners. No corner
+  pattern repeats, so the run wanders to the cap. Why restore turns them down was not determined.
+
+How common this is, from the trace over the whole default tier (one process, 479 passed):
+
+| Drive at the Mechanism declaration | Declarations |
+|---|---|
+| 1e-12 to 3e-11 | 14 |
+| 3e-11 to 1e-9 | 0 |
+| 1e-9 to 1e-6 | 28 |
+| 1e-6 to 1e-3 | 79 |
+| above 1e-3 | 12,166 |
+
+- **14 of 12,287 declarations sit on a near-zero drive, with a clean gap above them.** They are five
+  distinct solves: the three walls (each solved twice) and two not identified (78 and 174 unknowns, four
+  times each) that fail no test under the floor.
+- The 28 between 1e-9 and 1e-6 include the anchor tests that load a block just past its limit; a floor at
+  1e-6 loses those (§9.3).
+- Counted over every driven singular iteration, not only declarations, there is no gap (§9.6).
+
+### 9.6 Open
+
+- Why the restore step turns down the strongly driven slide on these dry walls. This is what leaves them
+  undecided, with or without the floor.
+- The power check accepts any dry-joint motion. The floor covers that hole at the singular step; nothing
+  else does.
+- The two unidentified solves declared on a near-zero drive.
 - Why the sparse free-motion set comes back empty 410 times. That, not the floor, decides how often a large
   component pays for a dense factorisation.
 - The floor's value. 1e-9 is 200 times above the arch's weak motion and 140,000 times below its weakest
