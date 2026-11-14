@@ -1063,6 +1063,10 @@ struct SoftSpikeSwitches
 	double Relative = 0.0;
 	bool bAllSizes = false;
 	double Band = 1e-6;
+	double NeutralBand = 2e-13;
+	double GrayLow = 0.0;
+	double GrayHigh = 0.0;
+	int NullPasses = 4;
 	int MaxPasses = 60;
 	int Ritz = 8;
 	bool bPivotRange = false;
@@ -1112,6 +1116,22 @@ const SoftSpikeSwitches& SoftSpike()
 		{
 			S.bPivotRange = std::string(V) == "pivots";
 		}
+		if (const char* V = std::getenv("LOADPATH_SOFT_NEUTRAL_BAND"))
+		{
+			S.NeutralBand = std::atof(V);
+		}
+		if (const char* V = std::getenv("LOADPATH_SOFT_NULL_PASSES"))
+		{
+			S.NullPasses = std::atoi(V);
+		}
+		if (const char* V = std::getenv("LOADPATH_SOFT_GRAY_LOW"))
+		{
+			S.GrayLow = std::atof(V);
+		}
+		if (const char* V = std::getenv("LOADPATH_SOFT_GRAY_HIGH"))
+		{
+			S.GrayHigh = std::atof(V);
+		}
 		S.Log = std::getenv("LOADPATH_SOFT_LOG");
 		S.Diag = std::getenv("LOADPATH_SOFT_DIAG");
 		S.EndLog = std::getenv("LOADPATH_END_LOG");
@@ -1159,6 +1179,7 @@ struct SoftSingular
 	int Refines = 0;
 	int NullRitz = 0;
 	int Pinned = -1;
+	bool bGray = false;
 	double ProjectionChange = 0.0;
 	double Residual = 0.0;
 	double Seconds = 0.0;
@@ -1234,6 +1255,14 @@ SoftSingular SolveSoftSingular(const SparseMatrix& Ks, const Eigen::VectorXd& Lo
 		const Eigen::MatrixXd H = Basis.transpose() * (Ks * Basis);
 		const Eigen::SelfAdjointEigenSolver<Eigen::MatrixXd> Solver(0.5 * (H + H.transpose()));
 		V = Eigen::VectorXd::Zero(Load.size());
+		for (Eigen::Index I = 0; I < Columns; ++I)
+		{
+			const double Theta = Solver.eigenvalues()(I);
+			if (Theta > SoftSpike().GrayLow * Largest && Theta < SoftSpike().GrayHigh * Largest)
+			{
+				Out.bGray = true;
+			}
+		}
 		for (Eigen::Index I = 0; I < Columns; ++I)
 		{
 			if (Solver.eigenvalues()(I) < PivotToleranceRelative * Largest)
@@ -1322,12 +1351,108 @@ SoftSingular SolveSoftSingular(const SparseMatrix& Ks, const Eigen::VectorXd& Lo
 		}
 	}
 	Out.ScaledX = X;
-	if (!Out.Projection.allFinite() || !Out.ScaledX.allFinite())
+	if (!Out.Projection.allFinite() || !Out.ScaledX.allFinite() || Out.bGray)
 	{
 		Out.bFactored = false;
 	}
 	Out.Seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - Start).count();
 	return Out;
+}
+
+std::vector<Eigen::VectorXd> SoftNullBasis(const SparseMatrix& Ks, double Relative, double PivotToleranceRelative, int Passes)
+{
+	const Eigen::Index N = Ks.rows();
+	const double Largest = Ks.diagonal().maxCoeff();
+	const double Shift = Relative * Largest;
+	if (!(Shift > 0.0) || !std::isfinite(Shift))
+	{
+		return {};
+	}
+	SparseMatrix A = Ks;
+	for (Eigen::Index I = 0; I < N; ++I)
+	{
+		A.coeffRef(I, I) += Shift;
+	}
+	SparseFactor Factor;
+	Factor.compute(A);
+	if (Factor.info() != Eigen::Success)
+	{
+		return {};
+	}
+	std::minstd_rand Generator(7);
+	for (Eigen::Index Block = 4;; Block *= 2)
+	{
+		const Eigen::Index Start = std::min(Block, N);
+		const Eigen::Index Capacity = std::min<Eigen::Index>(Start * (Passes + 1), N);
+		Eigen::MatrixXd Q(N, Capacity);
+		Eigen::Index Columns = 0;
+		const auto Append = [&](Eigen::VectorXd W) {
+			if (Columns >= Capacity)
+			{
+				return false;
+			}
+			const double Before = W.norm();
+			for (int Sweep = 0; Sweep < 2; ++Sweep)
+			{
+				W -= Q.leftCols(Columns) * (Q.leftCols(Columns).transpose() * W);
+			}
+			const double Size = W.norm();
+			if (!(Size > 1e-10 * Before) || !std::isfinite(Size))
+			{
+				return false;
+			}
+			Q.col(Columns++) = W / Size;
+			return true;
+		};
+		std::vector<Eigen::Index> Current;
+		for (Eigen::Index J = 0; J < Start; ++J)
+		{
+			Eigen::VectorXd W(N);
+			for (Eigen::Index I = 0; I < N; ++I)
+			{
+				W(I) = (Generator() & 1u) != 0 ? 1.0 : -1.0;
+			}
+			if (Append(W))
+			{
+				Current.push_back(Columns - 1);
+			}
+		}
+		for (int Pass = 0; Pass < Passes; ++Pass)
+		{
+			std::vector<Eigen::Index> Next;
+			for (const Eigen::Index C : Current)
+			{
+				if (Append(Factor.solve(Eigen::VectorXd(Q.col(C)))))
+				{
+					Next.push_back(Columns - 1);
+				}
+			}
+			Current = Next;
+		}
+		const Eigen::MatrixXd Basis = Q.leftCols(Columns);
+		const Eigen::MatrixXd H = Basis.transpose() * (Ks * Basis);
+		const Eigen::SelfAdjointEigenSolver<Eigen::MatrixXd> Solver(0.5 * (H + H.transpose()));
+		std::vector<Eigen::VectorXd> Null;
+		for (Eigen::Index I = 0; I < Columns; ++I)
+		{
+			const double Theta = Solver.eigenvalues()(I);
+			if (Theta > SoftSpike().GrayLow * Largest && Theta < SoftSpike().GrayHigh * Largest)
+			{
+				return {};
+			}
+		}
+		for (Eigen::Index I = 0; I < Columns; ++I)
+		{
+			if (Solver.eigenvalues()(I) < PivotToleranceRelative * Largest)
+			{
+				Null.push_back(Basis * Solver.eigenvectors().col(I));
+			}
+		}
+		if (static_cast<Eigen::Index>(Null.size()) < Start || Start >= N)
+		{
+			return Null;
+		}
+	}
 }
 
 void DiagnoseSoft(const Problem& P, const std::vector<JointState>& States, const Eigen::MatrixXd& K, const Factorisation& F, const std::vector<Eigen::VectorXd>& Basis, const Eigen::VectorXd& Load, const Eigen::VectorXd& Projection, int Iteration, double PivotToleranceRelative)
@@ -1437,20 +1562,38 @@ StandingResult SolveProblem(const Problem& P, const StandingOptions& Options, Ph
 		}
 		return false;
 	};
-	const auto TrySoft = [&](const Eigen::VectorXd& Load, int Iteration, std::optional<bool>& Finished) {
+	const auto TrySoft = [&](const Eigen::VectorXd& Load, int Iteration, std::vector<Eigen::VectorXd>& NeutralMotions, std::optional<bool>& Finished) {
 		const SparseMatrix Ks = profile::Timed(Timings.AssemblySeconds, [&] { return AssembleScaledSparseStiffness(P, States); });
 		const SoftSingular Soft = profile::Timed(Timings.FactorizationSeconds, [&] { return SolveSoftSingular(Ks, Load, SoftRelative, Spike.MaxPasses, Spike.MaxRefines, Spike.PassTolerance, Spike.StallRatio, Options.PivotToleranceRelative); });
 		const bool bUse = Soft.bFactored && !(Soft.Projection.norm() <= Spike.Band * Load.norm());
+		const bool bNeutral = Soft.bFactored && Soft.Projection.norm() <= Spike.NeutralBand * Load.norm();
+		std::vector<Eigen::VectorXd> Null;
+		double NullSeconds = 0.0;
+		if (bNeutral)
+		{
+			const auto Begin = std::chrono::steady_clock::now();
+			Null = profile::Timed(Timings.FactorizationSeconds, [&] { return SoftNullBasis(Ks, SoftRelative, Options.PivotToleranceRelative, Spike.NullPasses); });
+			NullSeconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - Begin).count();
+		}
 		if (Spike.Log != nullptr)
 		{
 			char Line[256];
-			std::snprintf(Line, sizeof(Line), "%d,%d,%s,%d,%d,%.3e,%.3e,%.4f\n", P.DofCount, Iteration, bUse ? "soft" : "fallback", Soft.Passes, Soft.Refines,
-				Soft.bFactored ? Soft.Projection.norm() / Load.norm() : -1.0, Soft.Residual, Soft.Seconds);
+			std::snprintf(Line, sizeof(Line), "%d,%d,%s,%d,%d,%.3e,%.3e,%.4f,%d,%.4f\n", P.DofCount, Iteration, bUse ? "soft" : (bNeutral && !Null.empty() ? "neutral" : "fallback"), Soft.Passes, Soft.Refines,
+				Soft.bFactored ? Soft.Projection.norm() / Load.norm() : -1.0, Soft.Residual, Soft.Seconds, static_cast<int>(Null.size()), NullSeconds);
 			AppendLine(Spike.Log, Line);
 		}
 		if (bUse)
 		{
 			Finished = Resolve(Soft.Projection, Soft.ScaledX, Iteration);
+		}
+		else if (bNeutral && !Null.empty())
+		{
+			for (const Eigen::VectorXd& V : Null)
+			{
+				NeutralMotions.push_back(D * V);
+			}
+			X = D * Soft.ScaledX;
+			Finished = AdvanceActiveSet(P, Options, X, NeutralMotions, bOverstressed, States, Result, Timings, Iteration, E) == StepOutcome::Finished;
 		}
 	};
 	for (int Iteration = 1; Iteration <= Options.MaxActiveSetIterations; ++Iteration)
@@ -1482,7 +1625,7 @@ StandingResult SolveProblem(const Problem& P, const StandingOptions& Options, Ph
 			if (bSoft)
 			{
 				std::optional<bool> Finished;
-				TrySoft(Load, Iteration, Finished);
+				TrySoft(Load, Iteration, NeutralMotions, Finished);
 				if (Finished)
 				{
 					if (*Finished)
@@ -1506,7 +1649,7 @@ StandingResult SolveProblem(const Problem& P, const StandingOptions& Options, Ph
 			if (bSoft && Spike.bAllSizes && P.DofCount <= Options.DenseDofLimit)
 			{
 				std::optional<bool> Finished;
-				TrySoft(Load, Iteration, Finished);
+				TrySoft(Load, Iteration, NeutralMotions, Finished);
 				if (Finished)
 				{
 					if (*Finished)
