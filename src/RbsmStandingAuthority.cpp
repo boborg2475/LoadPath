@@ -1064,6 +1064,7 @@ struct SoftSpikeSwitches
 	bool bAllSizes = false;
 	double Band = 1e-6;
 	double NeutralBand = 2e-13;
+	double NeutralFloor = 0.0;
 	double GrayLow = 0.0;
 	double GrayHigh = 0.0;
 	int NullPasses = 4;
@@ -1119,6 +1120,14 @@ const SoftSpikeSwitches& SoftSpike()
 		if (const char* V = std::getenv("LOADPATH_SOFT_NEUTRAL_BAND"))
 		{
 			S.NeutralBand = std::atof(V);
+		}
+		if (const char* V = std::getenv("LOADPATH_NEUTRAL_FLOOR"))
+		{
+			S.NeutralFloor = std::atof(V);
+			if (S.NeutralFloor > 0.0 && std::getenv("LOADPATH_SOFT_NEUTRAL_BAND") == nullptr)
+			{
+				S.NeutralBand = S.NeutralFloor;
+			}
 		}
 		if (const char* V = std::getenv("LOADPATH_SOFT_NULL_PASSES"))
 		{
@@ -1665,7 +1674,7 @@ StandingResult SolveProblem(const Problem& P, const StandingOptions& Options, Ph
 			{
 				DiagnoseSoft(P, States, K, F, Basis, Load, Projection, Iteration, Options.PivotToleranceRelative);
 			}
-			if (!(Projection.norm() <= Options.NeutralLoadToleranceRelative * Load.norm()))
+			if (!(Projection.norm() <= (Spike.NeutralFloor > 0.0 ? Spike.NeutralFloor : Options.NeutralLoadToleranceRelative) * Load.norm()))
 			{
 				if (Resolve(Projection, SolveInRange(F, Load), Iteration))
 				{
