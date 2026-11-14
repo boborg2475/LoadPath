@@ -233,6 +233,24 @@ TEST_CASE("Measure.Factor.FortyByThirtyTwoWallElastic")
 	MESSAGE("ec6 wall 40 x 32 (" << Model.LiveBodyCount() - 1 << " bricks): blocked elastic " << SecondsSince(Start) << " s (" << Blocked.State << " after " << Blocked.ActiveSetIterations << ")");
 }
 
+TEST_CASE("Measure.Spike.FloorLostWallDraws")
+{
+	for (const int Draw : {13, 34, 51})
+	{
+		const FactorCase C = WallCase(Draw);
+		const StandingResult Got = SolveWith(C.Model, C.Options, C.Loads);
+		const OracleVerdict Verdict = StaticAdmissibility(C.Model, C.Options.Gravity);
+		std::ostringstream Line;
+		Line << std::setprecision(4) << C.Name << ": " << Got.State << " after " << Got.ActiveSetIterations << ", oracle " << Verdict.Verdict << " (inner " << Verdict.InnerResidualOverDemand << ", outer " << Verdict.OuterResidualOverDemand << ")";
+		for (const MechanismMotion& M : Got.Mechanism)
+		{
+			const Vec3 At = C.Model.Body(M.Body).CentroidM;
+			Line << "\n  body " << M.Body.Index << " at (" << At.X << ", " << At.Y << ", " << At.Z << ") t (" << M.TranslationM.X << ", " << M.TranslationM.Y << ", " << M.TranslationM.Z << ") r (" << M.RotationRad.X << ", " << M.RotationRad.Y << ", " << M.RotationRad.Z << ")";
+		}
+		MESSAGE(Line.str());
+	}
+}
+
 namespace
 {
 void EmitPinValue(std::ostream& Out, double V)

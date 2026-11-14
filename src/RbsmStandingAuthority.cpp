@@ -1078,6 +1078,7 @@ struct SoftSpikeSwitches
 	const char* Diag = nullptr;
 	std::vector<double> DiagRelatives;
 	const char* EndLog = nullptr;
+	const char* Trace = nullptr;
 };
 
 const SoftSpikeSwitches& SoftSpike()
@@ -1144,6 +1145,7 @@ const SoftSpikeSwitches& SoftSpike()
 		S.Log = std::getenv("LOADPATH_SOFT_LOG");
 		S.Diag = std::getenv("LOADPATH_SOFT_DIAG");
 		S.EndLog = std::getenv("LOADPATH_END_LOG");
+		S.Trace = std::getenv("LOADPATH_TRACE_LOG");
 		if (const char* V = std::getenv("LOADPATH_SOFT_DIAG_EPS"))
 		{
 			std::string Text(V);
@@ -1177,6 +1179,45 @@ void AppendLine(const char* Path, const std::string& Line)
 		std::fputs(Line.c_str(), F);
 		std::fclose(F);
 	}
+}
+
+int CountCornerChanges(const std::vector<JointState>& Before, const std::vector<JointState>& After)
+{
+	int Changed = 0;
+	for (std::size_t J = 0; J < Before.size() && J < After.size(); ++J)
+	{
+		for (std::size_t C = 0; C < CornerCount; ++C)
+		{
+			Changed += Before[J].Status[C] != After[J].Status[C] ? 1 : 0;
+		}
+	}
+	return Changed;
+}
+
+std::uint64_t StatusHash(const std::vector<JointState>& States)
+{
+	std::uint64_t H = 1469598103934665603ull;
+	for (const JointState& S : States)
+	{
+		for (std::size_t C = 0; C < CornerCount; ++C)
+		{
+			H = (H ^ static_cast<std::uint64_t>(S.Status[C])) * 1099511628211ull;
+		}
+	}
+	return H;
+}
+
+std::string StatusCounts(const std::vector<JointState>& States)
+{
+	int Count[3] = {0, 0, 0};
+	for (const JointState& S : States)
+	{
+		for (std::size_t C = 0; C < CornerCount; ++C)
+		{
+			++Count[static_cast<int>(S.Status[C])];
+		}
+	}
+	return std::to_string(Count[0]) + "/" + std::to_string(Count[1]) + "/" + std::to_string(Count[2]);
 }
 
 struct SoftSingular
@@ -1544,6 +1585,17 @@ StandingResult SolveProblem(const Problem& P, const StandingOptions& Options, Ph
 	const double SoftRelative = Options.SingularSoftSpringRelative > 0.0 ? Options.SingularSoftSpringRelative : Spike.Relative;
 	const bool bDiag = Spike.Diag != nullptr && !Spike.DiagRelatives.empty();
 	const bool bSoft = SoftRelative > 0.0 && !bDiag;
+	double TracePowerW = std::numeric_limits<double>::quiet_NaN();
+	double TraceDissipationW = std::numeric_limits<double>::quiet_NaN();
+	const auto TraceLine = [&](int Iteration, const char* Rank, double Ratio, const char* Branch, int Changes, const char* Rule, const char* End) {
+		if (Spike.Trace == nullptr)
+		{
+			return;
+		}
+		char Line[512];
+		std::snprintf(Line, sizeof(Line), "%d,%d,%s,%.3e,%s,%d,%s,%s,%016llx,%s,%.6e,%.6e\n", P.DofCount, Iteration, Rank, Ratio, Branch, Changes, Rule, End, static_cast<unsigned long long>(StatusHash(States)), StatusCounts(States).c_str(), TracePowerW, TraceDissipationW);
+		AppendLine(Spike.Trace, Line);
+	};
 	const auto Resolve = [&](const Eigen::VectorXd& Projection, const Eigen::VectorXd& ScaledX, int Iteration) -> bool {
 		const Eigen::VectorXd Motion = D * Projection;
 		X = D * ScaledX;
@@ -1556,7 +1608,10 @@ StandingResult SolveProblem(const Problem& P, const StandingOptions& Options, Ph
 		if (Outcome == Restoration::None)
 		{
 			const double PowerW = AssembleLoad(P, States).dot(Motion);
-			if (!(PowerW > CohesiveDissipationW(P, Options, States, Motion)))
+			const double DissipationW = CohesiveDissipationW(P, Options, States, Motion);
+			TracePowerW = PowerW;
+			TraceDissipationW = DissipationW;
+			if (!(PowerW > DissipationW))
 			{
 				Result.Readings = bHaveFullRank ? ReadAll(P, Options, FullRankStates, FullRankX, bOverstressed, Timings) : ReadAll(P, Options, States, X, bOverstressed, Timings);
 				Result.State = StandingState::Undecided;
@@ -1676,12 +1731,18 @@ StandingResult SolveProblem(const Problem& P, const StandingOptions& Options, Ph
 			}
 			if (!(Projection.norm() <= (Spike.NeutralFloor > 0.0 ? Spike.NeutralFloor : Options.NeutralLoadToleranceRelative) * Load.norm()))
 			{
-				if (Resolve(Projection, SolveInRange(F, Load), Iteration))
+				const std::vector<JointState> TraceBefore = Spike.Trace != nullptr ? States : std::vector<JointState>{};
+				TracePowerW = std::numeric_limits<double>::quiet_NaN();
+				TraceDissipationW = std::numeric_limits<double>::quiet_NaN();
+				const bool bResolved = Resolve(Projection, SolveInRange(F, Load), Iteration);
+				TraceLine(Iteration, "singular", Projection.norm() / Load.norm(), "driven", Spike.Trace != nullptr ? CountCornerChanges(TraceBefore, States) : 0, "restore", bResolved ? (E.End == SolveEnd::Mechanism ? "Mechanism" : "PowerCheckFailed") : "-");
+				if (bResolved)
 				{
 					return Result;
 				}
 				continue;
 			}
+			TraceLine(Iteration, "singular", Projection.norm() / Load.norm(), "loadfree", -1, "-", "pending");
 			for (const Eigen::VectorXd& V : Basis)
 			{
 				NeutralMotions.push_back(D * V);
@@ -1694,11 +1755,20 @@ StandingResult SolveProblem(const Problem& P, const StandingOptions& Options, Ph
 			FullRankX = X;
 			bHaveFullRank = true;
 		}
-		if (AdvanceActiveSet(P, Options, X, NeutralMotions, bOverstressed, States, Result, Timings, Iteration, E) == StepOutcome::Finished)
+		const std::vector<JointState> TraceBefore = Spike.Trace != nullptr ? States : std::vector<JointState>{};
+		const bool bAdvanced = AdvanceActiveSet(P, Options, X, NeutralMotions, bOverstressed, States, Result, Timings, Iteration, E) == StepOutcome::Finished;
+		if (Spike.Trace != nullptr)
+		{
+			TracePowerW = std::numeric_limits<double>::quiet_NaN();
+			TraceDissipationW = std::numeric_limits<double>::quiet_NaN();
+			TraceLine(Iteration, F.Rank == P.DofCount ? "full" : "singular", -1.0, F.Rank == P.DofCount ? "full" : "loadfree", CountCornerChanges(TraceBefore, States), NeutralMotions.empty() ? "ordinary" : "neutral", bAdvanced ? (Result.State == StandingState::Undecided ? "UpdateUndecided" : "Converged") : "-");
+		}
+		if (bAdvanced)
 		{
 			return Result;
 		}
 	}
+	TraceLine(Options.MaxActiveSetIterations, "-", -1.0, "-", 0, "-", "IterationCap");
 	Result.Readings = ReadAll(P, Options, States, X, bOverstressed, Timings);
 	Result.State = StandingState::Undecided;
 	E.End = SolveEnd::IterationCap;
