@@ -58,6 +58,15 @@ Full note: `decisions/2026-11-10-a14-undecided-findings-and-plan.md`. What worke
 
 Copy `loadpath_cli.exe` before a sweep (it locks the build output). Perl `JSON::PP` reads the viz files.
 
+## 4c. Third worked case: three dry walls, a Mechanism proven on noise (2026-11-14)
+
+Full note: `decisions/2026-11-13-soft-singular-step-spike.md` §9.5 (branch `spike/soft-singular-step`).
+
+- **Symptom:** raising the singular step's neutral threshold from 1e-12 to 1e-9 turned three pinned wall Mechanisms into `IterationCap`.
+- **Look first at** how strongly the load drives the motion on the iteration that declares the Mechanism (projection over load), and at the declared motion against the load direction. On that branch `LOADPATH_TRACE_LOG` writes one line per iteration.
+- **What it was:** the Mechanisms were declared on motions driven at about 1e-12 of the load, with bricks tipping and lifting against the push. The power check cannot reject them on dry joints. The tighter threshold exposed a false proof; it did not lose a real one.
+- **Rules it leaves:** a changed verdict under a tighter tolerance is not a regression until the old verdict's proof has been read. Check a pin's history before defending it: these were Undecided one regeneration earlier. Ask the oracle whether the outcome is right separately from whether the proof is.
+
 ## 5. Toward a program and a skill
 
 A `loadpath_cli debug <scenario>` command (or a Scripts wrapper) would replace the hand-written probe:
