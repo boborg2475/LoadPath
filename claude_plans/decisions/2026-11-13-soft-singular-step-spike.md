@@ -3,7 +3,10 @@ Status: spike measured 2026-11-13 on branch `spike/soft-singular-step`, built on
 # Soft springs at the singular step only: spike results (2026-11-13)
 
 The first soft-spring spike (`spike/soft-springs`, `2026-11-12-soft-spring-spike.md` on that branch) put the
-springs on every iteration and failed: the huge loose motion fed the corner rules. The owner asked
+springs on every iteration and failed: the huge loose motion fed the corner rules.
+
+A one-page summary of this whole note is at https://claude.ai/artifact/QGcCfE5GaEwBfTANqFxwVf (private to the owner).
+ The owner asked
 (2026-11-13) what happens if the springs run only when the matrix is singular. This is that spike. Release
 build; every number was measured on this branch.
 
