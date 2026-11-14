@@ -15,8 +15,8 @@ build; every number was measured on this branch.
 - **The shed and the warehouse are unchanged**, as expected. Their undecided components are small and never
   reach this step at the default size limit.
 - **"Same answers" does not fully hold.** The forces read in iterations that end as a Mechanism differ from
-  the dense path's, and with the step forced on for components of every size 7 of 479 suite tests fail.
-  Those differences sit in small components that would keep the dense step at the default size limit.
+  the dense path's. With the step forced on for components of every size 7 of 479 suite tests fail, and with
+  it on at the default size limit 2 fail (corrected in §9; this note first said none).
 
 ## 2. What was built
 
@@ -87,7 +87,7 @@ choice. An attempt to reproduce the dense choice from an unpivoted sparse factor
 ## 6. The suite with the step forced on for every size
 
 472 passed, 7 failed. These are all components under 600 unknowns, which keep the dense step at the default
-limit, so none of this happens with the setting simply on.
+limit. Two of the seven also fail with the setting simply on at the default limit: see §9.
 
 | Test | What differs |
 |---|---|
@@ -111,9 +111,113 @@ factorisation is cheaper than the soft step.
 ## 8. Open
 
 - **Which force solution is right in a Mechanism iteration** (§5). The owner has not ruled.
-- **The weak-motion iteration** costs the one remaining dense factorisation on the arch. It is the same
-  iteration the findings review's free-motion floor would remove.
+- **The weak-motion iteration** cost the one remaining dense factorisation on the arch. The free-motion floor
+  removes it: see §9.
 - **The 1e-9 restore tolerance** sits on the precision floor between the two projections.
 - Not done: a per-iteration profile build; the Measure times are single runs; the random start of the
   sparse free-motion set is seeded but not checked for robustness.
 - It inherits everything open on `wip/closing-rate-restore` (that branch's note, §9).
+
+## 9. The free-motion floor (added 2026-11-13)
+
+The owner asked for the free-motion floor from the findings review, then the arch with the floor and the soft
+step together.
+
+### 9.1 What the floor is
+
+- A free motion the load drives only weakly is treated as not driven at all. It goes to the load-free branch
+  and the restore rule never sees it.
+- **It is an existing setting with a larger value.** The dense path already tests the load's projection on
+  the free motions against `solver.neutral_load_tolerance_relative` (1e-12) times the load. The floor is that
+  number raised. On the soft path it is the lower band of §2 (2e-13).
+- **What the number means:** the fraction of the load that must be unbalanced before the solver treats a
+  motion as real. A floor of 1e-9 reads a structure within one billionth of its limit as not moving.
+- The findings review words it as a ratio of free motion to elastic deflection. With a soft spring that ratio
+  is this same fraction divided by the spring value, so it is one measure, not two.
+- Spike-only switch `LOADPATH_NEUTRAL_FLOOR` (commit `98d661e`) sets the floor on both paths so the suite can
+  be run under it. Unset, nothing changes: 479 passed, 0 failed.
+
+### 9.2 The arch
+
+| Path | Floor | Singular steps | Runs |
+|---|---|---|---|
+| dense | 1e-12 (none) | 21 dense | 3.6 to 4.1 s |
+| dense | 1e-11, 1e-9, 1e-6 | 21 dense | 3.6 to 4.1 s |
+| soft step | none | 17 soft, 3 load-free, 1 dense fallback | 0.72, 0.72, 0.73, 0.74, 0.76 s |
+| soft step | 1e-11 | 18 soft, 4 load-free, 0 dense | 0.59 to 0.62 s |
+| soft step | 1e-9 | same | 0.58 to 0.62 s |
+| soft step | 1e-6 | same | 0.58 to 0.66 s |
+
+- **The answer is the same in all eight runs:** passes end Overstressed, Overstressed, Overstressed,
+  Mechanism in 1, 3, 8 and 16 iterations; 133 voussoirs released, both piers stand. The CLI output is
+  byte-identical across all eight.
+- **The lopsided step is gone.** Without the floor, pass 3 iteration 5 re-closes `v.65/v.66` alone. With it
+  that iteration changes the four springing joints as mirror pairs, the next changes `v.59/v.60` and
+  `v.72/v.73`, and the pass ends in the same state (1,480 corners closed, 16 open, 24 slipping) with the
+  same 30 haunch cracks.
+- **Soft and dense agree step for step under the floor.** At 1e-9 every iteration's corner states, every
+  ending and the released set are identical between the two paths.
+- **The dense fallback is gone on the arch**, which is the 0.74 s to 0.60 s.
+- Any floor from 1e-11 to 1e-6 works on the arch because nothing sits between its weak motion (4.8e-12 of
+  the load) and its weakest real one (1.4e-4).
+
+### 9.3 The suite under the floor
+
+Default tier, 479 tests, measured by an agent; the 1e-9 dense row was re-run by the orchestrator.
+
+| Floor | Soft step | Passed | Failed |
+|---|---|---|---|
+| none | off | 479 | 0 |
+| 1e-11 | off | 478 | 1 |
+| 1e-9 | off | 478 | 1 |
+| 1e-6 | off | 470 | 9 |
+| none | on, default size limit | 477 | 2 |
+| 1e-9 | on, default size limit | 476 | 3 |
+| none | on, every size | 472 | 7 |
+| 1e-9 | on, every size | 473 | 6 |
+| 1e-6 | on, every size | 466 | 13 |
+
+- **1e-11 and 1e-9 fail the same one test.** `Statics.Factor.TheBlockedFactorReadsItsPinsAcrossPanels`:
+  three dry walls (draws 13, 34 and 51, friction 0.40 to 0.49, pushed at or past sliding) go from Mechanism
+  to Undecided. A real collapse is lost to "undecided", not to a false stand. Why was not looked into.
+- **No test at 1e-11 or 1e-9 turns a collapse into a stand.**
+- **1e-6 is unusable.** Collapses just past their limit now stand: the free wall overturning, the incline
+  tipping, the Housner block, the coursed free wall, the harmonic stack. The incline slide and a dry-bed slip
+  go Undecided. This is the meaning in §9.1 showing: those tests load a block within 1e-6 of its limit.
+- **The floor fixes one soft-step failure:** the Orduna false Mechanism at lambda 0.427. The other six of §6
+  stay. It adds none beyond the `AcrossPanels` one.
+- **Correction to §1 and §6.** With the soft step on at the default size limit and no floor, 2 tests fail:
+  `Statics.Ungrounded.AnOverflowingFloatingPairIsInvalidInputAsOnTheFullPath` and
+  `Statics.Sparse.AgreesWithTheDensePath` (3 trades against a budget of 1). The suite does hold components
+  over the limit.
+- The ending census is not quoted: six processes append to one log and totals drift by about 1,500 between
+  identical runs.
+
+### 9.4 Does the floor remove the dense fallback?
+
+Singular steps with the soft step forced on for every size:
+
+| Floor | Soft | Load-free | Dense fallback |
+|---|---|---|---|
+| none | 39,461 | 330 | 596 |
+| 1e-9 | 39,388 | 497 | 503 |
+| 1e-6 | 39,566 | 758 | 438 |
+
+- **No. At 1e-9 it removes about one fallback in six.**
+- **What the 503 at 1e-9 are:** 410 are motions classed as load-free where the sparse free-motion set came
+  back empty; 63 lie between the floor and the 1e-6 line where the soft result is trusted; 30 are failed
+  factorisations.
+- **The 410 are the limit, and the floor does not touch them.** The count is 410 with no floor and at 1e-6
+  too. At the default size limit the suite shows 231 fallbacks, every one an empty free-motion set, so this
+  reaches large components.
+- An earlier count of "about 450" fallbacks was low; 596 is the measured figure.
+
+### 9.5 Open
+
+- Why three dry walls go from Mechanism to Undecided under the floor.
+- Why the sparse free-motion set comes back empty 410 times. That, not the floor, decides how often a large
+  component pays for a dense factorisation.
+- The floor's value. 1e-9 is 200 times above the arch's weak motion and 140,000 times below its weakest
+  real one; 1e-11 is only twice above. The suite has motions in every decade from 1e-13 to 1e-7, so no value
+  separates cleanly there.
+- Not built: the floor as a changed default with tests. It was only tried through overrides and the switch.
