@@ -13,7 +13,8 @@
     "sparse_acceptance_margin": 1.0,
     "open_tension_tolerance_relative": 1e-12,
     "close_compression_tolerance_relative": 1e-12,
-    "restore_closing_rate_threshold": 0.1
+    "restore_closing_rate_threshold": 0.1,
+    "singular_soft_spring_relative": 0.0
   },
   "cascade": {
     "undecided_resolution": "collapse",

@@ -1010,6 +1010,7 @@ TEST_CASE("Authority.Judge.DifferentOptionsReuseNothing")
 	Add("Standing.OpenTensionToleranceRelative 1e-9", [](AuthorityOptions& O) { O.Standing.OpenTensionToleranceRelative = 1e-9; });
 	Add("Standing.CloseCompressionToleranceRelative 1e-9", [](AuthorityOptions& O) { O.Standing.CloseCompressionToleranceRelative = 1e-9; });
 	Add("Standing.RestoreClosingRateThreshold 0.5", [](AuthorityOptions& O) { O.Standing.RestoreClosingRateThreshold = 0.5; });
+	Add("Standing.SingularSoftSpringRelative 1e-6", [](AuthorityOptions& O) { O.Standing.SingularSoftSpringRelative = 1e-6; });
 	for (const auto& [Name, Options] : Variants)
 	{
 		INFO("options differing in " << std::string(Name));

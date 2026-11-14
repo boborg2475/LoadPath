@@ -26,6 +26,7 @@ struct SolverSettings
 	double OpenTensionToleranceRelative = 1e-12;
 	double CloseCompressionToleranceRelative = 1e-12;
 	double RestoreClosingRateThreshold = 0.1;
+	double SingularSoftSpringRelative = 0.0;
 };
 
 struct CascadeSettings

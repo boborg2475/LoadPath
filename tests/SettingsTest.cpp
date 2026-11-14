@@ -57,7 +57,7 @@ bool SameSettings(const Settings& A, const Settings& B)
 		A.Solver.AdmissibilityToleranceRelative == B.Solver.AdmissibilityToleranceRelative && A.Solver.UnconstrainedComponent == B.Solver.UnconstrainedComponent &&
 		A.Solver.DryRecloseFactor == B.Solver.DryRecloseFactor && A.Solver.SparseAcceptanceMargin == B.Solver.SparseAcceptanceMargin &&
 		A.Solver.OpenTensionToleranceRelative == B.Solver.OpenTensionToleranceRelative && A.Solver.CloseCompressionToleranceRelative == B.Solver.CloseCompressionToleranceRelative &&
-		A.Solver.RestoreClosingRateThreshold == B.Solver.RestoreClosingRateThreshold &&
+		A.Solver.RestoreClosingRateThreshold == B.Solver.RestoreClosingRateThreshold && A.Solver.SingularSoftSpringRelative == B.Solver.SingularSoftSpringRelative &&
 		A.Cascade.CrackBandEdgeRelative == B.Cascade.CrackBandEdgeRelative && A.Cascade.CrushEdgeRelative == B.Cascade.CrushEdgeRelative &&
 		A.Cascade.MotionAxisThresholdRelative == B.Cascade.MotionAxisThresholdRelative &&
 		A.Cascade.CrackBandFraction == B.Cascade.CrackBandFraction && A.Cascade.MaxPasses == B.Cascade.MaxPasses && A.Cascade.OnUndecided == B.Cascade.OnUndecided && A.Debug.bRecordPasses == B.Debug.bRecordPasses;
@@ -96,6 +96,7 @@ Settings DistinctSettings()
 	S.Solver.OpenTensionToleranceRelative = 1.5e-2;
 	S.Solver.CloseCompressionToleranceRelative = 1.6e-2;
 	S.Solver.RestoreClosingRateThreshold = 1.7e-2;
+	S.Solver.SingularSoftSpringRelative = 1.8e-2;
 	S.Cascade.CrackBandFraction = 0.25;
 	S.Cascade.CrackBandEdgeRelative = 1.2e-2;
 	S.Cascade.CrushEdgeRelative = 1.3e-2;
@@ -178,6 +179,7 @@ const ToleranceKey EngineTolerances[] = {
 	{"solver", "open_tension_tolerance_relative", 1e-12, [](const Settings& S) { return S.Solver.OpenTensionToleranceRelative; }},
 	{"solver", "close_compression_tolerance_relative", 1e-12, [](const Settings& S) { return S.Solver.CloseCompressionToleranceRelative; }},
 	{"solver", "restore_closing_rate_threshold", 0.1, [](const Settings& S) { return S.Solver.RestoreClosingRateThreshold; }},
+	{"solver", "singular_soft_spring_relative", 0.0, [](const Settings& S) { return S.Solver.SingularSoftSpringRelative; }},
 	{"cascade", "crack_band_edge_relative", 1e-9, [](const Settings& S) { return S.Cascade.CrackBandEdgeRelative; }},
 	{"cascade", "crush_edge_relative", 1e-9, [](const Settings& S) { return S.Cascade.CrushEdgeRelative; }},
 	{"cascade", "motion_axis_threshold_relative", 1e-3, [](const Settings& S) { return S.Cascade.MotionAxisThresholdRelative; }},
@@ -425,6 +427,7 @@ TEST_CASE("Settings.ToOptionsCarriesEveryField")
 	CHECK(Standing.OpenTensionToleranceRelative == 1.5e-2);
 	CHECK(Standing.CloseCompressionToleranceRelative == 1.6e-2);
 	CHECK(Standing.RestoreClosingRateThreshold == 1.7e-2);
+	CHECK(Standing.SingularSoftSpringRelative == 1.8e-2);
 	CHECK(Standing.Debug == &S.Debug);
 	const CascadeOptions Cascade = ToCascadeOptions(S, Gravity);
 	CHECK(Cascade.CrackBandFraction == 0.25);
@@ -436,6 +439,7 @@ TEST_CASE("Settings.ToOptionsCarriesEveryField")
 	CHECK(Cascade.Authority.Standing.OpenTensionToleranceRelative == 1.5e-2);
 	CHECK(Cascade.Authority.Standing.CloseCompressionToleranceRelative == 1.6e-2);
 	CHECK(Cascade.Authority.Standing.RestoreClosingRateThreshold == 1.7e-2);
+	CHECK(Cascade.Authority.Standing.SingularSoftSpringRelative == 1.8e-2);
 	CHECK(Cascade.MaxPasses == 3);
 	CHECK(Cascade.Authority.Standing.Gravity.Z == -3.0);
 	CHECK(Cascade.Authority.Standing.DryNoiseFloorRelative == 5e-3);
@@ -457,6 +461,7 @@ TEST_CASE("Settings.ToOptionsCarriesEveryField")
 	CHECK(Plain.OpenTensionToleranceRelative == Compiled.OpenTensionToleranceRelative);
 	CHECK(Plain.CloseCompressionToleranceRelative == Compiled.CloseCompressionToleranceRelative);
 	CHECK(Plain.RestoreClosingRateThreshold == Compiled.RestoreClosingRateThreshold);
+	CHECK(Plain.SingularSoftSpringRelative == Compiled.SingularSoftSpringRelative);
 	const CascadeOptions PlainCascade = ToCascadeOptions(Settings{}, Vec3{0.0, 0.0, -GravityMPerS2});
 	const CascadeOptions CompiledCascade{};
 	CHECK(PlainCascade.CrackBandEdgeRelative == CompiledCascade.CrackBandEdgeRelative);

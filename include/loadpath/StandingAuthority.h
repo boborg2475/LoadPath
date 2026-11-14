@@ -51,6 +51,8 @@ struct StandingOptions
 	double CloseCompressionToleranceRelative = 1e-12;
 	// Under a motion the load drives, an open corner is re-closed only when its closing rate, -gap / motion scale (the largest corner movement in the component), exceeds this.
 	double RestoreClosingRateThreshold = 0.1;
+	// Above zero, a singular stiffness is resolved by sparse solves on K + this times its mean diagonal instead of a dense factorisation (spike).
+	double SingularSoftSpringRelative = 0.0;
 	// A rank-deficient component is a mechanism only when the load's null-space projection exceeds this times the load.
 	double NeutralLoadToleranceRelative = 1e-12;
 	// A corner closes or slides against friction in a null motion when it moves more than this times the motion's scale.

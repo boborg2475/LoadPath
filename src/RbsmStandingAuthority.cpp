@@ -1,5 +1,9 @@
 #include "loadpath/StandingAuthority.h"
 
+#if defined(_MSC_VER)
+#pragma warning(disable : 4996)
+#endif
+
 #include "loadpath/Settings.h"
 
 #include "EigenInclude.h"
@@ -8,6 +12,11 @@
 
 #include <algorithm>
 #include <array>
+#include <chrono>
+#include <cstdio>
+#include <cstdlib>
+#include <mutex>
+#include <string>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -1041,6 +1050,198 @@ StandingResult FallRigid(const Problem& P, const StandingOptions& Options)
 	return Result;
 }
 
+struct SoftSpikeSwitches
+{
+	double Relative = 0.0;
+	bool bAllSizes = false;
+	double Band = 1e-6;
+	int MaxPasses = 60;
+	int MaxRefines = 10;
+	double PassTolerance = 1e-14;
+	double StallRatio = 0.5;
+	const char* Log = nullptr;
+	const char* Diag = nullptr;
+	std::vector<double> DiagRelatives;
+	const char* EndLog = nullptr;
+};
+
+const SoftSpikeSwitches& SoftSpike()
+{
+	static const SoftSpikeSwitches Switches = [] {
+		SoftSpikeSwitches S;
+		if (const char* V = std::getenv("LOADPATH_SOFT_SINGULAR"))
+		{
+			S.Relative = std::atof(V);
+		}
+		S.bAllSizes = std::getenv("LOADPATH_SOFT_ALL_SIZES") != nullptr;
+		if (const char* V = std::getenv("LOADPATH_SOFT_BAND"))
+		{
+			S.Band = std::atof(V);
+		}
+		if (const char* V = std::getenv("LOADPATH_SOFT_PASSES"))
+		{
+			S.MaxPasses = std::atoi(V);
+		}
+		if (const char* V = std::getenv("LOADPATH_SOFT_REFINES"))
+		{
+			S.MaxRefines = std::atoi(V);
+		}
+		if (const char* V = std::getenv("LOADPATH_SOFT_PASS_TOL"))
+		{
+			S.PassTolerance = std::atof(V);
+		}
+		if (const char* V = std::getenv("LOADPATH_SOFT_STALL"))
+		{
+			S.StallRatio = std::atof(V);
+		}
+		S.Log = std::getenv("LOADPATH_SOFT_LOG");
+		S.Diag = std::getenv("LOADPATH_SOFT_DIAG");
+		S.EndLog = std::getenv("LOADPATH_END_LOG");
+		if (const char* V = std::getenv("LOADPATH_SOFT_DIAG_EPS"))
+		{
+			std::string Text(V);
+			std::size_t Start = 0;
+			while (Start < Text.size())
+			{
+				const std::size_t Comma = Text.find(',', Start);
+				S.DiagRelatives.push_back(std::atof(Text.substr(Start, Comma - Start).c_str()));
+				if (Comma == std::string::npos)
+				{
+					break;
+				}
+				Start = Comma + 1;
+			}
+		}
+		return S;
+	}();
+	return Switches;
+}
+
+void AppendLine(const char* Path, const std::string& Line)
+{
+	if (Path == nullptr)
+	{
+		return;
+	}
+	static std::mutex Lock;
+	const std::lock_guard<std::mutex> Guard(Lock);
+	if (std::FILE* F = std::fopen(Path, "a"))
+	{
+		std::fputs(Line.c_str(), F);
+		std::fclose(F);
+	}
+}
+
+struct SoftSingular
+{
+	bool bFactored = false;
+	Eigen::VectorXd Projection;
+	Eigen::VectorXd ScaledX;
+	int Passes = 0;
+	int Refines = 0;
+	double ProjectionChange = 0.0;
+	double Residual = 0.0;
+	double Seconds = 0.0;
+};
+
+SoftSingular SolveSoftSingular(const SparseMatrix& Ks, const Eigen::VectorXd& Load, double Relative, int MaxPasses, int MaxRefines, double PassTolerance, double StallRatio)
+{
+	SoftSingular Out;
+	const auto Start = std::chrono::steady_clock::now();
+	const double Shift = Relative * Ks.diagonal().mean();
+	SparseMatrix A = Ks;
+	for (Eigen::Index I = 0; I < A.rows(); ++I)
+	{
+		A.coeffRef(I, I) += Shift;
+	}
+	SparseFactor Factor;
+	Factor.compute(A);
+	if (Factor.info() != Eigen::Success)
+	{
+		return Out;
+	}
+	Out.bFactored = true;
+	const double LoadNorm = Load.norm();
+	Eigen::VectorXd V = Load;
+	for (int Pass = 1; Pass <= MaxPasses; ++Pass)
+	{
+		const Eigen::VectorXd Next = Shift * Factor.solve(V);
+		const double Change = (Next - V).norm() / LoadNorm;
+		const bool bStalled = Pass >= 3 && Change > StallRatio * Out.ProjectionChange;
+		Out.ProjectionChange = Change;
+		V = Next;
+		Out.Passes = Pass;
+		if (Change <= PassTolerance || bStalled)
+		{
+			break;
+		}
+	}
+	Out.Projection = V;
+	const Eigen::VectorXd Balanced = Load - V;
+	Eigen::VectorXd X = Factor.solve(Balanced);
+	for (int Refine = 1; Refine <= MaxRefines; ++Refine)
+	{
+		const Eigen::VectorXd R = Balanced - Ks * X;
+		Out.Residual = R.norm() / LoadNorm;
+		if (Out.Residual <= 1e-13)
+		{
+			break;
+		}
+		X += Factor.solve(R);
+		Out.Refines = Refine;
+	}
+	Out.Residual = (Balanced - Ks * X).norm() / LoadNorm;
+	Out.ScaledX = X;
+	Out.Seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - Start).count();
+	return Out;
+}
+
+void DiagnoseSoft(const Problem& P, const std::vector<JointState>& States, const Eigen::MatrixXd& K, const Factorisation& F, const std::vector<Eigen::VectorXd>& Basis, const Eigen::VectorXd& Load, const Eigen::VectorXd& Projection, int Iteration)
+{
+	const SoftSpikeSwitches& S = SoftSpike();
+	const SparseMatrix Ks = AssembleScaledSparseStiffness(P, States);
+	std::vector<Eigen::VectorXd> Orthonormal;
+	for (Eigen::VectorXd V : Basis)
+	{
+		for (int Pass = 0; Pass < 2; ++Pass)
+		{
+			for (const Eigen::VectorXd& Q : Orthonormal)
+			{
+				V -= Q.dot(V) * Q;
+			}
+		}
+		if (V.norm() > 0.0)
+		{
+			Orthonormal.push_back(V.normalized());
+		}
+	}
+	const auto StripNull = [&](Eigen::VectorXd V) {
+		for (const Eigen::VectorXd& Q : Orthonormal)
+		{
+			V -= Q.dot(V) * Q;
+		}
+		return V;
+	};
+	const double LoadNorm = Load.norm();
+	const Eigen::VectorXd DenseX = SolveInRange(F, Load);
+	const Eigen::VectorXd ExactX = StripNull(SolveInRange(F, Load - Projection));
+	const double ProjectionNorm = Projection.norm();
+	for (const double Relative : S.DiagRelatives)
+	{
+		const SoftSingular Soft = SolveSoftSingular(Ks, Load, Relative, S.MaxPasses, S.MaxRefines, S.PassTolerance, S.StallRatio);
+		if (!Soft.bFactored)
+		{
+			AppendLine(S.Diag, std::to_string(P.DofCount) + "," + std::to_string(Iteration) + ",nofactor\n");
+			continue;
+		}
+		char Line[512];
+		std::snprintf(Line, sizeof(Line), "%d,%d,%d,%d,%.1e,%d,%d,%.3e,%.3e,%.3e,%.3e,%.3e,%.3e,%.3e,%.4f,%.3e,%.3e\n", P.DofCount, Iteration, static_cast<int>(F.Rank), static_cast<int>(P.DofCount - F.Rank), Relative,
+			Soft.Passes, Soft.Refines, ProjectionNorm / LoadNorm, (Soft.Projection - Projection).norm() / std::max(ProjectionNorm, 1e-300), (StripNull(Soft.ScaledX) - ExactX).norm() / ExactX.norm(),
+			(K * (Soft.ScaledX - DenseX)).norm() / LoadNorm, Soft.Residual, Soft.ProjectionChange, StripNull(Soft.Projection).norm() / LoadNorm, Soft.Seconds, (Ks * Projection).norm() / (Ks.diagonal().mean() * std::max(ProjectionNorm, 1e-300)), (Ks * Soft.Projection).norm() / (Ks.diagonal().mean() * std::max(Soft.Projection.norm(), 1e-300)));
+		AppendLine(S.Diag, Line);
+	}
+}
+
 StandingResult SolveProblem(const Problem& P, const StandingOptions& Options, PhaseTimings& Timings, Ending& E)
 {
 	StandingResult Result;
@@ -1071,6 +1272,53 @@ StandingResult SolveProblem(const Problem& P, const StandingOptions& Options, Ph
 	Eigen::VectorXd FullRankX;
 	bool bHaveFullRank = false;
 	const auto D = P.Scaling.asDiagonal();
+	const SoftSpikeSwitches& Spike = SoftSpike();
+	const double SoftRelative = Options.SingularSoftSpringRelative > 0.0 ? Options.SingularSoftSpringRelative : Spike.Relative;
+	const bool bDiag = Spike.Diag != nullptr && !Spike.DiagRelatives.empty();
+	const bool bSoft = SoftRelative > 0.0 && !bDiag;
+	const auto Resolve = [&](const Eigen::VectorXd& Projection, const Eigen::VectorXd& ScaledX, int Iteration) -> bool {
+		const Eigen::VectorXd Motion = D * Projection;
+		X = D * ScaledX;
+		const std::vector<JointState> Solved = bRecord ? States : std::vector<JointState>{};
+		const Restoration Outcome = RestoreInadmissibleReleases(P, Options, Motion, bHaveFullRank ? &FullRankX : nullptr, States);
+		if (bRecord)
+		{
+			RecordPass(P, Options, Solved, States, X, Iteration, E.Passes);
+		}
+		if (Outcome == Restoration::None)
+		{
+			const double PowerW = AssembleLoad(P, States).dot(Motion);
+			if (!(PowerW > CohesiveDissipationW(P, Options, States, Motion)))
+			{
+				Result.Readings = bHaveFullRank ? ReadAll(P, Options, FullRankStates, FullRankX, bOverstressed, Timings) : ReadAll(P, Options, States, X, bOverstressed, Timings);
+				Result.State = StandingState::Undecided;
+				E.End = SolveEnd::PowerCheckFailed;
+				return true;
+			}
+			Result.Readings = ReadAll(P, Options, States, X, bOverstressed, Timings);
+			Result.State = StandingState::Mechanism;
+			profile::Timed(Timings.ReadoutSeconds, [&] { FillMechanism(P, Options, Motion, Result); });
+			E.End = SolveEnd::Mechanism;
+			return true;
+		}
+		return false;
+	};
+	const auto TrySoft = [&](const Eigen::VectorXd& Load, int Iteration, std::optional<bool>& Finished) {
+		const SparseMatrix Ks = profile::Timed(Timings.AssemblySeconds, [&] { return AssembleScaledSparseStiffness(P, States); });
+		const SoftSingular Soft = profile::Timed(Timings.FactorizationSeconds, [&] { return SolveSoftSingular(Ks, Load, SoftRelative, Spike.MaxPasses, Spike.MaxRefines, Spike.PassTolerance, Spike.StallRatio); });
+		const bool bUse = Soft.bFactored && !(Soft.Projection.norm() <= Spike.Band * Load.norm());
+		if (Spike.Log != nullptr)
+		{
+			char Line[256];
+			std::snprintf(Line, sizeof(Line), "%d,%d,%s,%d,%d,%.3e,%.3e,%.4f\n", P.DofCount, Iteration, bUse ? "soft" : "fallback", Soft.Passes, Soft.Refines,
+				Soft.bFactored ? Soft.Projection.norm() / Load.norm() : -1.0, Soft.Residual, Soft.Seconds);
+			AppendLine(Spike.Log, Line);
+		}
+		if (bUse)
+		{
+			Finished = Resolve(Soft.Projection, Soft.ScaledX, Iteration);
+		}
+	};
 	for (int Iteration = 1; Iteration <= Options.MaxActiveSetIterations; ++Iteration)
 	{
 		Result.ActiveSetIterations = Iteration;
@@ -1097,6 +1345,19 @@ StandingResult SolveProblem(const Problem& P, const StandingOptions& Options, Ph
 				}
 				continue;
 			}
+			if (bSoft)
+			{
+				std::optional<bool> Finished;
+				TrySoft(Load, Iteration, Finished);
+				if (Finished)
+				{
+					if (*Finished)
+					{
+						return Result;
+					}
+					continue;
+				}
+			}
 		}
 		const Eigen::MatrixXd K = profile::Timed(Timings.AssemblySeconds, [&]() -> Eigen::MatrixXd { return D * AssembleStiffness(P, States) * D; });
 		if (Iteration == 1 && !IsAllFinite(K))
@@ -1108,32 +1369,29 @@ StandingResult SolveProblem(const Problem& P, const StandingOptions& Options, Ph
 		const Factorisation F = profile::Timed(Timings.FactorizationSeconds, [&] { return FactoriseBlocked(K, Options.PivotToleranceRelative); });
 		if (F.Rank < P.DofCount)
 		{
-			const std::vector<Eigen::VectorXd> Basis = profile::Timed(Timings.SolveSeconds, [&] { return NullBasis(F); });
-			const Eigen::VectorXd Projection = profile::Timed(Timings.SolveSeconds, [&] { return ProjectOntoSpan(Basis, Load); });
-			if (!(Projection.norm() <= Options.NeutralLoadToleranceRelative * Load.norm()))
+			if (bSoft && Spike.bAllSizes && P.DofCount <= Options.DenseDofLimit)
 			{
-				const Eigen::VectorXd Motion = D * Projection;
-				X = profile::Timed(Timings.SolveSeconds, [&]() -> Eigen::VectorXd { return D * SolveInRange(F, Load); });
-				const std::vector<JointState> Solved = bRecord ? States : std::vector<JointState>{};
-				const Restoration Outcome = RestoreInadmissibleReleases(P, Options, Motion, bHaveFullRank ? &FullRankX : nullptr, States);
-				if (bRecord)
+				std::optional<bool> Finished;
+				TrySoft(Load, Iteration, Finished);
+				if (Finished)
 				{
-					RecordPass(P, Options, Solved, States, X, Iteration, E.Passes);
-				}
-				if (Outcome == Restoration::None)
-				{
-					const double PowerW = AssembleLoad(P, States).dot(Motion);
-					if (!(PowerW > CohesiveDissipationW(P, Options, States, Motion)))
+					if (*Finished)
 					{
-						Result.Readings = bHaveFullRank ? ReadAll(P, Options, FullRankStates, FullRankX, bOverstressed, Timings) : ReadAll(P, Options, States, X, bOverstressed, Timings);
-						Result.State = StandingState::Undecided;
-						E.End = SolveEnd::PowerCheckFailed;
 						return Result;
 					}
-					Result.Readings = ReadAll(P, Options, States, X, bOverstressed, Timings);
-					Result.State = StandingState::Mechanism;
-					profile::Timed(Timings.ReadoutSeconds, [&] { FillMechanism(P, Options, Motion, Result); });
-					E.End = SolveEnd::Mechanism;
+					continue;
+				}
+			}
+			const std::vector<Eigen::VectorXd> Basis = profile::Timed(Timings.SolveSeconds, [&] { return NullBasis(F); });
+			const Eigen::VectorXd Projection = profile::Timed(Timings.SolveSeconds, [&] { return ProjectOntoSpan(Basis, Load); });
+			if (bDiag)
+			{
+				DiagnoseSoft(P, States, K, F, Basis, Load, Projection, Iteration);
+			}
+			if (!(Projection.norm() <= Options.NeutralLoadToleranceRelative * Load.norm()))
+			{
+				if (Resolve(Projection, SolveInRange(F, Load), Iteration))
+				{
 					return Result;
 				}
 				continue;
@@ -1215,6 +1473,12 @@ StandingResult SolveComponents(const std::vector<Problem>& Problems, std::size_t
 		PhaseTimings Timings;
 		Solved[K] = profile::Timed(Timings.TotalSeconds, [&] { return SolveProblem(Problems[Work[K]], Options, Timings, Endings[K]); });
 		Solved[K].Timings = Timings;
+		if (SoftSpike().EndLog != nullptr)
+		{
+			char Line[128];
+			std::snprintf(Line, sizeof(Line), "%d,%d,%d,%d,%.4f\n", Problems[Work[K]].DofCount, static_cast<int>(Endings[K].End), static_cast<int>(Solved[K].State), Solved[K].ActiveSetIterations, Timings.TotalSeconds);
+			AppendLine(SoftSpike().EndLog, Line);
+		}
 	};
 	if (Workers != nullptr)
 	{
